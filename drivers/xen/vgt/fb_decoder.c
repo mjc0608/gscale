@@ -364,21 +364,29 @@ static void vgt_show_fb_format(int vmid, struct vgt_fb_format *fb)
 int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 {
 	int i;
-	struct vgt_device *vgt = vmid_2_vgt_device(vmid);
+	struct vgt_device *vgt;
+	struct pgt_device *pdev = &default_device;
+	unsigned long flags;
 	int ret = 0;
 
 	if (!fb)
 		return -EINVAL;
 
-	if (!vgt) {
-		vgt_err("Invalid domain ID (%d)\n", vmid);
-		return -ENODEV;
-	}
-
-	if (!IS_HSW(vgt->pdev)) {
+	if (!IS_HSW(pdev)) {
 		vgt_err("Only HSW is supported now\n");
 		return -EINVAL;
 	}
+
+	/* TODO: use fine-grained refcnt later */
+	spin_lock_irqsave(&pdev->lock, flags);
+
+	vgt = vmid_2_vgt_device(vmid);
+	if (!vgt) {
+		vgt_err("Invalid domain ID (%d)\n", vmid);
+		spin_unlock_irqrestore(&pdev->lock, flags);
+		return -ENODEV;
+	}
+
 	for (i = 0; i < MAX_INTEL_PIPES; i++) {
 		struct vgt_pipe_format *pipe = &fb->pipes[i];
 
@@ -392,6 +400,8 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 			break;
 		}
 	}
+
+	spin_unlock_irqrestore(&pdev->lock, flags);
 
 	vgt_show_fb_format(vmid, fb);
 	return ret;
