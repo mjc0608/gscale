@@ -590,10 +590,14 @@ static void vgt_handle_crt_hotplug_virt(struct vgt_irq_host_state *hstate,
 
 		__vreg(vgt, _REG_PCH_ADPA) &=
 				~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-
-		__vreg(vgt, _REG_PCH_ADPA) |=
+		if (is_current_display_owner(vgt)) {
+			__vreg(vgt, _REG_PCH_ADPA) |=
 					vgt_get_event_val(hstate, event) &
 					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+		} else if (test_bit(VGT_CRT, vgt->presented_ports)) {
+				__vreg(vgt, _REG_PCH_ADPA) |=
+					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+		}
 
 		vgt_handle_default_event_virt(hstate, event, vgt);
 	}
@@ -619,8 +623,12 @@ static void vgt_handle_port_hotplug_virt(struct vgt_irq_host_state *hstate,
 	if (__vreg(vgt, _REG_SHOTPLUG_CTL) & enable_mask) {
 
 		__vreg(vgt, _REG_SHOTPLUG_CTL) &= ~status_mask;
-		__vreg(vgt, _REG_SHOTPLUG_CTL) |=
+		if (is_current_display_owner(vgt)) {
+			__vreg(vgt, _REG_SHOTPLUG_CTL) |=
 				vgt_get_event_val(hstate, event) & status_mask;
+		} else {
+			__vreg(vgt, _REG_SHOTPLUG_CTL) |= status_mask;
+		}
 
 		vgt_handle_default_event_virt(hstate, event, vgt);
 	}
