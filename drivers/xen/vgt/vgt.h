@@ -2028,6 +2028,7 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 }
 
 #define vgt_lock_dev_flags(pdev, cpu, flags) {	\
+	flags = 0;				\
 	if (likely(vgt_track_nest))		\
 		cpu = vgt_enter();		\
 	else					\
