@@ -17,25 +17,30 @@
 #include <xen/xen-ops.h>
 #include <xen/interface/xen.h>
 #include <xen/interface/vcpu.h>
+#include <xen/x86_emulate.h>
 #include <linux/init.h>
 
+#define VGT_DEBUG
+#ifdef VGT_DEBUG
+#define dprintk(fmt, a...)	\
+	printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a)
+#else
+#define dprintk(fmt, a...)
+#endif
 static int vgt_io_forward = 0;
+extern int vgt_emulate_ins(struct pt_regs *regs);
 static int xen_vgt_handler(struct pt_regs *regs, long error_code)
 {
 	sf_ioreq_t *req = (sf_ioreq_t *)&HYPERVISOR_shared_info->arch.sf_ioreq;
 
 	if (!vgt_io_forward || req->state != STATE_PV_IOREQ_READY)
-		return -EINVAL;
+		return 0;
 
-	/* a short circuit to Xen with a default pass-through policy */
-	req->state = STATE_PV_IOREQ_EMUL;
-	if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation, 0, NULL) < 0 ||
-	    req->state != STATE_PV_IOREQ_EMUL_DONE)
-		return -EINVAL;
+	dprintk("vgt_handler error_code %lx req->addr %llx \n", error_code, req->addr);
+	if (error_code != 0xe008)
+		return 0;
 
-	req->state = STATE_PV_IORESP_READY; /* if relying on Xen to complete */
-	//req->state = STATE_PV_IOREQ_NONE; /* if completing the emulation by vGT itself */
-	return 0;
+	return vgt_emulate_ins(regs) == X86EMUL_OKAY;
 }
 
 static void __init xen_setup_vgt(void)

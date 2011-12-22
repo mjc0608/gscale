@@ -321,7 +321,7 @@ do_general_protection(struct pt_regs *regs, long error_code)
 		if (fixup_exception(regs))
 			goto exit;
 
-		if (gp_prehandler && !gp_prehandler(regs, error_code))
+		if (gp_prehandler && gp_prehandler(regs, error_code))
 			goto exit;
 
 		tsk->thread.error_code = error_code;
@@ -332,7 +332,7 @@ do_general_protection(struct pt_regs *regs, long error_code)
 		goto exit;
 	}
 
-	if (gp_prehandler && !gp_prehandler(regs, error_code))
+	if (gp_prehandler && gp_prehandler(regs, error_code))
 		goto exit;
 
 	tsk->thread.error_code = error_code;

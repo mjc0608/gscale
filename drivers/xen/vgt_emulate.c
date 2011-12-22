@@ -338,7 +338,7 @@ int emulate_write(
 			printk("vGT: failed to do hypercall for write address (%lx)\n", w_pa);
 			return X86EMUL_UNHANDLEABLE;
 		}
-		printk("hcall return\n");
+		dprintk("hcall return\n");
 	}
 	else
 		memcpy ((void*)offset, p_data, bytes);
