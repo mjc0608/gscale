@@ -117,42 +117,11 @@ struct trap_info {
 };
 DEFINE_GUEST_HANDLE_STRUCT(trap_info);
 
-/* parameters for self-forwarding I/O service. copy from hvm ioreq_t */
-#define PV_IOREQ_READ      1
-#define PV_IOREQ_WRITE     0
-
-#define STATE_PV_IOREQ_NONE        0
-#define STATE_PV_IOREQ_READY       1
-#define STATE_PV_IOREQ_EMUL        2
-#define STATE_PV_IOREQ_EMUL_DONE   3
-#define STATE_PV_IORESP_READY      4
-
-#define PV_IOREQ_TYPE_PIO          0 /* pio */
-#define PV_IOREQ_TYPE_COPY         1 /* mmio ops */
-struct sf_ioreq {
-    uint64_t      addr;           /* physical address */
-    uint64_t      data;           /* data (or paddr of data) */
-    uint64_t      count;          /* for rep prefixes */
-    uint32_t      size;           /* size in bytes */
-    uint16_t      _pad0;
-    uint8_t       state:4;
-    uint8_t       data_is_ptr:1;  /* if 1, data above is the guest paddr
-                                   * of the real data to use. */
-    uint8_t       dir:1;          /* 1=read, 0=write */
-    uint8_t       df:1;
-    uint8_t       _pad1:1;
-    uint8_t       type;           /* I/O type */
-    uint8_t       buf[128];
-};
-typedef struct sf_ioreq sf_ioreq_t;
 struct arch_shared_info {
     unsigned long max_pfn;                  /* max pfn that appears in table */
     /* Frame containing list of mfns containing list of mfns containing p2m. */
     unsigned long pfn_to_mfn_frame_list_list;
-
     unsigned long nmi_reason;
-    /* FIXME: need move to the arch vcpu architecture */
-    sf_ioreq_t    sf_ioreq;
 };
 #endif	/* !__ASSEMBLY__ */
 

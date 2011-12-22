@@ -272,18 +272,22 @@ int emulate_read(
 
 	r_pa = vgt_va_to_pa (offset);
 	if ( is_vgt_trap_address(r_pa) ) {
-		sf_ioreq_t *req = (sf_ioreq_t *)&HYPERVISOR_shared_info->arch.sf_ioreq;
+		struct vcpu_emul_ioreq req;
 
-		req->state = STATE_PV_IOREQ_EMUL;
-		if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation, 0, NULL) < 0 ||
-		    req->state != STATE_PV_IOREQ_EMUL_DONE) {
+		req.data = 0x12345678; // a correctness check
+		req.addr = r_pa;
+		req.size = bytes;
+		req.dir = PV_IOREQ_READ;
+		req.type = PV_IOREQ_TYPE_COPY;
+		if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
+					smp_processor_id(), &req) < 0) {
 			printk("vGT: failed to do hypercall for read address (%lx)\n", r_pa);
 			return X86EMUL_UNHANDLEABLE;
 		}
 
 		dprintk("hcall return\n");
-		memcpy(p_data, (void *)&req->data, bytes);
-		dprintk("VGT: read pa %08lx data %08lx (%08llx)\n", r_pa, *(unsigned long *)p_data, req->data);
+		memcpy(p_data, (void *)&(req.data), bytes);
+		dprintk("VGT: read pa %08lx data %08lx (%08llx)\n", r_pa, *(unsigned long *)p_data, req.data);
 	}
 	else
 		memcpy (p_data, (void*)offset, bytes);
@@ -330,11 +334,15 @@ int emulate_write(
 	dprintk("VGT: write pa %08lx data %08lx\n", w_pa, data);
 
 	if ( is_vgt_trap_address(w_pa) ) {
-		sf_ioreq_t *req = (sf_ioreq_t *)&HYPERVISOR_shared_info->arch.sf_ioreq;
+		struct vcpu_emul_ioreq req;
 
-		req->state = STATE_PV_IOREQ_EMUL;
-		if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation, 0, NULL) < 0 ||
-		    req->state != STATE_PV_IOREQ_EMUL_DONE) {
+		req.data = data; // a correctness check
+		req.addr = w_pa;
+		req.size = bytes;
+		req.dir = PV_IOREQ_WRITE;
+		req.type = PV_IOREQ_TYPE_COPY;
+		if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
+					smp_processor_id(), &req) < 0) {
 			printk("vGT: failed to do hypercall for write address (%lx)\n", w_pa);
 			return X86EMUL_UNHANDLEABLE;
 		}
@@ -452,12 +460,11 @@ void pt_regs_2_em_regs(
 int vgt_emulate_ins(struct pt_regs *regs)
 {
 	int rc;
-	sf_ioreq_t *req = (sf_ioreq_t *)&HYPERVISOR_shared_info->arch.sf_ioreq;
 
 	pt_regs_2_em_regs(regs, &em_regs);
 	rc = x86_emulate (&ctxt, &vgt_ops);
 	em_regs_2_pt_regs(&em_regs, regs);
 
-	req->state = STATE_PV_IOREQ_NONE;
 	return rc;
 }
+
