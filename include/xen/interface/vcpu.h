@@ -175,6 +175,8 @@ DEFINE_GUEST_HANDLE_STRUCT(vcpu_register_vcpu_info);
 
 /* Request an I/O emulation for the specified VCPU. @extra_arg == NULL. */
 #define VCPUOP_request_io_emulation       14
+/* Activate I/O self-forwarding for the specified VCPU. */
+#define VCPUOP_start_io_forward           15
 #define PV_IOREQ_READ      1
 #define PV_IOREQ_WRITE     0
 

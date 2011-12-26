@@ -41,7 +41,10 @@ static void __init xen_setup_vgt(void)
 {
 	if (!register_gp_prehandler(xen_vgt_handler)) {
 		printk("vGT: install GP handler successfully\n");
-		vgt_io_forward = 1;
+		if (HYPERVISOR_vcpu_op(VCPUOP_start_io_forward, 0, NULL) < 0)
+			printk("vGT: failed to start I/O forwarding\n");
+		else
+			vgt_io_forward = 1;
 	} else
 		printk("vGT: fail to install GP handler\n");
 }
