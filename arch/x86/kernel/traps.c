@@ -305,6 +305,9 @@ do_general_protection(struct pt_regs *regs, long error_code)
 	struct task_struct *tsk;
 	enum ctx_state prev_state;
 
+	if (gp_prehandler && gp_prehandler(regs, error_code))
+		return;
+
 	prev_state = exception_enter();
 	conditional_sti(regs);
 
@@ -321,9 +324,6 @@ do_general_protection(struct pt_regs *regs, long error_code)
 		if (fixup_exception(regs))
 			goto exit;
 
-		if (gp_prehandler && gp_prehandler(regs, error_code))
-			goto exit;
-
 		tsk->thread.error_code = error_code;
 		tsk->thread.trap_nr = X86_TRAP_GP;
 		if (notify_die(DIE_GPF, "general protection fault", regs, error_code,
@@ -331,9 +331,6 @@ do_general_protection(struct pt_regs *regs, long error_code)
 			die("general protection fault", regs, error_code);
 		goto exit;
 	}
-
-	if (gp_prehandler && gp_prehandler(regs, error_code))
-		goto exit;
 
 	tsk->thread.error_code = error_code;
 	tsk->thread.trap_nr = X86_TRAP_GP;
