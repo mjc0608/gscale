@@ -173,10 +173,8 @@ DEFINE_GUEST_HANDLE_STRUCT(vcpu_register_vcpu_info);
 /* Send an NMI to the specified VCPU. @extra_arg == NULL. */
 #define VCPUOP_send_nmi             11
 
-/* Request an I/O emulation for the specified VCPU. @extra_arg == NULL. */
+/* Request an I/O emulation for the specified VCPU. */
 #define VCPUOP_request_io_emulation       14
-/* Activate I/O self-forwarding for the specified VCPU. */
-#define VCPUOP_start_io_forward           15
 #define PV_IOREQ_READ      1
 #define PV_IOREQ_WRITE     0
 
@@ -197,5 +195,20 @@ struct vcpu_emul_ioreq {
     uint8_t       type;           /* I/O type */
 };
 DEFINE_GUEST_HANDLE_STRUCT(vcpu_emul_ioreq);
+
+/* Activate I/O self-forwarding for the specified VCPU */
+#define VCPUOP_start_io_forward           15
+struct trap_frags {
+    uint64_t   s;   /* start address */
+    uint64_t   e;   /* end address */
+};
+
+#define MAX_TRAP_FRAGS	32
+struct vcpu_io_forwarding_request {
+    int16_t      nr_pio_frags;
+    struct trap_frags	  pio_frags[MAX_TRAP_FRAGS];
+    int16_t      nr_mmio_frags;  /* 0..max-1, -1 means let VMM fill */
+    struct trap_frags	  mmio_frags[MAX_TRAP_FRAGS];	/*s/e address */
+};
 
 #endif /* __XEN_PUBLIC_VCPU_H__ */

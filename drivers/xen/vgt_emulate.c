@@ -39,6 +39,8 @@
 #define dprintk(fmt, a...)
 #endif
 
+extern struct vcpu_io_forwarding_request trap_req;
+
 int _un_wbinvd(struct x86_emulate_ctxt *ctxt)
 {
 	UNSUPPORTED("wbinvd");
@@ -130,8 +132,14 @@ int _un_write_cr(
 
 int is_vgt_trap_pio(unsigned int port)
 {
-	/* FIXME: need pass from vGT driver */
-	return port >= 0x3B0 && port < 0x3DF;
+	int i;
+
+	for (i=0; i<trap_req.nr_pio_frags; i++) {
+		if ( port >= trap_req.pio_frags[i].s &&
+			port <= trap_req.pio_frags[i].e )
+			return 1;
+	}
+	return 0;
 }
 
 int read_io(
@@ -306,8 +314,15 @@ printk("pmd %p val %lx\n", pmd, (long)(*pmd).pmd);
 
 int is_vgt_trap_address(unsigned long pa)
 {
-	/* FIXME: need pass from vGT driver */
-	return pa >= 0xfb000000L && pa < 0xfb400000;
+	int i;
+
+	for (i=0; i<trap_req.nr_mmio_frags; i++)
+	{
+		if ( pa >= trap_req.mmio_frags[i].s &&
+			pa <= trap_req.mmio_frags[i].e )
+			return 1;
+	}
+	return 0;
 }
 
 int emulate_read(
