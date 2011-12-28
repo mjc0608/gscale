@@ -38,7 +38,7 @@ static int xen_vgt_handler(struct pt_regs *regs, long error_code)
 }
 
 struct vcpu_io_forwarding_request trap_req;
-static void __init xen_setup_vgt(void)
+static int __init xen_setup_vgt(void)
 {
 	if (!register_gp_prehandler(xen_vgt_handler)) {
 		trap_req.nr_pio_frags = 1;
@@ -58,5 +58,6 @@ static void __init xen_setup_vgt(void)
 		}
 	} else
 		printk("vGT: fail to install GP handler\n");
+	return 0;
 }
 core_initcall(xen_setup_vgt);

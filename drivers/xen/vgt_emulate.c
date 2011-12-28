@@ -31,7 +31,7 @@
 		return 0;						\
 	} while (1)
 
-#define VGT_DEBUG
+//#define VGT_DEBUG
 #ifdef VGT_DEBUG
 #define dprintk(fmt, a...)	\
 	printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a)
