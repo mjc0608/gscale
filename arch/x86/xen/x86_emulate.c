@@ -903,6 +903,7 @@ static int ioport_access_check(
     if ( !(ctxt->regs->eflags & EFLG_VM) && mode_iopl() )
         return X86EMUL_OKAY;
 
+#if 0	// FIX ME ...
     fail_if(ops->read_segment == NULL);
     if ( (rc = ops->read_segment(x86_seg_tr, &tr, ctxt)) != 0 )
         return rc;
@@ -927,6 +928,7 @@ static int ioport_access_check(
         return rc;
     if ( (iobmp & (((1<<bytes)-1) << (first_port&7))) != 0 )
         goto raise_exception;
+#endif
 
  done:
     return rc;

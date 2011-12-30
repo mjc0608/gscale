@@ -20,12 +20,14 @@
 #include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/sched.h>
+#include <linux/delay.h>
 #include <asm/ptrace.h>
 #include <asm/traps.h>
 #include <asm/xen/interface.h>
 #include <asm/xen/x86_emulate.h>
 #include <asm/xen/hypercall.h>
 #include <asm/xen/hypervisor.h>
+#include <asm/desc.h>
 #include <xen/interface/vcpu.h>
 #include <xen/vgt.h>
 #include <linux/init.h>
@@ -54,6 +56,43 @@
 #endif
 
 struct vcpu_io_forwarding_request trap_req;
+
+static inline uint16_t get_selector(
+	enum x86_segment seg, struct cpu_user_regs *regs)
+{
+    uint16_t selector = 0;
+
+    switch (seg)
+    {
+        case x86_seg_cs:
+            selector = regs->cs;
+            break;
+        case x86_seg_ss:
+            selector = regs->ss;
+            break;
+        case x86_seg_ds:
+            selector = regs->ds;
+            break;
+        case x86_seg_es:
+            selector = regs->es;
+            break;
+        case x86_seg_fs:
+            selector = regs->fs;
+            break;
+        case x86_seg_gs:
+            selector = regs->gs;
+            break;
+#if 0
+        case x86_seg_tr:
+            store_tr(selector);
+            break;
+#endif
+        default:
+	    printk("VGT:Unsupported segment %d in get_selector!!!\n", seg);
+	    break;
+    }
+    return selector;
+}
 
 int _un_wbinvd(struct x86_emulate_ctxt *ctxt)
 {
@@ -182,8 +221,10 @@ int read_io(
 	printk("vGT: failed to do hypercall for read address (%x)\n", port);
 	return X86EMUL_UNHANDLEABLE;
     }
-dprintk("read pio at gip %lx port %x bytes %x val %x\n",
+#if 0
+    dprintk("read pio at gip %lx port %x bytes %x val %x\n",
 	(unsigned long)ctxt->regs->rip, port, bytes, (unsigned int) req.data);
+#endif
     memcpy ( val, &req.data, bytes);
 
     return X86EMUL_OKAY;
@@ -215,18 +256,85 @@ int write_io(
 	printk("vGT: failed to do hypercall for read address (%x)\n", port);
 	return X86EMUL_UNHANDLEABLE;
     }
-dprintk("write pio at gip %lx port %x bytes %x val %lx\n",
+#if 0
+    dprintk("write pio at gip %lx port %x bytes %x val %lx\n",
 	(unsigned long)ctxt->regs->rip, port, bytes, val);
+#endif
 
     return X86EMUL_OKAY;
 }
 
-int _un_read_segment(
+static int xen_read_sys_data(void *p_data, unsigned long offset, int bytes)
+{
+    struct vcpu_sysdata_request req;
+
+    req.op_type = VCPUOP_sysdata_read;
+    req.bytes = bytes;
+    req.src_addr = offset;
+
+    ASSERT (bytes <= 8);
+    if (HYPERVISOR_vcpu_op(VCPUOP_get_sysdata,
+			smp_processor_id(), &req) < 0) {
+	printk("vGT: failed to do VCPUOP_sysdata_read hypercall,src : %lx\n",
+			offset);
+		return X86EMUL_UNHANDLEABLE;
+    }
+#if 0
+    dprintk("xen_read_sys_data: offset %lx got %llx bytes %d\n",
+		offset, req.sys_data, bytes);
+#endif
+    memcpy (p_data, &req.sys_data, bytes);
+    return X86EMUL_OKAY;
+}
+
+int read_segment(
         enum x86_segment seg,
         struct segment_register *reg,
         struct x86_emulate_ctxt *ctxt)
 {
-	UNSUPPORTED("read_segment");
+    struct vcpu_sysdata_request req;
+    struct desc_struct desc;
+
+    req.selector = get_selector(seg, ctxt->regs);
+    req.op_type = VCPUOP_sysdata_get_segment;
+
+    if (HYPERVISOR_vcpu_op(VCPUOP_get_sysdata,
+			smp_processor_id(), &req) < 0) {
+	printk("vGT: failed to do get_segment hypercall, sel: %x\n",
+			req.selector);
+		return X86EMUL_UNHANDLEABLE;
+    }
+    desc = *(struct desc_struct*)&req.xdt_desc[0];
+    reg->sel = req.selector;
+    reg->attr.fields.type = desc.type;
+    reg->attr.fields.s = desc.s;
+    reg->attr.fields.dpl = desc.dpl;
+    reg->attr.fields.p = desc.p;
+    reg->attr.fields.avl = desc.avl;
+    reg->attr.fields.l = desc.l;
+    reg->attr.fields.db = desc.d;
+    reg->attr.fields.g = desc.g;
+
+    if (desc.l)
+    {	/* 64 bit mode */
+	if ( (seg = x86_seg_fs) || (seg == x86_seg_gs) )
+	    reg->base = desc.base0 | (desc.base1 << 16) | (desc.base2 << 24);
+	else
+	    reg->base = 0;
+        reg->limit = 0xfffff;
+    }
+    else
+    {
+	reg->base = desc.base0 | ((uint64_t)desc.base1 << 16) |
+		((uint64_t)desc.base2 << 24) | req.xdt_desc[1] << 32;
+        reg->limit = desc.limit0 | (desc.limit << 16L);
+    }
+#if 0
+    dprintk("VGT:Eddie000: seg %x sel %x base %lx limit %lx attr %x\n",
+	seg, req.selector,
+	(unsigned long)reg->base, (unsigned long)reg->limit, reg->attr.bytes);
+#endif
+    return X86EMUL_OKAY;
 }
 
 int _un_write_segment(
@@ -348,9 +456,14 @@ int emulate_read(
 {
 	unsigned long r_pa;
 
-	ASSERT (seg == x86_seg_ds ); 	// TO FIX
+#if 0
 	dprintk("VGT: read seg %x off %lx data %p bytes %d gip = %llx\n",
 		seg, offset, p_data, bytes, ctxt->regs->rip);
+#endif
+	if ( seg == x86_seg_none ) {
+		/* read system structure such as TSS, GDTR etc */
+		return xen_read_sys_data(p_data, offset, bytes);
+	}
 
 	r_pa = vgt_va_to_pa (offset);
 	if ( is_vgt_trap_address(r_pa) ) {
@@ -367,9 +480,10 @@ int emulate_read(
 			return X86EMUL_UNHANDLEABLE;
 		}
 
-		dprintk("hcall return\n");
 		memcpy(p_data, (void *)&(req.data), bytes);
+#if 0
 		dprintk("VGT: read pa %08lx data %08lx (%08llx)\n", r_pa, *(unsigned long *)p_data, req.data);
+#endif
 	}
 	else
 		memcpy (p_data, (void*)offset, bytes);
@@ -385,8 +499,10 @@ int emulate_insn_fetch (
         struct x86_emulate_ctxt *ctxt)
 {
 	ASSERT (seg == x86_seg_cs ); 	// TO FIX
+#if 0
 	dprintk("VGT: insn_fetch seg %x off %lx data %p bytes %d gip = %llx\n",
 		seg, offset, p_data, bytes, ctxt->regs->rip);
+#endif
 
 	memcpy(p_data, (void *)offset, bytes);
 	return X86EMUL_OKAY;
@@ -438,7 +554,7 @@ static const struct x86_emulate_ops vgt_ops = {
 	.rep_ins = _un_rep_ins,
 	.rep_outs = _un_rep_outs,
 	.rep_movs = _un_rep_movs,
-	.read_segment = _un_read_segment,
+	.read_segment = read_segment,
 	.write_segment = _un_write_segment,
 	.read_io = read_io,
 	.write_io = write_io,
@@ -496,10 +612,12 @@ void em_regs_2_pt_regs(
 	tgt_regs->flags = src_regs->eflags;
 	tgt_regs->sp = src_regs->rsp;
 	tgt_regs->ss = src_regs->ss;
+#if 0
 	dprintk("user_regs to pt_regs eax %08lx ebx %08lx ecx %08lx edx"
 		" %08lx ip %08lx\n",
 		tgt_regs->ax, tgt_regs->bx, tgt_regs->cx,
 		tgt_regs->dx, tgt_regs->ip);
+#endif
 }
 
 void pt_regs_2_em_regs(
@@ -527,10 +645,12 @@ void pt_regs_2_em_regs(
 	tgt_regs->eflags = src_regs->flags;
 	tgt_regs->rsp = src_regs->sp;
 	tgt_regs->ss = src_regs->ss;
+#if 0
 	dprintk("pt_regs to user_regs eax %08llx ebx %08llx ecx %08llx edx"
 		" %08llx ip %08llx\n",
 		tgt_regs->rax, tgt_regs->rbx, tgt_regs->rcx,
 		tgt_regs->rdx, tgt_regs->rip);
+#endif
 }
 
 static int vgt_emulate_ins(struct pt_regs *regs)
@@ -547,7 +667,7 @@ static int vgt_emulate_ins(struct pt_regs *regs)
 static int vgt_io_forward = 0;
 static int xen_vgt_handler(struct pt_regs *regs, long error_code)
 {
-	if (!vgt_io_forward || error_code != 0xe008)
+	if (!vgt_io_forward || (error_code != 0xe008 && error_code != 0xe00c))
 		return 0;
 
 	return vgt_emulate_ins(regs) == X86EMUL_OKAY;

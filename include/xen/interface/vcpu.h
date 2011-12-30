@@ -211,4 +211,24 @@ struct vcpu_io_forwarding_request {
     struct trap_frags	  mmio_frags[MAX_TRAP_FRAGS];	/*s/e address */
 };
 
+#define VCPUOP_get_sysdata           16
+/* sub operations */
+#define VCPUOP_sysdata_get_segment   0
+#define VCPUOP_sysdata_read	     1
+struct vcpu_sysdata_request {
+    uint64_t      op_type;
+    union {
+	struct {
+	    uint32_t     selector;
+            uint32_t     pad1;
+	    uint64_t     xdt_desc[2];
+	};
+	struct {
+	    uint64_t     src_addr;	/* linear address */
+            uint64_t     sys_data;
+            uint32_t     bytes;
+	};
+    };
+};
+
 #endif /* __XEN_PUBLIC_VCPU_H__ */
