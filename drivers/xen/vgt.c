@@ -2,8 +2,20 @@
  * vGT core module
  * Copyright (c) 2011, Intel Corporation.
  *
- * CCCCCCCCCCCCCCCCCCCCCCCCCC (leave copyright to be filled later)
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
+
 #include <linux/linkage.h>
 #include <linux/module.h>
 #include <linux/string.h>
@@ -37,9 +49,9 @@ static int xen_vgt_handler(struct pt_regs *regs, long error_code)
 	return vgt_emulate_ins(regs) == X86EMUL_OKAY;
 }
 
-struct vcpu_io_forwarding_request trap_req;
 static int __init xen_setup_vgt(void)
 {
+	struct vcpu_io_forwarding_request trap_req;
 	if (!register_gp_prehandler(xen_vgt_handler)) {
 		trap_req.nr_pio_frags = 1;
 		trap_req.pio_frags[0].s = 0x3B0;
@@ -50,7 +62,7 @@ static int __init xen_setup_vgt(void)
 			printk("vGT: failed to start I/O forwarding\n");
 		else {
 			vgt_io_forward = 1;
-			printk("trap_req.nr_pio_frags: mmio %d %lx %lx\n",
+			printk("vGT: trap_req.nr_pio_frags: mmio %d %lx %lx\n",
 				trap_req.nr_mmio_frags,
 				(long)trap_req.mmio_frags[0].s,
 				(long)trap_req.mmio_frags[0].e
