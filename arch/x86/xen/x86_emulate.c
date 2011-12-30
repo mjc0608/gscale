@@ -50,7 +50,7 @@
 
 #include <linux/types.h>
 #include <asm/xen/interface.h>
-#include <xen/x86_emulate.h>
+#include <asm/xen/x86_emulate.h>
 
 static uint8_t opcode_table[256] = {
     /* 0x00 - 0x07 */
