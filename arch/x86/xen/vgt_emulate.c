@@ -195,57 +195,12 @@ int is_vgt_trap_pio(unsigned int port)
 	return 0;
 }
 
-int read_io(
+int hcall_pio_write(
         unsigned int port,
         unsigned int bytes,
-        unsigned long *val,
-        struct x86_emulate_ctxt *ctxt)
+        unsigned long val)
 {
     struct vcpu_emul_ioreq req;
-
-    ASSERT ( is_vgt_trap_pio(port) == is_vgt_trap_pio(port + bytes - 1) );
-    ASSERT (bytes <= 4);	/* TODO */
-
-    if ( !is_vgt_trap_pio(port) ) {
-        printk("Unknown PIO read at %lx, port %x bytes %x!!!\n",
-		(unsigned long)ctxt->regs->rip, port, bytes);
-        return X86EMUL_UNHANDLEABLE;
-    }
-    req.data = 0x12345678; // a correctness check
-    req.addr = port;
-    req.size = bytes;
-    req.dir = PV_IOREQ_READ;
-    req.type = PV_IOREQ_TYPE_PIO;
-    if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
-			smp_processor_id(), &req) < 0) {
-	printk("vGT: failed to do hypercall for read address (%x)\n", port);
-	return X86EMUL_UNHANDLEABLE;
-    }
-#if 0
-    dprintk("read pio at gip %lx port %x bytes %x val %x\n",
-	(unsigned long)ctxt->regs->rip, port, bytes, (unsigned int) req.data);
-#endif
-    memcpy ( val, &req.data, bytes);
-
-    return X86EMUL_OKAY;
-}
-
-int write_io(
-        unsigned int port,
-        unsigned int bytes,
-        unsigned long val,
-        struct x86_emulate_ctxt *ctxt)
-{
-    struct vcpu_emul_ioreq req;
-
-    ASSERT ( is_vgt_trap_pio(port) == is_vgt_trap_pio(port + bytes - 1) );
-    ASSERT (bytes <= 4);	/* TODO */
-
-    if ( !is_vgt_trap_pio(port) ) {
-        printk("Unknown PIO write at %lx, port %x bytes %x!!!\n",
-		(unsigned long)ctxt->regs->rip, port, bytes);
-        return X86EMUL_UNHANDLEABLE;
-    }
     req.data = val;
     req.addr = port;
     req.size = bytes;
@@ -256,12 +211,138 @@ int write_io(
 	printk("vGT: failed to do hypercall for read address (%x)\n", port);
 	return X86EMUL_UNHANDLEABLE;
     }
+    return X86EMUL_OKAY;
+}
+
+int hcall_pio_read(
+        unsigned int port,
+        unsigned int bytes,
+        unsigned long *val)
+{
+    struct vcpu_emul_ioreq req;
+
+    req.data = 0x12345678; // a correctness check
+    req.addr = port;
+    req.size = bytes;
+    req.dir = PV_IOREQ_READ;
+    req.type = PV_IOREQ_TYPE_PIO;
+    if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
+			smp_processor_id(), &req) < 0) {
+	printk("vGT: failed to do hypercall for read address (%x)\n", port);
+	return X86EMUL_UNHANDLEABLE;
+    }
+    *val = req.data;
+    return X86EMUL_OKAY;
+}
+
+unsigned int vgt_cf8;
+int vgt_cfg_write_emul(
+        unsigned int port,
+        unsigned int bytes,
+        unsigned long val,
+        struct x86_emulate_ctxt *ctxt)
+{
+    int rc = X86EMUL_OKAY;
+
+    dprintk("VGT: vgt_cfg_write_emul %x %x %lx at %llx\n",
+	    port, bytes, val, ctxt->regs->rip);
+
+    if ((port & ~3)== 0xcf8) {
+        ASSERT (bytes == 4);
+        ASSERT ((port & 3) == 0);
+
+        vgt_cf8 = val;
+    }
+    else	// port 0xCFC */
+        rc = hcall_pio_write(port, bytes, val);
+
+    return rc;
+}
+
+int vgt_cfg_read_emul(
+        unsigned int port,
+        unsigned int bytes,
+        unsigned long *val)
+{
+    unsigned long data;
+    int rc = X86EMUL_OKAY;
+
+    if ((port & ~3)== 0xcf8) {
+        memcpy(val, (uint8_t*)&vgt_cf8 + (port & 3), bytes);
+    }
+    else if ( (rc = hcall_pio_read(port, bytes, &data)) == X86EMUL_OKAY)
+    {
+        memcpy(val, &data, bytes);
+    }
+    dprintk("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
+			port, bytes, *val);
+    return rc;
+}
+
+/* PIO read */
+int read_io(
+        unsigned int port,
+        unsigned int bytes,
+        unsigned long *val,
+        struct x86_emulate_ctxt *ctxt)
+{
+    unsigned int  aport;
+    unsigned long data;
+
+    ASSERT ( is_vgt_trap_pio(port) == is_vgt_trap_pio(port + bytes - 1) );
+    ASSERT (bytes <= 4);	/* TODO */
+
+    aport = port & ~3;
+    if ( aport == 0xcf8 || aport == 0xcfc ) {
+	dprintk("VGT: read pio at gip %lx port %x bytes %x\n",
+		(unsigned long)ctxt->regs->rip, port,
+		bytes);
+	return vgt_cfg_read_emul(port, bytes, val);
+    }
+
+    if ( !is_vgt_trap_pio(port) ) {
+        printk("Unknown PIO read at %lx, port %x bytes %x!!!\n",
+		(unsigned long)ctxt->regs->rip, port, bytes);
+        return X86EMUL_UNHANDLEABLE;
+    }
+    if ( hcall_pio_read(port, bytes, &data) != X86EMUL_OKAY)
+	return X86EMUL_UNHANDLEABLE;
+
 #if 0
-    dprintk("write pio at gip %lx port %x bytes %x val %lx\n",
-	(unsigned long)ctxt->regs->rip, port, bytes, val);
+    dprintk("read pio at gip %lx port %x bytes %x val %x\n",
+	(unsigned long)ctxt->regs->rip, port, bytes, (unsigned int) req.data);
 #endif
+    memcpy ( val, &data, bytes);
 
     return X86EMUL_OKAY;
+}
+
+int write_io(
+        unsigned int port,
+        unsigned int bytes,
+        unsigned long val,
+        struct x86_emulate_ctxt *ctxt)
+{
+    unsigned int  aport;
+
+    ASSERT ( is_vgt_trap_pio(port) == is_vgt_trap_pio(port + bytes - 1) );
+    ASSERT (bytes <= 4);	/* TODO */
+
+    aport = port & ~3;
+    if ( aport == 0xcf8 || aport == 0xcfc ) {
+        dprintk("VGT: write pio at gip %lx port %x bytes %x val %lx\n",
+		(unsigned long)ctxt->regs->rip,
+		port, bytes, val);
+	return vgt_cfg_write_emul(port, bytes, val, ctxt);
+    }
+
+    if ( !is_vgt_trap_pio(port) ) {
+        printk("Unknown PIO write at %lx, port %x bytes %x!!!\n",
+		(unsigned long)ctxt->regs->rip, port, bytes);
+        return X86EMUL_UNHANDLEABLE;
+    }
+
+    return hcall_pio_write(port, bytes, val);
 }
 
 static int xen_read_sys_data(void *p_data, unsigned long offset, int bytes)
@@ -330,7 +411,7 @@ int read_segment(
         reg->limit = desc.limit0 | (desc.limit << 16L);
     }
 #if 0
-    dprintk("VGT:Eddie000: seg %x sel %x base %lx limit %lx attr %x\n",
+    dprintk("VGT: seg %x sel %x base %lx limit %lx attr %x\n",
 	seg, req.selector,
 	(unsigned long)reg->base, (unsigned long)reg->limit, reg->attr.bytes);
 #endif
