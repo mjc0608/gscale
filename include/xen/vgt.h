@@ -57,8 +57,23 @@
  */
 
 // structures
+struct vgt_device;
+typedef struct {
+    int (*start_vgt)(struct pci_dev *pdev);
+    bool (*mem_read)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
+    bool (*mem_write)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
+    bool (*cfg_read)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
+    bool (*cfg_write)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
+    bool boot_time;
+} vgt_ops_t;
+bool vgt_emulate_write(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
+bool vgt_emulate_read(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
+bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
+bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
 
 // function prototype definitions
-extern int xen_setup_vgt(void); // defined in arch specific file
+// defined in arch specific file
+extern int xen_setup_vgt(vgt_ops_t *ops);
+extern int xen_start_vgt(struct pci_dev *pdev);
 
 // MMIO definitions

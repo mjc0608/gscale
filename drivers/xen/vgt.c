@@ -58,7 +58,10 @@
 
 #include <linux/linkage.h>
 #include <linux/module.h>
+#include <linux/kthread.h>
+#include <linux/pci.h>
 #include <xen/vgt.h>
+#include "vgt_reg.h"
 
 #define VGT_DEBUG
 #ifdef VGT_DEBUG
@@ -73,22 +76,53 @@ MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION("0.1");
 
+struct task_struct *p_thread;
+static int start_vgt(struct pci_dev *pdev)
+{
+    if (vgt_initialize(pdev->bus) == 0) {
+        p_thread = kthread_run(vgt_thread, NULL, "vgt_thread");
+        if (p_thread)
+            return 1;
+        else {
+            vgt_destroy();
+        }
+    }
+    printk("VGT couldn't be started\n");
+    return 0;
+}
+
+static vgt_ops_t vgt_ops = {
+    .start_vgt = start_vgt,
+    .mem_read = vgt_emulate_read,
+    .mem_write = vgt_emulate_write,
+    .cfg_read = vgt_emulate_cfg_read,
+    .cfg_write = vgt_emulate_cfg_write
+#ifndef SINGLE_VM_DEBUG
+    .boot_time = 1;
+#endif
+};
+
 static int __init vgt_init_module(void)
 {
 	int rc;
 
-	rc = xen_setup_vgt();
+	rc = xen_setup_vgt(&vgt_ops);
 
 	// fill other initialization works here
-	return rc;
+	return rc == 0;
 }
 module_init(vgt_init_module);
 
 static void __exit vgt_exit_module(void)
 {
+    int rc;
+
+    rc = kthread_stop (p_thread);
+    printk("VGT module exit %d\n", rc);
 	// Need cancel the i/o forwarding
 
 	// fill other exit works here
+	vgt_destroy();
 	return;
 }
 module_exit(vgt_exit_module);

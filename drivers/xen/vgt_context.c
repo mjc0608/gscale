@@ -1,0 +1,1066 @@
+
+
+/*
+ * vGT core module
+ *
+ * This file is provided under a dual BSD/GPLv2 license.  When using or
+ * redistributing this file, you may do so under either license.
+ *
+ * GPL LICENSE SUMMARY
+ *
+ * Copyright(c) 2011 Intel Corporation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of version 2 of the GNU General Public License as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
+ * The full GNU General Public License is included in this distribution
+ * in the file called LICENSE.GPL.
+ *
+ * BSD LICENSE
+ *
+ * Copyright(c) 2011 Intel Corporation. All rights reserved.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in
+ *     the documentation and/or other materials provided with the
+ *     distribution.
+ *   * Neither the name of Intel Corporation nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#include <linux/linkage.h>
+#include <linux/module.h>
+#include <linux/types.h>
+#include <linux/list.h>
+#include <linux/bitops.h>
+#include <linux/slab.h>
+#include <linux/kthread.h>
+#include <linux/pci.h>
+#include <linux/hash.h>
+#include <asm/bitops.h>
+#include <xen/vgt.h>
+#include "vgt_reg.h"
+#include "vgt_wr.c"
+
+void vgt_restore_context (struct vgt_device *vgt, struct vgt_device *prev);
+void vgt_save_context (struct vgt_device *vgt, struct vgt_device *next);
+
+unsigned int ring_mmio_base [MAX_ENGINES] = {
+	/* must be in the order of ring ID definition */
+	_REG_RCS_TAIL,
+	_REG_VCS_TAIL,
+	_REG_BCS_TAIL,
+#ifndef SANDY_BRIDGE
+	_REG_VECS_TAIL,	// HSW+
+	_REG_VCS2_TAIL,	// BDW
+#endif
+};
+static vgt_ringbuffer_t	*ring_base_vaddr[MAX_ENGINES];
+
+static int vgt_bus=0, vgt_devfn = 0x20;		/* BDF: 0:2:0 */
+static vgt_reg_t vgt_initial_mmio_state[VGT_MMIO_REG_NUM];
+static uint8_t vgt_initial_cfg_space[VGT_CFG_SPACE_SZ];
+static uint32_t vgt_bar_size[3];
+static uint64_t vgt_gttmmio_base;
+static void *vgt_gttmmio_base_va;
+static uint64_t vgt_gmadr_base;
+static void *gt_phys_gmadr_va;
+
+/*
+ * Gfx ownership
+ */
+static struct vgt_device *curr_rendering_owner = NULL;
+LIST_HEAD(rendering_runq_head);
+LIST_HEAD(rendering_idleq_head);
+static inline bool is_current_vgt(struct vgt_device *vgt)
+{
+	return vgt == curr_rendering_owner;
+}
+
+#ifndef SINGLE_VM_DEBUG
+static int curr_monitor_owner = 0;	/* initial from dom0 */
+#define	INVLID_MONITOR_SW_REQ	(-1)	/* -1: means no request */
+int next_monitor_owner;
+#endif
+static struct vgt_device *vgt_dom0;
+struct mmio_hash_table	*mtable[MHASH_SIZE];
+
+static void _add_mtable(int index, struct mmio_hash_table *mht)
+{
+	if ( !mtable[index] ) {
+		mtable[index] = mht;
+		mht->next = NULL;
+	}
+	else {
+		mht->next = mtable[index];
+		mtable[index] = mht;
+	}
+}
+
+static struct mmio_hash_table *lookup_mtable(int mmio_base)
+{
+	int index;
+	struct mmio_hash_table *mht;
+
+	mmio_base &= ~3;
+	index = mhash(mmio_base);
+	mht = mtable[index];
+
+	while (mht != NULL) {
+		if (mht->mmio_base == mmio_base)
+			return mht;
+		else
+			mht = mht->next;
+	};
+	return NULL;
+}
+
+static void free_mtable_chain(struct mmio_hash_table *chain)
+{
+	if (!chain) {
+		free_mtable_chain(chain->next);
+		kfree(chain);
+	}
+}
+
+static void free_mtable(void)
+{
+	int i;
+
+	for (i=0; i<MHASH_SIZE; i++) {
+		if ( mtable[i] )
+			free_mtable_chain(mtable[i]);
+	}
+	memset(mtable, 0, sizeof(mtable));
+}
+
+static void register_mhash_entry(struct mmio_hash_table *mht)
+{
+	int index = mhash(mht->mmio_base);
+
+	ASSERT ((mht->mmio_base & 3) == 0);
+	_add_mtable(index, mht);
+}
+
+bool vgt_register_mmio_handler(int start, int end,
+	vgt_mmio_read read, vgt_mmio_write write)
+{
+	int i;
+	struct mmio_hash_table *mht;
+
+	ASSERT((start & 3) == 0);
+	ASSERT(((end+1) & 3) == 0);
+
+	for ( i = start; i < end; i += 4 ) {
+		mht = kmalloc(sizeof(*mht), GFP_KERNEL);
+		if (mht == NULL) {
+			printk("Insufficient memory in %s\n", __FUNCTION__);
+			free_mtable();
+			return false;
+		}
+		mht->mmio_base = i;
+		mht->read = read;
+		mht->write = write;
+		register_mhash_entry(mht);
+	}
+	return true;
+}
+
+/*
+ * bitmap of allocated vgt_ids.
+ * bit = 0 means free ID, =1 means allocated ID.
+ */
+unsigned long vgt_id_alloc_bitmap;
+
+int allocate_vgt_id(void)
+{
+	unsigned long bit_index;
+
+	ASSERT((vgt_id_alloc_bitmap & VGT_ID_ALLOC_BITMAP)
+		!= VGT_ID_ALLOC_BITMAP);
+
+	do {
+		bit_index = ffz (vgt_id_alloc_bitmap);
+		ASSERT (bit_index < VGT_MAX_VMS);
+		if (bit_index >= VGT_MAX_VMS)
+			return -1;
+	}
+	while ( test_and_set_bit(bit_index, &vgt_id_alloc_bitmap) != 0);
+
+	return bit_index;
+}
+
+void free_vgt_id(int vgt_id)
+{
+	clear_bit(vgt_id, &vgt_id_alloc_bitmap);
+}
+
+
+/*
+ * Guest to host GMADR (include aperture) converting.
+ */
+vgt_reg_t g2h_gmadr(struct vgt_device *vgt, vgt_reg_t g_gm_addr)
+{
+	/* TODO: for offseting */
+	return g_gm_addr;
+}
+
+/*
+ * Host to guest GMADR (include aperture) converting.
+ */
+vgt_reg_t h2g_gmadr(struct vgt_device *vgt, vgt_reg_t h_gm_addr)
+{
+	/* TODO: for offseting */
+	return h_gm_addr;
+}
+
+/*
+ * Get the VA of vgt guest aperture base.
+ * (NOTES: Aperture base is equal to GMADR base)
+ */
+static inline char *__aperture(struct vgt_device *vgt)
+{
+	char *p_contents;
+
+	p_contents = vgt->aperture_base_va;
+	/* TODO: check */
+	p_contents += vgt->aperture_offset;	/* WR use "-" */
+	return p_contents;
+}
+
+/*
+ * Emulate the VGT MMIO register read ops.
+ * Return : true/false
+ * */
+bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,int bytes)
+{
+	struct mmio_hash_table *mht;
+	int id;
+	unsigned int flags=0, off2;
+	vgt_reg_t wvalue;
+
+	ASSERT (offset + bytes <= vgt->state.regNum *
+				sizeof(vgt->state.vReg[0]));
+	ASSERT (bytes <= 4);
+	ASSERT ((offset & 3) + bytes <= 4);
+
+	mht = lookup_mtable(offset);
+	if ( mht && mht->read )
+		mht->read(vgt, offset, p_data, bytes);
+	else {
+		off2 = offset & ~3;
+		id = gpuRegIndex(off2);
+		if ( id >= 0 )
+			flags = gpuregs[id].flags;
+
+		/*
+		 * PIPE registers are pass thru, and need to come
+		 * from real HW register.
+		 */
+		if ((flags & (I915_REG_FLAG_PIPE_A | I915_REG_FLAG_PIPE_B))
+#ifndef SINGLE_VM_DEBUG
+            && (vgt->vgt_id == curr_monitor_owner)
+#endif
+            ) {
+			/* need to update hardware */
+			wvalue = VGT_MMIO_READ(vgt, off2);
+			if (flags & I915_REG_FLAG_GRAPHICS_ADDRESS)
+				wvalue = h2g_gmadr(vgt, wvalue);
+
+		} else
+			wvalue = __vreg(vgt, off2);
+
+		memcpy(p_data, &wvalue + (offset & 3), bytes);
+	}
+	return true;
+}
+
+vgt_reg_t mmio_address_v2p(
+	struct vgt_device *vgt, int id, vgt_reg_t vreg, int shadow_only)
+{
+	unsigned int flags = 0;
+	vgt_reg_t	sreg = vreg;
+
+	if ( id >= 0 )
+		flags = gpuregs[id].flags;
+
+	/*
+	 * We need to fix address for GRAPHICS register here.
+	 * But we want to ignore the ring buffer register.
+	 * The pipe registers must be passthru
+	 */
+	if (flags & I915_REG_FLAG_GRAPHICS_ADDRESS)
+		sreg = g2h_gmadr(vgt, vreg);
+
+	if (!shadow_only &&
+		(flags & (I915_REG_FLAG_PIPE_A | I915_REG_FLAG_PIPE_B)))
+		/* need to update hardware */
+		VGT_MMIO_WRITE(vgt, gpuregs[id].offset, sreg);
+	return sreg;
+}
+
+/*
+ * Emulate the VGT MMIO register write ops.
+ * Return : true/false
+ * */
+bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, int bytes)
+{
+	struct mmio_hash_table *mht;
+	int id;
+
+	ASSERT (offset + bytes <= vgt->state.regNum *
+				sizeof(vgt->state.vReg[0]));
+	ASSERT (bytes <= 4);
+
+	mht = lookup_mtable(offset);
+	if ( mht && mht->write )
+		mht->write(vgt, offset, p_data, bytes);
+	else {
+		memcpy((char *)vgt->state.vReg + offset,
+				p_data, bytes);
+		offset &= ~3;
+		id = gpuRegIndex(offset);
+
+		mmio_address_v2p (vgt, id, __vreg(vgt, offset), 0);
+	}
+	return true;
+}
+
+bool is_rendering_engine_empty(int ring_id)
+{
+	vgt_ringbuffer_t	*prb;
+
+	prb = ring_base_vaddr[ring_id];
+	if ( is_ring_enabled(prb) && !is_ring_empty(prb) )
+		return false;
+	return true;
+}
+
+bool is_rendering_engines_empty(void)
+{
+	int i;
+
+	for (i=0; i < VGT_MAX_VMS; i++)
+		if ( !is_rendering_engine_empty(i) )
+			return false;
+	return true;
+}
+
+#ifndef SINGLE_VM_DEBUG
+/*
+ * Request from user level daemon/IOCTL
+ */
+void vgt_request_monitor_owner_switch(int vgt_id)
+{
+	if (next_monitor_owner != curr_monitor_owner)
+		next_monitor_owner = vgt_id;
+}
+
+/*
+ * Do monitor owner switch.
+ */
+void vgt_switch_monitor_owner(int prev_id, int next_id)
+{
+}
+#endif
+
+static struct vgt_device *next_vgt(
+	struct list_head *head, struct vgt_device *vgt)
+{
+	struct list_head *next;
+
+	next = vgt->list.next;
+	if (next == head)
+		return NULL;
+	return list_entry(next, struct vgt_device, list);
+}
+/*
+ * The thread to perform the VGT ownership switch.
+ *
+ */
+int vgt_thread(void *priv)
+{
+	struct vgt_device *next, *vgt=priv;
+
+	while (!kthread_should_stop()) {
+		/*
+		 * TODO: Use high priority task and timeout based event
+		 * 	mechanism for QoS
+		 */
+		schedule();
+
+		set_current_state(TASK_INTERRUPTIBLE);
+
+#ifndef SINGLE_VM_DEBUG
+		/* Response to the monitor switch request. */
+		if (next_monitor_owner != INVLID_MONITOR_SW_REQ) {
+			/* has pending request */
+			vgt_switch_monitor_owner(curr_monitor_owner,
+					next_monitor_owner);
+			curr_monitor_owner = next_monitor_owner;
+			next_monitor_owner = INVLID_MONITOR_SW_REQ;
+		}
+#endif
+
+		if ((curr_rendering_owner == NULL) &&
+			list_empty(&rendering_runq_head))
+			/* Idle now, and no pending activity */
+			continue;
+
+		if (is_rendering_engines_empty()) {
+			next = next_vgt(&rendering_runq_head, vgt);
+			if ( next != curr_rendering_owner ) {
+				vgt_save_context(curr_rendering_owner, next);
+				if ( next != NULL )
+					vgt_restore_context(next, curr_rendering_owner);
+				curr_rendering_owner = next;
+			}
+		}
+	}
+	return 0;
+}
+
+void ring_phys_2_shadow(int ring_id, vgt_ringbuffer_t *srb)
+{
+	vgt_ringbuffer_t *prb = ring_base_vaddr[ring_id];
+
+	srb->tail = _REG_READ_(&prb->tail);
+	srb->head = _REG_READ_(&prb->head);
+	srb->start = _REG_READ_(&prb->start);
+	srb->ctl = _REG_READ_(&prb->ctl);
+}
+
+/* Rewind the head/tail registers */
+void rewind_ring(int ring_id, vgt_ringbuffer_t *srb)
+{
+	vgt_ringbuffer_t *prb = ring_base_vaddr[ring_id];
+
+	_REG_WRITE_(&prb->tail, srb->tail);
+	_REG_WRITE_(&prb->head, srb->head);
+}
+
+void ring_shadow_2_phys(int ring_id, vgt_ringbuffer_t *srb)
+{
+	vgt_ringbuffer_t *prb = ring_base_vaddr[ring_id];
+
+	_REG_WRITE_(&prb->tail, srb->tail);
+	_REG_WRITE_(&prb->head, srb->head);
+	_REG_WRITE_(&prb->start, srb->start);
+	_REG_WRITE_(&prb->ctl, srb->ctl);
+}
+
+/*
+ * Load sring from vring.
+ */
+static void vring_2_sring(struct vgt_device *vgt, vgt_state_ring_t *rb)
+{
+	rb->sring.head = rb->vring.head;
+	rb->sring.tail = rb->vring.tail;
+	/* Aperture fixes */
+	rb->sring.start = g2h_gmadr(vgt, rb->vring.start);
+
+	rb->sring.ctl = rb->vring.start;
+
+	/* TODO: QoS  control to advance tail reg. */
+}
+
+/*
+ * s2v only needs to update head register.
+ */
+static void sring_2_vring(struct vgt_device *vgt,
+	vgt_ringbuffer_t *sr, vgt_ringbuffer_t *vr)
+{
+	/* Fix address */
+	vr->head = h2g_gmadr(vgt, sr->head);
+}
+
+static  void ring_save_commands (vgt_state_ring_t *rb,
+	char *p_aperture, char *buf, int bytes)
+{
+	char	*p_contents;
+	vgt_reg_t	rbtail;
+	vgt_reg_t  ring_size, to_tail;
+
+	ASSERT ((bytes & 3) == 0);
+	p_contents = p_aperture + rb->sring.start;
+	rbtail = rb->sring.tail;	/* in byte unit */
+
+	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
+	to_tail = ring_size - rbtail;
+
+	if ( likely(to_tail >= bytes) )
+	{
+		memcpy (buf, p_contents + rbtail, bytes);
+	}
+	else {
+		memcpy (buf, p_contents + rbtail, to_tail);
+		memcpy (buf + to_tail, p_contents, bytes - to_tail);
+	}
+}
+
+static void ring_load_commands(vgt_state_ring_t *rb,
+	char *p_aperture, char *buf, int bytes)
+{
+	char	*p_contents;
+	vgt_reg_t	rbtail;
+	vgt_reg_t  ring_size, to_tail;	/* bytes */
+
+	p_contents = p_aperture + rb->sring.start;
+	rbtail = rb->phys_tail;
+
+	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
+	to_tail = ring_size - rbtail;
+
+	if ( likely(to_tail >= bytes) )
+	{
+		memcpy ((rb_dword *)p_contents + rbtail, buf, bytes);
+		rb->phys_tail += bytes;
+	} else {
+		memcpy ((rb_dword *)p_contents + rbtail, buf, to_tail);
+		memcpy (p_contents, buf + to_tail, bytes - to_tail);
+		rb->phys_tail = bytes - to_tail;
+	}
+}
+
+static inline void save_ring_buffer(struct vgt_device *vgt, int ring_id)
+{
+	ring_save_commands (&vgt->rb[ring_id],
+			__aperture(vgt),
+			(char*)vgt->rb[ring_id].save_buffer,
+			sizeof(vgt->rb[ring_id].save_buffer));
+}
+
+static void restore_ring_buffer(struct vgt_device *vgt, int ring_id)
+{
+	ring_load_commands (&vgt->rb[ring_id],
+			__aperture(vgt),
+			(char *)vgt->rb[ring_id].save_buffer,
+			sizeof(vgt->rb[ring_id].save_buffer));
+}
+
+static void disable_power_management(struct vgt_device *vgt)
+{
+	/* Save the power state and froce wakeup. */
+	vgt->saved_wakeup = VGT_MMIO_READ(vgt, I915_REG_FORCEWAKE_OFFSET);
+	VGT_MMIO_WRITE(vgt, I915_REG_FORCEWAKE_OFFSET, 1);
+	VGT_MMIO_READ(vgt, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
+}
+
+static void restore_power_management(struct vgt_device *vgt)
+{
+	/* Restore the saved power state. */
+	VGT_MMIO_WRITE(vgt, I915_REG_FORCEWAKE_OFFSET, vgt->saved_wakeup);
+	VGT_MMIO_READ(vgt, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
+}
+
+
+static rb_dword	cmds_save_context[8] =
+	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
+	MI_SET_CONTEXT, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT,
+	MI_NOOP,
+	MI_SUSPEND_FLUSH,
+	MI_NOOP,
+	MI_FLUSH,
+	MI_NOOP};
+
+static rb_dword	cmds_restore_context[8] =
+	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
+	MI_SET_CONTEXT, MI_MM_SPACE_GTT | MI_FORCE_RESTORE,
+	MI_NOOP,
+	MI_SUSPEND_FLUSH,
+	MI_NOOP,
+	MI_FLUSH,
+	MI_NOOP};
+
+/*
+ * Wait for the empty of RB.
+ * NOTES: Empty of RB doesn't mean the commands are retired.
+ */
+static bool ring_wait_for_empty(int ring_id, int timeout)
+{
+	bool r = true;
+
+	/* wait to be completed: TO CHECK: WR uses CCID register */
+	while (--timeout > 0 ) {
+		if (is_rendering_engine_empty(ring_id))
+			break;
+		sleep_us(1);		/* 1us delay */
+	}
+	if (timeout <= 0) {
+		printk("ring_wait_for_empty timeout\n");
+		ASSERT(0);
+		r = false;
+	}
+	return r;
+}
+
+static bool wait_ccid_to_renew(vgt_reg_t new_ccid)
+{
+	int	timeout;
+	vgt_reg_t ccid;
+
+	/* wait for the register to be updated */
+	timeout = CCID_TIMEOUT_LIMIT;
+	while (--timeout > 0 ) {
+		ccid = VGT_MMIO_READ (vgt, _REG_CCID);
+		if ((ccid & GPU_PAGE_MASK) == (new_ccid & GPU_PAGE_MASK))
+			break;
+		sleep_us(1);		/* 1us delay */
+	}
+	if (timeout <= 0) {
+		printk("Update CCID failed at %s %d %xi %x\n",
+			__FUNCTION__, __LINE__,	ccid, new_ccid);
+		return false;
+	}
+	return true;
+}
+
+/*
+ * Submit a series of context save/restore commands to ring engine,
+ * and wait till it is executed.
+ */
+bool submit_context_command (struct vgt_device *vgt,
+	int ring_id, rb_dword *cmds, int bytes, uint32_t ccid_addr)
+{
+	vgt_state_ring_t	*rb;
+	vgt_reg_t	ccid;
+	vgt_ringbuffer_t *prb = ring_base_vaddr[ring_id];
+
+	ASSERT ((ccid_addr & ~GPU_PAGE_MASK) == 0 );
+
+	rb = &vgt->rb[ring_id];
+
+	/* WR ignore extended state, and MBO bits, why ? */
+	ccid =  ccid_addr | CCID_MBO_BITS |
+		CCID_VALID | CCID_EXTENDED_STATE_SAVE_ENABLE;
+	VGT_MMIO_WRITE(vgt, _REG_CCID, ccid);
+
+	if ( !wait_ccid_to_renew (ccid) )
+		return false;
+
+	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
+	_REG_WRITE_(&prb->tail, rb->phys_tail);		/* TODO: Lock in future */
+
+	return wait_ccid_to_renew(cmds[2]);
+}
+
+void vgt_rendering_save_mmio(struct vgt_device *vgt)
+{
+	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
+	int num = ARRAY_NUM(rendering_ctx_regs);
+	int i;
+
+	sreg = vgt->state.sReg;
+	vreg = vgt->state.vReg;
+
+	for (i=0; i<num; i++) {
+		ASSERT (rendering_ctx_regs[i] < vgt->state.regNum);
+		sreg[rendering_ctx_regs[i]] =
+			VGT_MMIO_READ(vgt, rendering_ctx_regs[i]);
+		/*
+		 * TODO: Fix address.
+		 */
+		/*
+		 * If a register may be updated by HW as well,
+		 * how to coordinate w/ pure SW emulation?
+		 */
+		vreg[rendering_ctx_regs[i]] = sreg[rendering_ctx_regs[i]];
+	}
+}
+
+/*
+ * Rstore MMIO registers per rendering context.
+ * (Not include ring buffer registers).
+ */
+void vgt_rendering_restore_mmio(struct vgt_device *vgt)
+{
+	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
+	int num = ARRAY_NUM(rendering_ctx_regs);
+	int i;
+
+	sreg = vgt->state.sReg;
+	vreg = vgt->state.vReg;
+
+	for (i=0; i<num; i++) {
+		/* Address is fixed previously */
+		VGT_MMIO_WRITE(vgt, rendering_ctx_regs[i],
+			sreg[rendering_ctx_regs[i]]);
+	}
+}
+
+/*
+ * Rendering engine context switch.
+ *
+ */
+
+void vgt_save_context (struct vgt_device *vgt, struct vgt_device *next)
+{
+	int 			i;
+	vgt_state_ring_t	*rb;
+
+	if (vgt == NULL)
+		return;
+	/* disable Power */
+	disable_power_management(vgt);
+
+	/* save MMIO: IntelGpuRegSave in WR */
+	vgt_rendering_save_mmio(vgt);
+
+	/* save rendering engines */
+	for (i=0; i < MAX_ENGINES; i++) {
+		rb = &vgt->rb[i];
+		ring_phys_2_shadow (i, &rb->sring);
+		/* cache the tail reg. */
+		rb->phys_tail = rb->sring.tail;
+
+		sring_2_vring(vgt, &rb->sring, &rb->vring);
+
+		/* save 32 dwords of the ring */
+		save_ring_buffer (vgt, i);
+
+		/* No need to submit ArbOnOffInstruction */
+
+		/* The new context area must be different with CCID
+		 * Can we use 0 here ? If yes, no need to use restore address.
+		 * TODO: Check w/ the buffer contents to see if it happens.
+		 */
+		cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
+			next->rb[i].context_save_area;
+		submit_context_command (vgt, i, cmds_save_context,
+				sizeof(cmds_save_context),
+				rb->context_save_area);
+		rb->initialized = true;
+	}
+}
+
+void vgt_restore_context (struct vgt_device *vgt, struct vgt_device *prev)
+{
+	int i;
+	vgt_state_ring_t	*rb;
+
+	if (vgt == NULL)
+		return ;
+	/* Restore rb registers */
+	for (i=0; i < MAX_ENGINES; i++) {
+		rb = &vgt->rb[i];
+
+		if (rb->initialized ) {	/* has saved context */
+			ring_shadow_2_phys (i, &rb->sring);
+			rb->phys_tail = rb->sring.tail;
+
+			/* Update set_context command: Double save here */
+			cmds_restore_context[2] = rb->context_save_area |
+				MI_MM_SPACE_GTT | MI_FORCE_RESTORE;
+			submit_context_command (vgt, i, cmds_restore_context,
+				sizeof(cmds_restore_context),
+				prev->rb[i].context_save_area);
+
+			/* restore 32 dwords of the ring */
+			restore_ring_buffer (vgt, i);
+		}
+	}
+	/* MMIO restore: intelGpuRegRestore in WR */
+	vgt_rendering_restore_mmio(vgt);
+
+	/* Restore ring registers */
+	for (i=0; i < MAX_ENGINES; i++) {
+		rb = &vgt->rb[i];
+		/* vring->sring */
+		vring_2_sring(vgt, rb);
+		ring_shadow_2_phys (i, &rb->sring);
+	}
+
+	/* Restore the PM */
+	restore_power_management(vgt);
+}
+
+static void state_reg_v2s(struct vgt_device *vgt)
+{
+	int i, off;
+	vgt_reg_t *vreg, *sreg;
+
+	vreg = vgt->state.vReg;
+	sreg = vgt->state.sReg;
+	memcpy (sreg, vreg, VGT_MMIO_SPACE_SZ);
+
+	/* Address fix */
+	for (i = 0; i < gpuRegEntries; i++) {
+		off = gpuregs[i].offset;
+		/* reuse vgt_emulate_write logic to fix address. */
+		*(vgt_reg_t *)((char *)sreg + off) =
+			mmio_address_v2p (vgt, i, __vreg(vgt, off), 1);
+
+	}
+}
+
+/*
+ * Initialize the vgt state instance.
+ * Return:   0: failed
+ * 	     1: success
+ *
+ */
+static bool create_state_instance(struct vgt_device *vgt)
+{
+	vgt_state_t	*state;
+
+	state = &vgt->state;
+	state->vReg = kmalloc (state->regNum * REG_SIZE, GFP_KERNEL);
+	state->sReg = kmalloc (state->regNum * REG_SIZE, GFP_KERNEL);
+	if ( state->vReg == NULL || state->sReg == NULL )
+	{
+		printk("VGT: insufficient memory allocation at %s\n", __FUNCTION__);
+		if ( state->vReg )
+			kfree (state->vReg);
+		if ( state->sReg )
+			kfree (state->sReg);
+		state->sReg = state->vReg = NULL;
+		return false;
+	}
+	return true;
+}
+
+/*
+ * priv: VCPU ?
+ */
+struct vgt_device *create_vgt_instance(void *priv)
+{
+	int vgt_id, i;
+	struct vgt_device *vgt;
+	vgt_state_ring_t	*rb;
+	char *cfg_space;
+
+	/* TODO: check format of aperture size */
+
+	vgt_id = allocate_vgt_id();
+	if (vgt_id < 0)
+		return NULL;
+	vgt = kmalloc (sizeof(*vgt), GFP_KERNEL);
+	if (vgt == NULL) {
+		free_vgt_id(vgt_id);
+		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
+		return NULL;
+	}
+	vgt->vgt_id = vgt_id;
+	vgt->priv = priv;
+	vgt->state.regNum = VGT_MMIO_REG_NUM;
+	INIT_LIST_HEAD(&vgt->list);
+	list_add(&vgt->list, &rendering_idleq_head);
+
+	if ( !create_state_instance(vgt) ) {
+		free_vgt_id(vgt_id);
+		kfree (vgt);
+		return NULL;
+	}
+
+	if (vgt_id == 0) {	/* dom0 GFX driver */
+		vgt->state.aperture_base_pa = vgt_gmadr_base +
+				VGT_DOM0_GFX_APERTURE_BASE;
+//		vgt->state.gt_gmadr_base = ;
+	} else {
+		vgt->state.aperture_base_pa = vgt_gmadr_base +
+				VGT_VM1_APERTURE_BASE +
+				VGT_GUEST_APERTURE_SZ * (vgt_id-1);
+	}
+	vgt->aperture_base_va = _vgt_mmio_va(vgt, vgt->state.aperture_base_pa);
+	vgt->aperture_offset = 0;
+
+	vgt->vgt_aperture_base = vgt_gmadr_base + VGT_APERTURE_BASE +
+		vgt_id * VGT_APERTURE_PER_INSTANCE_SZ;
+
+	for (i=0; i< MAX_ENGINES; i++) {
+		rb = &vgt->rb[i];
+		rb->context_save_area = vgt->vgt_aperture_base +
+			i * SZ_CONTEXT_AREA_PER_RING;
+		rb->initialized = false;
+	}
+
+	vgt->state.bar_size[0] = VGT_GUEST_APERTURE_SZ;	/* MMIOGTT */
+	vgt->state.bar_size[1] = vgt_bar_size[1];	/* GMADR */
+	vgt->state.bar_size[2] = vgt_bar_size[2];	/* PIO */
+
+	/* Set initial configuration space and MMIO space registers. */
+	cfg_space = &vgt->state.cfg_space[0];
+	memcpy (cfg_space, vgt_initial_cfg_space, VGT_CFG_SPACE_SZ);
+	cfg_space[VGT_REG_CFG_SPACE_MSAC] = MSAC_APERTURE_SIZE_128M;
+	*(uint32_t *)(cfg_space + VGT_REG_CFG_SPACE_BAR1) =
+		vgt->state.aperture_base_pa | 0x4;	/* 64-bit MMIO bar */
+
+	memcpy (vgt->state.vReg, vgt_initial_mmio_state, VGT_MMIO_SPACE_SZ);
+	state_reg_v2s (vgt);
+
+	/* TODO: per register special handling. */
+	return vgt;
+}
+
+void vgt_release_instance(struct vgt_device *vgt)
+{
+	struct list_head *pos;
+
+	list_for_each (pos, &rendering_runq_head)
+		if (pos == &vgt->list) {
+			printk("Couldn't release an active vgt instance\n");
+			return ;
+		}
+	/* The vgt may be still in executing. */
+	while ( is_current_vgt(vgt) )
+		schedule();
+
+	/* already idle */
+	list_del(&vgt->list);
+
+	kfree(vgt->state.vReg);
+	kfree(vgt->state.sReg);
+	free_vgt_id(vgt->vgt_id);
+	kfree(vgt);
+}
+
+static uint32_t pci_bar_size(struct pci_bus *bus, unsigned int bar_off)
+{
+	unsigned long bar_s, bar_size=0;
+
+	pci_bus_read_config_dword(bus, vgt_devfn, bar_off,
+				(uint32_t *)&bar_s);
+	pci_bus_write_config_dword(bus, vgt_devfn, bar_off, 0xFFFFFFFF);
+
+	pci_bus_read_config_dword(bus, vgt_devfn, bar_off,
+				(uint32_t *)&bar_size);
+	bar_size &= ~0xf;       /* bit 4-31 */
+	bar_size = 1 << find_first_bit(&bar_size, sizeof(bar_size));
+
+	pci_bus_write_config_dword(bus, vgt_devfn, bar_off, bar_s);
+
+#if 0
+        bar_s = pci_conf_read32( 0, vgt_bus, vgt_dev, vgt_fun, bar_off);
+        pci_conf_write32(0, vgt_bus, vgt_dev, vgt_fun, bar_off, 0xFFFFFFFF);
+
+        bar_size = pci_conf_read32(0, vgt_bus, vgt_dev, vgt_fun, bar_off);
+        bar_size &= ~0xf;       /* bit 4-31 */
+        bar_size = 1 << find_first_bit(&bar_size, sizeof(bar_size));
+
+        pci_conf_write32(0, vgt_bus, vgt_dev, vgt_fun, bar_offset, bar_s);
+#endif
+        return bar_size;
+}
+
+bool initial_phys_states(struct pci_bus *bus)
+{
+	int i;
+	uint64_t	bar0, bar1;
+
+	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4) {
+		pci_bus_read_config_dword(bus, vgt_devfn, i,
+				(uint32_t *)&vgt_initial_cfg_space[i]);
+	}
+	for (i=0; i < 3; i++)
+		vgt_bar_size[i] = pci_bar_size(bus, VGT_REG_CFG_SPACE_BAR0 + 8*i);
+
+	bar0 = *(uint64_t *)&vgt_initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
+	bar1 = *(uint64_t *)&vgt_initial_cfg_space[VGT_REG_CFG_SPACE_BAR1];
+	ASSERT ((bar0 & 7) == 4);
+	/* memory, 64 bits bar0 */
+	vgt_gttmmio_base = bar0 & ~0xf;
+
+	ASSERT ((bar1 & 7) == 4);
+	/* memory, 64 bits bar */
+	vgt_gmadr_base = bar1 & ~0xf;
+
+	vgt_gttmmio_base_va = ioremap (vgt_gttmmio_base, VGT_MMIO_SPACE_SZ);
+	if ( vgt_gttmmio_base_va == NULL ) {
+		printk("Insufficient memory for ioremap1\n");
+		return false;
+	}
+	gt_phys_gmadr_va = ioremap (vgt_gmadr_base, VGT_MMIO_SPACE_SZ);
+	if ( gt_phys_gmadr_va == NULL ) {
+		iounmap(vgt_gttmmio_base_va);
+		printk("Insufficient memory for ioremap2\n");
+		return false;
+	}
+	memcpy (vgt_initial_mmio_state, vgt_gttmmio_base_va,
+			VGT_MMIO_SPACE_SZ);
+	return true;
+}
+
+/*
+ * Initialize the vgt driver.
+ *  return 0: success
+ *	-1: error
+ */
+int vgt_initialize(struct pci_bus *bus)
+{
+	int i;
+
+	memset (mtable, 0, sizeof(mtable));
+	for (i=0; i < MAX_ENGINES; i++) {
+		ring_base_vaddr[i] =
+			(vgt_ringbuffer_t *) _vgt_mmio_va(NULL, ring_mmio_base[i]);
+	}
+	if ( !vgt_initialize_mmio_hooks() )
+		return -1;
+	if ( !initial_phys_states(bus) )
+		return -1;
+
+	/* create domain 0 instance */
+	vgt_dom0 = create_vgt_instance(NULL);   /* TODO: */
+	if (vgt_dom0 == NULL)
+		return -1;
+	return 0;
+}
+
+void vgt_destroy()
+{
+	struct list_head *pos, *next;
+	struct vgt_device *vgt;
+
+	/* Deactive all VGTs */
+	while ( list_empty(&rendering_runq_head) ) {
+		list_for_each (pos, &rendering_runq_head)
+			vgt_deactive(pos);
+	};
+	if (vgt_gttmmio_base_va)
+		iounmap(vgt_gttmmio_base_va);
+	if (gt_phys_gmadr_va)
+		iounmap(gt_phys_gmadr_va);
+	for (pos = rendering_idleq_head.next;
+		pos != &rendering_idleq_head; pos = next) {
+		next = pos->next;
+		vgt = list_entry (pos, struct vgt_device, list);
+		vgt_release_instance(vgt);
+	}
+	free_mtable();
+}
+
+
+/*
+ * TODO: PIO BAR.
+ */

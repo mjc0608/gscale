@@ -31,6 +31,7 @@
 #include <xen/interface/vcpu.h>
 #include <xen/vgt.h>
 #include <linux/init.h>
+static vgt_ops_t *vgt_ops = NULL;
 
 #define ASSERT(x)						\
 	do {							\
@@ -627,7 +628,7 @@ int emulate_write(
 	return X86EMUL_OKAY;
 }
 
-static const struct x86_emulate_ops vgt_ops = {
+static const struct x86_emulate_ops vgt_emu_ops = {
 	.read = emulate_read,
 	.write = emulate_write,
 	.insn_fetch = emulate_insn_fetch,
@@ -739,7 +740,7 @@ static int vgt_emulate_ins(struct pt_regs *regs)
 	int rc;
 
 	pt_regs_2_em_regs(regs, &em_regs);
-	rc = x86_emulate (&ctxt, &vgt_ops);
+	rc = x86_emulate (&ctxt, &vgt_emu_ops);
 	em_regs_2_pt_regs(&em_regs, regs);
 
 	return rc;
@@ -754,8 +755,9 @@ static int xen_vgt_handler(struct pt_regs *regs, long error_code)
 	return vgt_emulate_ins(regs) == X86EMUL_OKAY;
 }
 
-int xen_setup_vgt(void)
+int xen_setup_vgt(vgt_ops_t *ops)
 {
+    vgt_ops = ops;
 	if (!register_gp_prehandler(xen_vgt_handler)) {
 		trap_req.nr_pio_frags = 1;
 		trap_req.pio_frags[0].s = 0x3B0;
@@ -777,5 +779,16 @@ int xen_setup_vgt(void)
 		printk("vGT: fail to install GP handler\n");
 	return 0;
 }
+
+int xen_start_vgt(struct pci_dev *pdev)
+{
+    int ret = 0;
+
+    if (vgt_ops && vgt_ops->start_vgt)
+        ret = vgt_ops->start_vgt(pdev);
+    return ret;
+}
+
 //core_initcall(xen_setup_vgt);
 EXPORT_SYMBOL(xen_setup_vgt);
+EXPORT_SYMBOL(xen_start_vgt);

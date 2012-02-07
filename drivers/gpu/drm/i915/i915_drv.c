@@ -29,6 +29,7 @@
 
 #include <linux/device.h>
 #include <linux/acpi.h>
+#include <xen/vgt.h>
 #include <drm/drmP.h>
 #include <drm/i915_drm.h>
 #include "i915_drv.h"
@@ -910,6 +911,9 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		return -ENODEV;
 
 	driver.driver_features &= ~(DRIVER_USE_AGP);
+
+	/* TO inform VGT */
+	xen_start_vgt(pdev);
 
 	return drm_get_pci_dev(pdev, ent, &driver);
 }
