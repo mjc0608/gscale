@@ -21,6 +21,8 @@
 #include <linux/mm.h>
 #include <linux/sched.h>
 #include <linux/delay.h>
+#include <linux/bitops.h>
+#include <asm/bitops.h>
 #include <asm/ptrace.h>
 #include <asm/traps.h>
 #include <asm/xen/interface.h>
@@ -32,6 +34,63 @@
 #include <xen/vgt.h>
 #include <linux/init.h>
 static vgt_ops_t *vgt_ops = NULL;
+
+#define MAX_VGT_DEVICES     16
+unsigned long   vgt_device_bitmap = 0;
+struct {
+    int dom_id;
+    struct vgt_device *vgt;
+} vgt_devices[MAX_VGT_DEVICES];      /* Dom0 is always in ..[0] */
+
+int find_free_device_id(void)
+{
+    int index;
+
+    do {
+        index = ffz (vgt_device_bitmap);
+        if (index >= MAX_VGT_DEVICES)
+            return -1;
+    } while (test_and_set_bit(index, &vgt_device_bitmap) != 0);
+    return index;
+}
+
+static inline void free_device_id(int id)
+{
+    clear_bit(id, &vgt_device_bitmap);
+}
+
+/*
+ * Return ID of registered vgt device.
+ *  >= 0: successful
+ *  -1: failed.
+ */
+int xen_register_vgt_device(int dom_id, struct vgt_device *vgt)
+{
+    int dev_id = find_free_device_id();
+    bool ret = -1;
+
+    if ((dev_id < MAX_VGT_DEVICES) && (dev_id >= 0)) {
+        vgt_devices[dev_id].dom_id = dom_id;
+        vgt_devices[dev_id].vgt = vgt;
+        ret = dev_id;
+    }
+    return ret;
+}
+
+void xen_deregister_vgt_device(struct vgt_device *vgt)
+{
+    int i;
+
+    for (i=0; i < MAX_VGT_DEVICES; i++)
+         if (vgt_devices[i].vgt == vgt) {
+            vgt_devices[i].vgt = NULL;
+            vgt_devices[i].dom_id = 0;
+            free_device_id(i);
+            return;
+        };
+
+    printk("xen_deregister_vgt_device failed\n");
+}
 
 #define ASSERT(x)						\
 	do {							\
@@ -236,7 +295,7 @@ int hcall_pio_read(
     return X86EMUL_OKAY;
 }
 
-unsigned int vgt_cf8;
+static unsigned int vgt_cf8;
 int vgt_cfg_write_emul(
         unsigned int port,
         unsigned int bytes,
@@ -254,8 +313,15 @@ int vgt_cfg_write_emul(
 
         vgt_cf8 = val;
     }
-    else	// port 0xCFC */
-        rc = hcall_pio_write(port, bytes, val);
+    else {	// port 0xCFC */
+        ASSERT (port == 0xcfc);
+        if ((vgt_ops == NULL) || vgt_ops->boot_time)
+            rc = hcall_pio_write(port, bytes, val);
+        else
+            if (!vgt_ops->cfg_write(vgt_devices[0].vgt,
+                        vgt_cf8 & 0xff, &val, bytes))
+                rc = X86EMUL_UNHANDLEABLE;
+    }
 
     return rc;
 }
@@ -271,9 +337,19 @@ int vgt_cfg_read_emul(
     if ((port & ~3)== 0xcf8) {
         memcpy(val, (uint8_t*)&vgt_cf8 + (port & 3), bytes);
     }
-    else if ( (rc = hcall_pio_read(port, bytes, &data)) == X86EMUL_OKAY)
-    {
-        memcpy(val, &data, bytes);
+    else {
+        ASSERT (port == 0xcfc);
+        if ((vgt_ops == NULL) || vgt_ops->boot_time) {
+            rc = hcall_pio_read(port, bytes, &data);
+            if (rc == X86EMUL_OKAY)
+                memcpy(val, &data, bytes);
+        } else {
+            if (vgt_ops->cfg_read(vgt_devices[0].vgt,
+                        vgt_cf8 & 0xff, &val, bytes))
+                memcpy(val, &data, bytes);
+            else
+                rc = X86EMUL_UNHANDLEABLE;
+        }
     }
     dprintk("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
 			port, bytes, *val);
@@ -790,5 +866,10 @@ int xen_start_vgt(struct pci_dev *pdev)
 }
 
 //core_initcall(xen_setup_vgt);
-EXPORT_SYMBOL(xen_setup_vgt);
+/* for GFX driver */
 EXPORT_SYMBOL(xen_start_vgt);
+
+/* for vGT driver */
+EXPORT_SYMBOL(xen_setup_vgt);
+EXPORT_SYMBOL(xen_register_vgt_device);
+EXPORT_SYMBOL(xen_deregister_vgt_device);

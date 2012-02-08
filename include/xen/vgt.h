@@ -75,5 +75,7 @@ bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int off, void *p_data
 // defined in arch specific file
 extern int xen_setup_vgt(vgt_ops_t *ops);
 extern int xen_start_vgt(struct pci_dev *pdev);
+extern int xen_register_vgt_device(int dom_id, struct vgt_device *vgt);
+extern void xen_deregister_vgt_device(struct vgt_device *vgt);
 
 // MMIO definitions

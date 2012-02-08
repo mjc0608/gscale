@@ -1026,15 +1026,23 @@ int vgt_initialize(struct pci_bus *bus)
 			(vgt_ringbuffer_t *) _vgt_mmio_va(NULL, ring_mmio_base[i]);
 	}
 	if ( !vgt_initialize_mmio_hooks() )
-		return -1;
+		goto err;
 	if ( !initial_phys_states(bus) )
-		return -1;
+		goto err;
 
 	/* create domain 0 instance */
 	vgt_dom0 = create_vgt_instance(NULL);   /* TODO: */
 	if (vgt_dom0 == NULL)
-		return -1;
+        goto err;
+    if (xen_register_vgt_device(0, vgt_dom0) != 0) {
+        xen_deregister_vgt_device(vgt_dom0);
+        goto err;
+    }
 	return 0;
+err:
+    printk("vgt_initialize failed\n");
+    vgt_destroy();
+    return -1;
 }
 
 void vgt_destroy()
