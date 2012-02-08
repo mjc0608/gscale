@@ -1,5 +1,3 @@
-
-
 /*
  * vGT core module
  *
@@ -85,30 +83,21 @@ unsigned int ring_mmio_base [MAX_ENGINES] = {
 	_REG_VCS2_TAIL,	// BDW
 #endif
 };
-static vgt_ringbuffer_t	*ring_base_vaddr[MAX_ENGINES];
 
-static int vgt_bus=0, vgt_devfn = 0x20;		/* BDF: 0:2:0 */
-static vgt_reg_t vgt_initial_mmio_state[VGT_MMIO_REG_NUM];
-static uint8_t vgt_initial_cfg_space[VGT_CFG_SPACE_SZ];
-static uint32_t vgt_bar_size[3];
-static uint64_t vgt_gttmmio_base;
-static void *vgt_gttmmio_base_va;
-static uint64_t vgt_gmadr_base;
-static void *gt_phys_gmadr_va;
+static struct pgt_device default_device = {
+	.bus = 0,
+	.devfn = 0x20,		/* BDF: 0:2:0 */
+};
 
 /*
  * Gfx ownership
  */
-static struct vgt_device *curr_rendering_owner = NULL;
-LIST_HEAD(rendering_runq_head);
-LIST_HEAD(rendering_idleq_head);
 static inline bool is_current_vgt(struct vgt_device *vgt)
 {
-	return vgt == curr_rendering_owner;
+	return vgt == current_render_owner(vgt->pdev);
 }
 
 #ifndef SINGLE_VM_DEBUG
-static int curr_monitor_owner = 0;	/* initial from dom0 */
 #define	INVLID_MONITOR_SW_REQ	(-1)	/* -1: means no request */
 int next_monitor_owner;
 #endif
@@ -289,7 +278,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 		 */
 		if ((flags & (I915_REG_FLAG_PIPE_A | I915_REG_FLAG_PIPE_B))
 #ifndef SINGLE_VM_DEBUG
-            && (vgt->vgt_id == curr_monitor_owner)
+            && (vgt->vgt_id == curr_monitor_owner(pdev))
 #endif
             ) {
 			/* need to update hardware */
@@ -357,22 +346,22 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool is_rendering_engine_empty(int ring_id)
+bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 {
 	vgt_ringbuffer_t	*prb;
 
-	prb = ring_base_vaddr[ring_id];
+	prb = pdev->ring_base_vaddr[ring_id];
 	if ( is_ring_enabled(prb) && !is_ring_empty(prb) )
 		return false;
 	return true;
 }
 
-bool is_rendering_engines_empty(void)
+bool is_rendering_engines_empty(struct pgt_device *pdev)
 {
 	int i;
 
 	for (i=0; i < VGT_MAX_VMS; i++)
-		if ( !is_rendering_engine_empty(i) )
+		if ( !is_rendering_engine_empty(pdev, i) )
 			return false;
 	return true;
 }
@@ -383,7 +372,7 @@ bool is_rendering_engines_empty(void)
  */
 void vgt_request_monitor_owner_switch(int vgt_id)
 {
-	if (next_monitor_owner != curr_monitor_owner)
+	if (next_monitor_owner != curr_monitor_owner(pdev))
 		next_monitor_owner = vgt_id;
 }
 
@@ -412,6 +401,7 @@ static struct vgt_device *next_vgt(
 int vgt_thread(void *priv)
 {
 	struct vgt_device *next, *vgt=priv;
+	struct pgt_device *pdev = vgt->pdev;
 
 	while (!kthread_should_stop()) {
 		/*
@@ -426,34 +416,34 @@ int vgt_thread(void *priv)
 		/* Response to the monitor switch request. */
 		if (next_monitor_owner != INVLID_MONITOR_SW_REQ) {
 			/* has pending request */
-			vgt_switch_monitor_owner(curr_monitor_owner,
+			vgt_switch_monitor_owner(curr_monitor_owner(pdev),
 					next_monitor_owner);
-			curr_monitor_owner = next_monitor_owner;
+			curr_monitor_owner(pdev) = next_monitor_owner;
 			next_monitor_owner = INVLID_MONITOR_SW_REQ;
 		}
 #endif
 
-		if ((curr_rendering_owner == NULL) &&
-			list_empty(&rendering_runq_head))
+		if ((current_render_owner(pdev) == NULL) &&
+			list_empty(&pdev->rendering_runq_head))
 			/* Idle now, and no pending activity */
 			continue;
 
-		if (is_rendering_engines_empty()) {
-			next = next_vgt(&rendering_runq_head, vgt);
-			if ( next != curr_rendering_owner ) {
-				vgt_save_context(curr_rendering_owner, next);
+		if (is_rendering_engines_empty(pdev)) {
+			next = next_vgt(&pdev->rendering_runq_head, vgt);
+			if ( next != current_render_owner(pdev) ) {
+				vgt_save_context(current_render_owner(pdev), next);
 				if ( next != NULL )
-					vgt_restore_context(next, curr_rendering_owner);
-				curr_rendering_owner = next;
+					vgt_restore_context(next, current_render_owner(pdev));
+				current_render_owner(pdev) = next;
 			}
 		}
 	}
 	return 0;
 }
 
-void ring_phys_2_shadow(int ring_id, vgt_ringbuffer_t *srb)
+void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	vgt_ringbuffer_t *prb = ring_base_vaddr[ring_id];
+	vgt_ringbuffer_t *prb = pdev->ring_base_vaddr[ring_id];
 
 	srb->tail = _REG_READ_(&prb->tail);
 	srb->head = _REG_READ_(&prb->head);
@@ -462,17 +452,17 @@ void ring_phys_2_shadow(int ring_id, vgt_ringbuffer_t *srb)
 }
 
 /* Rewind the head/tail registers */
-void rewind_ring(int ring_id, vgt_ringbuffer_t *srb)
+void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	vgt_ringbuffer_t *prb = ring_base_vaddr[ring_id];
+	vgt_ringbuffer_t *prb = pdev->ring_base_vaddr[ring_id];
 
 	_REG_WRITE_(&prb->tail, srb->tail);
 	_REG_WRITE_(&prb->head, srb->head);
 }
 
-void ring_shadow_2_phys(int ring_id, vgt_ringbuffer_t *srb)
+void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	vgt_ringbuffer_t *prb = ring_base_vaddr[ring_id];
+	vgt_ringbuffer_t *prb = pdev->ring_base_vaddr[ring_id];
 
 	_REG_WRITE_(&prb->tail, srb->tail);
 	_REG_WRITE_(&prb->head, srb->head);
@@ -607,13 +597,13 @@ static rb_dword	cmds_restore_context[8] =
  * Wait for the empty of RB.
  * NOTES: Empty of RB doesn't mean the commands are retired.
  */
-static bool ring_wait_for_empty(int ring_id, int timeout)
+static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, int timeout)
 {
 	bool r = true;
 
 	/* wait to be completed: TO CHECK: WR uses CCID register */
 	while (--timeout > 0 ) {
-		if (is_rendering_engine_empty(ring_id))
+		if (is_rendering_engine_empty(pdev, ring_id))
 			break;
 		sleep_us(1);		/* 1us delay */
 	}
@@ -655,7 +645,7 @@ bool submit_context_command (struct vgt_device *vgt,
 {
 	vgt_state_ring_t	*rb;
 	vgt_reg_t	ccid;
-	vgt_ringbuffer_t *prb = ring_base_vaddr[ring_id];
+	vgt_ringbuffer_t *prb = vgt->pdev->ring_base_vaddr[ring_id];
 
 	ASSERT ((ccid_addr & ~GPU_PAGE_MASK) == 0 );
 
@@ -740,7 +730,7 @@ void vgt_save_context (struct vgt_device *vgt, struct vgt_device *next)
 	/* save rendering engines */
 	for (i=0; i < MAX_ENGINES; i++) {
 		rb = &vgt->rb[i];
-		ring_phys_2_shadow (i, &rb->sring);
+		ring_phys_2_shadow (vgt->pdev, i, &rb->sring);
 		/* cache the tail reg. */
 		rb->phys_tail = rb->sring.tail;
 
@@ -776,7 +766,7 @@ void vgt_restore_context (struct vgt_device *vgt, struct vgt_device *prev)
 		rb = &vgt->rb[i];
 
 		if (rb->initialized ) {	/* has saved context */
-			ring_shadow_2_phys (i, &rb->sring);
+			ring_shadow_2_phys (vgt->pdev, i, &rb->sring);
 			rb->phys_tail = rb->sring.tail;
 
 			/* Update set_context command: Double save here */
@@ -798,7 +788,7 @@ void vgt_restore_context (struct vgt_device *vgt, struct vgt_device *prev)
 		rb = &vgt->rb[i];
 		/* vring->sring */
 		vring_2_sring(vgt, rb);
-		ring_shadow_2_phys (i, &rb->sring);
+		ring_shadow_2_phys (vgt->pdev, i, &rb->sring);
 	}
 
 	/* Restore the PM */
@@ -853,7 +843,7 @@ static bool create_state_instance(struct vgt_device *vgt)
 /*
  * priv: VCPU ?
  */
-struct vgt_device *create_vgt_instance(void *priv)
+struct vgt_device *create_vgt_instance(struct pgt_device *pdev, void *priv)
 {
 	int vgt_id, i;
 	struct vgt_device *vgt;
@@ -875,7 +865,7 @@ struct vgt_device *create_vgt_instance(void *priv)
 	vgt->priv = priv;
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
-	list_add(&vgt->list, &rendering_idleq_head);
+	list_add(&vgt->list, &pdev->rendering_idleq_head);
 
 	if ( !create_state_instance(vgt) ) {
 		free_vgt_id(vgt_id);
@@ -884,18 +874,18 @@ struct vgt_device *create_vgt_instance(void *priv)
 	}
 
 	if (vgt_id == 0) {	/* dom0 GFX driver */
-		vgt->state.aperture_base_pa = vgt_gmadr_base +
+		vgt->state.aperture_base_pa = pdev->gmadr_base +
 				VGT_DOM0_GFX_APERTURE_BASE;
 //		vgt->state.gt_gmadr_base = ;
 	} else {
-		vgt->state.aperture_base_pa = vgt_gmadr_base +
+		vgt->state.aperture_base_pa = pdev->gmadr_base +
 				VGT_VM1_APERTURE_BASE +
 				VGT_GUEST_APERTURE_SZ * (vgt_id-1);
 	}
 	vgt->aperture_base_va = _vgt_mmio_va(vgt, vgt->state.aperture_base_pa);
 	vgt->aperture_offset = 0;
 
-	vgt->vgt_aperture_base = vgt_gmadr_base + VGT_APERTURE_BASE +
+	vgt->vgt_aperture_base = pdev->gmadr_base + VGT_APERTURE_BASE +
 		vgt_id * VGT_APERTURE_PER_INSTANCE_SZ;
 
 	for (i=0; i< MAX_ENGINES; i++) {
@@ -906,19 +896,20 @@ struct vgt_device *create_vgt_instance(void *priv)
 	}
 
 	vgt->state.bar_size[0] = VGT_GUEST_APERTURE_SZ;	/* MMIOGTT */
-	vgt->state.bar_size[1] = vgt_bar_size[1];	/* GMADR */
-	vgt->state.bar_size[2] = vgt_bar_size[2];	/* PIO */
+	vgt->state.bar_size[1] = pdev->bar_size[1];	/* GMADR */
+	vgt->state.bar_size[2] = pdev->bar_size[2];	/* PIO */
 
 	/* Set initial configuration space and MMIO space registers. */
 	cfg_space = &vgt->state.cfg_space[0];
-	memcpy (cfg_space, vgt_initial_cfg_space, VGT_CFG_SPACE_SZ);
+	memcpy (cfg_space, pdev->initial_cfg_space, VGT_CFG_SPACE_SZ);
 	cfg_space[VGT_REG_CFG_SPACE_MSAC] = MSAC_APERTURE_SIZE_128M;
 	*(uint32_t *)(cfg_space + VGT_REG_CFG_SPACE_BAR1) =
 		vgt->state.aperture_base_pa | 0x4;	/* 64-bit MMIO bar */
 
-	memcpy (vgt->state.vReg, vgt_initial_mmio_state, VGT_MMIO_SPACE_SZ);
+	memcpy (vgt->state.vReg, pdev->initial_mmio_state, VGT_MMIO_SPACE_SZ);
 	state_reg_v2s (vgt);
 
+	vgt->pdev = pdev;
 	/* TODO: per register special handling. */
 	return vgt;
 }
@@ -927,7 +918,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 {
 	struct list_head *pos;
 
-	list_for_each (pos, &rendering_runq_head)
+	list_for_each (pos, &vgt->pdev->rendering_runq_head)
 		if (pos == &vgt->list) {
 			printk("Couldn't release an active vgt instance\n");
 			return ;
@@ -945,9 +936,11 @@ void vgt_release_instance(struct vgt_device *vgt)
 	kfree(vgt);
 }
 
-static uint32_t pci_bar_size(struct pci_bus *bus, unsigned int bar_off)
+static uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
 {
 	unsigned long bar_s, bar_size=0;
+	struct pci_bus *bus = pdev->pbus;
+	int vgt_devfn = pdev->devfn;
 
 	pci_bus_read_config_dword(bus, vgt_devfn, bar_off,
 				(uint32_t *)&bar_s);
@@ -973,42 +966,48 @@ static uint32_t pci_bar_size(struct pci_bus *bus, unsigned int bar_off)
         return bar_size;
 }
 
-bool initial_phys_states(struct pci_bus *bus)
+bool initial_phys_states(struct pgt_device *pdev)
 {
 	int i;
 	uint64_t	bar0, bar1;
+	struct pci_bus *bus = pdev->pbus;
 
 	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4) {
-		pci_bus_read_config_dword(bus, vgt_devfn, i,
-				(uint32_t *)&vgt_initial_cfg_space[i]);
+		pci_bus_read_config_dword(bus, pdev->devfn, i,
+				(uint32_t *)&pdev->initial_cfg_space[i]);
 	}
 	for (i=0; i < 3; i++)
-		vgt_bar_size[i] = pci_bar_size(bus, VGT_REG_CFG_SPACE_BAR0 + 8*i);
+		pdev->bar_size[i] = pci_bar_size(pdev, VGT_REG_CFG_SPACE_BAR0 + 8*i);
 
-	bar0 = *(uint64_t *)&vgt_initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
-	bar1 = *(uint64_t *)&vgt_initial_cfg_space[VGT_REG_CFG_SPACE_BAR1];
+	bar0 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
+	bar1 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR1];
 	ASSERT ((bar0 & 7) == 4);
 	/* memory, 64 bits bar0 */
-	vgt_gttmmio_base = bar0 & ~0xf;
+	pdev->gttmmio_base = bar0 & ~0xf;
 
 	ASSERT ((bar1 & 7) == 4);
 	/* memory, 64 bits bar */
-	vgt_gmadr_base = bar1 & ~0xf;
+	pdev->gmadr_base = bar1 & ~0xf;
 
-	vgt_gttmmio_base_va = ioremap (vgt_gttmmio_base, VGT_MMIO_SPACE_SZ);
-	if ( vgt_gttmmio_base_va == NULL ) {
+	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, VGT_MMIO_SPACE_SZ);
+	if ( pdev->gttmmio_base_va == NULL ) {
 		printk("Insufficient memory for ioremap1\n");
 		return false;
 	}
-	gt_phys_gmadr_va = ioremap (vgt_gmadr_base, VGT_MMIO_SPACE_SZ);
-	if ( gt_phys_gmadr_va == NULL ) {
-		iounmap(vgt_gttmmio_base_va);
+	pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_MMIO_SPACE_SZ);
+	if ( pdev->phys_gmadr_va == NULL ) {
+		iounmap(pdev->gttmmio_base_va);
 		printk("Insufficient memory for ioremap2\n");
 		return false;
 	}
-	memcpy (vgt_initial_mmio_state, vgt_gttmmio_base_va,
+	memcpy (pdev->initial_mmio_state, pdev->gttmmio_base_va,
 			VGT_MMIO_SPACE_SZ);
 	return true;
+}
+
+static void vgt_initialize_pgt_device(struct pgt_device *pdev)
+{
+
 }
 
 /*
@@ -1019,21 +1018,28 @@ bool initial_phys_states(struct pci_bus *bus)
 int vgt_initialize(struct pci_bus *bus)
 {
 	int i;
+	struct pgt_device *pdev = &default_device;
 
 	memset (mtable, 0, sizeof(mtable));
+
+	vgt_initialize_pgt_device(pdev);
 	for (i=0; i < MAX_ENGINES; i++) {
-		ring_base_vaddr[i] =
+		pdev->ring_base_vaddr[i] =
 			(vgt_ringbuffer_t *) _vgt_mmio_va(NULL, ring_mmio_base[i]);
 	}
 	if ( !vgt_initialize_mmio_hooks() )
 		goto err;
-	if ( !initial_phys_states(bus) )
+	if ( !initial_phys_states(pdev) )
 		goto err;
 
 	/* create domain 0 instance */
-	vgt_dom0 = create_vgt_instance(NULL);   /* TODO: */
+	vgt_dom0 = create_vgt_instance(pdev, NULL);   /* TODO: */
 	if (vgt_dom0 == NULL)
-        goto err;
+		goto err;
+#ifndef SINGLE_VM_DEBUG
+	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
+#endif
+
     if (xen_register_vgt_device(0, vgt_dom0) != 0) {
         xen_deregister_vgt_device(vgt_dom0);
         goto err;
@@ -1049,18 +1055,19 @@ void vgt_destroy()
 {
 	struct list_head *pos, *next;
 	struct vgt_device *vgt;
+	struct pgt_device *pdev = &default_device;
 
 	/* Deactive all VGTs */
-	while ( list_empty(&rendering_runq_head) ) {
-		list_for_each (pos, &rendering_runq_head)
-			vgt_deactive(pos);
+	while ( list_empty(&pdev->rendering_runq_head) ) {
+		list_for_each (pos, &pdev->rendering_runq_head)
+			vgt_deactive(pdev, pos);
 	};
-	if (vgt_gttmmio_base_va)
-		iounmap(vgt_gttmmio_base_va);
-	if (gt_phys_gmadr_va)
-		iounmap(gt_phys_gmadr_va);
-	for (pos = rendering_idleq_head.next;
-		pos != &rendering_idleq_head; pos = next) {
+	if (pdev->gttmmio_base_va)
+		iounmap(pdev->gttmmio_base_va);
+	if (pdev->phys_gmadr_va)
+		iounmap(pdev->phys_gmadr_va);
+	for (pos = pdev->rendering_idleq_head.next;
+		pos != &pdev->rendering_idleq_head; pos = next) {
 		next = pos->next;
 		vgt = list_entry (pos, struct vgt_device, list);
 		vgt_release_instance(vgt);

@@ -268,29 +268,11 @@ extern bool vgt_register_mmio_handler(int start, int end,
 	vgt_mmio_read read, vgt_mmio_write write);
 extern bool vgt_initialize_mmio_hooks(void);
 
-extern struct list_head rendering_runq_head;
-extern struct list_head rendering_idleq_head;
-/*
- * Activate/Deactive an VGT instance.
- */
-static inline void vgt_active(struct list_head *rq)
-{
-	list_del(rq);		/* remove from idle queue */
-	list_add(rq, &rendering_runq_head);	/* add to run queue */
-}
-
-/*
- * Remove from run queue, but the vgt may be still in executing.
- */
-static inline void vgt_deactive(struct list_head *rq)
-{
-	/* TODO: make sure it is not the current vgt */
-	list_del(rq);		/* remove from run queue */
-	list_add(rq, &rendering_idleq_head);	/* add to idle queue */
-}
-
+/* per-VM structure */
 struct vgt_device {
 	int vgt_id;		/* 0 is always for dom0 */
+	int vm_id;		/* domain ID per hypervisor */
+	struct pgt_device  *pdev;	/* the pgt device where the GT device registered. */
 	struct list_head	list;
 	vgt_state_t	state;		/* MMIO state except ring buffers */
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
@@ -298,10 +280,49 @@ struct vgt_device {
 	unsigned int	aperture_offset;	/* TODO: for aperture virtualization */
 	void	*priv;
 	uint64_t  vgt_aperture_base;	/* aperture used for VGT driver */
-	struct pci_bus *bus;		/* the bus where the GT device registered. */
 	vgt_reg_t		saved_wakeup;	/* disable PM before switching */
 };
 
+enum vgt_owner_type {
+	VGT_OT_INVALID = 0,
+	VGT_OT_RENDER,                  // the owner directly operating render command buffers
+	VGT_OT_BLITTER,                 // the owner directly operating blitter command buffers
+	VGT_OT_VIDEO,                   // the owner directly operating video command buffers
+	VGT_OT_GT,                      // the owner directly operating all render buffers (render/blit/video)
+	VGT_OT_DISPLAY,                 // the owner having its content directly shown on one or several displays
+	VGT_OT_PM,                      // the owner handling GEN power management activities
+	VGT_OT_MGMT,                    // the owner managing display/monitor resources
+	VGT_OT_MAX,
+};
+
+/* per-device structure */
+struct pgt_device {
+	struct pci_bus *pbus;	/* parent bus of the device */
+	int bus;		/* parent bus number */
+	int devfn;		/* device function number */
+
+	vgt_ringbuffer_t *ring_base_vaddr[MAX_ENGINES];	/* base vitrual address of ring buffer mmios */
+	vgt_reg_t initial_mmio_state[VGT_MMIO_REG_NUM];	/* copy from physical at start */
+	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */
+	uint32_t bar_size[3];
+	uint64_t gttmmio_base;	/* base of GTT */
+	void *gttmmio_base_va;	/* virtual base of GTT */
+	uint64_t gmadr_base;	/* base of GMADR */
+	void *phys_gmadr_va;	/* virtual base of GMADR */
+
+	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
+	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
+	struct list_head rendering_runq_head;	/* ??? */
+	struct list_head rendering_idleq_head;	/* ??? */
+	bool switch_inprogress;	/* an ownership switch in progress */
+	enum vgt_owner_type switch_owner;	/* the type of the owner in switch */
+};
+
+#define vgt_get_owner(d, t)             (d->owner[t])
+#define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_GT))
+#define current_display_owner(d)	((vgt_get_owner(d, VGT_OT_DISPLAY))->id)
+#define vgt_switch_inprogress(d)        (d->switch_inprogress)
+#define vgt_switch_owner_type(d)        (d->switch_owner)
 
 #define _REG_WRITE_(preg, val)	{ *(volatile vgt_reg_t *)preg = val;}
 #define _REG_READ_(preg)		(*(volatile vgt_reg_t *)preg)
@@ -314,6 +335,25 @@ struct vgt_device {
 		_REG_READ_(_vgt_mmio_va(vgt, mmio_offset))
 
 #define ARRAY_NUM(x)		(sizeof(x) / sizeof(x[0]))
+
+/*
+ * Activate/Deactive an VGT instance.
+ */
+static inline void vgt_active(struct pgt_device *pdev, struct list_head *rq)
+{
+	list_del(rq);		/* remove from idle queue */
+	list_add(rq, &pdev->rendering_runq_head);	/* add to run queue */
+}
+
+/*
+ * Remove from run queue, but the vgt may be still in executing.
+ */
+static inline void vgt_deactive(struct pgt_device *pdev, struct list_head *rq)
+{
+	/* TODO: make sure it is not the current vgt */
+	list_del(rq);		/* remove from run queue */
+	list_add(rq, &pdev->rendering_idleq_head);	/* add to idle queue */
+}
 
 
 /*

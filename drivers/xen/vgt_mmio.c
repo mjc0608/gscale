@@ -115,12 +115,12 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 		/* Do we need to wait for the completion of current slice? */
 		if ( (oval & _RING_CTL_ENABLE) &&
 			!(vring->ctl & _RING_CTL_ENABLE) ) {
-			vgt_deactive (&vgt->list);
+			vgt_deactive (vgt->pdev, &vgt->list);
 		}
 		else if ( !(oval & _RING_CTL_ENABLE) &&
 			(vring->ctl & _RING_CTL_ENABLE) ) {
 			/* enabled */
-			vgt_active (&vgt->list);
+			vgt_active (vgt->pdev, &vgt->list);
 		}
 		if (vring->ctl & _RING_CTL_ENABLE) {
 			/*
