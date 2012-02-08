@@ -72,6 +72,15 @@ int xen_register_vgt_device(int dom_id, struct vgt_device *vgt)
     if ((dev_id < MAX_VGT_DEVICES) && (dev_id >= 0)) {
         vgt_devices[dev_id].dom_id = dom_id;
         vgt_devices[dev_id].vgt = vgt;
+#ifdef SINGLE_VM_DEBUG
+        if (dev_id == 0)
+            vgt_devices[dev_id].boot_time = 0;
+#else
+        if (dev_id == 1) {
+            /* TODO: switch dom0 vgt from pass thru to virt. */
+            vgt_ops->boot_time = 0;
+        }
+#endif
         ret = dev_id;
     }
     return ret;
@@ -314,12 +323,15 @@ int vgt_cfg_write_emul(
         vgt_cf8 = val;
     }
     else {	// port 0xCFC */
-        ASSERT (port == 0xcfc);
+        ASSERT ( (vgt_cf8 & 3) == 0);
+        ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
+            (bytes == 2) && ((port & 1) == 0) || (bytes ==1));
         if ((vgt_ops == NULL) || vgt_ops->boot_time)
             rc = hcall_pio_write(port, bytes, val);
         else
             if (!vgt_ops->cfg_write(vgt_devices[0].vgt,
-                        vgt_cf8 & 0xff, &val, bytes))
+                        (vgt_cf8 & 0xfc) + (port & 3),
+                        &val, bytes))
                 rc = X86EMUL_UNHANDLEABLE;
     }
 
@@ -338,14 +350,19 @@ int vgt_cfg_read_emul(
         memcpy(val, (uint8_t*)&vgt_cf8 + (port & 3), bytes);
     }
     else {
-        ASSERT (port == 0xcfc);
+printk("cfg_read_emul port %x %d\n",port, bytes);
+        ASSERT ( (vgt_cf8 & 3) == 0);
+        ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
+            (bytes == 2) && ((port & 1) == 0) || (bytes ==1));
+
         if ((vgt_ops == NULL) || vgt_ops->boot_time) {
             rc = hcall_pio_read(port, bytes, &data);
             if (rc == X86EMUL_OKAY)
                 memcpy(val, &data, bytes);
         } else {
             if (vgt_ops->cfg_read(vgt_devices[0].vgt,
-                        vgt_cf8 & 0xff, &val, bytes))
+                        (vgt_cf8 & 0xfc) + (port & 3),
+                        &data, bytes))
                 memcpy(val, &data, bytes);
             else
                 rc = X86EMUL_UNHANDLEABLE;

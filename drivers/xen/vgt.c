@@ -97,11 +97,7 @@ static vgt_ops_t vgt_ops = {
     .mem_write = vgt_emulate_write,
     .cfg_read = vgt_emulate_cfg_read,
     .cfg_write = vgt_emulate_cfg_write,
-#ifdef SINGLE_VM_DEBUG
-    .boot_time = 0     /* no boottime pass thru for 1-VM debug */
-#else
     .boot_time = 1
-#endif
 };
 
 static int __init vgt_init_module(void)
