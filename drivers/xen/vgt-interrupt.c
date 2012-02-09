@@ -1,0 +1,1124 @@
+/*
+ * vGT interrupt handler
+ *
+ * This file is provided under a dual BSD/GPLv2 license.  When using or
+ * redistributing this file, you may do so under either license.
+ *
+ * GPL LICENSE SUMMARY
+ *
+ * Copyright(c) 2011 Intel Corporation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of version 2 of the GNU General Public License as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
+ * The full GNU General Public License is included in this distribution
+ * in the file called LICENSE.GPL.
+ *
+ * BSD LICENSE
+ *
+ * Copyright(c) 2011 Intel Corporation. All rights reserved.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in
+ *     the documentation and/or other materials provided with the
+ *     distribution.
+ *   * Neither the name of Intel Corporation nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#include <linux/linkage.h>
+#include <linux/module.h>
+#include <linux/types.h>
+#include <linux/bitops.h>
+#include <linux/slab.h>
+#include <xen/vgt.h>
+#include "vgt_reg.h"
+
+/*
+ * Major tasks of this file:
+ *   - handle physical GEN interrupt
+ *   - interrupt virtualization to dom0 and other GT VMs
+ *     o forward events carried in a physical interrupt, if it's
+ *       programmed by a VM
+ *     o emulate events if a given VM is not allowed to program them
+ *     o interrupt register virtualization
+ *   - track the permission of which events can be programmed by which VM
+ *
+ * Micellaneous tasks:
+ *   - initialization of interrupt control registers
+ *   - statistics
+ */
+
+/*
+ * TODO-must:
+ *   - virtual interrupt injection
+ *   - display context switch
+ *   - lock consideration. there may be events requiring more register
+ *     updates other than IIR/ISR. Could they be done in a delayed context?
+ *
+ * TODO:
+ *   - IIR could store two pending interrupts. need emulate the behavior
+ *   - pipe control
+ *   - error handling (related registers)
+ *	page fault (GFX_ARB_ERROR_RPT, PP_PFIR)
+ *	cmd error (IPEHR)
+ *   - reserved bit checking in vREG?
+ *   - watchdog timer control (write 1 to reset, and write 0 to start)
+ *	PR_CTR_CTL, BCS_CTR_THRSH, VCS_ECOSKPD, VCS_CNTR
+ *	interresting that blitter has no such interrupt
+ */
+
+/* for debug purpose */
+uint8_t vgt_irq_warn_once[IRQ_MAX] = {0};
+char *vgt_irq_name[IRQ_MAX] = {
+	// GT
+	[IRQ_RDR_MI_USER_INTERRUPT] = "Render Command Streamer MI USER INTERRUPT",
+	[IRQ_RDR_DEBUG] = "Render EU debug from SVG",
+	[IRQ_RDR_MMIO_SYNC_FLUSH] = "Render MMIO sync flush status",
+	[IRQ_RDR_CMD_STREAMER_ERR] = "Render Command Streamer error interrupt",
+	[IRQ_RDR_PIPE_CONTROL] = "ender PIPE CONTROL notify",
+	[IRQ_RDR_WATCHDOG_EXCEEDED] = "Render Command Streamer Watchdog counter exceeded",
+	[IRQ_RDR_PAGE_DIRECTORY_FAULT] = "Render page directory faults",
+	[IRQ_RDR_AS_CONTEXT_SWITCH] = "Render AS Context Switch Interrupt",
+
+	[IRQ_VIDEO_MI_USER_INTERRUPT] = "Video Command Streamer MI USER INTERRUPT",
+	[IRQ_VIDEO_MMIO_SYNC_FLUSH] = "Video MMIO sync flush status",
+	[IRQ_VIDEO_CMD_STREAMER_ERR] = "Video Command Streamer error interrupt",
+	[IRQ_VIDEO_MI_FLUSH_DW] = "Video MI FLUSH DW notify",
+	[IRQ_VIDEO_WATCHDOG_EXCEEDED] = "Video Command Streamer Watchdog counter exceeded",
+	[IRQ_VIDEO_PAGE_DIRECTORY_FAULT] = "Video page directory faults",
+	[IRQ_VIDEO_AS_CONTEXT_SWITCH] = "Video AS Context Switch Interrupt",
+
+	[IRQ_BLIT_MI_USER_INTERRUPT] = "Blitter Command Streamer MI USER INTERRUPT",
+	[IRQ_BLIT_MMIO_SYNC_FLUSH] = "Billter MMIO sync flush status",
+	[IRQ_BLIT_CMD_STREAMER_ERR] = "Blitter Command Streamer error interrupt",
+	[IRQ_BLIT_MI_FLUSH_DW] = "Blitter MI FLUSH DW notify",
+	[IRQ_BLIT_PAGE_DIRECTORY_FAULT] = "Blitter page directory faults",
+	[IRQ_BLIT_AS_CONTEXT_SWITCH] = "Blitter AS Context Switch Interrupt",
+
+	// DISPLAY
+	[IRQ_PIPE_A_FIFO_UNDERRUN] = "Pipe A FIFO underrun",
+	[IRQ_PIPE_A_CRC_ERR] = "Pipe A CRC error",
+	[IRQ_PIPE_A_CRC_DONE] = "Pipe A CRC done",
+	[IRQ_PIPE_A_VSYNC] = "Pipe A vsync",
+	[IRQ_PIPE_A_LINE_COMPARE] = "Pipe A line compare",
+	[IRQ_PIPE_A_ODD_FIELD] = "Pipe A odd field",
+	[IRQ_PIPE_A_EVEN_FIELD] = "Pipe A even field",
+	[IRQ_PIPE_A_VBLANK] = "Pipe A vblank",
+	[IRQ_PIPE_B_FIFO_UNDERRUN] = "Pipe B FIFO underrun",
+	[IRQ_PIPE_B_CRC_ERR] = "Pipe B CRC error",
+	[IRQ_PIPE_B_CRC_DONE] = "Pipe B CRC done",
+	[IRQ_PIPE_B_VSYNC] = "Pipe B vsync",
+	[IRQ_PIPE_B_LINE_COMPARE] = "Pipe B line compare",
+	[IRQ_PIPE_B_ODD_FIELD] = "Pipe B odd field",
+	[IRQ_PIPE_B_EVEN_FIELD] = "Pipe B even field",
+	[IRQ_PIPE_B_VBLANK] = "Pipe B vblank",
+	[IRQ_DPST_PHASE_IN] = "DPST phase in event",
+	[IRQ_DPST_HISTOGRAM] = "DPST histogram event",
+	[IRQ_GSE] = "GSE",
+	[IRQ_DP_A_HOTPLUG] = "DP A Hotplug",
+	[IRQ_AUX_CHANNEL_A] = "AUX Channel A",
+	[IRQ_PCH_IRQ] = "PCH Display interrupt event",
+	[IRQ_PERF_COUNTER] = "Performance counter",
+	[IRQ_POISON] = "Poison",
+	[IRQ_GTT_FAULT] = "GTT fault",
+	[IRQ_PRIMARY_A_FLIP_DONE] = "Primary Plane A flip done",
+	[IRQ_PRIMARY_B_FLIP_DONE] = "Primary Plane B flip done",
+	[IRQ_SPRITE_A_FLIP_DONE] = "Sprite Plane A flip done",
+	[IRQ_SPRITE_B_FLIP_DONE] = "Sprite Plane B flip done",
+
+	// PM
+	[IRQ_GV_DOWN_INTERVAL] = "Render geyserville Down evaluation interval interrupt",
+	[IRQ_GV_UP_INTERVAL] = "Render geyserville UP evaluation interval interrupt",
+	[IRQ_RP_DOWN_THRESHOLD] = "RP DOWN threshold interrupt",
+	[IRQ_RP_UP_THRESHOLD] = "RP UP threshold interrupt",
+	[IRQ_FREQ_DOWNWARD_TIMEOUT_RC6] = "Render Frequency Downward Timeout During RC6 interrupt",
+	[IRQ_PCU_THERMAL] = "PCU Thermal Event",
+	[IRQ_PCU_PCODE2DRIVER_MAILBOX] = "PCU pcode2driver mailbox event",
+
+	// PCH
+	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_A] = "FDI RX Interrupts Combined A",
+	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_A] = "Audio CP Change Transcoder A",
+	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_A] = "Audio CP Request Transcoder A",
+	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_B] = "FDI RX Interrupts Combined B",
+	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_B] = "Audio CP Change Transcoder B",
+	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_B] = "Audio CP Request Transcoder B",
+	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_C] = "FDI RX Interrupts Combined C",
+	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_C] = "Audio CP Change Transcoder C",
+	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_C] = "Audio CP Request Transcoder C",
+	[IRQ_ERR_AND_DBG] = "South Error and Debug Interupts Combined",
+	[IRQ_GMBUS] = "Gmbus",
+	[IRQ_SDVO_B_HOTPLUG] = "SDVO B hotplug",
+	[IRQ_CRT_HOTPLUG] = "CRT Hotplug",
+	[IRQ_DP_B_HOTPLUG] = "DisplayPort/HDMI/DVI B Hotplug",
+	[IRQ_DP_C_HOTPLUG] = "DisplayPort/HDMI/DVI C Hotplug",
+	[IRQ_DP_D_HOTPLUG] = "DisplayPort/HDMI/DVI D Hotplug",
+	[IRQ_AUX_CHENNEL_B] = "AUX Channel B",
+	[IRQ_AUX_CHENNEL_C] = "AUX Channel C",
+	[IRQ_AUX_CHENNEL_D] = "AUX Channel D",
+	[IRQ_AUDIO_POWER_STATE_CHANGE_B] = "Audio Power State change Port B",
+	[IRQ_AUDIO_POWER_STATE_CHANGE_C] = "Audio Power State change Port C",
+	[IRQ_AUDIO_POWER_STATE_CHANGE_D] = "Audio Power State change Port D",
+
+	[IRQ_RESERVED] = "RESERVED EVENTS!!!",
+};
+
+/* default event owner mapping table. may be changed dynamically */
+enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
+	// GT
+	[IRQ_RDR_MI_USER_INTERRUPT] = VGT_OT_GT,
+	[IRQ_RDR_DEBUG] = VGT_OT_GT,
+	[IRQ_RDR_MMIO_SYNC_FLUSH] = VGT_OT_GT,
+	[IRQ_RDR_CMD_STREAMER_ERR] = VGT_OT_GT,
+	[IRQ_RDR_PIPE_CONTROL] = VGT_OT_GT,
+	[IRQ_RDR_WATCHDOG_EXCEEDED] = VGT_OT_GT,
+	[IRQ_RDR_PAGE_DIRECTORY_FAULT] = VGT_OT_GT,
+	[IRQ_RDR_AS_CONTEXT_SWITCH] = VGT_OT_GT,
+
+	[IRQ_VIDEO_MI_USER_INTERRUPT] = VGT_OT_GT,
+	[IRQ_VIDEO_MMIO_SYNC_FLUSH] = VGT_OT_GT,
+	[IRQ_VIDEO_CMD_STREAMER_ERR] = VGT_OT_GT,
+	[IRQ_VIDEO_MI_FLUSH_DW] = VGT_OT_GT,
+	[IRQ_VIDEO_WATCHDOG_EXCEEDED] = VGT_OT_GT,
+	[IRQ_VIDEO_PAGE_DIRECTORY_FAULT] = VGT_OT_GT,
+	[IRQ_VIDEO_AS_CONTEXT_SWITCH] = VGT_OT_GT,
+
+	[IRQ_BLIT_MI_USER_INTERRUPT] = VGT_OT_GT,
+	[IRQ_BLIT_MMIO_SYNC_FLUSH] = VGT_OT_GT,
+	[IRQ_BLIT_CMD_STREAMER_ERR] = VGT_OT_GT,
+	[IRQ_BLIT_MI_FLUSH_DW] = VGT_OT_GT,
+	[IRQ_BLIT_PAGE_DIRECTORY_FAULT] = VGT_OT_GT,
+	[IRQ_BLIT_AS_CONTEXT_SWITCH] = VGT_OT_GT,
+
+	// DISPLAY
+	[IRQ_PIPE_A_FIFO_UNDERRUN] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_A_CRC_ERR] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_A_CRC_DONE] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_A_VSYNC] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_A_LINE_COMPARE] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_A_ODD_FIELD] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_A_EVEN_FIELD] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_A_VBLANK] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_B_FIFO_UNDERRUN] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_B_CRC_ERR] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_B_CRC_DONE] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_B_VSYNC] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_B_LINE_COMPARE] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_B_ODD_FIELD] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_B_EVEN_FIELD] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_B_VBLANK] = VGT_OT_DISPLAY,
+	[IRQ_DPST_PHASE_IN] = VGT_OT_DISPLAY,	// ???
+	[IRQ_DPST_HISTOGRAM] = VGT_OT_DISPLAY,	// ???
+	[IRQ_GSE] = VGT_OT_MGMT,
+	[IRQ_DP_A_HOTPLUG] = VGT_OT_MGMT,
+	[IRQ_AUX_CHANNEL_A] = VGT_OT_MGMT,
+	[IRQ_PCH_IRQ] = VGT_OT_INVALID,		// 2nd level events
+	[IRQ_PERF_COUNTER] = VGT_OT_DISPLAY,
+	[IRQ_POISON] = VGT_OT_DISPLAY,		// ???
+	[IRQ_GTT_FAULT] = VGT_OT_DISPLAY,	// ???
+	[IRQ_PRIMARY_A_FLIP_DONE] = VGT_OT_DISPLAY,
+	[IRQ_PRIMARY_B_FLIP_DONE] = VGT_OT_DISPLAY,
+	[IRQ_SPRITE_A_FLIP_DONE] = VGT_OT_DISPLAY,
+	[IRQ_SPRITE_B_FLIP_DONE] = VGT_OT_DISPLAY,
+
+	// PM
+	[IRQ_GV_DOWN_INTERVAL] = VGT_OT_PM,
+	[IRQ_GV_UP_INTERVAL] = VGT_OT_PM,
+	[IRQ_RP_DOWN_THRESHOLD] = VGT_OT_PM,
+	[IRQ_RP_UP_THRESHOLD] = VGT_OT_PM,
+	[IRQ_FREQ_DOWNWARD_TIMEOUT_RC6] = VGT_OT_PM,
+	[IRQ_PCU_THERMAL] = VGT_OT_PM,
+	[IRQ_PCU_PCODE2DRIVER_MAILBOX] = VGT_OT_PM,
+
+	// PCH
+	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_A] = VGT_OT_DISPLAY,	// ???
+	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_A] = VGT_OT_DISPLAY,
+	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_A] = VGT_OT_DISPLAY,
+	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_B] = VGT_OT_DISPLAY,
+	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_B] = VGT_OT_DISPLAY,
+	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_B] = VGT_OT_DISPLAY,
+	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_C] = VGT_OT_DISPLAY,
+	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_C] = VGT_OT_DISPLAY,
+	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_C] = VGT_OT_DISPLAY,
+	[IRQ_ERR_AND_DBG] = VGT_OT_DISPLAY,	// ???
+	[IRQ_GMBUS] = VGT_OT_MGMT,
+	[IRQ_SDVO_B_HOTPLUG] = VGT_OT_MGMT,
+	[IRQ_CRT_HOTPLUG] = VGT_OT_MGMT,
+	[IRQ_DP_B_HOTPLUG] = VGT_OT_MGMT,
+	[IRQ_DP_C_HOTPLUG] = VGT_OT_MGMT,
+	[IRQ_DP_D_HOTPLUG] = VGT_OT_MGMT,
+	[IRQ_AUX_CHENNEL_B] = VGT_OT_MGMT,
+	[IRQ_AUX_CHENNEL_C] = VGT_OT_MGMT,
+	[IRQ_AUX_CHENNEL_D] = VGT_OT_MGMT,
+	[IRQ_AUDIO_POWER_STATE_CHANGE_B] = VGT_OT_DISPLAY,
+	[IRQ_AUDIO_POWER_STATE_CHANGE_C] = VGT_OT_DISPLAY,
+	[IRQ_AUDIO_POWER_STATE_CHANGE_D] = VGT_OT_DISPLAY,
+
+	[IRQ_RESERVED] = VGT_OT_INVALID,
+};
+
+static void vgt_run_emul(struct vgt_device *vstate,
+		enum vgt_event_type event, int bit, bool enable);
+/* =============Configurations (statc/dynamic)================ */
+
+/*
+ * force enabling a hw event regardless of the owner setting
+ * not optimal for multiple bits change
+ */
+static void vgt_enable_hw_event(struct pgt_device *dev,
+	enum vgt_event_type event, int bit)
+{
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+
+	ops->toggle_hw_event(dev, event, bit, true);
+}
+
+/* force disabling a hw event regardless of the owner setting */
+static void vgt_disable_hw_event(struct pgt_device *dev,
+	enum vgt_event_type event, int bit)
+{
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+	struct vgt_device *vstate = vgt_get_event_owner(dev, event);
+
+	if (vstate &&
+		test_and_clear_bit(event, vgt_state_enabled_events(vstate)))
+		printk("!!!vGT: force disabling an event (%s) with an active owner setting\n",
+				vgt_irq_name[event]);
+
+	ops->toggle_hw_event(dev, event, bit, false);
+}
+
+#if 0
+/*
+ * register an event handler for vGT core itself
+ *
+ * TODO: Currently no lock protection here. It's assumed that registered
+ * handler should prepare for handling spurious interrupt even after
+ * unregisteration, since it's possible for a vGT-core-caused event coming
+ * after the unregistration.
+ */
+static int vgt_core_register_event(struct vgt_device *dev,
+	enum vgt_event_type event, vgt_core_handler_t core_handler)
+{
+	/* initialize core handlers info at the 1st registration */
+	if (!vgt_core_event_handlers(dev)) {
+		void *handlers;
+
+		handlers = kzalloc(IRQ_MAX * sizeof(vgt_core_handler_t), GFP_KERNEL);
+		if (!handlers) {
+			dprintk("vGT: no enough memory for core handler table\n");
+			return -ENOMEM;
+		}
+		vgt_core_event_handlers(dev) = handlers;
+	}
+
+	if (vgt_core_event_handler(dev, event)) {
+		dprintk("vGT: existing handler for event (%s)\n", vgt_irq_name[event]);
+		return -EBUSY;
+	}
+
+	vgt_core_event_handler(dev, event) = core_handler;
+	vgt_enable_hw_event(dev, event, VGT_IRQ_BITWIDTH);
+}
+
+static int vgt_core_register_event(struct vgt_device *dev, enum vgt_event_type event)
+{
+	ASSERT(vgt_core_event_handlers(dev));
+	ASSERT(vgt_core_event_handler(dev, event));
+
+	vgt_disable_hw_event(dev, event, VGT_IRQ_BITWIDTH);
+	vgt_core_event_handler(dev, event) = NULL;
+}
+#endif
+
+void vgt_irq_toggle_emulations(struct vgt_device *vstate,
+		enum vgt_owner_type owner, bool enable)
+{
+	int event;
+	struct pgt_device *dev = vstate->pdev;
+
+	for_each_set_bit(event, vgt_state_emulated_events(vstate), IRQ_MAX) {
+		if (vgt_get_event_owner_type(dev, event) == owner &&
+		    !test_bit(event, vgt_always_emulated_events(dev))) {
+			if (enable) {
+				vgt_run_emul(vstate, event, VGT_IRQ_BITWIDTH, true);
+			} else {
+				if (test_bit(event, vgt_state_emulated_events(vstate)))
+					vgt_run_emul(vstate, event, VGT_IRQ_BITWIDTH, false);
+			}
+		}
+	}
+}
+
+/*
+ * Invoked from vGT core when the ownership gets changed
+ * INPUT:
+ * 	vstate: instance context to be poked
+ * 	type: ownership type
+ */
+void vgt_irq_save_context(struct vgt_device *vstate, enum vgt_owner_type owner)
+{
+	struct pgt_device *dev = vstate->pdev;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+
+	if (owner != VGT_OT_GT || owner != VGT_OT_DISPLAY) {
+		dprintk("Dynamic ownership update for type (%d) is prohibited\n", owner);
+		return;
+	}
+
+	ASSERT(bitmap_empty(vgt_delayed_events(dev), IRQ_MAX));
+
+	dev->switch_owner = owner;
+	wmb();
+	/* FIXME: this flag is not enough to handle SMP case */
+	dev->switch_inprogress = true;
+
+	/* start emulation for prev owner */
+	if (owner == VGT_OT_DISPLAY)
+		vgt_irq_toggle_emulations(vstate, owner, true);
+
+	if (ops->save)
+		ops->save(vstate, owner);
+}
+
+/*
+ * Invoked from vGT core when the ownership gets changed
+ * INPUT:
+ * 	vstate: instance context to be poked
+ * 	owner: ownership type
+ */
+void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owner)
+{
+	struct pgt_device *dev = vstate->pdev;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+
+	if (owner != VGT_OT_GT || owner != VGT_OT_DISPLAY) {
+		dprintk("Dynamic ownership update for type (%d) is prohibited\n", owner);
+		return;
+	}
+
+	if (ops->restore)
+		ops->restore(vstate, owner);
+
+	/* disable emulation for the new owner */
+	if (owner == VGT_OT_DISPLAY)
+		vgt_irq_toggle_emulations(vstate, owner, false);
+
+	/* write instruction isn't reordered with I/O instructions */
+	dev->switch_inprogress = false;
+}
+
+#if 0
+/*
+ * There may have requirements to update event<->owner relationship
+ * in different scenarios, e.g. pass through a display hotplug control
+ * to a primary VM. In such case an interface is required to allow
+ * updating the mapping table dynamically.
+ *
+ * Since a rare case, leave it empty now
+ */
+int vgt_irq_update_event_ownership(struct vgt_device *dev,
+	enum vgt_event_type event, enum vgt_owner_type owner)
+{
+	dprintk("Event ownership mapping change is not supported now\n");
+	return -EINVAL;
+}
+#endif
+
+/* ========================virq injection===================== */
+
+static int vgt_inject_virtual_interrupt(struct vgt_device *vstate)
+{
+	if (vstate->vgt_id)
+		hvm_inject_virtual_interrupt(vstate);
+	else
+		initdom_inject_virtual_interrupt(vstate);
+
+	vgt_clear_irq_pending(vstate);
+
+	return 0;
+}
+
+/* ========================Emulations========================= */
+
+static void vgt_run_emul(struct vgt_device *vstate,
+		enum vgt_event_type event, int bit, bool enable)
+{
+	struct vgt_irq_info *info;
+	struct vgt_irq_info_entry *entry;
+	struct pgt_device *dev = vstate->pdev;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+
+	info = ops->get_irq_info_from_event(dev, event);
+	ASSERT(info);
+
+	entry = info->table + bit;
+	if (entry->emul_handler) {
+		if (!enable)
+			clear_bit(event, vgt_state_emulated_events(vstate));
+
+		entry->emul_handler(vstate, event, enable);
+
+		if (enable)
+			set_bit(event, vgt_state_emulated_events(vstate));
+	} else
+		VGT_IRQ_WARN(info, event, "No emulation handler\n");
+}
+
+static void vgt_toggle_reg_event(struct vgt_device *vstate,
+	enum vgt_event_type event, int bit, bool enable)
+{
+	struct pgt_device *dev = vstate->pdev;
+
+	/*
+	 * FIXME: need lock protection on pass-through style MMIO
+	 * but it should be fine for UP dom0.
+	 */
+	if (vgt_get_event_owner(dev, event) == vstate) {
+		if (enable) {
+			if (!test_and_set_bit(event, vgt_state_enabled_events(vstate)))
+				vgt_enable_hw_event(dev, event, bit);
+		} else {
+			if (test_and_clear_bit(event, vgt_state_enabled_events(vstate)))
+				vgt_disable_hw_event(dev, event, bit);
+		}
+	} else {
+		vgt_run_emul(vstate, event, bit, enable);
+	}
+}
+
+static void vgt_toggle_reg_events(struct vgt_device *vstate,
+	uint32_t reg, uint32_t bits, bool enable)
+{
+	int bit;
+	unsigned long val = (unsigned long)bits;
+	enum vgt_event_type event;
+	struct pgt_device *dev = vstate->pdev;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+
+	for_each_set_bit(bit, &val, VGT_IRQ_BITWIDTH) {
+		event = ops->get_event_type_from_bit(dev, reg, bit);
+		ASSERT(event != IRQ_RESERVED);
+		vgt_toggle_reg_event(vstate, event, bit, enable);
+	}
+}
+
+/*
+ * we only handle the cases which cause an physically enabled event
+ * to be disabled, or vice versa. This means under the scope of
+ * currently enabled IER bits.
+ */
+void vgt_reg_imr_handler(struct vgt_device *state,
+	uint32_t reg, uint32_t val, bool write, ...)
+{
+	printk("vGT: capture IMR access (%s) on reg (%x) with val (%x)\n",
+			write ? "w" : "r", reg, val);
+	if (write) {
+		uint32_t changed, masked, unmasked;
+		uint32_t enabled, disabled, ier;
+
+		changed = (*vgt_vreg(state, reg)) ^ val;
+		masked = ((*vgt_vreg(state, reg)) & changed) ^ changed;
+		unmasked = masked ^ changed;
+
+		ier = reg + 8;	// should be device specific
+		enabled = ier & unmasked;
+		disabled = ier & masked;
+
+		/*
+		 * update vreg before touching pReg to better sync with
+		 * context restore flow
+		 */
+		*vgt_vreg(state, reg) = val;
+		if (enabled)
+			vgt_toggle_reg_events(state, reg, enabled, true);
+		if (disabled)
+			vgt_toggle_reg_events(state, reg, disabled, false);
+
+	} else {
+		// read...
+	}
+}
+
+/*
+ * we only handle the cases which cause an physically enabled event
+ * to be disabled, or vice versa. This means under the scope of
+ * currently unmasked IMR bits.
+ */
+void vgt_reg_ier_handler(struct vgt_device *state,
+	uint32_t reg, uint32_t val, bool write, ...)
+{
+	printk("vGT: capture IER access (%s) on reg (%x) with val (%x)\n",
+			write ? "w" : "r", reg, val);
+	if (write) {
+		uint32_t changed, imr;
+		uint32_t enabled, disabled;
+
+		changed = (*vgt_vreg(state, reg)) ^ val;
+		enabled = ((*vgt_vreg(state, reg)) & changed) ^ changed;
+		disabled = enabled ^ changed;
+
+		imr = reg - 8;
+		enabled ^= imr;
+		disabled ^= imr;
+
+		*vgt_vreg(state, reg) = val;
+		if (enabled)
+			vgt_toggle_reg_events(state, reg, enabled, true);
+		if (disabled)
+			vgt_toggle_reg_events(state, reg, disabled, false);
+
+	} else {
+		// read...
+	}
+}
+
+void vgt_reg_watchdog_handler(struct vgt_device *state,
+	uint32_t reg, uint32_t val, bool write, ...)
+{
+	printk("!!!vGT: capture watchdog operations (%s on reg %x). Not emulated yet!\n",
+			write ? "write" : "read", reg);
+}
+
+static enum hrtimer_restart vgt_dpy_timer_fn(struct hrtimer *data)
+{
+	struct vgt_emul_timer *dpy_timer = container_of(data, struct vgt_emul_timer, timer);
+	struct vgt_irq_virt_state *virq = container_of(dpy_timer, struct vgt_irq_virt_state, dpy_timer);
+	struct vgt_device *vstate = virq->vgt;
+
+	/* carry all display status events in one timer */
+	if (test_bit(IRQ_PIPE_A_VSYNC, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_VSYNC);
+	if (test_bit(IRQ_PIPE_A_LINE_COMPARE, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_LINE_COMPARE);
+	if (test_bit(IRQ_PIPE_A_ODD_FIELD, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_ODD_FIELD);
+	if (test_bit(IRQ_PIPE_A_EVEN_FIELD, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_EVEN_FIELD);
+	if (test_bit(IRQ_PIPE_A_VBLANK, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_VBLANK);
+	if (test_bit(IRQ_PIPE_B_VSYNC, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_VSYNC);
+	if (test_bit(IRQ_PIPE_B_LINE_COMPARE, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_LINE_COMPARE);
+	if (test_bit(IRQ_PIPE_B_ODD_FIELD, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_ODD_FIELD);
+	if (test_bit(IRQ_PIPE_B_EVEN_FIELD, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_EVEN_FIELD);
+	if (test_bit(IRQ_PIPE_B_VBLANK, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_VBLANK);
+	if (test_bit(IRQ_PRIMARY_A_FLIP_DONE, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PRIMARY_A_FLIP_DONE);
+	if (test_bit(IRQ_PRIMARY_B_FLIP_DONE, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_PRIMARY_B_FLIP_DONE);
+	if (test_bit(IRQ_SPRITE_A_FLIP_DONE, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_SPRITE_A_FLIP_DONE);
+	if (test_bit(IRQ_SPRITE_B_FLIP_DONE, vgt_state_emulated_events(vstate)))
+		vgt_propogate_emulated_event(vstate, IRQ_SPRITE_B_FLIP_DONE);
+
+	if (vgt_has_irq_pending(vstate))
+		vgt_inject_virtual_interrupt(vstate);
+	hrtimer_add_expires_ns(&dpy_timer->timer, dpy_timer->period);
+	return HRTIMER_RESTART;
+}
+
+/*
+ * TODO: currently we use a single timer to emulate all timer-based events.
+ * Need further study case-by-case in the future
+ */
+void vgt_emulate_dpy_status(struct vgt_device *vstate, enum vgt_event_type event, bool enable)
+{
+	if (!enable)
+		clear_bit(event, vgt_dpy_timer(vstate).events);
+
+	if (bitmap_empty(vgt_dpy_timer(vstate).events, IRQ_MAX)) {
+		/* TODO: use range timer */
+		if (enable)
+			/* FIXME : check interface */
+			hrtimer_start(&vgt_dpy_timer(vstate).timer,
+				      ktime_add_ns(ktime_get(), vgt_dpy_timer(vstate).period),
+				      HRTIMER_MODE_ABS);
+		else
+			hrtimer_cancel(&vgt_dpy_timer(vstate).timer);
+	}
+
+	if (enable)
+		set_bit(event, vgt_dpy_timer(vstate).events);
+}
+
+void vgt_emulate_watchdog(struct vgt_device *vstate, enum vgt_event_type event, bool enable)
+{
+	dprintk("vGT: watch dog emulation is not supported yet\n");
+}
+
+/* =======================pEvent Handlers===================== */
+
+/*
+ * Check whether vGT core itself wants to handle this event.
+ *
+ * This should be always invoked after physical housekeeping is done,
+ * but before virtual interrupt injection.
+ *
+ * return 1 to indicate virtual interrupt injection is required.
+ */
+static int vgt_irq_prehandle_event(struct pgt_device *dev,
+	struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	int handled = 0;
+
+	if (vgt_event_owner_is_core(dev, entry->event) &&
+	    (action != VGT_IRQ_HANDLE_VIRTUAL)) {
+		vgt_core_handler_t handler;
+		handler = vgt_core_event_handler(dev, entry->event);
+		handler(dev, entry->event);
+		handled = 1;
+	}
+
+	if (!vgt_get_event_owner(dev, entry->event)) {
+		if (!handled) {
+			printk("!!!vGT (%s): event (%s) in reg (%x) has no owner\n",
+				info->name, vgt_irq_name[entry->event],
+				vgt_iir(info->reg_base));
+		}
+		return 0;
+	} else if (action == VGT_IRQ_HANDLE_PHYSICAL) {
+		/* kick a delayed event injection request */
+#if 0
+		if (bitmap_empty(vgt_delayed_events(dev), IRQ_MAX))
+			vgt_kick_event(...);
+
+		set_bit(entry->event, vgt_delayed_events(dev));
+#endif
+		return 0;
+	} else {
+		/* require virtual interrupt handling */
+		return 1;
+	}
+}
+
+/*
+ * the default handler for most events, w/o extra physical housekeeping
+ * required except IIR clearing
+ */
+void vgt_default_event_handler(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	if (!vgt_irq_prehandle_event(dev, entry, info, action))
+		return;
+
+	vgt_propogate_virtual_event(vgt_get_inject_event_owner(dev, entry->event, action), bit, info);
+}
+
+/* in the case that PCH events are queued in another set of control registers */
+void vgt_handle_chained_pch_events(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	//uint32_t sde_iir;
+	struct vgt_device *vstate;
+
+	/* FIXME: need consider how delayed event is done for PCH */
+	if (action != VGT_IRQ_HANDLE_FULL)
+		VGT_IRQ_WARN_ONCE(info, entry->event, "!!!!!!\n");
+
+#if 0
+	/* loop pending events with PCH */
+	sde_iir = VGT_MMIO_READ(dev, _REG_SDEIIR);
+	vgt_irq_handle_event(dev, &sde_iir, &snb_pch_irq_info);
+	VGT_MMIO_WRITE(dev, _REG_SDEIIR, sde_iir);
+#endif
+
+	vstate = vgt_get_event_owner(dev, entry->event);
+	/* propogate to level-1 control registers */
+	if (vgt_has_pch_irq_pending(vstate)) {
+		vgt_propogate_virtual_event(vgt_get_event_owner(dev, entry->event), bit, info);
+		vgt_clear_pch_irq_pending(vstate);
+	}
+}
+
+/* not assumed to be invoked! */
+void vgt_handle_unexpected_event(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	VGT_IRQ_WARN_ONCE(info, entry->event, "not assumed to happen!!!\n");
+	vgt_default_event_handler(dev, bit, entry, info, action);
+}
+
+/* events we don't expect programmed by VM, such as watchdog timer */
+void vgt_handle_host_only_event(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	VGT_IRQ_WARN_ONCE(info, entry->event, "host-only event!!!\n");
+	vgt_irq_prehandle_event(dev, entry, info, action);
+}
+
+/*
+ * unlike NULL handler which we know won't handle for now, weak handlers
+ * are for those which may be triggered but the detail is not very clear
+ * at this stage.
+ */
+void vgt_handle_weak_event(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	VGT_IRQ_WARN_ONCE(info, entry->event, "more consideration required on this handler~~\n");
+	vgt_default_event_handler(dev, bit, entry, info, action);
+}
+
+/*
+ * Erros is now injected into the current owner.
+ *
+ * need to consider whether recovery of vGT driver is required
+ *
+ * there's further error information in some debug registers. no forward now
+ */
+void vgt_handle_cmd_stream_error(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	struct vgt_device *vstate;
+	uint32_t reg, val;
+
+	/* always warn for errors */
+	VGT_IRQ_WARN(info, entry->event, "ERROR ERROR!!!\n");
+
+	/* check error status */
+	switch (entry->event) {
+		case IRQ_RDR_CMD_STREAMER_ERR:
+			reg = _REG_RDR_EIR;
+		case IRQ_BLIT_CMD_STREAMER_ERR:
+			reg = _REG_BLIT_EIR;
+		default:
+			printk("no reg info to propogate\n");
+			reg = _REG_INVALID;
+	};
+	ASSERT(reg != _REG_INVALID);
+
+	val = VGT_MMIO_READ(dev, reg);
+	if (action != VGT_IRQ_HANDLE_VIRTUAL)
+		VGT_MMIO_WRITE(dev, reg, val);
+
+	if (!vgt_irq_prehandle_event(dev, entry, info, action))
+		return;
+
+	vstate = vgt_get_inject_event_owner(dev, entry->event, action);
+	*vgt_vreg(vstate, reg) = val;
+
+	/*
+	 * FIXME:
+	 * there're several conditions contributing to the error condition
+	 * such as command error, page table error, etc. However next level
+	 * error information for the condition is only for debug-only
+	 * purpose. I didn't find consistent information cross manual, and
+	 * thus leave them unhandled for now.
+	 */
+
+	vgt_propogate_virtual_event(vstate, bit, info);
+}
+
+void vgt_handle_phase_in(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	struct vgt_device *vstate;
+	uint32_t val;
+
+	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured Phase-In event!!!\n");
+
+	if (action != VGT_IRQ_HANDLE_VIRTUAL) {
+		val = VGT_MMIO_READ(dev, _REG_BLC_PWM_CTL2);
+		val &= ~_REGBIT_PHASE_IN_IRQ_STATUS;
+		VGT_MMIO_WRITE(dev, _REG_BLC_PWM_CTL2, val);
+	}
+
+	if (!vgt_irq_prehandle_event(dev, entry,info, action))
+		return;
+
+	vstate = vgt_get_inject_event_owner(dev, entry->event, action);
+	*vgt_vreg(vstate, _REG_BLC_PWM_CTL2) |= _REGBIT_PHASE_IN_IRQ_STATUS;
+
+	vgt_propogate_virtual_event(vstate, bit, info);
+}
+
+void vgt_handle_histogram(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	struct vgt_device *vstate;
+	uint32_t val;
+
+	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured Histogram event!!!\n")
+
+	if (action != VGT_IRQ_HANDLE_VIRTUAL) {
+		val = VGT_MMIO_READ(dev, _REG_HISTOGRAM_THRSH);
+		val &= ~_REGBIT_HISTOGRAM_IRQ_STATUS;
+		VGT_MMIO_WRITE(dev, _REG_HISTOGRAM_THRSH, val);
+	}
+
+	if (!vgt_irq_prehandle_event(dev, entry, info, action))
+		return;
+
+	vstate = vgt_get_inject_event_owner(dev, entry->event, action);
+	*vgt_vreg(vstate, _REG_HISTOGRAM_THRSH) |= _REGBIT_HISTOGRAM_IRQ_STATUS;
+
+	vgt_propogate_virtual_event(vstate, bit, info);
+}
+
+void vgt_handle_hotplug(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured hotplug event (no handler)!!!\n")
+}
+
+void vgt_handle_aux_channel(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured aux channel event (no handler)!!!\n")
+}
+
+void vgt_handle_gmbus(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	enum vgt_irq_action_type action)
+{
+	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured gmbus event (no handler)!!!\n")
+}
+
+/* core event handling loop for a given IIR */
+void vgt_irq_handle_event(struct pgt_device *dev,
+	void *iir, struct vgt_irq_info *info)
+{
+	int bit;
+	struct vgt_irq_info_entry *entry;
+
+	for_each_set_bit(bit, iir, info->table_size) {
+		entry = info->table + bit;
+		vgt_trace_irq_event(info, entry->event);
+
+		if (entry->event == IRQ_RESERVED ||
+		    entry->event >= IRQ_MAX) {
+			VGT_IRQ_WARN(info, entry->event, "UNKNOWN!!!\n");
+			return;
+		}
+
+		if (unlikely(!entry->event_handler)) {
+			VGT_IRQ_WARN(info, entry->event, "No handler!!!\n");
+			return;
+		}
+
+		/* in case a context switch in progress */
+		if (vgt_switch_inprogress(dev) &&
+		    (vgt_get_event_owner_type(dev, entry->event) ==
+		     vgt_switch_owner_type(dev)))
+			entry->event_handler(dev, bit, entry, info, VGT_IRQ_HANDLE_PHYSICAL);
+		else
+			entry->event_handler(dev, bit, entry, info, VGT_IRQ_HANDLE_FULL);
+	}
+}
+
+/*
+ * For an event coming in the middle of an ownership switch, we don't
+ * know whether prev or current owner should handle it. Also since the
+ * context is in switch, it's better to defer the event injection in
+ * a safe point.
+ *
+ * This should be a rare case in render ownership switch. There may
+ * have some hits in display ownership switch, which lasts in seconds.
+ * So for simplicity this delayed handling may be a bit slow, and also
+ * for safety we simply deliver to all active VMs.
+ */
+void vgt_irq_handle_delayed_events(struct pgt_device *dev)
+{
+	int i;
+
+	if (bitmap_empty(vgt_delayed_events(dev), IRQ_MAX))
+		return;
+
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		int event, bit;
+		struct vgt_irq_info_entry *entry;
+		struct vgt_irq_info *info;
+		struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+
+		if (!dev->device[i])
+			continue;
+
+		vgt_delayed_owner(dev) = dev->device[i];
+		for_each_set_bit(event, vgt_delayed_events(dev), IRQ_MAX) {
+			info = ops->get_irq_info_from_event(dev, event);
+			bit = ops->get_bit_from_event(dev, event, info);
+			entry = info->table + bit;
+			ASSERT((entry->event == event) && entry->event_handler);
+			VGT_IRQ_WARN(info, entry->event, "inject a delayed event!!!\n");
+			entry->event_handler(dev, bit, entry, info, VGT_IRQ_HANDLE_VIRTUAL);
+		}
+	}
+
+	vgt_delayed_owner(dev) = NULL;
+}
+
+/*
+ * Physical interrupt handler for Intel HD serious graphics
+ *   - handle various interrupt reasons
+ *   - may trigger virtual interrupt instances to dom0 or other VMs
+ */
+static irqreturn_t vgt_interrupt(int irq, void *data)
+{
+	struct pgt_device *dev = (struct pgt_device *)data;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+	irqreturn_t ret;
+	u32 de_ier;
+	int i;
+
+	/* avoid nested handling by disabling master interrupt */
+	de_ier = VGT_MMIO_READ(dev, _REG_DEIER);
+	VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier & ~_REGBIT_MASTER_INTERRUPT);
+
+	ret = ops->interrupt(dev);
+	if (ret == IRQ_NONE) {
+		dprintk("Spurious interrupt received (or shared vector)\n");
+		VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);
+		return ret;
+	}
+
+	/* check pending virtual interrupt for active VMs. may instead put on a delayed work? */
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		if (dev->device[i] && vgt_has_irq_pending(dev->device[i]))
+			vgt_inject_virtual_interrupt(dev->device[i]);
+	}
+
+	/* re-enable master interrupt */
+	VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);
+
+	return IRQ_HANDLED;
+}
+
+/* =====================Initializations======================= */
+
+static void vgt_initialize_enabled_events(struct pgt_device *dev)
+{
+	/* TODO: a rough test, need think more on the initial set */
+	vgt_enable_hw_event(dev, IRQ_RDR_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
+	vgt_enable_hw_event(dev, IRQ_VIDEO_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
+	vgt_enable_hw_event(dev, IRQ_BLIT_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
+}
+
+static void vgt_initialize_always_emulated_events(struct pgt_device *dev)
+{
+	/* timers are always emulated */
+	set_bit(IRQ_RDR_WATCHDOG_EXCEEDED, vgt_always_emulated_events(dev));
+	set_bit(IRQ_VIDEO_WATCHDOG_EXCEEDED, vgt_always_emulated_events(dev));
+	vgt_get_event_owner_type(dev, IRQ_RDR_WATCHDOG_EXCEEDED) = VGT_OT_INVALID;
+	vgt_get_event_owner_type(dev, IRQ_VIDEO_WATCHDOG_EXCEEDED) = VGT_OT_INVALID;
+}
+
+/*
+ * Do interrupt initialization for vGT driver
+ */
+int vgt_irq_init(struct pgt_device *dev)
+{
+	enum vgt_owner_type *o_table;
+	struct vgt_irq_ops *ops;
+	struct vgt_irq_host_state *irq_hstate;
+
+	spin_lock_init(&(dev->irq_hstate->lock));
+
+	if (snb_device(dev))
+		dev->irq_hstate->ops = &snb_irq_ops;
+	else {
+		dprintk("vGT: no irq ops found!\n");
+		return -EINVAL;
+	}
+
+	irq_hstate = kzalloc(sizeof(struct vgt_irq_host_state), GFP_KERNEL);
+	ASSERT(irq_hstate);
+
+	dev->irq_hstate = irq_hstate;
+
+	/* Initialize ownership table, based on a default policy table */
+	o_table = kmalloc(IRQ_MAX * sizeof(enum vgt_owner_type), GFP_KERNEL);
+	if (!o_table) {
+		dprintk("vGT: no enough memory for owner table\n");
+		return -ENOMEM;
+	}
+	memcpy((void *)o_table, (void *)vgt_default_event_owner_table,
+		IRQ_MAX * sizeof(enum vgt_owner_type));
+	vgt_event_owner_table(dev) = o_table;
+
+	ops = vgt_get_irq_ops(dev);
+	ops->init(dev);
+
+	vgt_initialize_enabled_events(dev);
+
+	vgt_initialize_always_emulated_events(dev);
+
+	return 0;
+}
+
+void vgt_irq_exit(struct pgt_device *dev)
+{
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+
+	ops->exit(dev);
+	kfree(vgt_event_owner_table(dev));
+}
+
+int vgt_vstate_irq_init(struct vgt_device *vstate)
+{
+	struct vgt_emul_timer *dpy_timer;
+	struct vgt_irq_virt_state *irq_vstate;
+
+	irq_vstate = kzalloc(sizeof(struct vgt_irq_virt_state), GFP_KERNEL);
+	ASSERT(irq_vstate);
+
+	dpy_timer = &irq_vstate->dpy_timer;
+
+	hrtimer_init(&dpy_timer->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+	dpy_timer->timer.function = vgt_dpy_timer_fn;
+	dpy_timer->period = VGT_DPY_EMUL_PERIOD;
+
+	irq_vstate->vgt = vstate;
+	vstate->irq_vstate = irq_vstate;
+	/* Assume basic domain information has been retrieved already */
+	return 0;
+}
+
+void vgt_vstate_irq_exit(struct pgt_device *vstate)
+{
+	// leave it empty for now
+}
