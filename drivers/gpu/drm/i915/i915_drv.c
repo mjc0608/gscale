@@ -1612,6 +1612,8 @@ static struct pci_driver i915_pci_driver = {
 
 static int __init i915_init(void)
 {
+printk("Eddie: i915_initi915_init\n");
+printk("Eddie: -------------\n");
 	driver.num_ioctls = i915_max_ioctl;
 
 	/*
@@ -1644,6 +1646,38 @@ static int __init i915_init(void)
 #endif
 	}
 
+    {
+        struct pci_driver *pdriver = &i915_pci_driver;
+	    struct pci_dev *pdev = NULL;
+	const struct pci_device_id *pid;
+	int i;
+
+        for (i = 0; pdriver->id_table[i].vendor != 0; i++) {
+		pid = &pdriver->id_table[i];
+
+		/* Loop around setting up a DRM device for each PCI device
+		 * matching our ID and device class.  If we had the internal
+		 * function that pci_get_subsys and pci_get_class used, we'd
+		 * be able to just pass pid in instead of doing a two-stage
+		 * thing.
+		 */
+		pdev = NULL;
+		while ((pdev =
+			pci_get_subsys(pid->vendor, pid->device, pid->subvendor,
+				       pid->subdevice, pdev)) != NULL) {
+			if ((pdev->class & pid->class_mask) != pid->class)
+				continue;
+
+			/* stealth mode requires a manual probe */
+			//pci_dev_get(pdev);
+			printk("(i915) ready to start Xen vgt\n");
+                xen_start_vgt(pdev);
+                break;
+		}
+        }
+    }
+
+printk("Eddie: =============\n");
 	return drm_pci_init(&driver, &i915_pci_driver);
 }
 

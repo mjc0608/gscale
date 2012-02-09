@@ -34,6 +34,7 @@
 #include <xen/vgt.h>
 #include <linux/init.h>
 static vgt_ops_t *vgt_ops = NULL;
+#define SINGLE_VM_DEBUG
 
 #define MAX_VGT_DEVICES     16
 unsigned long   vgt_device_bitmap = 0;
@@ -69,12 +70,13 @@ int xen_register_vgt_device(int dom_id, struct vgt_device *vgt)
     int dev_id = find_free_device_id();
     bool ret = -1;
 
+printk("Eddie: xen_register_vgt_device %d %p\n", dom_id, vgt);
     if ((dev_id < MAX_VGT_DEVICES) && (dev_id >= 0)) {
         vgt_devices[dev_id].dom_id = dom_id;
         vgt_devices[dev_id].vgt = vgt;
 #ifdef SINGLE_VM_DEBUG
         if (dev_id == 0)
-            vgt_devices[dev_id].boot_time = 0;
+            vgt_ops->boot_time = 0;
 #else
         if (dev_id == 1) {
             /* TODO: switch dom0 vgt from pass thru to virt. */
@@ -90,6 +92,7 @@ void xen_deregister_vgt_device(struct vgt_device *vgt)
 {
     int i;
 
+printk("Eddie: xen_deregister_vgt_device %p\n", vgt);
     for (i=0; i < MAX_VGT_DEVICES; i++)
          if (vgt_devices[i].vgt == vgt) {
             vgt_devices[i].vgt = NULL;
@@ -321,11 +324,13 @@ int vgt_cfg_write_emul(
         ASSERT ((port & 3) == 0);
 
         vgt_cf8 = val;
+printk("vgt_cf8 write w/ %x\n", vgt_cf8);
     }
     else {	// port 0xCFC */
+printk("cfg_write_emul port %x %d %lx\n",port, bytes, val);
         ASSERT ( (vgt_cf8 & 3) == 0);
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
-            (bytes == 2) && ((port & 1) == 0) || (bytes ==1));
+            ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
         if ((vgt_ops == NULL) || vgt_ops->boot_time)
             rc = hcall_pio_write(port, bytes, val);
         else
@@ -350,10 +355,12 @@ int vgt_cfg_read_emul(
         memcpy(val, (uint8_t*)&vgt_cf8 + (port & 3), bytes);
     }
     else {
-printk("cfg_read_emul port %x %d\n",port, bytes);
+printk("cfg_read_emul port %x %d vgt_ops %p\n",port, bytes, vgt_ops);
+if (vgt_ops)
+    printk("boot_time %d\n", vgt_ops->boot_time);
         ASSERT ( (vgt_cf8 & 3) == 0);
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
-            (bytes == 2) && ((port & 1) == 0) || (bytes ==1));
+            ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
 
         if ((vgt_ops == NULL) || vgt_ops->boot_time) {
             rc = hcall_pio_read(port, bytes, &data);
@@ -877,6 +884,9 @@ int xen_start_vgt(struct pci_dev *pdev)
 {
     int ret = 0;
 
+printk("eddie: xen_start_vgt vgt_ops %p \n", vgt_ops);
+if (vgt_ops)
+printk("Eddie: start_vgt %p\n", vgt_ops->start_vgt);
     if (vgt_ops && vgt_ops->start_vgt)
         ret = vgt_ops->start_vgt(pdev);
     return ret;
