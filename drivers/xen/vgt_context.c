@@ -282,7 +282,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 #endif
             ) {
 			/* need to update hardware */
-			wvalue = VGT_MMIO_READ(vgt, off2);
+			wvalue = VGT_MMIO_READ(vgt->pdev, off2);
 			if (flags & I915_REG_FLAG_GRAPHICS_ADDRESS)
 				wvalue = h2g_gmadr(vgt, wvalue);
 
@@ -314,7 +314,7 @@ vgt_reg_t mmio_address_v2p(
 	if (!shadow_only &&
 		(flags & (I915_REG_FLAG_PIPE_A | I915_REG_FLAG_PIPE_B)))
 		/* need to update hardware */
-		VGT_MMIO_WRITE(vgt, gpuregs[id].offset, sreg);
+		VGT_MMIO_WRITE(vgt->pdev, gpuregs[id].offset, sreg);
 	return sreg;
 }
 
@@ -562,16 +562,16 @@ static void restore_ring_buffer(struct vgt_device *vgt, int ring_id)
 static void disable_power_management(struct vgt_device *vgt)
 {
 	/* Save the power state and froce wakeup. */
-	vgt->saved_wakeup = VGT_MMIO_READ(vgt, I915_REG_FORCEWAKE_OFFSET);
-	VGT_MMIO_WRITE(vgt, I915_REG_FORCEWAKE_OFFSET, 1);
-	VGT_MMIO_READ(vgt, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
+	vgt->saved_wakeup = VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);
+	VGT_MMIO_WRITE(vgt->pdev, I915_REG_FORCEWAKE_OFFSET, 1);
+	VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
 }
 
 static void restore_power_management(struct vgt_device *vgt)
 {
 	/* Restore the saved power state. */
-	VGT_MMIO_WRITE(vgt, I915_REG_FORCEWAKE_OFFSET, vgt->saved_wakeup);
-	VGT_MMIO_READ(vgt, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
+	VGT_MMIO_WRITE(vgt->pdev, I915_REG_FORCEWAKE_OFFSET, vgt->saved_wakeup);
+	VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
 }
 
 
@@ -615,7 +615,7 @@ static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, int timeou
 	return r;
 }
 
-static bool wait_ccid_to_renew(vgt_reg_t new_ccid)
+static bool wait_ccid_to_renew(struct pgt_device *pdev, vgt_reg_t new_ccid)
 {
 	int	timeout;
 	vgt_reg_t ccid;
@@ -623,7 +623,7 @@ static bool wait_ccid_to_renew(vgt_reg_t new_ccid)
 	/* wait for the register to be updated */
 	timeout = CCID_TIMEOUT_LIMIT;
 	while (--timeout > 0 ) {
-		ccid = VGT_MMIO_READ (vgt, _REG_CCID);
+		ccid = VGT_MMIO_READ (pdev, _REG_CCID);
 		if ((ccid & GPU_PAGE_MASK) == (new_ccid & GPU_PAGE_MASK))
 			break;
 		sleep_us(1);		/* 1us delay */
@@ -654,15 +654,15 @@ bool submit_context_command (struct vgt_device *vgt,
 	/* WR ignore extended state, and MBO bits, why ? */
 	ccid =  ccid_addr | CCID_MBO_BITS |
 		CCID_VALID | CCID_EXTENDED_STATE_SAVE_ENABLE;
-	VGT_MMIO_WRITE(vgt, _REG_CCID, ccid);
+	VGT_MMIO_WRITE(vgt->pdev, _REG_CCID, ccid);
 
-	if ( !wait_ccid_to_renew (ccid) )
+	if ( !wait_ccid_to_renew (vgt->pdev, ccid) )
 		return false;
 
 	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
 	_REG_WRITE_(&prb->tail, rb->phys_tail);		/* TODO: Lock in future */
 
-	return wait_ccid_to_renew(cmds[2]);
+	return wait_ccid_to_renew(vgt->pdev, cmds[2]);
 }
 
 void vgt_rendering_save_mmio(struct vgt_device *vgt)
@@ -677,7 +677,7 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 	for (i=0; i<num; i++) {
 		ASSERT (rendering_ctx_regs[i] < vgt->state.regNum);
 		sreg[rendering_ctx_regs[i]] =
-			VGT_MMIO_READ(vgt, rendering_ctx_regs[i]);
+			VGT_MMIO_READ(vgt->pdev, rendering_ctx_regs[i]);
 		/*
 		 * TODO: Fix address.
 		 */
@@ -704,7 +704,7 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 
 	for (i=0; i<num; i++) {
 		/* Address is fixed previously */
-		VGT_MMIO_WRITE(vgt, rendering_ctx_regs[i],
+		VGT_MMIO_WRITE(vgt->pdev, rendering_ctx_regs[i],
 			sreg[rendering_ctx_regs[i]]);
 	}
 }
@@ -876,13 +876,17 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, void *priv)
 	if (vgt_id == 0) {	/* dom0 GFX driver */
 		vgt->state.aperture_base_pa = pdev->gmadr_base +
 				VGT_DOM0_GFX_APERTURE_BASE;
+		vgt->aperture_base_va = pdev->phys_gmadr_va +
+				VGT_DOM0_GFX_APERTURE_BASE;
 //		vgt->state.gt_gmadr_base = ;
 	} else {
 		vgt->state.aperture_base_pa = pdev->gmadr_base +
 				VGT_VM1_APERTURE_BASE +
 				VGT_GUEST_APERTURE_SZ * (vgt_id-1);
+		vgt->aperture_base_va = pdev->phys_gmadr_va +
+				VGT_VM1_APERTURE_BASE +
+				VGT_GUEST_APERTURE_SZ * (vgt_id-1);
 	}
-	vgt->aperture_base_va = _vgt_mmio_va(vgt, vgt->state.aperture_base_pa);
 	vgt->aperture_offset = 0;
 
 	vgt->vgt_aperture_base = pdev->gmadr_base + VGT_APERTURE_BASE +
@@ -994,7 +998,8 @@ bool initial_phys_states(struct pgt_device *pdev)
 		printk("Insufficient memory for ioremap1\n");
 		return false;
 	}
-	pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_MMIO_SPACE_SZ);
+	pdev->mmio_base_va = pdev->gttmmio_base_va + SIZE_1MB * 2;
+	pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
 	if ( pdev->phys_gmadr_va == NULL ) {
 		iounmap(pdev->gttmmio_base_va);
 		printk("Insufficient memory for ioremap2\n");
@@ -1023,15 +1028,15 @@ int vgt_initialize(struct pci_bus *bus)
 	memset (mtable, 0, sizeof(mtable));
 
 	vgt_initialize_pgt_device(pdev);
-	for (i=0; i < MAX_ENGINES; i++) {
-		pdev->ring_base_vaddr[i] =
-			(vgt_ringbuffer_t *) _vgt_mmio_va(NULL, ring_mmio_base[i]);
-	}
 	if ( !vgt_initialize_mmio_hooks() )
 		goto err;
 	if ( !initial_phys_states(pdev) )
 		goto err;
 
+	for (i=0; i < MAX_ENGINES; i++) {
+		pdev->ring_base_vaddr[i] =
+			(vgt_ringbuffer_t *) _vgt_mmio_va(pdev, ring_mmio_base[i]);
+	}
 	/* create domain 0 instance */
 	vgt_dom0 = create_vgt_instance(pdev, NULL);   /* TODO: */
 	if (vgt_dom0 == NULL)

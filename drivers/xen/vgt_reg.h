@@ -63,6 +63,15 @@
 #define SANDY_BRIDGE
 #define ASSERT(x)   do { if (!(x)) printk("Assert at %s line %d\n", __FILE__, __LINE__);} while (0);
 
+#define VGT_DEBUG
+#ifdef VGT_DEBUG
+#define dprintk(fmt, a...)	\
+	printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a)
+#else
+#define dprintk(fmt, a...)
+#endif
+
+
 typedef uint32_t vgt_reg_t;
 
 /*
@@ -83,7 +92,7 @@ typedef struct {
 #define  MAX_ENGINES		5
 #endif
 
-#define _vgt_mmio_va(vgt, x)		((char*)NULL+x)	/* PA to VA */
+#define _vgt_mmio_va(pdev, x)		((char*)pdev->mmio_base_va+x)	/* PA to VA */
 #define sleep_ns(x)	{long y=1UL*x/2; while (y-- > 0) ;}
 #define sleep_us(x)	{long y=500UL*x; while (y-- > 0) ;}
 
@@ -98,6 +107,7 @@ typedef struct {
 #define VGT_GUEST_APERTURE_SZ		(128*SIZE_1MB)
 #define VGT_DOM0_APERTURE_SZ		(128*SIZE_1MB)	/* 64MB for dom0 */
 #define VGT_APERTURE_SZ			(128*SIZE_1MB)	/* reserve 64MB */
+#define VGT_TOTAL_APERTURE_SZ		(512*SIZE_1MB)
 #define VGT_MAX_VMS		3	/* the maximum # of VMs VGT can support */
 #endif
 
@@ -307,6 +317,7 @@ struct pgt_device {
 	uint32_t bar_size[3];
 	uint64_t gttmmio_base;	/* base of GTT */
 	void *gttmmio_base_va;	/* virtual base of GTT */
+	void *mmio_base_va;	/* virtual base of mmio */
 	uint64_t gmadr_base;	/* base of GMADR */
 	void *phys_gmadr_va;	/* virtual base of GMADR */
 
@@ -327,12 +338,12 @@ struct pgt_device {
 #define _REG_WRITE_(preg, val)	{ *(volatile vgt_reg_t *)preg = val;}
 #define _REG_READ_(preg)		(*(volatile vgt_reg_t *)preg)
 
-#define VGT_MMIO_WRITE(vgt, mmio_offset, val)	\
-		_REG_WRITE_(_vgt_mmio_va(vgt, mmio_offset), val);
+#define VGT_MMIO_WRITE(pdev, mmio_offset, val)	\
+		_REG_WRITE_(_vgt_mmio_va(pdev, mmio_offset), val);
 
 
-#define VGT_MMIO_READ(vgt, mmio_offset)		\
-		_REG_READ_(_vgt_mmio_va(vgt, mmio_offset))
+#define VGT_MMIO_READ(pdev, mmio_offset)		\
+		_REG_READ_(_vgt_mmio_va(pdev, mmio_offset))
 
 #define ARRAY_NUM(x)		(sizeof(x) / sizeof(x[0]))
 

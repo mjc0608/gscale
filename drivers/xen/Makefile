@@ -40,6 +40,7 @@ obj-$(CONFIG_XEN_SCSI_BACKEND)		+= xen-scsiback.o
 obj-$(CONFIG_XEN_VGT_I915)		+= vgt.o
 obj-$(CONFIG_XEN_VGT_I915)		+= vgt_context.o
 obj-$(CONFIG_XEN_VGT_I915)		+= vgt_mmio.o
+#obj-$(CONFIG_XEN_VGT_I915)		+= vgt-interrupt.o vgt-snb.o
 
 xen-evtchn-y				:= evtchn.o
 xen-gntdev-y				:= gntdev.o
