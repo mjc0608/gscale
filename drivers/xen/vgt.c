@@ -92,7 +92,7 @@ printk("Eddie: start_vgt.....\n");
     return 0;
 }
 
-static vgt_ops_t vgt_ops = {
+static vgt_ops_t vgt_xops = {
     .start_vgt = start_vgt,
     .mem_read = vgt_emulate_read,
     .mem_write = vgt_emulate_write,
@@ -145,7 +145,7 @@ static int __init vgt_init_module(void)
 {
 	int rc;
 
-	rc = xen_setup_vgt(&vgt_ops);
+	rc = xen_setup_vgt(&vgt_xops);
 
 	// fill other initialization works here
 	return rc == 0;

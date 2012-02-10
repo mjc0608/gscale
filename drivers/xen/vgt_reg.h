@@ -304,8 +304,6 @@ struct vgt_device {
 	struct vgt_irq_virt_state *irq_vstate;
 };
 
-#define vgt_is_dom0(id)	(id == 0)
-
 enum vgt_owner_type {
 	VGT_OT_INVALID = 0,
 	VGT_OT_RENDER,                  // the owner directly operating render command buffers

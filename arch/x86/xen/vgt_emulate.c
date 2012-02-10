@@ -33,7 +33,7 @@
 #include <xen/interface/vcpu.h>
 #include <xen/vgt.h>
 #include <linux/init.h>
-static vgt_ops_t *vgt_ops = NULL;
+vgt_ops_t *vgt_ops = NULL;
 #define SINGLE_VM_DEBUG
 
 #define MAX_VGT_DEVICES     16
@@ -381,7 +381,7 @@ if (vgt_ops)
 	/* read always happens on virtual conf context after initialization */
 	if (vgt_ops && vgt_ops->initialized) {
 printk("initialized\n");
-		if (!vgt_ops->cfg_read(vgt_devices[0].vgt,
+		if (!vgt_ops->cfg_read(vgt_devices[dom_id].vgt,
 			(vgt_cf8 & 0xfc) + (port & 3),
 			&data, bytes)) {
 			rc = X86EMUL_UNHANDLEABLE;
@@ -397,6 +397,7 @@ printk("initialized\n");
     }
     dprintk("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
 			port, bytes, *val);
+out:
     return rc;
 }
 

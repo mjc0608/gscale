@@ -280,7 +280,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 #ifndef SINGLE_VM_DEBUG
             && (vgt->vgt_id == curr_monitor_owner(pdev))
 #endif
-            ) {
+		) {
 			/* need to update hardware */
 			wvalue = VGT_MMIO_READ(vgt->pdev, off2);
 			if (flags & I915_REG_FLAG_GRAPHICS_ADDRESS)
@@ -288,6 +288,8 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 
 		} else
 			wvalue = __vreg(vgt, off2);
+
+		/* FIXME: also need to find some registers updaetd by HW, which should be passed through too */
 
 		memcpy(p_data, &wvalue + (offset & 3), bytes);
 	}
@@ -336,13 +338,28 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
 	else {
+		vgt_reg_t	sreg;
+
 		memcpy((char *)vgt->state.vReg + offset,
 				p_data, bytes);
 		offset &= ~3;
 		id = gpuRegIndex(offset);
 
-		mmio_address_v2p (vgt, id, __vreg(vgt, offset), 0);
+
+		sreg = mmio_address_v2p (vgt, id, __vreg(vgt, offset), 0);
+
+		/*
+		 * Before the 2nd VM is started, we think the system is in
+		 * boot time, where we'd like all dom0's MMIO writes flushed
+		 * to the hardware since vGT driver itself doesn't do the
+		 * initialization work. After the boot phase, passed through
+		 * MMIOs are switched at ownership switch
+		 */
+		if (vgt_ops->boot_time && vgt_is_dom0(vgt->vm_id))
+			VGT_MMIO_WRITE(vgt->pdev, offset, sreg);
 	}
+
+
 	return true;
 }
 
@@ -862,6 +879,11 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, void *priv)
 		return NULL;
 	}
 	vgt->vgt_id = vgt_id;
+#ifdef SINGLE_VM_DEBUG
+	vgt->vm_id = 0;
+#else
+	vgt->vm_id = ...;
+#endif
 	vgt->priv = priv;
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
