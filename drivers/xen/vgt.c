@@ -81,12 +81,16 @@ static int start_vgt(struct pci_dev *pdev)
 {
 printk("Eddie: start_vgt.....\n");
     if (vgt_initialize(pdev->bus) == 0) {
+#if 0
         p_thread = kthread_run(vgt_thread, NULL, "vgt_thread");
         if (p_thread)
             return 1;
         else {
             vgt_destroy();
         }
+#endif
+	printk("vGT started\n");
+	return 1;
     }
     printk("VGT couldn't be started\n");
     return 0;
