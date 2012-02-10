@@ -210,6 +210,7 @@ bool vgt_initialize_mmio_hooks()
 {
     int i;
 
+printk("mmio hooks initialized\n");
 	/* ring registers */
 	for (i=0; i < MAX_ENGINES; i++)
 		if (!vgt_register_mmio_handler(ring_mmio_base[i],

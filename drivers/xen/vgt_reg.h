@@ -169,7 +169,7 @@ typedef struct {
 } vgt_state_t;
 
 #define __vreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.vReg + off))
-#define __sreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.vReg + off))
+#define __sreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.sReg + off))
 #define vgt_vreg(vgt, off)	((vgt_reg_t *)vgt->state.vReg + off)
 #define vgt_sreg(vgt, off)	((vgt_reg_t *)vgt_>state.vReg + off)
 
@@ -281,7 +281,7 @@ static inline bool is_ring_enabled (vgt_ringbuffer_t *rb)
 
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
-extern int vgt_initialize(struct pci_bus *bus);
+extern int vgt_initialize(struct pci_dev *dev);
 extern bool vgt_register_mmio_handler(int start, int end,
 	vgt_mmio_read read, vgt_mmio_write write);
 extern bool vgt_initialize_mmio_hooks(void);
@@ -320,6 +320,7 @@ struct vgt_irq_host_state;
 /* per-device structure */
 struct pgt_device {
 	struct pci_bus *pbus;	/* parent bus of the device */
+	struct pci_dev *pdev;	/* the gfx device bound to */
 	int bus;		/* parent bus number */
 	int devfn;		/* device function number */
 

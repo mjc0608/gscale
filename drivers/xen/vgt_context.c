@@ -693,7 +693,7 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 
 	for (i=0; i<num; i++) {
 		ASSERT (rendering_ctx_regs[i] < vgt->state.regNum);
-		sreg[rendering_ctx_regs[i]] =
+		__sreg(vgt, rendering_ctx_regs[i]) =
 			VGT_MMIO_READ(vgt->pdev, rendering_ctx_regs[i]);
 		/*
 		 * TODO: Fix address.
@@ -702,7 +702,8 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 		 * If a register may be updated by HW as well,
 		 * how to coordinate w/ pure SW emulation?
 		 */
-		vreg[rendering_ctx_regs[i]] = sreg[rendering_ctx_regs[i]];
+		__vreg(vgt, rendering_ctx_regs[i]) =
+			__sreg(vgt, rendering_ctx_regs[i]);
 	}
 }
 
@@ -722,7 +723,7 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 	for (i=0; i<num; i++) {
 		/* Address is fixed previously */
 		VGT_MMIO_WRITE(vgt->pdev, rendering_ctx_regs[i],
-			sreg[rendering_ctx_regs[i]]);
+			__sreg(vgt, rendering_ctx_regs[i]));
 	}
 }
 
@@ -825,8 +826,10 @@ static void state_reg_v2s(struct vgt_device *vgt)
 	for (i = 0; i < gpuRegEntries; i++) {
 		off = gpuregs[i].offset;
 		/* reuse vgt_emulate_write logic to fix address. */
-		*(vgt_reg_t *)((char *)sreg + off) =
+		__sreg(vgt, off) =
 			mmio_address_v2p (vgt, i, __vreg(vgt, off), 1);
+		printk("vGT: address fix (%d) for reg (%x): (%x->%x)\n",
+			i, off, __vreg(vgt, off), __sreg(vgt, off));
 
 	}
 }
@@ -841,6 +844,7 @@ static bool create_state_instance(struct vgt_device *vgt)
 {
 	vgt_state_t	*state;
 
+printk("create_state_instance\n");
 	state = &vgt->state;
 	state->vReg = kmalloc (state->regNum * REG_SIZE, GFP_KERNEL);
 	state->sReg = kmalloc (state->regNum * REG_SIZE, GFP_KERNEL);
@@ -867,30 +871,33 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, void *priv)
 	vgt_state_ring_t	*rb;
 	char *cfg_space;
 
+printk("create_vgt_instance\n");
 	/* TODO: check format of aperture size */
-
+#ifdef SINGLE_VM_DEBUG
+	vgt->vgt_id = 0;
+	vgt->vm_id = 0;
+#else
 	vgt_id = allocate_vgt_id();
 	if (vgt_id < 0)
 		return NULL;
+	vgt->vgt_id = vgt_id;
+	vgt->vm_id = ...;
+#endif
 	vgt = kmalloc (sizeof(*vgt), GFP_KERNEL);
 	if (vgt == NULL) {
 		free_vgt_id(vgt_id);
 		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
 		return NULL;
 	}
-	vgt->vgt_id = vgt_id;
-#ifdef SINGLE_VM_DEBUG
-	vgt->vm_id = 0;
-#else
-	vgt->vm_id = ...;
-#endif
 	vgt->priv = priv;
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
 
 	if ( !create_state_instance(vgt) ) {
+#ifndef SINGLE_VM_DEBUG
 		free_vgt_id(vgt_id);
+#endif
 		kfree (vgt);
 		return NULL;
 	}
@@ -909,10 +916,12 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, void *priv)
 				VGT_VM1_APERTURE_BASE +
 				VGT_GUEST_APERTURE_SZ * (vgt_id-1);
 	}
+printk("aperture_base_pa: %llx, va: %llx\n", vgt->state.aperture_base_pa, (uint64_t)vgt->aperture_base_va);
 	vgt->aperture_offset = 0;
 
 	vgt->vgt_aperture_base = pdev->gmadr_base + VGT_APERTURE_BASE +
 		vgt_id * VGT_APERTURE_PER_INSTANCE_SZ;
+printk("vgt_aperture_base: %llx\n", vgt->vgt_aperture_base);
 
 	for (i=0; i< MAX_ENGINES; i++) {
 		rb = &vgt->rb[i];
@@ -958,7 +967,9 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	kfree(vgt->state.vReg);
 	kfree(vgt->state.sReg);
+#ifndef SINGLE_VM_DEBUG
 	free_vgt_id(vgt->vgt_id);
+#endif
 	kfree(vgt);
 }
 
@@ -998,15 +1009,26 @@ bool initial_phys_states(struct pgt_device *pdev)
 	uint64_t	bar0, bar1;
 	struct pci_bus *bus = pdev->pbus;
 
+printk("initial_phys_states\n");
+printk("configuration space:\n");
 	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4) {
 		pci_bus_read_config_dword(bus, pdev->devfn, i,
 				(uint32_t *)&pdev->initial_cfg_space[i]);
+		if (!(i % 4))
+			printk("\n[%2x]: ", i);
+
+		printk("%2x %2x %2x %2x ",
+			*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff,
+			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff00) >> 8,
+			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff0000) >> 16,
+			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff) >> 24);
 	}
 	for (i=0; i < 3; i++)
 		pdev->bar_size[i] = pci_bar_size(pdev, VGT_REG_CFG_SPACE_BAR0 + 8*i);
 
 	bar0 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
 	bar1 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR1];
+printk("bar0: %llx, Bar1: %llx\n", bar0, bar1);
 	ASSERT ((bar0 & 7) == 4);
 	/* memory, 64 bits bar0 */
 	pdev->gttmmio_base = bar0 & ~0xf;
@@ -1014,27 +1036,30 @@ bool initial_phys_states(struct pgt_device *pdev)
 	ASSERT ((bar1 & 7) == 4);
 	/* memory, 64 bits bar */
 	pdev->gmadr_base = bar1 & ~0xf;
-
+printk("gttmmio: %llx, gmadr:%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
 	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, VGT_MMIO_SPACE_SZ);
 	if ( pdev->gttmmio_base_va == NULL ) {
 		printk("Insufficient memory for ioremap1\n");
 		return false;
 	}
 	pdev->mmio_base_va = pdev->gttmmio_base_va + SIZE_1MB * 2;
+printk("gttmmio_base_va: %llx, mmio_base_va, %llx\n", (uint64_t)pdev->gttmmio_base_va, (uint64_t)pdev->mmio_base_va);
 	pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
 	if ( pdev->phys_gmadr_va == NULL ) {
 		iounmap(pdev->gttmmio_base_va);
 		printk("Insufficient memory for ioremap2\n");
 		return false;
 	}
+printk("gmadr_va: %llx\n", (uint64_t)pdev->phys_gmadr_va);
 	memcpy (pdev->initial_mmio_state, pdev->gttmmio_base_va,
 			VGT_MMIO_SPACE_SZ);
 	return true;
 }
 
-static void vgt_initialize_pgt_device(struct pgt_device *pdev)
+static void vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
 {
-
+	pdev->pdev = dev;
+	pdev->pbus = dev->bus;
 }
 
 /*
@@ -1042,14 +1067,15 @@ static void vgt_initialize_pgt_device(struct pgt_device *pdev)
  *  return 0: success
  *	-1: error
  */
-int vgt_initialize(struct pci_bus *bus)
+int vgt_initialize(struct pci_dev *dev)
 {
 	int i;
+	struct pci_bus *bus = dev->bus;
 	struct pgt_device *pdev = &default_device;
 
 	memset (mtable, 0, sizeof(mtable));
 
-	vgt_initialize_pgt_device(pdev);
+	vgt_initialize_pgt_device(dev, pdev);
 	if ( !vgt_initialize_mmio_hooks() )
 		goto err;
 	if ( !initial_phys_states(pdev) )
@@ -1058,6 +1084,7 @@ int vgt_initialize(struct pci_bus *bus)
 	for (i=0; i < MAX_ENGINES; i++) {
 		pdev->ring_base_vaddr[i] =
 			(vgt_ringbuffer_t *) _vgt_mmio_va(pdev, ring_mmio_base[i]);
+		printk("ring_base_vaddr[%d]: %llx\n", i, (uint64_t)pdev->ring_base_vaddr[i]);
 	}
 	/* create domain 0 instance */
 	vgt_dom0 = create_vgt_instance(pdev, NULL);   /* TODO: */
@@ -1067,10 +1094,12 @@ int vgt_initialize(struct pci_bus *bus)
 	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
 #endif
 
+printk("create dom0 instance succeeds\n");
     if (xen_register_vgt_device(0, vgt_dom0) != 0) {
         xen_deregister_vgt_device(vgt_dom0);
         goto err;
     }
+printk("vgt_initialize succeeds\n");
 	return 0;
 err:
     printk("vgt_initialize failed\n");
