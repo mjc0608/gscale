@@ -74,15 +74,12 @@ printk("Eddie: xen_register_vgt_device %d %p\n", dom_id, vgt);
     if ((dev_id < MAX_VGT_DEVICES) && (dev_id >= 0)) {
         vgt_devices[dev_id].dom_id = dom_id;
         vgt_devices[dev_id].vgt = vgt;
-#ifdef SINGLE_VM_DEBUG
-        if (dev_id == 0)
-            vgt_ops->boot_time = 0;
-#else
+
+	vgt_ops->initialized = 1;
         if (dev_id == 1) {
             /* TODO: switch dom0 vgt from pass thru to virt. */
             vgt_ops->boot_time = 0;
         }
-#endif
         ret = dev_id;
     }
     return ret;
@@ -315,6 +312,11 @@ int vgt_cfg_write_emul(
         struct x86_emulate_ctxt *ctxt)
 {
     int rc = X86EMUL_OKAY;
+#ifdef SINGLE_VM_DEBUG
+	int dom_id = 0;
+#else
+	int dom_id = ...;
+#endif
 
     dprintk("VGT: vgt_cfg_write_emul %x %x %lx at %llx\n",
 	    port, bytes, val, ctxt->regs->rip);
@@ -331,15 +333,24 @@ printk("cfg_write_emul port %x %d %lx\n",port, bytes, val);
         ASSERT ( (vgt_cf8 & 3) == 0);
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
-        if ((vgt_ops == NULL) || vgt_ops->boot_time)
-            rc = hcall_pio_write(port, bytes, val);
-        else
-            if (!vgt_ops->cfg_write(vgt_devices[0].vgt,
-                        (vgt_cf8 & 0xfc) + (port & 3),
-                        &val, bytes))
-                rc = X86EMUL_UNHANDLEABLE;
+
+	/* virtual conf space write handler */
+	if (vgt_ops && vgt_ops->initialized) {
+printk("initialized\n");
+		if (!vgt_ops->cfg_write(vgt_devices[dom_id].vgt,
+			(vgt_cf8 & 0xfc) + (port & 3),
+			&val, bytes)) {
+			rc = X86EMUL_UNHANDLEABLE;
+			goto out;
+		}
+	}
+
+	/* dom0's accesses need pass through to hw */
+	if (vgt_is_dom0(dom_id))
+		rc = hcall_pio_write(port, bytes, val);
     }
 
+out:
     return rc;
 }
 
@@ -350,6 +361,11 @@ int vgt_cfg_read_emul(
 {
     unsigned long data;
     int rc = X86EMUL_OKAY;
+#ifdef SINGLE_VM_DEBUG
+	int dom_id = 0;
+#else
+	int dom_id = ...;
+#endif
 
     if ((port & ~3)== 0xcf8) {
         memcpy(val, (uint8_t*)&vgt_cf8 + (port & 3), bytes);
@@ -357,23 +373,27 @@ int vgt_cfg_read_emul(
     else {
 printk("cfg_read_emul port %x %d vgt_ops %p\n",port, bytes, vgt_ops);
 if (vgt_ops)
-    printk("boot_time %d\n", vgt_ops->boot_time);
+    printk("vgt initalized? %d \n", vgt_ops->initialized);
         ASSERT ( (vgt_cf8 & 3) == 0);
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
 
-        if ((vgt_ops == NULL) || vgt_ops->boot_time) {
-            rc = hcall_pio_read(port, bytes, &data);
-            if (rc == X86EMUL_OKAY)
-                memcpy(val, &data, bytes);
-        } else {
-            if (vgt_ops->cfg_read(vgt_devices[0].vgt,
-                        (vgt_cf8 & 0xfc) + (port & 3),
-                        &data, bytes))
-                memcpy(val, &data, bytes);
-            else
-                rc = X86EMUL_UNHANDLEABLE;
-        }
+	/* read always happens on virtual conf context after initialization */
+	if (vgt_ops && vgt_ops->initialized) {
+printk("initialized\n");
+		if (!vgt_ops->cfg_read(vgt_devices[0].vgt,
+			(vgt_cf8 & 0xfc) + (port & 3),
+			&data, bytes)) {
+			rc = X86EMUL_UNHANDLEABLE;
+			goto out;
+		}
+	} else {
+		rc = hcall_pio_read(port, bytes, &data);
+		if (rc != X86EMUL_OKAY)
+			goto out;
+	}
+
+	memcpy(val, &data, bytes);
     }
     dprintk("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
 			port, bytes, *val);

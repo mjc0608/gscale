@@ -64,7 +64,8 @@ typedef struct {
     bool (*mem_write)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
     bool (*cfg_read)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
     bool (*cfg_write)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
-    bool boot_time;
+    bool boot_time;	/* in boot time dom0 access is always passed through */
+    bool initializd;	/* whether vgt is fully initialized */
 } vgt_ops_t;
 bool vgt_emulate_write(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
 bool vgt_emulate_read(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);

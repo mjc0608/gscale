@@ -198,6 +198,11 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 		memcpy (&vgt->state.cfg_space[off], p_data, bytes);
 		break;
 	}
+	/*
+	 * FIXME: assume most dmo0's cfg writes should be propogated to
+	 * the real conf space. In the case where propogation is required
+	 * but value needs be changed (sReg), do it here
+	 */
 	return true;
 }
 
