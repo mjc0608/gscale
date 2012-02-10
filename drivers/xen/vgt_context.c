@@ -1041,13 +1041,13 @@ printk("bar0: %llx, Bar1: %llx\n", bar0, bar1);
 	/* memory, 64 bits bar */
 	pdev->gmadr_base = bar1 & ~0xf;
 printk("gttmmio: %llx, gmadr:%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
-	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, VGT_MMIO_SPACE_SZ);
+	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, 2 * VGT_MMIO_SPACE_SZ);
 	if ( pdev->gttmmio_base_va == NULL ) {
 		printk("Insufficient memory for ioremap1\n");
 		return false;
 	}
-	pdev->mmio_base_va = pdev->gttmmio_base_va + SIZE_1MB * 2;
-printk("gttmmio_base_va: %llx, mmio_base_va, %llx\n", (uint64_t)pdev->gttmmio_base_va, (uint64_t)pdev->mmio_base_va);
+	pdev->gtt_base_va = pdev->gttmmio_base_va + SIZE_1MB * 2;
+printk("gttmmio_base_va: %llx, gtt_base_va, %llx\n", (uint64_t)pdev->gttmmio_base_va, (uint64_t)pdev->gtt_base_va);
 	pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
 	if ( pdev->phys_gmadr_va == NULL ) {
 		iounmap(pdev->gttmmio_base_va);
@@ -1064,6 +1064,9 @@ static void vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 {
 	pdev->pdev = dev;
 	pdev->pbus = dev->bus;
+
+	INIT_LIST_HEAD(&pdev->rendering_runq_head);
+	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
 }
 
 /*
@@ -1118,7 +1121,7 @@ void vgt_destroy()
 	struct pgt_device *pdev = &default_device;
 
 	/* Deactive all VGTs */
-	while ( list_empty(&pdev->rendering_runq_head) ) {
+	while ( !list_empty(&pdev->rendering_runq_head) ) {
 		list_for_each (pos, &pdev->rendering_runq_head)
 			vgt_deactive(pdev, pos);
 	};
@@ -1126,11 +1129,13 @@ void vgt_destroy()
 		iounmap(pdev->gttmmio_base_va);
 	if (pdev->phys_gmadr_va)
 		iounmap(pdev->phys_gmadr_va);
-	for (pos = pdev->rendering_idleq_head.next;
-		pos != &pdev->rendering_idleq_head; pos = next) {
-		next = pos->next;
-		vgt = list_entry (pos, struct vgt_device, list);
-		vgt_release_instance(vgt);
+	while ( !list_empty(&pdev->rendering_idleq_head)) {
+		for (pos = pdev->rendering_idleq_head.next;
+			pos != &pdev->rendering_idleq_head; pos = next) {
+			next = pos->next;
+			vgt = list_entry (pos, struct vgt_device, list);
+			vgt_release_instance(vgt);
+		}
 	}
 	free_mtable();
 }

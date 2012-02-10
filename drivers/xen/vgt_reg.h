@@ -98,7 +98,7 @@ typedef struct {
 #define  MAX_ENGINES		5
 #endif
 
-#define _vgt_mmio_va(pdev, x)		((char*)pdev->mmio_base_va+x)	/* PA to VA */
+#define _vgt_mmio_va(pdev, x)		((char*)pdev->gttmmio_base_va+x)	/* PA to VA */
 #define sleep_ns(x)	{long y=1UL*x/2; while (y-- > 0) ;}
 #define sleep_us(x)	{long y=500UL*x; while (y-- > 0) ;}
 
@@ -329,8 +329,8 @@ struct pgt_device {
 	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */
 	uint32_t bar_size[3];
 	uint64_t gttmmio_base;	/* base of GTT */
-	void *gttmmio_base_va;	/* virtual base of GTT */
-	void *mmio_base_va;	/* virtual base of mmio */
+	void *gttmmio_base_va;	/* virtual base of mmio */
+	void *gtt_base_va;	/* virtual base of GTT */
 	uint64_t gmadr_base;	/* base of GMADR */
 	void *phys_gmadr_va;	/* virtual base of GMADR */
 
