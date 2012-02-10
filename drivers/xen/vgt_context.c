@@ -86,7 +86,7 @@ unsigned int ring_mmio_base [MAX_ENGINES] = {
 
 static struct pgt_device default_device = {
 	.bus = 0,
-	.devfn = 0x20,		/* BDF: 0:2:0 */
+	.devfn = 0x10,		/* BDF: 0:2:0 */
 };
 
 /*
@@ -976,19 +976,19 @@ void vgt_release_instance(struct vgt_device *vgt)
 static uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
 {
 	unsigned long bar_s, bar_size=0;
-	struct pci_bus *bus = pdev->pbus;
-	int vgt_devfn = pdev->devfn;
+	struct pci_dev *dev = pdev->pdev;
 
-	pci_bus_read_config_dword(bus, vgt_devfn, bar_off,
-				(uint32_t *)&bar_s);
-	pci_bus_write_config_dword(bus, vgt_devfn, bar_off, 0xFFFFFFFF);
+	pci_read_config_dword(dev,  bar_off, (uint32_t *)&bar_s);
+	pci_write_config_dword(dev, bar_off, 0xFFFFFFFF);
 
-	pci_bus_read_config_dword(bus, vgt_devfn, bar_off,
-				(uint32_t *)&bar_size);
+	pci_read_config_dword(dev, bar_off, (uint32_t *)&bar_size);
+printk("read back bar_size %lx\n", bar_size);
 	bar_size &= ~0xf;       /* bit 4-31 */
-	bar_size = 1 << find_first_bit(&bar_size, sizeof(bar_size));
+printk("read back bar_size1 %lx\n", bar_size);
+	bar_size = 1 << find_first_bit(&bar_size, BITS_PER_LONG);
+printk("read back bar_size2 %lx\n", bar_size);
 
-	pci_bus_write_config_dword(bus, vgt_devfn, bar_off, bar_s);
+	pci_write_config_dword(dev, bar_off, bar_s);
 
 #if 0
         bar_s = pci_conf_read32( 0, vgt_bus, vgt_dev, vgt_fun, bar_off);
@@ -1007,24 +1007,28 @@ bool initial_phys_states(struct pgt_device *pdev)
 {
 	int i;
 	uint64_t	bar0, bar1;
-	struct pci_bus *bus = pdev->pbus;
+	struct pci_dev *dev = pdev->pdev;
 
 printk("initial_phys_states\n");
 printk("configuration space:\n");
-	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4) {
-		pci_bus_read_config_dword(bus, pdev->devfn, i,
+printk("bus: %d, devfn: %d\n", dev->bus->number, dev->devfn);
+	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4)
+		pci_read_config_dword(dev, i,
 				(uint32_t *)&pdev->initial_cfg_space[i]);
-		if (!(i % 4))
+	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4) {
+		if (!(i % 16))
 			printk("\n[%2x]: ", i);
 
-		printk("%2x %2x %2x %2x ",
+		printk("%02x %02x %02x %02x ",
 			*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff,
 			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff00) >> 8,
 			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff0000) >> 16,
-			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff) >> 24);
+			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff000000) >> 24);
 	}
-	for (i=0; i < 3; i++)
+	for (i=0; i < 3; i++) {
 		pdev->bar_size[i] = pci_bar_size(pdev, VGT_REG_CFG_SPACE_BAR0 + 8*i);
+		printk("bar-%d size: %d\n", i, pdev->bar_size[i]);
+	}
 
 	bar0 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
 	bar1 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR1];

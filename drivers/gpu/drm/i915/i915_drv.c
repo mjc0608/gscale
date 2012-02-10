@@ -1651,6 +1651,7 @@ printk("Eddie: -------------\n");
 	    struct pci_dev *pdev = NULL;
 	const struct pci_device_id *pid;
 	int i;
+	uint32_t val;
 
         for (i = 0; pdriver->id_table[i].vendor != 0; i++) {
 		pid = &pdriver->id_table[i];
@@ -1671,6 +1672,11 @@ printk("Eddie: -------------\n");
 			/* stealth mode requires a manual probe */
 			//pci_dev_get(pdev);
 			printk("(i915) ready to start Xen vgt\n");
+		printk("(i915)bus: %d, devfn: %d\n", pdev->bus->number, pdev->devfn);
+		pci_bus_read_config_dword(pdev->bus, pdev->devfn, 0, &val);
+		printk("return %x\n", val);
+		pci_read_config_dword(pdev, 0, &val);
+		printk("return %x\n", val);
                 xen_start_vgt(pdev);
                 break;
 		}
