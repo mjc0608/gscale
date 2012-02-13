@@ -866,29 +866,31 @@ printk("create_state_instance\n");
  */
 struct vgt_device *create_vgt_instance(struct pgt_device *pdev, void *priv)
 {
-	int vgt_id, i;
+	int i;
 	struct vgt_device *vgt;
 	vgt_state_ring_t	*rb;
 	char *cfg_space;
 
 printk("create_vgt_instance\n");
+	vgt = kmalloc (sizeof(*vgt), GFP_KERNEL);
+	if (vgt == NULL) {
+		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
+		return NULL;
+	}
 	/* TODO: check format of aperture size */
 #ifdef SINGLE_VM_DEBUG
 	vgt->vgt_id = 0;
 	vgt->vm_id = 0;
 #else
 	vgt_id = allocate_vgt_id();
-	if (vgt_id < 0)
+	if (vgt_id < 0) {
+		kfree (vgt);
 		return NULL;
+	}
 	vgt->vgt_id = vgt_id;
 	vgt->vm_id = ...;
 #endif
-	vgt = kmalloc (sizeof(*vgt), GFP_KERNEL);
-	if (vgt == NULL) {
-		free_vgt_id(vgt_id);
-		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
-		return NULL;
-	}
+	vgt->pgt = pdev;
 	vgt->priv = priv;
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
@@ -902,7 +904,7 @@ printk("create_vgt_instance\n");
 		return NULL;
 	}
 
-	if (vgt_id == 0) {	/* dom0 GFX driver */
+	if (vgt->vgt_id == 0) {	/* dom0 GFX driver */
 		vgt->state.aperture_base_pa = pdev->gmadr_base +
 				VGT_DOM0_GFX_APERTURE_BASE;
 		vgt->aperture_base_va = pdev->phys_gmadr_va +
@@ -911,16 +913,16 @@ printk("create_vgt_instance\n");
 	} else {
 		vgt->state.aperture_base_pa = pdev->gmadr_base +
 				VGT_VM1_APERTURE_BASE +
-				VGT_GUEST_APERTURE_SZ * (vgt_id-1);
+				VGT_GUEST_APERTURE_SZ * (vgt->vgt_id-1);
 		vgt->aperture_base_va = pdev->phys_gmadr_va +
 				VGT_VM1_APERTURE_BASE +
-				VGT_GUEST_APERTURE_SZ * (vgt_id-1);
+				VGT_GUEST_APERTURE_SZ * (vgt->vgt_id-1);
 	}
 printk("aperture_base_pa: %llx, va: %llx\n", vgt->state.aperture_base_pa, (uint64_t)vgt->aperture_base_va);
 	vgt->aperture_offset = 0;
 
 	vgt->vgt_aperture_base = pdev->gmadr_base + VGT_APERTURE_BASE +
-		vgt_id * VGT_APERTURE_PER_INSTANCE_SZ;
+		vgt->vgt_id * VGT_APERTURE_PER_INSTANCE_SZ;
 printk("vgt_aperture_base: %llx\n", vgt->vgt_aperture_base);
 
 	for (i=0; i< MAX_ENGINES; i++) {
@@ -1009,9 +1011,7 @@ bool initial_phys_states(struct pgt_device *pdev)
 	uint64_t	bar0, bar1;
 	struct pci_dev *dev = pdev->pdev;
 
-printk("initial_phys_states\n");
-printk("configuration space:\n");
-printk("bus: %d, devfn: %d\n", dev->bus->number, dev->devfn);
+printk("VGT: Initial_phys_states\n");
 	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4)
 		pci_read_config_dword(dev, i,
 				(uint32_t *)&pdev->initial_cfg_space[i]);
@@ -1027,12 +1027,13 @@ printk("bus: %d, devfn: %d\n", dev->bus->number, dev->devfn);
 	}
 	for (i=0; i < 3; i++) {
 		pdev->bar_size[i] = pci_bar_size(pdev, VGT_REG_CFG_SPACE_BAR0 + 8*i);
-		printk("bar-%d size: %d\n", i, pdev->bar_size[i]);
+		printk("bar-%d size: %x\n", i, pdev->bar_size[i]);
 	}
 
 	bar0 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
 	bar1 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR1];
-printk("bar0: %llx, Bar1: %llx\n", bar0, bar1);
+	dprintk("bar0: %llx, Bar1: %llx\n", bar0, bar1);
+
 	ASSERT ((bar0 & 7) == 4);
 	/* memory, 64 bits bar0 */
 	pdev->gttmmio_base = bar0 & ~0xf;
@@ -1040,23 +1041,41 @@ printk("bar0: %llx, Bar1: %llx\n", bar0, bar1);
 	ASSERT ((bar1 & 7) == 4);
 	/* memory, 64 bits bar */
 	pdev->gmadr_base = bar1 & ~0xf;
-printk("gttmmio: %llx, gmadr:%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
+	dprintk("Eddie: gttmmio: %llx, gmadr:%llx\n",
+			pdev->gttmmio_base, pdev->gmadr_base);
 	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, 2 * VGT_MMIO_SPACE_SZ);
 	if ( pdev->gttmmio_base_va == NULL ) {
 		printk("Insufficient memory for ioremap1\n");
 		return false;
 	}
-	pdev->gtt_base_va = pdev->gttmmio_base_va + SIZE_1MB * 2;
-printk("gttmmio_base_va: %llx, gtt_base_va, %llx\n", (uint64_t)pdev->gttmmio_base_va, (uint64_t)pdev->gtt_base_va);
+	pdev->gtt_base_va = pdev->gttmmio_base_va + VGT_MMIO_SPACE_SZ;
+	printk("gttmmio_base_va: %llx, gtt_base_va, %llx\n", (uint64_t)pdev->gttmmio_base_va, (uint64_t)pdev->gtt_base_va);
+#if 0		// TODO: runtime sanity check warning...
 	pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
 	if ( pdev->phys_gmadr_va == NULL ) {
 		iounmap(pdev->gttmmio_base_va);
 		printk("Insufficient memory for ioremap2\n");
 		return false;
 	}
+#endif
 printk("gmadr_va: %llx\n", (uint64_t)pdev->phys_gmadr_va);
+#if 0
+	/* TODO: Extend VCPUOP_request_io_emulation hypercall to handle
+	 * trunk data read request, and use hypercall here.
+	 * Or enable "rep movsx" support.
+	 */
 	memcpy (pdev->initial_mmio_state, pdev->gttmmio_base_va,
 			VGT_MMIO_SPACE_SZ);
+
+#else
+	for (i = 0; i < VGT_MMIO_REG_NUM; i++) {
+		if (!(i % (VGT_MMIO_REG_NUM/100)))
+			printk("vGT: snapshot # %x, MMIO %llx\n", i, *(uint64_t *)((vgt_reg_t *)pdev->gttmmio_base_va + i));
+		pdev->initial_mmio_state[i] = *((vgt_reg_t *)pdev->gttmmio_base_va + i);
+		if (!(i % (VGT_MMIO_REG_NUM/100)))
+			printk("(%x)\n", pdev->initial_mmio_state[i]);
+	}
+#endif
 	return true;
 }
 
@@ -1077,7 +1096,6 @@ static void vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 int vgt_initialize(struct pci_dev *dev)
 {
 	int i;
-	struct pci_bus *bus = dev->bus;
 	struct pgt_device *pdev = &default_device;
 
 	memset (mtable, 0, sizeof(mtable));
@@ -1106,10 +1124,10 @@ printk("create dom0 instance succeeds\n");
         xen_deregister_vgt_device(vgt_dom0);
         goto err;
     }
-printk("vgt_initialize succeeds\n");
+printk("vgt_initialize succeeds.\n");
 	return 0;
 err:
-    printk("vgt_initialize failed\n");
+    printk("vgt_initialize failed.\n");
     vgt_destroy();
     return -1;
 }

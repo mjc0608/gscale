@@ -298,6 +298,7 @@ struct vgt_device {
 	void		*aperture_base_va;
 	unsigned int	aperture_offset;	/* TODO: for aperture virtualization */
 	void	*priv;
+	struct pgt_device *pgt;
 	uint64_t  vgt_aperture_base;	/* aperture used for VGT driver */
 	vgt_reg_t		saved_wakeup;	/* disable PM before switching */
 

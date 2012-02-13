@@ -33,6 +33,8 @@
 #include <xen/interface/vcpu.h>
 #include <xen/vgt.h>
 #include <linux/init.h>
+#include <linux/page-flags.h>
+
 vgt_ops_t *vgt_ops = NULL;
 #define SINGLE_VM_DEBUG
 
@@ -326,17 +328,16 @@ int vgt_cfg_write_emul(
         ASSERT ((port & 3) == 0);
 
         vgt_cf8 = val;
-printk("vgt_cf8 write w/ %x\n", vgt_cf8);
+	dprintk("vgt_cf8 write w/ %x\n", vgt_cf8);
     }
     else {	// port 0xCFC */
-printk("cfg_write_emul port %x %d %lx\n",port, bytes, val);
+	dprintk("cfg_write_emul port %x %d %lx\n",port, bytes, val);
         ASSERT ( (vgt_cf8 & 3) == 0);
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
 
 	/* virtual conf space write handler */
 	if (vgt_ops && vgt_ops->initialized) {
-printk("initialized\n");
 		if (!vgt_ops->cfg_write(vgt_devices[dom_id].vgt,
 			(vgt_cf8 & 0xfc) + (port & 3),
 			&val, bytes)) {
@@ -371,16 +372,12 @@ int vgt_cfg_read_emul(
         memcpy(val, (uint8_t*)&vgt_cf8 + (port & 3), bytes);
     }
     else {
-printk("cfg_read_emul port %x %d vgt_ops %p\n",port, bytes, vgt_ops);
-if (vgt_ops)
-    printk("vgt initalized? %d \n", vgt_ops->initialized);
         ASSERT ( (vgt_cf8 & 3) == 0);
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
 
 	/* read always happens on virtual conf context after initialization */
 	if (vgt_ops && vgt_ops->initialized) {
-printk("initialized\n");
 		if (!vgt_ops->cfg_read(vgt_devices[dom_id].vgt,
 			(vgt_cf8 & 0xfc) + (port & 3),
 			&data, bytes)) {
@@ -591,6 +588,7 @@ int _un_rep_movs(
         struct x86_emulate_ctxt *ctxt)
 {
 	UNSUPPORTED("rep_movs");
+	printk("src: %lx, dst: %lx\n", src_offset, dst_offset);
 }
 
 //#define _PT_WALK_
@@ -641,6 +639,8 @@ int is_vgt_trap_address(unsigned long pa)
 {
 	int i;
 
+	/* Trap address is in page unit. */
+	pa &= PAGE_MASK;
 	for (i=0; i<trap_req.nr_mmio_frags; i++)
 	{
 		if ( pa >= trap_req.mmio_frags[i].s &&
