@@ -1041,7 +1041,7 @@ printk("VGT: Initial_phys_states\n");
 	ASSERT ((bar1 & 7) == 4);
 	/* memory, 64 bits bar */
 	pdev->gmadr_base = bar1 & ~0xf;
-	dprintk("Eddie: gttmmio: %llx, gmadr:%llx\n",
+	dprintk("gttmmio: %llx, gmadr:%llx\n",
 			pdev->gttmmio_base, pdev->gmadr_base);
 	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, 2 * VGT_MMIO_SPACE_SZ);
 	if ( pdev->gttmmio_base_va == NULL ) {
@@ -1057,8 +1057,9 @@ printk("VGT: Initial_phys_states\n");
 		printk("Insufficient memory for ioremap2\n");
 		return false;
 	}
+	printk("gmadr_va: %llx\n", (uint64_t)pdev->phys_gmadr_va);
 #endif
-printk("gmadr_va: %llx\n", (uint64_t)pdev->phys_gmadr_va);
+
 #if 0
 	/* TODO: Extend VCPUOP_request_io_emulation hypercall to handle
 	 * trunk data read request, and use hypercall here.
@@ -1069,11 +1070,7 @@ printk("gmadr_va: %llx\n", (uint64_t)pdev->phys_gmadr_va);
 
 #else
 	for (i = 0; i < VGT_MMIO_REG_NUM; i++) {
-		if (!(i % (VGT_MMIO_REG_NUM/100)))
-			printk("vGT: snapshot # %x, MMIO %llx\n", i, *(uint64_t *)((vgt_reg_t *)pdev->gttmmio_base_va + i));
 		pdev->initial_mmio_state[i] = *((vgt_reg_t *)pdev->gttmmio_base_va + i);
-		if (!(i % (VGT_MMIO_REG_NUM/100)))
-			printk("(%x)\n", pdev->initial_mmio_state[i]);
 	}
 #endif
 	return true;
@@ -1118,13 +1115,13 @@ int vgt_initialize(struct pci_dev *dev)
 #ifndef SINGLE_VM_DEBUG
 	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
 #endif
+	dprintk("create dom0 instance succeeds\n");
 
-printk("create dom0 instance succeeds\n");
     if (xen_register_vgt_device(0, vgt_dom0) != 0) {
         xen_deregister_vgt_device(vgt_dom0);
         goto err;
     }
-printk("vgt_initialize succeeds.\n");
+	printk("vgt_initialize succeeds.\n");
 	return 0;
 err:
     printk("vgt_initialize failed.\n");

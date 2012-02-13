@@ -79,7 +79,7 @@ MODULE_VERSION("0.1");
 struct task_struct *p_thread;
 static int start_vgt(struct pci_dev *pdev)
 {
-printk("Eddie: start_vgt.....\n");
+	dprintk("start_vgt.....\n");
     if (vgt_initialize(pdev) == 0) {
 #if 0
         p_thread = kthread_run(vgt_thread, NULL, "vgt_thread");
