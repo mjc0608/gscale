@@ -547,6 +547,9 @@ static unsigned int intel_gtt_mappable_entries(void)
 	} else {
 		/* 9xx supports large sizes, just look at the length */
 		aperture_size = pci_resource_len(intel_private.pcidev, 2);
+		/* FIXME: now hardcode 64MB for SNB laptop */
+		aperture_size = MB(64);
+		printk("vGT(i915): checked %x aperture size\n", aperture_size);
 	}
 
 	return aperture_size >> PAGE_SHIFT;

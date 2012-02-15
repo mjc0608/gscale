@@ -70,6 +70,11 @@
 #include "vgt_reg.h"
 #include "vgt_wr.c"
 
+/*
+ * WORKAROUND list:
+ * 	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
+ * 	- GTT aperture and gfx memory size check (now hardcode from intel-gtt.c)
+ */
 void vgt_restore_context (struct vgt_device *vgt, struct vgt_device *prev);
 void vgt_save_context (struct vgt_device *vgt, struct vgt_device *next);
 
@@ -931,14 +936,17 @@ printk("vgt_aperture_base: %llx\n", vgt->vgt_aperture_base);
 		rb->initialized = false;
 	}
 
-	vgt->state.bar_size[0] = VGT_GUEST_APERTURE_SZ;	/* MMIOGTT */
-	vgt->state.bar_size[1] = pdev->bar_size[1];	/* GMADR */
+	vgt->state.bar_size[0] = pdev->bar_size[0];	/* MMIOGTT */
+	if (vgt->vgt_id == 0)
+		vgt->state.bar_size[1] = VGT_DOM0_APERTURE_SZ;	/* GMADR */
+	else
+		vgt->state.bar_size[1] = VGT_GUEST_APERTURE_SZ;	/* GMADR */
 	vgt->state.bar_size[2] = pdev->bar_size[2];	/* PIO */
 
 	/* Set initial configuration space and MMIO space registers. */
 	cfg_space = &vgt->state.cfg_space[0];
 	memcpy (cfg_space, pdev->initial_cfg_space, VGT_CFG_SPACE_SZ);
-	cfg_space[VGT_REG_CFG_SPACE_MSAC] = MSAC_APERTURE_SIZE_128M;
+	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
 	*(uint32_t *)(cfg_space + VGT_REG_CFG_SPACE_BAR1) =
 		vgt->state.aperture_base_pa | 0x4;	/* 64-bit MMIO bar */
 

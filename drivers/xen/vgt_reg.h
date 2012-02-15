@@ -110,23 +110,34 @@ typedef struct {
 #define VGT_APERTURE_SZ			(64*SIZE_1MB)	/* reserve 64MB */
 #define VGT_MAX_VMS		4	/* the maximum # of VMs VGT can support */
 #else	/* Initial Configuration */
+/*
+ * Only 256M gfx memory available on SNB. Need turn this static configuration
+ * into model based or dynamically
+ */
 #define VGT_GUEST_APERTURE_SZ		(128*SIZE_1MB)
-#define VGT_DOM0_APERTURE_SZ		(128*SIZE_1MB)	/* 64MB for dom0 */
-#define VGT_APERTURE_SZ			(128*SIZE_1MB)	/* reserve 64MB */
-#define VGT_TOTAL_APERTURE_SZ		(512*SIZE_1MB)
-#define VGT_MAX_VMS		3	/* the maximum # of VMs VGT can support */
+#define VGT_DOM0_APERTURE_SZ		(64*SIZE_1MB)	/* 64MB for dom0 */
+#define VGT_APERTURE_SZ			(64*SIZE_1MB)	/* reserve 64MB */
+#define VGT_TOTAL_APERTURE_SZ		(256*SIZE_1MB)
+
+/*
+ * SNB support 1G/2G graphics memory size
+ * Assume dom0 and vGT itself has no extra gfx memory requirement except aperture
+ */
+#define VGT_GUEST_GFXMEM_SZ		(512*SIZE_1MB)
+#define VGT_MAX_VMS		2	/* the maximum # of VMs VGT can support */
 #endif
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
-#define SZ_CONTEXT_AREA_PER_RING	(4096*16)	/* use 64 KB for now */
+#define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 64 KB for now */
 extern unsigned long vgt_id_alloc_bitmap;
 #define VGT_ID_ALLOC_BITMAP		((1UL << VGT_MAX_VMS) - 1)
 
 #ifdef SINGLE_VM_DEBUG
 
+/* SNB only support one VM now */
 #define VGT_DOM0_GFX_APERTURE_BASE		0
 #define VGT_VM1_APERTURE_BASE	(VGT_DOM0_GFX_APERTURE_BASE + VGT_DOM0_APERTURE_SZ)
-#define VGT_VM2_APERTURE_BASE	(VGT_VM1_APERTURE_BASE+VGT_GUEST_APERTURE_SZ)
+#define VGT_VM2_APERTURE_BASE	(VGT_VM1_APERTURE_BASE)
 #define VGT_APERTURE_BASE	(VGT_VM2_APERTURE_BASE+VGT_GUEST_APERTURE_SZ)
 
 #else
@@ -136,7 +147,7 @@ extern unsigned long vgt_id_alloc_bitmap;
  *	VM2: 128MB-256MB
  *	VM3: 256-384MB
  *	DOM0: GFX driver: 384MB-448MB
- *	VGT driver (in Dom0): 448MB-512MB (54MB)
+ *	VGT driver (in Dom0): 448MB-512MB (64MB)
  *		Used for context save area (128KB per VGT instance)
  *			4KB per ring context save area
  * TODO: This may require Gfx driver modification!!!
