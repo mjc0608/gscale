@@ -890,7 +890,6 @@ printk("create_vgt_instance\n");
 	vgt->vgt_id = vgt_id;
 	vgt->vm_id = ...;
 #endif
-	vgt->pgt = pdev;
 	vgt->priv = priv;
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
@@ -1050,8 +1049,9 @@ printk("VGT: Initial_phys_states\n");
 	}
 	pdev->gtt_base_va = pdev->gttmmio_base_va + VGT_MMIO_SPACE_SZ;
 	printk("gttmmio_base_va: %llx, gtt_base_va, %llx\n", (uint64_t)pdev->gttmmio_base_va, (uint64_t)pdev->gtt_base_va);
-#if 0		// TODO: runtime sanity check warning...
-	pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
+#if 1		// TODO: runtime sanity check warning...
+	//pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
+	pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, pdev->bar_size[1]);
 	if ( pdev->phys_gmadr_va == NULL ) {
 		iounmap(pdev->gttmmio_base_va);
 		printk("Insufficient memory for ioremap2\n");
