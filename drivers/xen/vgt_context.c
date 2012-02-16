@@ -273,11 +273,18 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 	unsigned int flags=0, off2;
 	vgt_reg_t wvalue;
 
+	offset -= vgt->pdev->gttmmio_base;
 	ASSERT (offset + bytes <= vgt->state.regNum *
 				sizeof(vgt->state.vReg[0]));
 	ASSERT (bytes <= 4);
 	ASSERT ((offset & 3) + bytes <= 4);
 
+{
+static int i = 0;
+
+if (i++ < 10)
+	printk("vGT: captured read emulation for (%x)\n", offset);
+}
 	mht = lookup_mtable(offset);
 	if ( mht && mht->read )
 		mht->read(vgt, offset, p_data, bytes);
@@ -291,7 +298,8 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 		 * PIPE registers are pass thru, and need to come
 		 * from real HW register.
 		 */
-		if ((flags & (I915_REG_FLAG_PIPE_A | I915_REG_FLAG_PIPE_B))
+		if (vgt_ops->boot_time ||
+		    (flags & (I915_REG_FLAG_PIPE_A | I915_REG_FLAG_PIPE_B))
 #ifndef SINGLE_VM_DEBUG
             && (vgt->vgt_id == curr_monitor_owner(pdev))
 #endif
@@ -346,10 +354,17 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	struct mmio_hash_table *mht;
 	int id;
 
+	offset -= vgt->pdev->gttmmio_base;
 	ASSERT (offset + bytes <= vgt->state.regNum *
 				sizeof(vgt->state.vReg[0]));
 	ASSERT (bytes <= 4);
 
+{
+static int i = 0;
+
+if (i++ < 10)
+	printk("vGT: captured write emulation for (%x)\n", offset);
+}
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
@@ -371,8 +386,12 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 		 * initialization work. After the boot phase, passed through
 		 * MMIOs are switched at ownership switch
 		 */
-		if (vgt_ops->boot_time && vgt_is_dom0(vgt->vm_id))
+		if (vgt_ops->boot_time) {
+			__sreg(vgt, offset) = sreg;
 			VGT_MMIO_WRITE(vgt->pdev, offset, sreg);
+		}
+
+		/* TODO: figure out pass through registers */
 	}
 
 

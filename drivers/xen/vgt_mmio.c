@@ -215,11 +215,13 @@ bool vgt_initialize_mmio_hooks()
 
 printk("mmio hooks initialized\n");
 	/* ring registers */
+#if 0
 	for (i=0; i < MAX_ENGINES; i++)
 		if (!vgt_register_mmio_handler(ring_mmio_base[i],
 			ring_mmio_base[i] + RB_REGS_SIZE - 1,
 			ring_mmio_read, ring_mmio_write))
 			return false;
-
+#endif
 	return true;
 }
+
