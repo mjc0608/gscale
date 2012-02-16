@@ -75,8 +75,8 @@
  * 	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
  * 	- GTT aperture and gfx memory size check (now hardcode from intel-gtt.c)
  */
-void vgt_restore_context (struct vgt_device *vgt, struct vgt_device *prev);
-void vgt_save_context (struct vgt_device *vgt, struct vgt_device *next);
+void vgt_restore_context (struct vgt_device *vgt);
+void vgt_save_context (struct vgt_device *vgt);
 
 unsigned int ring_mmio_base [MAX_ENGINES] = {
 	/* must be in the order of ring ID definition */
@@ -86,6 +86,16 @@ unsigned int ring_mmio_base [MAX_ENGINES] = {
 #ifndef SANDY_BRIDGE
 	_REG_VECS_TAIL,	// HSW+
 	_REG_VCS2_TAIL,	// BDW
+#endif
+};
+
+submit_context_command_t submit_context_command[MAX_ENGINES] = {
+	rcs_submit_context_command,
+	default_submit_context_command,
+	default_submit_context_command,
+#ifndef SANDY_BRIDGE
+	default_submit_context_command,
+	default_submit_context_command,
 #endif
 };
 
@@ -292,6 +302,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 				wvalue = h2g_gmadr(vgt, wvalue);
 
 		} else
+		/* FIXME: any emulation required for PIPE to make it forward progress */
 			wvalue = __vreg(vgt, off2);
 
 		/* FIXME: also need to find some registers updaetd by HW, which should be passed through too */
@@ -422,18 +433,21 @@ static struct vgt_device *next_vgt(
  */
 int vgt_thread(void *priv)
 {
-	struct vgt_device *next, *vgt=priv;
+	struct vgt_device *next, *vgt=priv, *prev;
 	struct pgt_device *pdev = vgt->pdev;
+	static u64 cnt = 0, switched = 0;
 
 	while (!kthread_should_stop()) {
 		/*
 		 * TODO: Use high priority task and timeout based event
-		 * 	mechanism for QoS
+		 * 	mechanism for QoS. schedule in 50ms now.
 		 */
-		schedule();
-
 		set_current_state(TASK_INTERRUPTIBLE);
+		//schedule_timeout(HZ/20);
+		schedule_timeout(HZ);
 
+		cnt++;
+		printk("vGT(%lld): check context switch\n", cnt);
 #ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
 		if (next_monitor_owner != INVLID_MONITOR_SW_REQ) {
@@ -446,31 +460,44 @@ int vgt_thread(void *priv)
 #endif
 
 		if ((current_render_owner(pdev) == NULL) &&
-			list_empty(&pdev->rendering_runq_head))
+			list_empty(&pdev->rendering_runq_head)) {
 			/* Idle now, and no pending activity */
+			printk("....idle\n");
 			continue;
+		}
+
+		/* TODO: need stop command parser from further adding content */
 
 		if (is_rendering_engines_empty(pdev)) {
 			next = next_vgt(&pdev->rendering_runq_head, vgt);
-			if ( next != current_render_owner(pdev) ) {
-				vgt_save_context(current_render_owner(pdev), next);
-				if ( next != NULL )
-					vgt_restore_context(next, current_render_owner(pdev));
+			if ( next && next != current_render_owner(pdev) ) {
+				prev = current_render_owner(pdev);
+				switched++;
+				printk("....the %lldth switch (%d->%d)\n", switched, prev->vgt_id, next->vgt_id);
+
+				vgt_save_context(prev);
+				vgt_restore_context(next);
 				current_render_owner(pdev) = next;
 			}
-		}
+		} else
+			printk("....ring is busy\n");
 	}
 	return 0;
 }
 
+/*
+ * Only need to save head, since it's the only one updated by hw
+ */
 void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
 	vgt_ringbuffer_t *prb = pdev->ring_base_vaddr[ring_id];
 
-	srb->tail = _REG_READ_(&prb->tail);
 	srb->head = _REG_READ_(&prb->head);
+#if 0
+	srb->tail = _REG_READ_(&prb->tail);
 	srb->start = _REG_READ_(&prb->start);
 	srb->ctl = _REG_READ_(&prb->ctl);
+#endif
 }
 
 /* Rewind the head/tail registers */
@@ -482,6 +509,9 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 	_REG_WRITE_(&prb->head, srb->head);
 }
 
+/*
+ * to restore to a new ring buffer, we need restore all ring regs including head.
+ */
 void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
 	vgt_ringbuffer_t *prb = pdev->ring_base_vaddr[ring_id];
@@ -493,7 +523,24 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 }
 
 /*
+ * A pre-step to restore a new ring buffer. We can't restore both head/tail pointers,
+ * if ctl reg is enabled, or else hw will start parsing it before we actually restore
+ * the context. This pre-step restores to the new ring buffer, but with head==tail
+ */
+void ring_pre_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
+{
+	vgt_ringbuffer_t *prb = pdev->ring_base_vaddr[ring_id];
+
+	_REG_WRITE_(&prb->tail, srb->head);
+	_REG_WRITE_(&prb->head, srb->head);
+	_REG_WRITE_(&prb->start, srb->start);
+	_REG_WRITE_(&prb->ctl, srb->ctl);
+}
+
+/*
  * Load sring from vring.
+ *
+ * FIXME: Do we require this? suppose vreg->sreg is done in mmio handler already?
  */
 static void vring_2_sring(struct vgt_device *vgt, vgt_state_ring_t *rb)
 {
@@ -509,6 +556,10 @@ static void vring_2_sring(struct vgt_device *vgt, vgt_state_ring_t *rb)
 
 /*
  * s2v only needs to update head register.
+ *
+ * Now invoked from context switch time, assuming that 50ms quantum for
+ * a VM won't fill all the ring buffer. This is the only place where
+ * vr->head is updated.
  */
 static void sring_2_vring(struct vgt_device *vgt,
 	vgt_ringbuffer_t *sr, vgt_ringbuffer_t *vr)
@@ -517,6 +568,18 @@ static void sring_2_vring(struct vgt_device *vgt,
 	vr->head = h2g_gmadr(vgt, sr->head);
 }
 
+/*
+ * FIXME:
+ * Now we reuse VM's ringbuffer to submit context switch commands,
+ * which can save the extra costs to program MMIO regs. Ideally
+ * context switch is kicked in only when ring buffer is empty, so
+ * that no valid content exists. But for safety now we still save
+ * original content replaced by vGT's commands, and retore it later.
+ *
+ * However this could be costful, since aperture is mapped as WC.
+ * Later we may want to skip the save/restore or use vGT's own
+ * aperture instead.
+ */
 static  void ring_save_commands (vgt_state_ring_t *rb,
 	char *p_aperture, char *buf, int bytes)
 {
@@ -526,7 +589,7 @@ static  void ring_save_commands (vgt_state_ring_t *rb,
 
 	ASSERT ((bytes & 3) == 0);
 	p_contents = p_aperture + rb->sring.start;
-	rbtail = rb->sring.tail;	/* in byte unit */
+	rbtail = rb->phys_tail;	/* in byte unit */
 
 	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
 	to_tail = ring_size - rbtail;
@@ -662,17 +725,28 @@ static bool wait_ccid_to_renew(struct pgt_device *pdev, vgt_reg_t new_ccid)
  * Submit a series of context save/restore commands to ring engine,
  * and wait till it is executed.
  */
-bool submit_context_command (struct vgt_device *vgt,
-	int ring_id, rb_dword *cmds, int bytes, uint32_t ccid_addr)
+bool rcs_submit_context_command (struct vgt_device *vgt,
+	int ring_id, rb_dword *cmds, int bytes)
 {
 	vgt_state_ring_t	*rb;
-	vgt_reg_t	ccid;
+//	vgt_reg_t	ccid;
 	vgt_ringbuffer_t *prb = vgt->pdev->ring_base_vaddr[ring_id];
 
-	ASSERT ((ccid_addr & ~GPU_PAGE_MASK) == 0 );
+	//ASSERT ((ccid_addr & ~GPU_PAGE_MASK) == 0 );
 
 	rb = &vgt->rb[ring_id];
 
+	printk("vGT: CCID is %x, new cmd is %x\n",
+		VGT_MMIO_READ(vgt->pdev, _REG_CCID), cmds[2]);
+	/*
+	 * No need to program CCID. Per the PRM, CCID will be
+	 * updated as the result of MI_SET_CONTEXT. In such
+	 * case, if current CCID is valid, meaning that VM is using
+	 * it, later MI_SET_CONTEXT will effectively save current
+	 * context to the VM's area, and then update new ID pointing
+	 * to vGT's area. Otherwise, it will be purely an ID change.
+	 */
+#if 0
 	/* WR ignore extended state, and MBO bits, why ? */
 	ccid =  ccid_addr | CCID_MBO_BITS |
 		CCID_VALID | CCID_EXTENDED_STATE_SAVE_ENABLE;
@@ -680,11 +754,19 @@ bool submit_context_command (struct vgt_device *vgt,
 
 	if ( !wait_ccid_to_renew (vgt->pdev, ccid) )
 		return false;
+#endif
 
 	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
 	_REG_WRITE_(&prb->tail, rb->phys_tail);		/* TODO: Lock in future */
 
 	return wait_ccid_to_renew(vgt->pdev, cmds[2]);
+}
+
+bool default_submit_context_command (struct vgt_device *vgt,
+	int ring_id, rb_dword *cmds, int bytes)
+{
+	printk("vGT: unsupported command submit for engine (%d)\n", ring_id);
+	return false;
 }
 
 void vgt_rendering_save_mmio(struct vgt_device *vgt)
@@ -698,6 +780,7 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 
 	for (i=0; i<num; i++) {
 		ASSERT (rendering_ctx_regs[i] < vgt->state.regNum);
+		/* TODO: only update __sreg for registers updated by HW */
 		__sreg(vgt, rendering_ctx_regs[i]) =
 			VGT_MMIO_READ(vgt->pdev, rendering_ctx_regs[i]);
 		/*
@@ -733,11 +816,11 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 }
 
 /*
- * Rendering engine context switch.
+ * Rendering engine context switch
  *
  */
 
-void vgt_save_context (struct vgt_device *vgt, struct vgt_device *next)
+void vgt_save_context (struct vgt_device *vgt)
 {
 	int 			i;
 	vgt_state_ring_t	*rb;
@@ -750,8 +833,16 @@ void vgt_save_context (struct vgt_device *vgt, struct vgt_device *next)
 	/* save MMIO: IntelGpuRegSave in WR */
 	vgt_rendering_save_mmio(vgt);
 
+	/*
+	 * FIXME: VCS and BCS has different context switch methods, relying on
+	 * MI_ARB_CHECK? Now just limit to the rendering engine only.
+	 */
 	/* save rendering engines */
+#if 0
 	for (i=0; i < MAX_ENGINES; i++) {
+#else
+	for (i=0; i < 1; i++) {
+#endif
 		rb = &vgt->rb[i];
 		ring_phys_2_shadow (vgt->pdev, i, &rb->sring);
 		/* cache the tail reg. */
@@ -764,20 +855,33 @@ void vgt_save_context (struct vgt_device *vgt, struct vgt_device *next)
 
 		/* No need to submit ArbOnOffInstruction */
 
-		/* The new context area must be different with CCID
-		 * Can we use 0 here ? If yes, no need to use restore address.
-		 * TODO: Check w/ the buffer contents to see if it happens.
+		/*
+		 * Switch context ID to the area allocated by vGT.
+		 *
+		 * If VM already has valid context ID in CCID, this will cause
+		 * the current context saved to the VM's area; Or else this is
+		 * purely an ID pointer change.
+		 *
+		 * Context save to vGT's area happens in the restore phase.
 		 */
-		cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
-			next->rb[i].context_save_area;
-		submit_context_command (vgt, i, cmds_save_context,
-				sizeof(cmds_save_context),
-				rb->context_save_area);
+		switch (i) {
+		case RING_BUFFER_RCS:
+			/* Does VM want the ext state to be saved? */
+			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
+				MI_SAVE_EXT_STATE_EN | rb->context_save_area;
+			break;
+		default:
+			printk("vGT: unsupported engine (%d) switch \n", i);
+			break;
+		}
+		(*submit_context_command[i]) (vgt, i, cmds_save_context,
+				sizeof(cmds_save_context));
+		restore_ring_buffer (vgt, i);
 		rb->initialized = true;
 	}
 }
 
-void vgt_restore_context (struct vgt_device *vgt, struct vgt_device *prev)
+void vgt_restore_context (struct vgt_device *vgt)
 {
 	int i;
 	vgt_state_ring_t	*rb;
@@ -785,19 +889,36 @@ void vgt_restore_context (struct vgt_device *vgt, struct vgt_device *prev)
 	if (vgt == NULL)
 		return ;
 	/* Restore rb registers */
+#if 0
 	for (i=0; i < MAX_ENGINES; i++) {
+#else
+	for (i=0; i < 0; i++) {
+#endif
 		rb = &vgt->rb[i];
 
 		if (rb->initialized ) {	/* has saved context */
-			ring_shadow_2_phys (vgt->pdev, i, &rb->sring);
+			//vring_2_sring(vgt, rb);
+			ring_pre_shadow_2_phys (vgt->pdev, i, &rb->sring);
 			rb->phys_tail = rb->sring.tail;
 
-			/* Update set_context command: Double save here */
-			cmds_restore_context[2] = rb->context_save_area |
-				MI_MM_SPACE_GTT | MI_FORCE_RESTORE;
-			submit_context_command (vgt, i, cmds_restore_context,
-				sizeof(cmds_restore_context),
-				prev->rb[i].context_save_area);
+			/* save 32 dwords of the ring */
+			save_ring_buffer (vgt, i);
+
+			/*
+			 * Save current context to prev's vGT area, and restore
+			 * context from next's vGT area.
+			 */
+			switch (i) {
+				case RING_BUFFER_RCS:
+					cmds_restore_context[2] = rb->context_save_area |
+						MI_MM_SPACE_GTT | MI_FORCE_RESTORE | MI_RESTORE_EXT_STATE_EN;
+					break;
+				default:
+					printk("vGT: unsupported engine (%d) switch \n", i);
+					break;
+			}
+			(*submit_context_command[i]) (vgt, i, cmds_restore_context,
+				sizeof(cmds_restore_context));
 
 			/* restore 32 dwords of the ring */
 			restore_ring_buffer (vgt, i);
@@ -807,7 +928,11 @@ void vgt_restore_context (struct vgt_device *vgt, struct vgt_device *prev)
 	vgt_rendering_restore_mmio(vgt);
 
 	/* Restore ring registers */
+#if 0
 	for (i=0; i < MAX_ENGINES; i++) {
+#else
+	for (i=0; i < MAX_ENGINES; i++) {
+#endif
 		rb = &vgt->rb[i];
 		/* vring->sring */
 		vring_2_sring(vgt, rb);

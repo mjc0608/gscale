@@ -224,6 +224,13 @@ struct mmio_hash_table	{
 #define RING_BUFFER_VCS2	4
 extern unsigned int ring_mmio_base[MAX_ENGINES];
 
+typedef bool (*submit_context_command_t) (struct vgt_device *vgt,
+	int ring_id, rb_dword *cmds, int bytes);
+bool rcs_submit_context_command (struct vgt_device *vgt,
+	int ring_id, rb_dword *cmds, int bytes);
+bool default_submit_context_command (struct vgt_device *vgt,
+	int ring_id, rb_dword *cmds, int bytes);
+
 /*
  * Definition of MMIO registers.
  */
