@@ -65,7 +65,6 @@ typedef struct {
     bool (*cfg_read)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
     bool (*cfg_write)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
     bool boot_time;	/* in boot time dom0 access is always passed through */
-    bool initialized;	/* whether vgt is fully initialized */
 } vgt_ops_t;
 extern vgt_ops_t *vgt_ops;
 #define vgt_is_dom0(id)	(id == 0)

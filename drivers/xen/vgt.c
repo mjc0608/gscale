@@ -103,7 +103,6 @@ static vgt_ops_t vgt_xops = {
     .cfg_read = vgt_emulate_cfg_read,
     .cfg_write = vgt_emulate_cfg_write,
     .boot_time = 1,
-    .initialized = 0,
 };
 
 /*

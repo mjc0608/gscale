@@ -305,7 +305,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 		/* FIXME: any emulation required for PIPE to make it forward progress */
 			wvalue = __vreg(vgt, off2);
 
-		/* FIXME: also need to find some registers updaetd by HW, which should be passed through too */
+		/* FIXME: also need to find other registers updaetd by HW, which should be passed through too */
 
 		memcpy(p_data, &wvalue + (offset & 3), bytes);
 	}

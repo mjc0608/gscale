@@ -100,7 +100,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	vgt_ringbuffer_t	*vring;
 	vgt_reg_t	oval;
 
-	printk("vGT:ring_mmio_write (%x) with val (%x)\n", off, *p_data);
+	printk("vGT:ring_mmio_write (%x) with val (%x)\n", off, *((u32 *)p_data));
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 	ring_id = tail_ro_ring_id ( _tail_reg_(off) );
 	vring = &vgt->rb[ring_id].vring;

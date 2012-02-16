@@ -77,7 +77,6 @@ printk("Eddie: xen_register_vgt_device %d %p\n", dom_id, vgt);
         vgt_devices[dev_id].dom_id = dom_id;
         vgt_devices[dev_id].vgt = vgt;
 
-	vgt_ops->initialized = 1;
         if (dev_id == 1) {
             /* TODO: switch dom0 vgt from pass thru to virt. */
             vgt_ops->boot_time = 0;
@@ -336,18 +335,21 @@ int vgt_cfg_write_emul(
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
 
-	/* virtual conf space write handler */
-	if (vgt_ops && vgt_ops->initialized) {
+	/*
+	 * at boot time, dom0 always has write accesses to hw
+	 * for initialization work
+	 *
+	 * FIXME: bar size check by i915 driver shouldn't go to hw!!!
+	 * FIXME: S3 suspend/resume needs to reset boot_time again!!!
+	 */
+	if (vgt_ops && !vgt_ops->boot_time) {
 		if (!vgt_ops->cfg_write(vgt_devices[dom_id].vgt,
 			(vgt_cf8 & 0xfc) + (port & 3),
 			&val, bytes)) {
 			rc = X86EMUL_UNHANDLEABLE;
 			goto out;
 		}
-	}
-
-	/* dom0's accesses need pass through to hw */
-	if (vgt_is_dom0(dom_id))
+	} else
 		rc = hcall_pio_write(port, bytes, val);
     }
 
@@ -376,18 +378,22 @@ int vgt_cfg_read_emul(
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
 
-	/* read always happens on virtual conf context after initialization */
-	if (vgt_ops && vgt_ops->initialized) {
+	/*
+	 * FIXME: similarly, for i915 bar size check we want it in virtual
+	 * bar, but if there's some real hw initialization work, we'd like
+	 * it to hw!!! hard to check
+	 */
+	if (!vgt_ops || vgt_ops->boot_time) {
+		rc = hcall_pio_read(port, bytes, &data);
+		if (rc != X86EMUL_OKAY)
+			goto out;
+	} else {
 		if (!vgt_ops->cfg_read(vgt_devices[dom_id].vgt,
 			(vgt_cf8 & 0xfc) + (port & 3),
 			&data, bytes)) {
 			rc = X86EMUL_UNHANDLEABLE;
 			goto out;
 		}
-	} else {
-		rc = hcall_pio_read(port, bytes, &data);
-		if (rc != X86EMUL_OKAY)
-			goto out;
 	}
 
 	memcpy(val, &data, bytes);
@@ -905,7 +911,7 @@ int xen_start_vgt(struct pci_dev *pdev)
 {
     int ret = 0;
 
-	if (vgt_ops && vgt_ops->initialized) {
+	if (vgt_ops) {
 		printk("vgt_ops has been intialized\n");
 		return 0;
 	}
