@@ -538,21 +538,21 @@ int vgt_thread(void *priv)
  */
 void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	printk("old head(%x)\n", srb->head);
-	srb->head = _REG_READ_(RB_HEAD(ring_id));
-	printk("new head(%x)\n", srb->head);
+	printk("old head(%x), old tail(%x)\n", srb->head, srb->tail);
+	srb->head = VGT_MMIO_READ(pdev, RB_HEAD(ring_id));
+	printk("new head(%x), new tail(%x)\n", srb->head, VGT_MMIO_READ(pdev, RB_HEAD(ring_id)));
 #if 0
-	srb->tail = _REG_READ_(&prb->tail);
-	srb->start = _REG_READ_(&prb->start);
-	srb->ctl = _REG_READ_(&prb->ctl);
+	srb->tail = VGT_MMIO_READ(pdev, &prb->tail);
+	srb->start = VGT_MMIO_READ(pdev, &prb->start);
+	srb->ctl = VGT_MMIO_READ(pdev, &prb->ctl);
 #endif
 }
 
 /* Rewind the head/tail registers */
 void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	_REG_WRITE_(RB_TAIL(ring_id), srb->tail);
-	_REG_WRITE_(RB_HEAD(ring_id), srb->head);
+	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), srb->tail);
+	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
 }
 
 /*
@@ -561,10 +561,10 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
 	printk("shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
-	_REG_WRITE_(RB_TAIL(ring_id), srb->tail);
-	_REG_WRITE_(RB_HEAD(ring_id), srb->head);
-	_REG_WRITE_(RB_START(ring_id), srb->start);
-	_REG_WRITE_(RB_CTL(ring_id), srb->ctl);
+	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), srb->tail);
+	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
+	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
+	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), srb->ctl);
 }
 
 /*
@@ -575,10 +575,10 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 void ring_pre_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
 	printk("pre shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
-	_REG_WRITE_(RB_TAIL(ring_id), srb->head);
-	_REG_WRITE_(RB_HEAD(ring_id), srb->head);
-	_REG_WRITE_(RB_START(ring_id), srb->start);
-	_REG_WRITE_(RB_CTL(ring_id), srb->ctl);
+	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), srb->head);
+	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
+	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
+	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), srb->ctl);
 }
 
 #if 0
@@ -635,10 +635,13 @@ static  void ring_save_commands (vgt_state_ring_t *rb,
 
 	ASSERT ((bytes & 3) == 0);
 	p_contents = p_aperture + rb->sring.start;
-	rbtail = rb->phys_tail;	/* in byte unit */
+	/* reset to the tail for every save */
+	rbtail = rb->phys_tail = rb->sring.tail; /* in byte unit */
 
 	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
 	to_tail = ring_size - rbtail;
+	printk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x\n",
+		(unsigned long)p_contents, rbtail, ring_size, to_tail);
 
 	if ( likely(to_tail >= bytes) )
 	{
@@ -658,10 +661,13 @@ static void ring_load_commands(vgt_state_ring_t *rb,
 	vgt_reg_t  ring_size, to_tail;	/* bytes */
 
 	p_contents = p_aperture + rb->sring.start;
-	rbtail = rb->phys_tail;
+	/* reset to the tail for every save */
+	rbtail = rb->phys_tail = rb->sring.tail; /* in byte unit */
 
 	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
 	to_tail = ring_size - rbtail;
+	printk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x\n",
+		(unsigned long)p_contents, rbtail, ring_size, to_tail);
 
 	if ( likely(to_tail >= bytes) )
 	{
@@ -672,6 +678,7 @@ static void ring_load_commands(vgt_state_ring_t *rb,
 		memcpy (p_contents, buf + to_tail, bytes - to_tail);
 		rb->phys_tail = bytes - to_tail;
 	}
+	printk("phys_tail: %x\n", rb->phys_tail);
 }
 
 static inline void save_ring_buffer(struct vgt_device *vgt, int ring_id)
@@ -764,10 +771,11 @@ static bool wait_ccid_to_renew(struct pgt_device *pdev, vgt_reg_t new_ccid)
 		sleep_us(1);		/* 1us delay */
 	}
 	if (timeout <= 0) {
-		printk("Update CCID failed at %s %d %xi %x\n",
+		printk("Update CCID failed at %s %d %x %x\n",
 			__FUNCTION__, __LINE__,	ccid, new_ccid);
 		return false;
 	}
+	printk("Update CCID successfully to %x\n", ccid);
 	return true;
 }
 
@@ -805,8 +813,10 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 		return false;
 #endif
 
+	printk("before load [%x, %x]\n", VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)), VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)));
 	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
-	_REG_WRITE_(RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
+	VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
+	printk("after load [%x, %x]\n", VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)), VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)));
 
 	return wait_ccid_to_renew(vgt->pdev, cmds[2]);
 }
@@ -899,8 +909,6 @@ void vgt_save_context (struct vgt_device *vgt)
 #endif
 		rb = &vgt->rb[i];
 		ring_phys_2_shadow (vgt->pdev, i, &rb->sring);
-		/* cache the tail reg. */
-		rb->phys_tail = rb->sring.tail;
 
 		sring_2_vring(vgt, &rb->sring, &rb->vring);
 
@@ -954,7 +962,6 @@ void vgt_restore_context (struct vgt_device *vgt)
 		if (rb->initialized ) {	/* has saved context */
 			//vring_2_sring(vgt, rb);
 			ring_pre_shadow_2_phys (vgt->pdev, i, &rb->sring);
-			rb->phys_tail = rb->sring.tail;
 
 			/* save 32 dwords of the ring */
 			save_ring_buffer (vgt, i);

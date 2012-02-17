@@ -396,9 +396,6 @@ static inline unsigned long __REG_READ(unsigned long preg, int bytes)
 	return data;
 }
 
-#define _REG_READ_(preg)	((vgt_reg_t)__REG_READ(preg, REG_SIZE))
-#define _REG_WRITE_(preg, val)	__REG_WRITE(preg, (unsigned long)val, REG_SIZE)
-
 #define VGT_MMIO_READ_BYTES(pdev, mmio_offset, bytes)	\
 		__REG_READ(_vgt_mmio_pa(pdev, mmio_offset), bytes)
 
