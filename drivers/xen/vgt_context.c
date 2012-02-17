@@ -65,6 +65,7 @@
 #include <linux/kthread.h>
 #include <linux/pci.h>
 #include <linux/hash.h>
+#include <linux/delay.h>
 #include <asm/bitops.h>
 #include <xen/vgt.h>
 #include "vgt_reg.h"
@@ -453,8 +454,9 @@ static struct vgt_device *next_vgt(
 	struct list_head *next;
 
 	next = vgt->list.next;
+	/* wrap the list */
 	if (next == head)
-		return NULL;
+		next = head->next;
 	return list_entry(next, struct vgt_device, list);
 }
 
@@ -477,7 +479,7 @@ int vgt_thread(void *priv)
 		 */
 		set_current_state(TASK_INTERRUPTIBLE);
 		//schedule_timeout(HZ/20);
-		schedule_timeout(HZ*5);
+		schedule_timeout(HZ*10);
 
 		cnt++;
 		printk("vGT: check %lldth context switch\n", cnt);
@@ -502,16 +504,29 @@ int vgt_thread(void *priv)
 
 		if (is_rendering_engines_empty(pdev)) {
 			next = next_vgt(&pdev->rendering_runq_head, vgt);
-			if ( next && next != current_render_owner(pdev) ) {
+#ifndef SINGLE_VM_DEBUG
+			if ( next != current_render_owner(pdev) )
+#endif
+			{
+				static int first = 0;
+
+				if (first)
+					continue;
+				else
+					first = 1;
 				prev = current_render_owner(pdev);
 				switched++;
 				printk("....the %lldth switch (%d->%d)\n", switched, prev->vgt_id, next->vgt_id);
 
 				vgt_save_context(prev);
+				mdelay(1); // now only one context, to make sure commands finished
 				vgt_restore_context(next);
 				current_render_owner(pdev) = next;
-			} else
+			}
+#ifndef SINGLE_VM_DEBUG
+			else
 				printk("....no other instance\n");
+#endif
 		} else
 			printk("....ring is busy\n");
 	}
@@ -523,7 +538,9 @@ int vgt_thread(void *priv)
  */
 void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
+	printk("old head(%x)\n", srb->head);
 	srb->head = _REG_READ_(RB_HEAD(ring_id));
+	printk("new head(%x)\n", srb->head);
 #if 0
 	srb->tail = _REG_READ_(&prb->tail);
 	srb->start = _REG_READ_(&prb->start);
@@ -543,6 +560,7 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
  */
 void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
+	printk("shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
 	_REG_WRITE_(RB_TAIL(ring_id), srb->tail);
 	_REG_WRITE_(RB_HEAD(ring_id), srb->head);
 	_REG_WRITE_(RB_START(ring_id), srb->start);
@@ -556,6 +574,7 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
  */
 void ring_pre_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
+	printk("pre shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
 	_REG_WRITE_(RB_TAIL(ring_id), srb->head);
 	_REG_WRITE_(RB_HEAD(ring_id), srb->head);
 	_REG_WRITE_(RB_START(ring_id), srb->start);
@@ -657,6 +676,7 @@ static void ring_load_commands(vgt_state_ring_t *rb,
 
 static inline void save_ring_buffer(struct vgt_device *vgt, int ring_id)
 {
+	printk("save ring buffer\n");
 	ring_save_commands (&vgt->rb[ring_id],
 			__aperture(vgt),
 			(char*)vgt->rb[ring_id].save_buffer,
@@ -665,6 +685,7 @@ static inline void save_ring_buffer(struct vgt_device *vgt, int ring_id)
 
 static void restore_ring_buffer(struct vgt_device *vgt, int ring_id)
 {
+	printk("restore ring buffer\n");
 	ring_load_commands (&vgt->rb[ring_id],
 			__aperture(vgt),
 			(char *)vgt->rb[ring_id].save_buffer,
@@ -807,10 +828,13 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 	vreg = vgt->state.vReg;
 
 	for (i=0; i<num; i++) {
-		ASSERT (rendering_ctx_regs[i] < vgt->state.regNum);
+		ASSERT (rendering_ctx_regs[i] < vgt->state.regNum * REG_SIZE);
 		/* TODO: only update __sreg for registers updated by HW */
 		__sreg(vgt, rendering_ctx_regs[i]) =
 			VGT_MMIO_READ(vgt->pdev, rendering_ctx_regs[i]);
+
+		printk("....save mmio (%x) with (%x)\n", rendering_ctx_regs[i],
+			__sreg(vgt, rendering_ctx_regs[i]));
 		/*
 		 * TODO: Fix address.
 		 */
@@ -837,6 +861,8 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 	vreg = vgt->state.vReg;
 
 	for (i=0; i<num; i++) {
+		printk("....restore mmio (%x) with (%x)\n", rendering_ctx_regs[i],
+			__sreg(vgt, rendering_ctx_regs[i]));
 		/* Address is fixed previously */
 		VGT_MMIO_WRITE(vgt->pdev, rendering_ctx_regs[i],
 			__sreg(vgt, rendering_ctx_regs[i]));
@@ -906,6 +932,7 @@ void vgt_save_context (struct vgt_device *vgt)
 				sizeof(cmds_save_context));
 		restore_ring_buffer (vgt, i);
 		rb->initialized = true;
+		printk("vgt_save_context done\n");
 	}
 }
 
@@ -920,7 +947,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 #if 0
 	for (i=0; i < MAX_ENGINES; i++) {
 #else
-	for (i=0; i < 0; i++) {
+	for (i=0; i < 1; i++) {
 #endif
 		rb = &vgt->rb[i];
 
@@ -969,6 +996,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 
 	/* Restore the PM */
 	restore_power_management(vgt);
+	printk("vgt_restore_context done\n");
 }
 
 static void state_reg_v2s(struct vgt_device *vgt)
