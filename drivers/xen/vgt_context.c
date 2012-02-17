@@ -410,11 +410,12 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 
 bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 {
-	vgt_ringbuffer_t	*prb;
-
-	prb = pdev->ring_base_vaddr[ring_id];
-	if ( is_ring_enabled(prb) && !is_ring_empty(prb) )
+	if ( is_ring_enabled(pdev, ring_id) && !is_ring_empty(pdev, ring_id) ) {
+		printk("vGT: ring-%d is busy\n", ring_id);
 		return false;
+	}
+
+	printk("vGT: ring-%d is empty\n", ring_id);
 	return true;
 }
 
@@ -422,7 +423,7 @@ bool is_rendering_engines_empty(struct pgt_device *pdev)
 {
 	int i;
 
-	for (i=0; i < VGT_MAX_VMS; i++)
+	for (i=0; i < MAX_ENGINES; i++)
 		if ( !is_rendering_engine_empty(pdev, i) )
 			return false;
 	return true;
@@ -467,6 +468,8 @@ int vgt_thread(void *priv)
 	struct pgt_device *pdev = vgt->pdev;
 	static u64 cnt = 0, switched = 0;
 
+	ASSERT(current_render_owner(pdev));
+	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
 	while (!kthread_should_stop()) {
 		/*
 		 * TODO: Use high priority task and timeout based event
@@ -474,10 +477,10 @@ int vgt_thread(void *priv)
 		 */
 		set_current_state(TASK_INTERRUPTIBLE);
 		//schedule_timeout(HZ/20);
-		schedule_timeout(HZ);
+		schedule_timeout(HZ*5);
 
 		cnt++;
-		printk("vGT(%lld): check context switch\n", cnt);
+		printk("vGT: check %lldth context switch\n", cnt);
 #ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
 		if (next_monitor_owner != INVLID_MONITOR_SW_REQ) {
@@ -489,8 +492,7 @@ int vgt_thread(void *priv)
 		}
 #endif
 
-		if ((current_render_owner(pdev) == NULL) &&
-			list_empty(&pdev->rendering_runq_head)) {
+		if (list_empty(&pdev->rendering_runq_head)) {
 			/* Idle now, and no pending activity */
 			printk("....idle\n");
 			continue;
@@ -508,7 +510,8 @@ int vgt_thread(void *priv)
 				vgt_save_context(prev);
 				vgt_restore_context(next);
 				current_render_owner(pdev) = next;
-			}
+			} else
+				printk("....no other instance\n");
 		} else
 			printk("....ring is busy\n");
 	}
@@ -1283,6 +1286,7 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 	}
 
+	current_render_owner(pdev) = vgt_dom0;
 	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
 	if (!p_thread) {
 		xen_deregister_vgt_device(vgt_dom0);

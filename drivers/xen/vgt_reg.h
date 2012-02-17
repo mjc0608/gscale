@@ -279,6 +279,11 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define RB_START(id)	(ring_mmio_base[id] + RB_OFFSET_START)
 #define RB_CTL(id)	(ring_mmio_base[id] + RB_OFFSET_CTL)
 
+#define RB_HEAD_OFF_MASK	((1UL << 21) - (1UL << 2))	/* bit 2 to 20 */
+#define RB_HEAD_OFF_SHIFT	2
+#define RB_TAIL_OFF_MASK	((1UL << 21) - (1UL << 3))	/* bit 2 to 20 */
+#define RB_TAIL_OFF_SHIFT	3
+
 #define RB_TAIL_SIZE_MASK	((1UL << 21) - (1UL << 12))	/* bit 12 to 20 */
 #define GPU_PAGE_SIZE		(1UL<<12)
 #define GPU_PAGE_MASK		(~(GPU_PAGE_SIZE-1))
@@ -294,16 +299,6 @@ bool default_submit_context_command (struct vgt_device *vgt,
 
 #define _REG_ISR		    0x020AC
 
-
-static inline bool is_ring_empty(vgt_ringbuffer_t *rb)
-{
-    return (rb->head == rb->tail);
-}
-
-static inline bool is_ring_enabled (vgt_ringbuffer_t *rb)
-{
-	return (rb->ctl & 1);	/* bit 0: enable/disable RB */
-}
 
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
@@ -448,6 +443,27 @@ static inline void vgt_deactive(struct pgt_device *pdev, struct list_head *rq)
 
 vgt_reg_t g2h_gmadr(struct vgt_device *vgt, vgt_reg_t g_gm_addr);
 vgt_reg_t h2g_gmadr(struct vgt_device *vgt, vgt_reg_t h_gm_addr);
+
+static inline bool is_ring_empty(struct pgt_device *pgt, int ring_id)
+{
+	vgt_reg_t head = VGT_MMIO_READ(pgt, RB_HEAD(ring_id));
+	vgt_reg_t tail = VGT_MMIO_READ(pgt, RB_TAIL(ring_id));
+
+	head = (head & RB_HEAD_OFF_MASK) >> RB_HEAD_OFF_SHIFT;
+	/*
+	 * FIXME: PRM said bit2-20 for head count, but bit3-20 for tail count
+	 * however doing that makes tail always head/2.
+	 */
+	tail = (tail & RB_TAIL_OFF_MASK) >> RB_HEAD_OFF_SHIFT;
+	if (head != tail)
+		printk("....head(%x) vs. tail (%x)\n", head, tail);
+	return (head == tail);
+}
+
+static inline bool is_ring_enabled (struct pgt_device *pgt, int ring_id)
+{
+	return (VGT_MMIO_READ(pgt, RB_CTL(ring_id)) & 1);	/* bit 0: enable/disable RB */
+}
 
 /*
  * Next MACROs for GT configuration space.
