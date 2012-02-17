@@ -275,8 +275,8 @@ int gpuRegIndex
         {
         half = ((end - begin) >> 1);
         mid = end - half;
-        printk("%s reg_off 0x%x begin %d end %d mid %d mid_off 0x%x\n",
-                      __FUNCTION__, reg_off, begin, end, mid, gpuregs[mid].offset);
+        //printk("%s reg_off 0x%x begin %d end %d mid %d mid_off 0x%x\n",
+        //              __FUNCTION__, reg_off, begin, end, mid, gpuregs[mid].offset);
         if (reg_off == gpuregs[mid].offset)
             {
             found = mid;
@@ -293,6 +293,7 @@ int gpuRegIndex
         i++;
         }
 
+	//printk("reg_off(%x), found(%x)\n", reg_off, found);
     return found;
     }
 

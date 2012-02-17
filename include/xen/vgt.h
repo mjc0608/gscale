@@ -82,4 +82,14 @@ extern int xen_start_vgt(struct pci_dev *pdev);
 extern int xen_register_vgt_device(int dom_id, struct vgt_device *vgt);
 extern void xen_deregister_vgt_device(struct vgt_device *vgt);
 
+extern int hcall_mmio_read(
+        unsigned long port,
+        unsigned int bytes,
+        unsigned long *val);
+
+extern int hcall_mmio_write(
+        unsigned long port,
+        unsigned int bytes,
+        unsigned long val);
+
 // MMIO definitions

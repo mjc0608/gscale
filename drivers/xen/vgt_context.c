@@ -74,6 +74,7 @@
  * WORKAROUND list:
  * 	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
  * 	- GTT aperture and gfx memory size check (now hardcode from intel-gtt.c)
+ * 	- need a check on "unsigned long" vs. "u64" usage
  */
 void vgt_restore_context (struct vgt_device *vgt);
 void vgt_save_context (struct vgt_device *vgt);
@@ -271,25 +272,22 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 	struct mmio_hash_table *mht;
 	int id;
 	unsigned int flags=0, off2;
-	vgt_reg_t wvalue;
+	unsigned long wvalue;
 
 	offset -= vgt->pdev->gttmmio_base;
 	ASSERT (offset + bytes <= vgt->state.regNum *
 				sizeof(vgt->state.vReg[0]));
-	ASSERT (bytes <= 4);
-	ASSERT ((offset & 3) + bytes <= 4);
+	ASSERT (bytes <= 8);
+	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 
-{
-static int i = 0;
+	if (bytes > 4)
+		printk("vGT: capture 8 bytes read to %x\n", offset);
 
-if (i++ < 10)
-	printk("vGT: captured read emulation for (%x)\n", offset);
-}
 	mht = lookup_mtable(offset);
 	if ( mht && mht->read )
 		mht->read(vgt, offset, p_data, bytes);
 	else {
-		off2 = offset & ~3;
+		off2 = offset & ~(bytes - 1);
 		id = gpuRegIndex(off2);
 		if ( id >= 0 )
 			flags = gpuregs[id].flags;
@@ -305,17 +303,21 @@ if (i++ < 10)
 #endif
 		) {
 			/* need to update hardware */
-			wvalue = VGT_MMIO_READ(vgt->pdev, off2);
+			wvalue = VGT_MMIO_READ_BYTES(vgt->pdev, off2, bytes);
+			/* FIXME: only address fix, not the whole reg val */
 			if (flags & I915_REG_FLAG_GRAPHICS_ADDRESS)
 				wvalue = h2g_gmadr(vgt, wvalue);
 
-		} else
-		/* FIXME: any emulation required for PIPE to make it forward progress */
-			wvalue = __vreg(vgt, off2);
+		} else {
+			if (bytes <= 4)
+				wvalue = (unsigned long)__vreg(vgt, off2);
+			else
+				wvalue = __vreg64(vgt, off2);
+		}
 
 		/* FIXME: also need to find other registers updaetd by HW, which should be passed through too */
 
-		memcpy(p_data, &wvalue + (offset & 3), bytes);
+		memcpy(p_data, &wvalue + (offset & (bytes - 1)), bytes);
 	}
 	return true;
 }
@@ -357,27 +359,37 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	offset -= vgt->pdev->gttmmio_base;
 	ASSERT (offset + bytes <= vgt->state.regNum *
 				sizeof(vgt->state.vReg[0]));
-	ASSERT (bytes <= 4);
+	/* at least FENCE registers are accessed in 8 bytes */
+	ASSERT (bytes <= 8);
+	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 
-{
-static int i = 0;
+	if (bytes > 4)
+		printk("vGT: capture 8 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
 
-if (i++ < 10)
-	printk("vGT: captured write emulation for (%x)\n", offset);
-}
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
 	else {
 		vgt_reg_t	sreg;
+		unsigned long	sreg_64;
 
 		memcpy((char *)vgt->state.vReg + offset,
 				p_data, bytes);
-		offset &= ~3;
+		offset &= ~(bytes - 1);
 		id = gpuRegIndex(offset);
 
-
-		sreg = mmio_address_v2p (vgt, id, __vreg(vgt, offset), 0);
+		if (bytes <= 4) {
+			sreg = mmio_address_v2p (vgt, id, __vreg(vgt, offset), 0);
+			if (vgt_ops->boot_time)
+				__sreg(vgt, offset) = sreg;
+			sreg_64 = (unsigned long)sreg;
+		} else {
+			/* FIXME: need a 64bit version of mmio_address_v2p */
+			//sreg_64 = (unsigned long)mmio_address_v2p (vgt, id, __vreg(vgt, offset), 0);
+			sreg_64 = (unsigned long)__vreg64(vgt, offset);
+			if (vgt_ops->boot_time)
+				__sreg64(vgt, offset) = sreg_64;
+		}
 
 		/*
 		 * Before the 2nd VM is started, we think the system is in
@@ -386,10 +398,8 @@ if (i++ < 10)
 		 * initialization work. After the boot phase, passed through
 		 * MMIOs are switched at ownership switch
 		 */
-		if (vgt_ops->boot_time) {
-			__sreg(vgt, offset) = sreg;
-			VGT_MMIO_WRITE(vgt->pdev, offset, sreg);
-		}
+		if (vgt_ops->boot_time)
+			VGT_MMIO_WRITE_BYTES(vgt->pdev, offset, sreg_64, bytes);
 
 		/* TODO: figure out pass through registers */
 	}
@@ -509,9 +519,7 @@ int vgt_thread(void *priv)
  */
 void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	vgt_ringbuffer_t *prb = pdev->ring_base_vaddr[ring_id];
-
-	srb->head = _REG_READ_(&prb->head);
+	srb->head = _REG_READ_(RB_HEAD(ring_id));
 #if 0
 	srb->tail = _REG_READ_(&prb->tail);
 	srb->start = _REG_READ_(&prb->start);
@@ -522,10 +530,8 @@ void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 /* Rewind the head/tail registers */
 void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	vgt_ringbuffer_t *prb = pdev->ring_base_vaddr[ring_id];
-
-	_REG_WRITE_(&prb->tail, srb->tail);
-	_REG_WRITE_(&prb->head, srb->head);
+	_REG_WRITE_(RB_TAIL(ring_id), srb->tail);
+	_REG_WRITE_(RB_HEAD(ring_id), srb->head);
 }
 
 /*
@@ -533,12 +539,10 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
  */
 void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	vgt_ringbuffer_t *prb = pdev->ring_base_vaddr[ring_id];
-
-	_REG_WRITE_(&prb->tail, srb->tail);
-	_REG_WRITE_(&prb->head, srb->head);
-	_REG_WRITE_(&prb->start, srb->start);
-	_REG_WRITE_(&prb->ctl, srb->ctl);
+	_REG_WRITE_(RB_TAIL(ring_id), srb->tail);
+	_REG_WRITE_(RB_HEAD(ring_id), srb->head);
+	_REG_WRITE_(RB_START(ring_id), srb->start);
+	_REG_WRITE_(RB_CTL(ring_id), srb->ctl);
 }
 
 /*
@@ -548,12 +552,10 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
  */
 void ring_pre_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	vgt_ringbuffer_t *prb = pdev->ring_base_vaddr[ring_id];
-
-	_REG_WRITE_(&prb->tail, srb->head);
-	_REG_WRITE_(&prb->head, srb->head);
-	_REG_WRITE_(&prb->start, srb->start);
-	_REG_WRITE_(&prb->ctl, srb->ctl);
+	_REG_WRITE_(RB_TAIL(ring_id), srb->head);
+	_REG_WRITE_(RB_HEAD(ring_id), srb->head);
+	_REG_WRITE_(RB_START(ring_id), srb->start);
+	_REG_WRITE_(RB_CTL(ring_id), srb->ctl);
 }
 
 /*
@@ -665,17 +667,19 @@ static void restore_ring_buffer(struct vgt_device *vgt, int ring_id)
 
 static void disable_power_management(struct vgt_device *vgt)
 {
+	vgt_reg_t val;
 	/* Save the power state and froce wakeup. */
 	vgt->saved_wakeup = VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);
 	VGT_MMIO_WRITE(vgt->pdev, I915_REG_FORCEWAKE_OFFSET, 1);
-	VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
+	val = VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
 }
 
 static void restore_power_management(struct vgt_device *vgt)
 {
+	vgt_reg_t val;
 	/* Restore the saved power state. */
 	VGT_MMIO_WRITE(vgt->pdev, I915_REG_FORCEWAKE_OFFSET, vgt->saved_wakeup);
-	VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
+	val = VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
 }
 
 
@@ -749,7 +753,6 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 {
 	vgt_state_ring_t	*rb;
 //	vgt_reg_t	ccid;
-	vgt_ringbuffer_t *prb = vgt->pdev->ring_base_vaddr[ring_id];
 
 	//ASSERT ((ccid_addr & ~GPU_PAGE_MASK) == 0 );
 
@@ -776,7 +779,7 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 #endif
 
 	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
-	_REG_WRITE_(&prb->tail, rb->phys_tail);		/* TODO: Lock in future */
+	_REG_WRITE_(RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
 
 	return wait_ccid_to_renew(vgt->pdev, cmds[2]);
 }
@@ -1194,6 +1197,7 @@ printk("VGT: Initial_phys_states\n");
 	pdev->gmadr_base = bar1 & ~0xf;
 	dprintk("gttmmio: %llx, gmadr:%llx\n",
 			pdev->gttmmio_base, pdev->gmadr_base);
+	/* TODO: no need for this mapping since hypercall is used */
 	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, 2 * VGT_MMIO_SPACE_SZ);
 	if ( pdev->gttmmio_base_va == NULL ) {
 		printk("Insufficient memory for ioremap1\n");
@@ -1255,6 +1259,7 @@ int vgt_initialize(struct pci_dev *dev)
 	if ( !initial_phys_states(pdev) )
 		goto err;
 
+	/* TODO: no need for this mapping since hypercall is used */
 	for (i=0; i < MAX_ENGINES; i++) {
 		pdev->ring_base_vaddr[i] =
 			(vgt_ringbuffer_t *) _vgt_mmio_va(pdev, ring_mmio_base[i]);

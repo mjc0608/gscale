@@ -99,6 +99,7 @@ typedef struct {
 #endif
 
 #define _vgt_mmio_va(pdev, x)		((char*)pdev->gttmmio_base_va+x)	/* PA to VA */
+#define _vgt_mmio_pa(pdev, x)		(pdev->gttmmio_base+x)	/* PA to VA */
 #define sleep_ns(x)	{long y=1UL*x/2; while (y-- > 0) ;}
 #define sleep_us(x)	{long y=500UL*x; while (y-- > 0) ;}
 
@@ -181,6 +182,8 @@ typedef struct {
 
 #define __vreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.vReg + off))
 #define __sreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.sReg + off))
+#define __vreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.vReg + off))
+#define __sreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.sReg + off))
 #define vgt_vreg(vgt, off)	((vgt_reg_t *)vgt->state.vReg + off)
 #define vgt_sreg(vgt, off)	((vgt_reg_t *)vgt_>state.vReg + off)
 
@@ -270,6 +273,11 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define RB_OFFSET_START		8
 #define RB_OFFSET_CTL		0xC
 #define RB_REGS_SIZE		0x10
+
+#define RB_TAIL(id)	(ring_mmio_base[id] + RB_OFFSET_TAIL)
+#define RB_HEAD(id)	(ring_mmio_base[id] + RB_OFFSET_HEAD)
+#define RB_START(id)	(ring_mmio_base[id] + RB_OFFSET_START)
+#define RB_CTL(id)	(ring_mmio_base[id] + RB_OFFSET_CTL)
 
 #define RB_TAIL_SIZE_MASK	((1UL << 21) - (1UL << 12))	/* bit 12 to 20 */
 #define GPU_PAGE_SIZE		(1UL<<12)
@@ -369,15 +377,47 @@ struct pgt_device {
 #define vgt_switch_inprogress(d)        (d->switch_inprogress)
 #define vgt_switch_owner_type(d)        (d->switch_owner)
 
-#define _REG_WRITE_(preg, val)	{ *(volatile vgt_reg_t *)preg = val;}
-#define _REG_READ_(preg)		(*(volatile vgt_reg_t *)preg)
+static inline void __REG_WRITE(unsigned long preg, unsigned long val, int bytes)
+{
+	int ret;
+
+	/* TODO: any license issue? */
+	ret = hcall_mmio_write(preg, bytes, val);
+	//ASSERT(ret == X86EMUL_OKAY);
+}
+
+static inline unsigned long __REG_READ(unsigned long preg, int bytes)
+{
+	unsigned long data;
+	int ret;
+
+	/* TODO: any license issue? */
+	ret = hcall_mmio_read(preg, bytes, &data);
+	//ASSERT(ret == X86EMUL_OKAY);
+
+	return data;
+}
+
+#define _REG_READ_(preg)	((vgt_reg_t)__REG_READ(preg, REG_SIZE))
+#define _REG_WRITE_(preg, val)	__REG_WRITE(preg, (unsigned long)val, REG_SIZE)
+
+#define VGT_MMIO_READ_BYTES(pdev, mmio_offset, bytes)	\
+		__REG_READ(_vgt_mmio_pa(pdev, mmio_offset), bytes)
+
+#define VGT_MMIO_WRITE_BYTES(pdev, mmio_offset, val, bytes)	\
+		__REG_WRITE(_vgt_mmio_pa(pdev, mmio_offset), val,  bytes)
 
 #define VGT_MMIO_WRITE(pdev, mmio_offset, val)	\
-		_REG_WRITE_(_vgt_mmio_va(pdev, mmio_offset), val);
-
+		VGT_MMIO_WRITE_BYTES(pdev, mmio_offset, (unsigned long)val, REG_SIZE)
 
 #define VGT_MMIO_READ(pdev, mmio_offset)		\
-		_REG_READ_(_vgt_mmio_va(pdev, mmio_offset))
+		((vgt_reg_t)VGT_MMIO_READ_BYTES(pdev, mmio_offset, REG_SIZE))
+
+#define VGT_MMIO_WRITE64(pdev, mmio_offset, val)	\
+		__REG_WRITE(_vgt_mmio_pa(pdev, mmio_offset), val, 8)
+
+#define VGT_MMIO_READ64(pdev, mmio_offset, val)		\
+		__REG_READ(_vgt_mmio_pa(pdev, mmio_offset), 8)
 
 #define vgt_restore_vreg(vgt, off)		\
 	VGT_MMIO_WRITE(vgt->pdev, off, __vreg(vgt, off))

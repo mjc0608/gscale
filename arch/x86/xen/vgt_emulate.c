@@ -659,6 +659,46 @@ int is_vgt_trap_address(unsigned long pa)
 	return 0;
 }
 
+int hcall_mmio_write(
+        unsigned long port,
+        unsigned int bytes,
+        unsigned long val)
+{
+    struct vcpu_emul_ioreq req;
+    req.data = val;
+    req.addr = port;
+    req.size = bytes;
+    req.dir = PV_IOREQ_WRITE;
+    req.type = PV_IOREQ_TYPE_COPY;
+    if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
+			smp_processor_id(), &req) < 0) {
+	printk("vGT: failed to do hypercall for read address (%x)\n", port);
+	return X86EMUL_UNHANDLEABLE;
+    }
+    return X86EMUL_OKAY;
+}
+
+int hcall_mmio_read(
+        unsigned long port,
+        unsigned int bytes,
+        unsigned long *val)
+{
+    struct vcpu_emul_ioreq req;
+
+    req.data = 0x12345678; // a correctness check
+    req.addr = port;
+    req.size = bytes;
+    req.dir = PV_IOREQ_READ;
+    req.type = PV_IOREQ_TYPE_COPY;
+    if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
+			smp_processor_id(), &req) < 0) {
+	printk("vGT: failed to do hypercall for read address (%x)\n", port);
+	return X86EMUL_UNHANDLEABLE;
+    }
+    *val = req.data;
+    return X86EMUL_OKAY;
+}
+
 int emulate_read(
         enum x86_segment seg,
         unsigned long offset,
@@ -673,10 +713,8 @@ int emulate_read(
 	int dom_id = ...;
 #endif
 
-#if 0
 	dprintk("VGT: read seg %x off %lx data %p bytes %d gip = %llx\n",
 		seg, offset, p_data, bytes, ctxt->regs->rip);
-#endif
 	if ( seg == x86_seg_none ) {
 		/* read system structure such as TSS, GDTR etc */
 		return xen_read_sys_data(p_data, offset, bytes);
@@ -684,31 +722,19 @@ int emulate_read(
 
 	r_pa = vgt_va_to_pa (offset);
 	if ( is_vgt_trap_address(r_pa) ) {
-		if (!vgt_ops || !vgt_ops->initialized) {
-			struct vcpu_emul_ioreq req;
+		unsigned long data;
 
-			req.data = 0x12345678; // a correctness check
-			req.addr = r_pa;
-			req.size = bytes;
-			req.dir = PV_IOREQ_READ;
-			req.type = PV_IOREQ_TYPE_COPY;
-			if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
-						smp_processor_id(), &req) < 0) {
-				printk("vGT: failed to do hypercall for read address (%lx)\n", r_pa);
+		if (!vgt_ops || !vgt_ops->initialized) {
+			if (hcall_mmio_read(r_pa, bytes, &data) != X86EMUL_OKAY)
+				return X86EMUL_UNHANDLEABLE;
+		} else {
+			if (!vgt_ops->mem_read(vgt_devices[dom_id].vgt, r_pa, &data, bytes)) {
+				printk("vGT: failed to emulate memory read for (%lx)\n", r_pa);
 				return X86EMUL_UNHANDLEABLE;
 			}
-
-			memcpy(p_data, (void *)&(req.data), bytes);
-		} else {
-			uint64_t data;
-			if (vgt_ops->mem_read(vgt_devices[dom_id].vgt, r_pa, &data, bytes))
-				memcpy(p_data, (void *)&data, bytes);
-			else
-				return X86EMUL_UNHANDLEABLE;
 		}
-#if 0
-		dprintk("VGT: read pa %08lx data %08lx (%08llx)\n", r_pa, *(unsigned long *)p_data, req.data);
-#endif
+		memcpy(p_data, (void *)&data, bytes);
+		dprintk("VGT: read pa %08lx data %08lx (%08llx)\n", r_pa, *(unsigned long *)p_data, data);
 	}
 	else
 		memcpy (p_data, (void*)offset, bytes);
@@ -757,22 +783,13 @@ int emulate_write(
 
 	if ( is_vgt_trap_address(w_pa) ) {
 		if (!vgt_ops || !vgt_ops->initialized) {
-			struct vcpu_emul_ioreq req;
-
-			req.data = data; // a correctness check
-			req.addr = w_pa;
-			req.size = bytes;
-			req.dir = PV_IOREQ_WRITE;
-			req.type = PV_IOREQ_TYPE_COPY;
-			if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
-						smp_processor_id(), &req) < 0) {
-				printk("vGT: failed to do hypercall for write address (%lx)\n", w_pa);
+			if (hcall_mmio_write(w_pa, bytes, data) != X86EMUL_OKAY)
+				return X86EMUL_UNHANDLEABLE;
+		} else {
+			if (!vgt_ops->mem_write(vgt_devices[dom_id].vgt, w_pa, &data, bytes)) {
+				printk("vGT: failed to emulate memory write for (%lx)\n", w_pa);
 				return X86EMUL_UNHANDLEABLE;
 			}
-			dprintk("hcall return\n");
-		} else {
-			if (!vgt_ops->mem_write(vgt_devices[dom_id].vgt, w_pa, &data, bytes))
-				return X86EMUL_UNHANDLEABLE;
 		}
 	}
 	else
