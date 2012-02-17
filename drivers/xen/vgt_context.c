@@ -456,13 +456,14 @@ static struct vgt_device *next_vgt(
 		return NULL;
 	return list_entry(next, struct vgt_device, list);
 }
+
 /*
  * The thread to perform the VGT ownership switch.
  *
  */
 int vgt_thread(void *priv)
 {
-	struct vgt_device *next, *vgt=priv, *prev;
+	struct vgt_device *next, *vgt = priv, *prev;
 	struct pgt_device *pdev = vgt->pdev;
 	static u64 cnt = 0, switched = 0;
 
@@ -1047,7 +1048,6 @@ printk("create_vgt_instance\n");
 	vgt->priv = priv;
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
-	list_add(&vgt->list, &pdev->rendering_idleq_head);
 
 	if ( !create_state_instance(vgt) ) {
 #ifndef SINGLE_VM_DEBUG
@@ -1103,6 +1103,7 @@ printk("vgt_aperture_base: %llx\n", vgt->vgt_aperture_base);
 	state_reg_v2s (vgt);
 
 	vgt->pdev = pdev;
+	list_add(&vgt->list, &pdev->rendering_idleq_head);
 	/* TODO: per register special handling. */
 	return vgt;
 }
@@ -1252,6 +1253,7 @@ int vgt_initialize(struct pci_dev *dev)
 {
 	int i;
 	struct pgt_device *pdev = &default_device;
+	struct task_struct *p_thread;
 
 	memset (mtable, 0, sizeof(mtable));
 
@@ -1276,10 +1278,18 @@ int vgt_initialize(struct pci_dev *dev)
 #endif
 	dprintk("create dom0 instance succeeds\n");
 
-    if (xen_register_vgt_device(0, vgt_dom0) != 0) {
-        xen_deregister_vgt_device(vgt_dom0);
-        goto err;
-    }
+	if (xen_register_vgt_device(0, vgt_dom0) != 0) {
+		xen_deregister_vgt_device(vgt_dom0);
+		goto err;
+	}
+
+	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
+	if (!p_thread) {
+		xen_deregister_vgt_device(vgt_dom0);
+		goto err;
+	}
+	pdev->p_thread = p_thread;
+
 	printk("vgt_initialize succeeds.\n");
 	return 0;
 err:
@@ -1293,6 +1303,9 @@ void vgt_destroy()
 	struct list_head *pos, *next;
 	struct vgt_device *vgt;
 	struct pgt_device *pdev = &default_device;
+
+	/* do we need the thread actually stopped? */
+	kthread_stop(pdev->p_thread);
 
 	/* Deactive all VGTs */
 	while ( !list_empty(&pdev->rendering_runq_head) ) {

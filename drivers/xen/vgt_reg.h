@@ -350,6 +350,8 @@ struct pgt_device {
 	int bus;		/* parent bus number */
 	int devfn;		/* device function number */
 
+	struct task_struct *p_thread;
+
 	vgt_ringbuffer_t *ring_base_vaddr[MAX_ENGINES];	/* base vitrual address of ring buffer mmios */
 	vgt_reg_t initial_mmio_state[VGT_MMIO_REG_NUM];	/* copy from physical at start */
 	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */

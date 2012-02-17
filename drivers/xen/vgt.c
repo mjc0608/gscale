@@ -76,19 +76,10 @@ MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION("0.1");
 
-struct task_struct *p_thread;
 static int start_vgt(struct pci_dev *pdev)
 {
 	dprintk("start_vgt.....\n");
     if (vgt_initialize(pdev) == 0) {
-#if 0
-        p_thread = kthread_run(vgt_thread, NULL, "vgt_thread");
-        if (p_thread)
-            return 1;
-        else {
-            vgt_destroy();
-        }
-#endif
 	printk("vGT started\n");
 	return 1;
     }
@@ -157,14 +148,13 @@ module_init(vgt_init_module);
 
 static void __exit vgt_exit_module(void)
 {
-    int rc;
+	int rc = 0;
 
-    rc = kthread_stop (p_thread);
-    printk("VGT module exit %d\n", rc);
 	// Need cancel the i/o forwarding
 
 	// fill other exit works here
 	vgt_destroy();
+	printk("VGT module exit %d\n", rc);
 	return;
 }
 module_exit(vgt_exit_module);

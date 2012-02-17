@@ -136,15 +136,18 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 		break;
 	case RB_OFFSET_CTL:
 		sring->ctl = vring->ctl;
-#if 0
+
+		/* TODO: need lock with kthread */
 		/* Do we need to wait for the completion of current slice? */
 		if ( (oval & _RING_CTL_ENABLE) &&
 			!(vring->ctl & _RING_CTL_ENABLE) ) {
+			printk("vGT: deactivate vgt (%d)\n", vgt->vgt_id);
 			vgt_deactive (vgt->pdev, &vgt->list);
 		}
 		else if ( !(oval & _RING_CTL_ENABLE) &&
 			(vring->ctl & _RING_CTL_ENABLE) ) {
 			/* enabled */
+			printk("vGT: activate vgt (%d)\n", vgt->vgt_id);
 			vgt_active (vgt->pdev, &vgt->list);
 		}
 		if (vring->ctl & _RING_CTL_ENABLE) {
@@ -158,7 +161,6 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 			 *	Start from 2, TO-REVISIT LATER!!!
 			 */
 		}
-#endif
 		break;
 	default:
 		ASSERT(0);
