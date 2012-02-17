@@ -77,19 +77,30 @@ static inline int tail_ro_ring_id(unsigned int tail_off)
 	return 0;
 }
 
+static void ring_debug(struct vgt_device *vgt, int ring_id)
+{
+	printk("phead (%x), ptail(%x), pstart(%x), pctl(%x)\n",
+		VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)),
+		VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)),
+		VGT_MMIO_READ(vgt->pdev, RB_START(ring_id)),
+		VGT_MMIO_READ(vgt->pdev, RB_CTL(ring_id)));
+}
+
 bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ring_id, rel_off;
 	vgt_ringbuffer_t	*vring;
 
-	printk("vGT:ring_mmio_read (%x)\n", off);
+	ASSERT(bytes <= 4 && !(off & (bytes - 1)));
+	//printk("vGT:ring_mmio_read (%x)\n", off);
 
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 	ring_id = tail_ro_ring_id ( _tail_reg_(off) );
 	vring = &vgt->rb[ring_id].vring;
 
 	memcpy(p_data, (char *)vring + rel_off, bytes);
+	//ring_debug(vgt, ring_id);
 	return true;
 }
 
@@ -98,23 +109,34 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 {
 	int ring_id, rel_off;
 	vgt_ringbuffer_t	*vring;
+	vgt_ringbuffer_t	*sring;
 	vgt_reg_t	oval;
 
-	printk("vGT:ring_mmio_write (%x) with val (%x)\n", off, *((u32 *)p_data));
+	ASSERT(bytes <= 4);
+	//printk("vGT:ring_mmio_write (%x) with val (%x)\n", off, *((u32 *)p_data));
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
+	ASSERT(!(rel_off & (bytes - 1)));
+
 	ring_id = tail_ro_ring_id ( _tail_reg_(off) );
 	vring = &vgt->rb[ring_id].vring;
+	sring = &vgt->rb[ring_id].sring;
 
 	oval = *(vgt_reg_t *)((char *)vring + rel_off);
 	memcpy((char *)vring + rel_off, p_data, bytes);
 
-	switch (rel_off & ~3) {
+	switch (rel_off) {
 	case RB_OFFSET_TAIL:
+		sring->tail = vring->tail;
 		break;
 	case RB_OFFSET_HEAD:
+		sring->head = vring->head;
+		break;
 	case RB_OFFSET_START:
+		sring->start = g2h_gmadr(vgt, vring->start);
 		break;
 	case RB_OFFSET_CTL:
+		sring->ctl = vring->ctl;
+#if 0
 		/* Do we need to wait for the completion of current slice? */
 		if ( (oval & _RING_CTL_ENABLE) &&
 			!(vring->ctl & _RING_CTL_ENABLE) ) {
@@ -136,8 +158,17 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 			 *	Start from 2, TO-REVISIT LATER!!!
 			 */
 		}
+#endif
+		break;
+	default:
+		ASSERT(0);
 		break;
 	}
+
+	/* TODO: lock with kthread? */
+	if (vgt_ops->boot_time || is_current_render_owner(vgt))
+		VGT_MMIO_WRITE(vgt->pdev, off, *(vgt_reg_t*)((char *)sring + rel_off));
+	//ring_debug(vgt, ring_id);
 	return true;
 }
 
@@ -215,13 +246,11 @@ bool vgt_initialize_mmio_hooks()
 
 printk("mmio hooks initialized\n");
 	/* ring registers */
-#if 0
 	for (i=0; i < MAX_ENGINES; i++)
 		if (!vgt_register_mmio_handler(ring_mmio_base[i],
 			ring_mmio_base[i] + RB_REGS_SIZE - 1,
 			ring_mmio_read, ring_mmio_write))
 			return false;
-#endif
 	return true;
 }
 

@@ -558,6 +558,7 @@ void ring_pre_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer
 	_REG_WRITE_(RB_CTL(ring_id), srb->ctl);
 }
 
+#if 0
 /*
  * Load sring from vring.
  *
@@ -574,6 +575,7 @@ static void vring_2_sring(struct vgt_device *vgt, vgt_state_ring_t *rb)
 
 	/* TODO: QoS  control to advance tail reg. */
 }
+#endif
 
 /*
  * s2v only needs to update head register.
@@ -957,7 +959,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 #endif
 		rb = &vgt->rb[i];
 		/* vring->sring */
-		vring_2_sring(vgt, rb);
+		//vring_2_sring(vgt, rb);
 		ring_shadow_2_phys (vgt->pdev, i, &rb->sring);
 	}
 

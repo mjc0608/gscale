@@ -64,7 +64,7 @@
 
 #define SINGLE_VM_DEBUG
 #define SANDY_BRIDGE
-#define ASSERT(x)   do { if (!(x)) printk("Assert at %s line %d\n", __FILE__, __LINE__);} while (0);
+#define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); BUG();}} while (0);
 
 #define VGT_DEBUG
 #ifdef VGT_DEBUG
@@ -373,6 +373,7 @@ struct pgt_device {
 
 #define vgt_get_owner(d, t)             (d->owner[t])
 #define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_GT))
+#define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
 #define current_display_owner(d)	((vgt_get_owner(d, VGT_OT_DISPLAY))->id)
 #define vgt_switch_inprogress(d)        (d->switch_inprogress)
 #define vgt_switch_owner_type(d)        (d->switch_owner)
@@ -443,6 +444,8 @@ static inline void vgt_deactive(struct pgt_device *pdev, struct list_head *rq)
 	list_add(rq, &pdev->rendering_idleq_head);	/* add to idle queue */
 }
 
+vgt_reg_t g2h_gmadr(struct vgt_device *vgt, vgt_reg_t g_gm_addr);
+vgt_reg_t h2g_gmadr(struct vgt_device *vgt, vgt_reg_t h_gm_addr);
 
 /*
  * Next MACROs for GT configuration space.
