@@ -282,7 +282,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 
 	if (bytes > 4)
-		printk("vGT: capture 8 bytes read to %x\n", offset);
+		dprintk("vGT: capture 8 bytes read to %x\n", offset);
 
 	mht = lookup_mtable(offset);
 	if ( mht && mht->read )
@@ -365,7 +365,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 
 	if (bytes > 4)
-		printk("vGT: capture 8 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
+		dprintk("vGT: capture 8 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
 
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
@@ -471,7 +471,7 @@ int vgt_thread(void *priv)
 	static u64 cnt = 0, switched = 0;
 
 	ASSERT(current_render_owner(pdev));
-	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
+	dprintk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
 	while (!kthread_should_stop()) {
 		/*
 		 * TODO: Use high priority task and timeout based event
@@ -683,7 +683,7 @@ static void ring_load_commands(vgt_state_ring_t *rb,
 
 static inline void save_ring_buffer(struct vgt_device *vgt, int ring_id)
 {
-	printk("save ring buffer\n");
+	printk("<vgt-%d>save ring buffer\n", vgt->vgt_id);
 	ring_save_commands (&vgt->rb[ring_id],
 			__aperture(vgt),
 			(char*)vgt->rb[ring_id].save_buffer,
@@ -692,7 +692,7 @@ static inline void save_ring_buffer(struct vgt_device *vgt, int ring_id)
 
 static void restore_ring_buffer(struct vgt_device *vgt, int ring_id)
 {
-	printk("restore ring buffer\n");
+	printk("<vgt-%d>restore ring buffer\n", vgt->vgt_id);
 	ring_load_commands (&vgt->rb[ring_id],
 			__aperture(vgt),
 			(char *)vgt->rb[ring_id].save_buffer,
@@ -940,7 +940,7 @@ void vgt_save_context (struct vgt_device *vgt)
 				sizeof(cmds_save_context));
 		restore_ring_buffer (vgt, i);
 		rb->initialized = true;
-		printk("vgt_save_context done\n");
+		printk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
 	}
 }
 
@@ -1003,7 +1003,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 
 	/* Restore the PM */
 	restore_power_management(vgt);
-	printk("vgt_restore_context done\n");
+	printk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
 }
 
 static void state_reg_v2s(struct vgt_device *vgt)
@@ -1037,7 +1037,7 @@ static bool create_state_instance(struct vgt_device *vgt)
 {
 	vgt_state_t	*state;
 
-printk("create_state_instance\n");
+dprintk("create_state_instance\n");
 	state = &vgt->state;
 	state->vReg = kmalloc (state->regNum * REG_SIZE, GFP_KERNEL);
 	state->sReg = kmalloc (state->regNum * REG_SIZE, GFP_KERNEL);
@@ -1064,7 +1064,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, void *priv)
 	vgt_state_ring_t	*rb;
 	char *cfg_space;
 
-printk("create_vgt_instance\n");
+dprintk("create_vgt_instance\n");
 	vgt = kmalloc (sizeof(*vgt), GFP_KERNEL);
 	if (vgt == NULL) {
 		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
@@ -1179,11 +1179,11 @@ static uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
 	pci_write_config_dword(dev, bar_off, 0xFFFFFFFF);
 
 	pci_read_config_dword(dev, bar_off, (uint32_t *)&bar_size);
-printk("read back bar_size %lx\n", bar_size);
+dprintk("read back bar_size %lx\n", bar_size);
 	bar_size &= ~0xf;       /* bit 4-31 */
-printk("read back bar_size1 %lx\n", bar_size);
+dprintk("read back bar_size1 %lx\n", bar_size);
 	bar_size = 1 << find_first_bit(&bar_size, BITS_PER_LONG);
-printk("read back bar_size2 %lx\n", bar_size);
+dprintk("read back bar_size2 %lx\n", bar_size);
 
 	pci_write_config_dword(dev, bar_off, bar_s);
 
@@ -1206,15 +1206,15 @@ bool initial_phys_states(struct pgt_device *pdev)
 	uint64_t	bar0, bar1;
 	struct pci_dev *dev = pdev->pdev;
 
-printk("VGT: Initial_phys_states\n");
+dprintk("VGT: Initial_phys_states\n");
 	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4)
 		pci_read_config_dword(dev, i,
 				(uint32_t *)&pdev->initial_cfg_space[i]);
 	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4) {
 		if (!(i % 16))
-			printk("\n[%2x]: ", i);
+			dprintk("\n[%2x]: ", i);
 
-		printk("%02x %02x %02x %02x ",
+		dprintk("%02x %02x %02x %02x ",
 			*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff,
 			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff00) >> 8,
 			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff0000) >> 16,
@@ -1236,7 +1236,7 @@ printk("VGT: Initial_phys_states\n");
 	ASSERT ((bar1 & 7) == 4);
 	/* memory, 64 bits bar */
 	pdev->gmadr_base = bar1 & ~0xf;
-	dprintk("gttmmio: %llx, gmadr:%llx\n",
+	printk("gttmmio: %llx, gmadr:%llx\n",
 			pdev->gttmmio_base, pdev->gmadr_base);
 	/* TODO: no need for this mapping since hypercall is used */
 	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, 2 * VGT_MMIO_SPACE_SZ);

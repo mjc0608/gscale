@@ -1,5 +1,5 @@
 /*
- * vGT core module
+ * vGT core headers
  *
  * This file is provided under a dual BSD/GPLv2 license.  When using or
  * redistributing this file, you may do so under either license.
@@ -66,7 +66,7 @@
 #define SANDY_BRIDGE
 #define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); BUG();}} while (0);
 
-#define VGT_DEBUG
+//#define VGT_DEBUG
 #ifdef VGT_DEBUG
 #define dprintk(fmt, a...)	\
 	printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a)
