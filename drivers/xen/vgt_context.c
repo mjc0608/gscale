@@ -116,6 +116,19 @@ static inline bool is_current_vgt(struct vgt_device *vgt)
 	return vgt == current_render_owner(vgt->pdev);
 }
 
+static void show_debug(struct pgt_device *pdev)
+{
+	printk("debug registers:\n");
+	printk(".... IPEHR(instruction error): %x\n", VGT_MMIO_READ(pdev, 0x2068));
+	printk("....INSTDONE_1: %x\n", VGT_MMIO_READ(pdev, 0x206C));
+	printk("....INSTPS: %x\n", VGT_MMIO_READ(pdev, 0x2070));
+	printk("....ACTHD(active header): %x\n", VGT_MMIO_READ(pdev, 0x2074));
+	printk("....DMA_FADD_P(current DMA): %x\n", VGT_MMIO_READ(pdev, 0x2078));
+	printk("....INSTDONE_2: %x\n", VGT_MMIO_READ(pdev, 0x207C));
+	printk("....CSCMDOP (instruction DWORD): %x\n", VGT_MMIO_READ(pdev, 0x220C));
+	printk("....CSCMDVLD (command buffer valid): %x\n", VGT_MMIO_READ(pdev, 0x2210));
+}
+
 #ifndef SINGLE_VM_DEBUG
 #define	INVLID_MONITOR_SW_REQ	(-1)	/* -1: means no request */
 int next_monitor_owner;
@@ -471,6 +484,8 @@ static void check_gtt(struct pgt_device *pdev)
 		GTT_INDEX(pdev, 0xC0000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xC0000000)));
 	printk("GMADR: 0xC2000000, GTT INDEX: %x, GTT VALUE: %x\n",
 		GTT_INDEX(pdev, 0xC2000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xC2000000)));
+	printk("GMADR: 0xC8000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0xC8000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xC8000000)));
 	printk("GMADR: 0xCC000000, GTT INDEX: %x, GTT VALUE: %x\n",
 		GTT_INDEX(pdev, 0xCC000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xCC000000)));
 	printk("GMADR: 0xCFFFF000, GTT INDEX: %x, GTT VALUE: %x\n",
@@ -675,16 +690,26 @@ static  void ring_save_commands (vgt_state_ring_t *rb,
 	char	*p_contents;
 	vgt_reg_t	rbtail;
 	vgt_reg_t  ring_size, to_tail;
+	int i;
 
 	ASSERT ((bytes & 3) == 0);
 	p_contents = p_aperture + rb->sring.start;
-	/* reset to the tail for every save */
-	rbtail = rb->phys_tail = rb->sring.tail; /* in byte unit */
+	rbtail = rb->sring.tail; /* in byte unit */
 
 	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
 	to_tail = ring_size - rbtail;
-	printk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x\n",
-		(unsigned long)p_contents, rbtail, ring_size, to_tail);
+	printk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x, start: %x\n",
+		(unsigned long)p_contents, rbtail, ring_size, to_tail,
+		rb->sring.start);
+
+	printk("current buffer: ");
+	for (i = 0; i < bytes/4; i++)
+		printk(" %x", (*((u32*)buf + i)));
+	printk("\n");
+	printk("current ring buffer: ");
+	for (i = 0; i < bytes/4; i++)
+		printk(" %x", *((u32*)p_contents + rbtail/4 + i));
+	printk("\n");
 
 	if ( likely(to_tail >= bytes) )
 	{
@@ -694,6 +719,11 @@ static  void ring_save_commands (vgt_state_ring_t *rb,
 		memcpy (buf, p_contents + rbtail, to_tail);
 		memcpy (buf + to_tail, p_contents, bytes - to_tail);
 	}
+
+	printk("saved content: ");
+	for (i = 0; i < bytes/4; i++)
+		printk(" %x", (*((u32*)buf + i)));
+	printk("\n");
 }
 
 static void ring_load_commands(vgt_state_ring_t *rb,
@@ -702,25 +732,43 @@ static void ring_load_commands(vgt_state_ring_t *rb,
 	char	*p_contents;
 	vgt_reg_t	rbtail;
 	vgt_reg_t  ring_size, to_tail;	/* bytes */
+	int i;
 
 	p_contents = p_aperture + rb->sring.start;
-	/* reset to the tail for every save */
+	/* reset to the tail for every load */
 	rbtail = rb->phys_tail = rb->sring.tail; /* in byte unit */
 
 	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
 	to_tail = ring_size - rbtail;
-	printk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x\n",
-		(unsigned long)p_contents, rbtail, ring_size, to_tail);
+	printk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x, start: %x\n",
+		(unsigned long)p_contents, rbtail, ring_size, to_tail,
+		rb->sring.start);
 
+	printk("current command: ");
+	for (i = 0; i < bytes/4; i++)
+		printk(" %x", (*((u32*)buf + i)));
+	printk("\n");
+	printk("current ring buffer: ");
+	for (i = 0; i < bytes/4; i++)
+		printk(" %x", *((u32*)p_contents + rbtail/4 + i));
+	printk("\n");
+
+	printk("copy to %lx\n", (unsigned long)((rb_dword *)p_contents + rbtail));
 	if ( likely(to_tail >= bytes) )
 	{
-		memcpy ((rb_dword *)p_contents + rbtail, buf, bytes);
+		/* FIXME: need using VGT_MMIO_WRITE */
+		memcpy (p_contents + rbtail, buf, bytes);
 		rb->phys_tail += bytes;
 	} else {
-		memcpy ((rb_dword *)p_contents + rbtail, buf, to_tail);
+		memcpy (p_contents + rbtail, buf, to_tail);
 		memcpy (p_contents, buf + to_tail, bytes - to_tail);
 		rb->phys_tail = bytes - to_tail;
 	}
+	//wbinvd();
+	printk("updated ring buffer: ");
+	for (i = 0; i < bytes/4; i++)
+		printk(" %x", *((u32*)p_contents + rbtail/4 + i));
+	printk("\n");
 	printk("phys_tail: %x\n", rb->phys_tail);
 }
 
@@ -764,18 +812,22 @@ static rb_dword	cmds_save_context[8] =
 	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
 	MI_SET_CONTEXT, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT,
 	MI_NOOP,
-	MI_SUSPEND_FLUSH,
+	//MI_SUSPEND_FLUSH,
 	MI_NOOP,
-	MI_FLUSH,
+	MI_NOOP,
+	//MI_FLUSH,
+	MI_NOOP,
 	MI_NOOP};
 
 static rb_dword	cmds_restore_context[8] =
 	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
 	MI_SET_CONTEXT, MI_MM_SPACE_GTT | MI_FORCE_RESTORE,
 	MI_NOOP,
-	MI_SUSPEND_FLUSH,
 	MI_NOOP,
-	MI_FLUSH,
+	//MI_SUSPEND_FLUSH,
+	MI_NOOP,
+	MI_NOOP,
+	//MI_FLUSH,
 	MI_NOOP};
 
 /*
@@ -857,9 +909,11 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 #endif
 
 	printk("before load [%x, %x]\n", VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)), VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)));
+	show_debug(vgt->pdev);
 	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
 	VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
 	printk("after load [%x, %x]\n", VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)), VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)));
+	show_debug(vgt->pdev);
 
 	return wait_ccid_to_renew(vgt->pdev, cmds[2]);
 }
@@ -974,12 +1028,24 @@ void vgt_save_context (struct vgt_device *vgt)
 			//rb->context_save_area = 0xC2000000;
 			/* Does VM want the ext state to be saved? */
 			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
-				MI_SAVE_EXT_STATE_EN | rb->context_save_area;
+				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | rb->context_save_area;
 			break;
 		default:
 			printk("vGT: unsupported engine (%d) switch \n", i);
 			break;
 		}
+
+#if 0
+		{
+		vgt_reg_t ccid;
+		ccid =  0xCE000000 | CCID_MBO_BITS | CCID_VALID;
+//			CCID_VALID| CCID_EXTENDED_STATE_SAVE_ENABLE;
+		VGT_MMIO_WRITE(vgt->pdev, _REG_CCID, ccid);
+
+		if ( !wait_ccid_to_renew (vgt->pdev, ccid) )
+			return;
+		}
+#endif
 		(*submit_context_command[i]) (vgt, i, cmds_save_context,
 				sizeof(cmds_save_context));
 		restore_ring_buffer (vgt, i);
@@ -1017,13 +1083,30 @@ void vgt_restore_context (struct vgt_device *vgt)
 			switch (i) {
 				case RING_BUFFER_RCS:
 					cmds_restore_context[2] = rb->context_save_area |
-						MI_MM_SPACE_GTT | MI_FORCE_RESTORE | MI_RESTORE_EXT_STATE_EN;
+//						MI_MM_SPACE_GTT | MI_FORCE_RESTORE | MI_RESTORE_EXT_STATE_EN;
+						MI_MM_SPACE_GTT | MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN |
+						MI_FORCE_RESTORE;
 //						MI_MM_SPACE_GTT | MI_RESTORE_EXT_STATE_EN;
 					break;
 				default:
 					printk("vGT: unsupported engine (%d) switch \n", i);
 					break;
 			}
+#ifdef SINGLE_VM_DEBUG
+			/*
+			 * for single VM debug, we need a dummy context to make sure
+			 * context save actually conducted
+			 */
+			printk("dummy switch\n");
+			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
+				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | 0xCE000000;
+			(*submit_context_command[i]) (vgt, i, cmds_save_context,
+				sizeof(cmds_save_context));
+
+			/* reset the head/tail */
+			ring_pre_shadow_2_phys (vgt->pdev, i, &rb->sring);
+			printk("real switch\n");
+#endif
 			(*submit_context_command[i]) (vgt, i, cmds_restore_context,
 				sizeof(cmds_restore_context));
 
@@ -1406,6 +1489,7 @@ static int setup_gtt(struct pgt_device *pdev)
 		}
 
 		get_page(page);
+		/* use wc instead! */
 		set_pages_uc(page, 1);
 
 		pages[i] = page;
@@ -1491,6 +1575,7 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 	}
 	pdev->p_thread = p_thread;
+	show_debug(pdev);
 
 	printk("vgt_initialize succeeds.\n");
 	return 0;
