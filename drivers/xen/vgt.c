@@ -63,14 +63,6 @@
 #include <xen/vgt.h>
 #include "vgt_reg.h"
 
-#define VGT_DEBUG
-#ifdef VGT_DEBUG
-#define dprintk(fmt, a...)	\
-	printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a)
-#else
-#define dprintk(fmt, a...)
-#endif
-
 MODULE_AUTHOR("Intel Corporation");
 MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");
 MODULE_LICENSE("Dual BSD/GPL");

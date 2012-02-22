@@ -120,6 +120,8 @@ typedef struct {
 #define VGT_APERTURE_SZ			(64*SIZE_1MB)	/* reserve 64MB */
 #define VGT_TOTAL_APERTURE_SZ		(256*SIZE_1MB)
 
+#define VGT_TOTAL_APERTURE_PAGES	(VGT_TOTAL_APERTURE_SZ >> GTT_PAGE_SHIFT)
+#define VGT_APERTURE_PAGES		(VGT_APERTURE_SZ >> GTT_PAGE_SHIFT)
 /*
  * SNB support 1G/2G graphics memory size
  * Assume dom0 and vGT itself has no extra gfx memory requirement except aperture
@@ -162,6 +164,7 @@ extern unsigned long vgt_id_alloc_bitmap;
 		(VGT_DOM0_GFX_APERTURE_BASE + VGT_DOM0_APERTURE_SZ)
 #endif
 #define VGT_APERTURE_PER_INSTANCE_SZ		(4*SIZE_1MB)	/* 4MB per instance (?) */
+
 
 #define REG_SIZE    sizeof(vgt_reg_t)        /* size of gReg/sReg[0] */
 #define VGT_MMIO_SPACE_SZ	(2*SIZE_1MB)
@@ -285,9 +288,15 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define RB_TAIL_OFF_SHIFT	3
 
 #define RB_TAIL_SIZE_MASK	((1UL << 21) - (1UL << 12))	/* bit 12 to 20 */
-#define GPU_PAGE_SIZE		(1UL<<12)
-#define GPU_PAGE_MASK		(~(GPU_PAGE_SIZE-1))
-#define _RING_CTL_BUF_SIZE(ctl)	(((ctl) & RB_TAIL_SIZE_MASK) + GPU_PAGE_SIZE)
+#define GTT_PAGE_SHIFT		12
+#define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
+#define GTT_PAGE_MASK		(~(GTT_PAGE_SIZE-1))
+#define GTT_ENTRY_SIZE		4
+#define GTT_INDEX(pdev, addr)		\
+	((u32)((addr - pdev->gmadr_base) >> GTT_PAGE_SHIFT))
+#define GTT_ADDR(pdev, index)		\
+	(pdev->gtt_base + index * GTT_ENTRY_SIZE)
+#define _RING_CTL_BUF_SIZE(ctl)	(((ctl) & RB_TAIL_SIZE_MASK) + GTT_PAGE_SIZE)
 #define _RING_CTL_ENABLE	0x1	/* bit 0 */
 
 #define _REG_CCID		0x02180
@@ -299,6 +308,18 @@ bool default_submit_context_command (struct vgt_device *vgt,
 
 #define _REG_ISR		    0x020AC
 
+#define _REG_MI_MODE	0x209C
+#define		_REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE	(1 << 14)
+#define		_REGBIT_MI_FLUSH_PERFORMANCE_MODE	(1 << 13)
+#define		_REGBIT_MI_FLUSH			(1 << 12)
+#define		_REGBIT_MI_INVALIDATE_UHPTR		(1 << 11)
+#define _REG_GFX_MODE	0x2520
+#define		_REGBIT_FLUSH_TLB_INVALIDATION_MODE	(1 << 13)
+#define		_REGBIT_REPLAY_MODE			(1 << 11)
+#define		_REGBIT_PPGTT				(1 << 9)
+#define _REG_GFX_MODE_IVB	0x229C
+#define _REG_ARB_MODE	0x4030
+#define		_REGBIT_ADDRESS_SWIZZLING		(3 << 4)
 
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
@@ -351,9 +372,11 @@ struct pgt_device {
 	vgt_reg_t initial_mmio_state[VGT_MMIO_REG_NUM];	/* copy from physical at start */
 	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */
 	uint32_t bar_size[3];
-	uint64_t gttmmio_base;	/* base of GTT */
+	uint64_t gttmmio_base;	/* base of GTT and MMIO */
 	void *gttmmio_base_va;	/* virtual base of mmio */
+	uint64_t gtt_base;		/* base of GTT */
 	void *gtt_base_va;	/* virtual base of GTT */
+	uint64_t vgt_aperture_base;	/* aperture used for vGT driver itself */
 	uint64_t gmadr_base;	/* base of GMADR */
 	void *phys_gmadr_va;	/* virtual base of GMADR */
 
@@ -460,6 +483,19 @@ static inline bool is_ring_empty(struct pgt_device *pgt, int ring_id)
 static inline bool is_ring_enabled (struct pgt_device *pgt, int ring_id)
 {
 	return (VGT_MMIO_READ(pgt, RB_CTL(ring_id)) & 1);	/* bit 0: enable/disable RB */
+}
+
+/* FIXME: use readl/writel as Xen doesn't trap GTT access now */
+static inline u32 vgt_read_gtt(struct pgt_device *pdev, u32 index)
+{
+	//return VGT_MMIO_READ(pdev, pdev->gtt_base + index * GTT_ENTRY_SIZE);
+	return readl((u32*)pdev->gtt_base_va + index);
+}
+
+static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
+{
+	//VGT_MMIO_WRITE(pdev, pdev->gtt_base + index * GTT_ENTRY_SIZE, val);
+	writel(val, (u32*)pdev->gtt_base_va + index);
 }
 
 /*

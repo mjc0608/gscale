@@ -67,6 +67,8 @@
 #include <linux/hash.h>
 #include <linux/delay.h>
 #include <asm/bitops.h>
+#include <drm/intel-gtt.h>
+#include <asm/cacheflush.h>
 #include <xen/vgt.h>
 #include "vgt_reg.h"
 #include "vgt_wr.c"
@@ -367,6 +369,9 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	if (bytes > 4)
 		dprintk("vGT: capture 8 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
 
+	if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE)
+		printk("vGT: write to global registers (%x)\n", offset);
+
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
@@ -460,6 +465,25 @@ static struct vgt_device *next_vgt(
 	return list_entry(next, struct vgt_device, list);
 }
 
+static void check_gtt(struct pgt_device *pdev)
+{
+	printk("GMADR: 0xC0000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0xC0000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xC0000000)));
+	printk("GMADR: 0xC2000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0xC2000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xC2000000)));
+	printk("GMADR: 0xCC000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0xCC000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xCC000000)));
+	printk("GMADR: 0xCFFFF000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0xCFFFF000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xCFFFF000)));
+}
+
+static int period = 10; /* in unit of second */
+static int __init period_setup(char *str)
+{
+	period = simple_strtoul(str, NULL, 10);
+	return 1;
+}
+__setup("vgt_period=", period_setup);
 /*
  * The thread to perform the VGT ownership switch.
  *
@@ -478,8 +502,7 @@ int vgt_thread(void *priv)
 		 * 	mechanism for QoS. schedule in 50ms now.
 		 */
 		set_current_state(TASK_INTERRUPTIBLE);
-		//schedule_timeout(HZ/20);
-		schedule_timeout(HZ*10);
+		schedule_timeout(HZ*period);
 
 		cnt++;
 		printk("vGT: check %lldth context switch\n", cnt);
@@ -508,16 +531,19 @@ int vgt_thread(void *priv)
 			if ( next != current_render_owner(pdev) )
 #endif
 			{
+#if 1
 				static int first = 0;
 
-				if (first)
+				if (first > 1)
 					continue;
 				else
-					first = 1;
+					first++;
+#endif
 				prev = current_render_owner(pdev);
 				switched++;
 				printk("....the %lldth switch (%d->%d)\n", switched, prev->vgt_id, next->vgt_id);
 
+				check_gtt(pdev);
 				vgt_save_context(prev);
 				mdelay(1); // now only one context, to make sure commands finished
 				vgt_restore_context(next);
@@ -540,7 +566,7 @@ void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 {
 	printk("old head(%x), old tail(%x)\n", srb->head, srb->tail);
 	srb->head = VGT_MMIO_READ(pdev, RB_HEAD(ring_id));
-	printk("new head(%x), new tail(%x)\n", srb->head, VGT_MMIO_READ(pdev, RB_HEAD(ring_id)));
+	printk("new head(%x), new tail(%x)\n", srb->head, VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 #if 0
 	srb->tail = VGT_MMIO_READ(pdev, &prb->tail);
 	srb->start = VGT_MMIO_READ(pdev, &prb->start);
@@ -556,11 +582,25 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 }
 
 /*
+ * write to head is undefined when ring is enabled.
+ *
+ * so always invoke this disable action when recovering a new ring setting
+ */
+static inline void disable_ring(struct pgt_device *pdev, int ring_id)
+{
+	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), 0);
+	//need a post read?
+}
+
+/*
  * to restore to a new ring buffer, we need restore all ring regs including head.
  */
 void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
 	printk("shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
+
+	ASSERT(srb->ctl & _RING_CTL_ENABLE);
+	disable_ring(pdev, ring_id);
 	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), srb->tail);
 	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
 	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
@@ -575,6 +615,9 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 void ring_pre_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
 	printk("pre shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
+
+	ASSERT(srb->ctl & _RING_CTL_ENABLE);
+	disable_ring(pdev, ring_id);
 	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), srb->head);
 	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
 	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
@@ -766,7 +809,7 @@ static bool wait_ccid_to_renew(struct pgt_device *pdev, vgt_reg_t new_ccid)
 	timeout = CCID_TIMEOUT_LIMIT;
 	while (--timeout > 0 ) {
 		ccid = VGT_MMIO_READ (pdev, _REG_CCID);
-		if ((ccid & GPU_PAGE_MASK) == (new_ccid & GPU_PAGE_MASK))
+		if ((ccid & GTT_PAGE_MASK) == (new_ccid & GTT_PAGE_MASK))
 			break;
 		sleep_us(1);		/* 1us delay */
 	}
@@ -789,7 +832,7 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 	vgt_state_ring_t	*rb;
 //	vgt_reg_t	ccid;
 
-	//ASSERT ((ccid_addr & ~GPU_PAGE_MASK) == 0 );
+	//ASSERT ((ccid_addr & ~GTT_PAGE_MASK) == 0 );
 
 	rb = &vgt->rb[ring_id];
 
@@ -928,6 +971,7 @@ void vgt_save_context (struct vgt_device *vgt)
 		 */
 		switch (i) {
 		case RING_BUFFER_RCS:
+			//rb->context_save_area = 0xC2000000;
 			/* Does VM want the ext state to be saved? */
 			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
 				MI_SAVE_EXT_STATE_EN | rb->context_save_area;
@@ -974,6 +1018,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 				case RING_BUFFER_RCS:
 					cmds_restore_context[2] = rb->context_save_area |
 						MI_MM_SPACE_GTT | MI_FORCE_RESTORE | MI_RESTORE_EXT_STATE_EN;
+//						MI_MM_SPACE_GTT | MI_RESTORE_EXT_STATE_EN;
 					break;
 				default:
 					printk("vGT: unsupported engine (%d) switch \n", i);
@@ -993,7 +1038,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 #if 0
 	for (i=0; i < MAX_ENGINES; i++) {
 #else
-	for (i=0; i < MAX_ENGINES; i++) {
+	for (i=0; i < 1; i++) {
 #endif
 		rb = &vgt->rb[i];
 		/* vring->sring */
@@ -1112,7 +1157,7 @@ dprintk("create_vgt_instance\n");
 printk("aperture_base_pa: %llx, va: %llx\n", vgt->state.aperture_base_pa, (uint64_t)vgt->aperture_base_va);
 	vgt->aperture_offset = 0;
 
-	vgt->vgt_aperture_base = pdev->gmadr_base + VGT_APERTURE_BASE +
+	vgt->vgt_aperture_base = pdev->vgt_aperture_base +
 		vgt->vgt_id * VGT_APERTURE_PER_INSTANCE_SZ;
 printk("vgt_aperture_base: %llx\n", vgt->vgt_aperture_base);
 
@@ -1236,8 +1281,10 @@ dprintk("VGT: Initial_phys_states\n");
 	ASSERT ((bar1 & 7) == 4);
 	/* memory, 64 bits bar */
 	pdev->gmadr_base = bar1 & ~0xf;
-	printk("gttmmio: %llx, gmadr:%llx\n",
-			pdev->gttmmio_base, pdev->gmadr_base);
+	pdev->vgt_aperture_base = pdev->gmadr_base + VGT_APERTURE_BASE;
+	printk("gttmmio: %llx, gmadr:%llx, vgt aperture: %llx\n",
+			pdev->gttmmio_base, pdev->gmadr_base,
+			pdev->vgt_aperture_base);
 	/* TODO: no need for this mapping since hypercall is used */
 	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, 2 * VGT_MMIO_SPACE_SZ);
 	if ( pdev->gttmmio_base_va == NULL ) {
@@ -1245,6 +1292,7 @@ dprintk("VGT: Initial_phys_states\n");
 		return false;
 	}
 	pdev->gtt_base_va = pdev->gttmmio_base_va + VGT_MMIO_SPACE_SZ;
+	pdev->gtt_base = pdev->gttmmio_base + VGT_MMIO_SPACE_SZ;
 	printk("gttmmio_base_va: %llx, gtt_base_va, %llx\n", (uint64_t)pdev->gttmmio_base_va, (uint64_t)pdev->gtt_base_va);
 #if 1		// TODO: runtime sanity check warning...
 	//pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
@@ -1282,6 +1330,116 @@ static void vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
 }
 
+static void check_initial_settings(struct pgt_device *pdev)
+{
+	vgt_reg_t reg;
+
+#define ENABLED_STR(val, bit)		\
+	((val & bit) ? "enabled" : "disabled")
+	reg = VGT_MMIO_READ(pdev, _REG_GFX_MODE);
+	printk("vGT: GFX_MODE: (%x)\n", reg);
+	printk("....(%x)Flush TLB invalidation mode: %s\n",
+		_REGBIT_FLUSH_TLB_INVALIDATION_MODE,
+		ENABLED_STR(reg, _REGBIT_FLUSH_TLB_INVALIDATION_MODE));
+	printk("....(%x)Replay mode: %d\n",
+		_REGBIT_REPLAY_MODE, reg & _REGBIT_REPLAY_MODE);
+	printk("....(%x)PPGTT: %s\n", _REGBIT_PPGTT,
+		ENABLED_STR(reg, _REGBIT_PPGTT));
+
+	reg = VGT_MMIO_READ(pdev, _REG_MI_MODE);
+	printk("VGT: MI_MODE: (%x)\n", reg);
+	printk("....(%x)Async Flip Performance mode: %s\n",
+		_REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE,
+		ENABLED_STR(reg, _REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE));
+	printk("....(%x)Flush performance mode: %s\n",
+		_REGBIT_MI_FLUSH_PERFORMANCE_MODE,
+		ENABLED_STR(reg, _REGBIT_MI_FLUSH_PERFORMANCE_MODE));
+	printk("....(%x)MI_FLUSH: %s\n",
+		_REGBIT_MI_FLUSH,
+		ENABLED_STR(reg, _REGBIT_MI_FLUSH));
+	printk("....(%x)Invalidate UHPTR: %s\n",
+		_REGBIT_MI_INVALIDATE_UHPTR,
+		ENABLED_STR(reg, _REGBIT_MI_INVALIDATE_UHPTR));
+
+	reg = VGT_MMIO_READ(pdev, _REG_ARB_MODE);
+	printk("VGT: ARB_MODE: (%x)\n", reg);
+	printk("....address swizzling: %s\n",
+		(reg & _REGBIT_ADDRESS_SWIZZLING) ? "no" : "bit 6 used");
+}
+
+static struct page *pages[VGT_APERTURE_PAGES];
+static struct page *dummy_page;
+/* TODO: check license. May move to another file */
+static int setup_gtt(struct pgt_device *pdev)
+{
+	struct page *page;
+	int i, ret, index;
+	dma_addr_t dma_addr;
+
+	check_gtt(pdev);
+	printk("vGT: clear all GTT entries.\n");
+	dummy_page = alloc_page(GFP_KERNEL | __GFP_ZERO | GFP_DMA32);
+	if (!dummy_page)
+		return -ENOMEM;
+
+	get_page(dummy_page);
+	set_pages_uc(dummy_page, 1);
+	dma_addr = pci_map_page(pdev->pdev, dummy_page, 0, PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
+	if (pci_dma_mapping_error(pdev->pdev, dma_addr))
+		return -EINVAL;
+
+	dma_addr |= (dma_addr >> 28) & 0xff0;
+	dma_addr |= 0x1;	/* UC, valid */
+	printk("....dummy page (%llx, %llx)\n", page_to_phys(dummy_page), dma_addr);
+	for (i = 0; i < VGT_TOTAL_APERTURE_PAGES; i++)
+		vgt_write_gtt(pdev, i, dma_addr);
+
+	check_gtt(pdev);
+	printk("vGT: allocate vGT aperture\n");
+	/* Fill GTT range owned by vGT driver */
+	for (i = 0; i < VGT_APERTURE_PAGES; i++) {
+		/* need a DMA flag? */
+		page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+		if (!page) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+
+		get_page(page);
+		set_pages_uc(page, 1);
+
+		pages[i] = page;
+
+		/* dom0 needs DMAR anyway */
+		dma_addr = pci_map_page(pdev->pdev, page, 0, PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
+		if (pci_dma_mapping_error(pdev->pdev, dma_addr)) {
+			ret = -EINVAL;
+			goto err_out;
+		}
+
+		dma_addr |= (dma_addr >> 28) & 0xff0;
+		dma_addr |= 0x1;	/* UC, valid */
+		index = GTT_INDEX(pdev, pdev->vgt_aperture_base) + i;
+		vgt_write_gtt(pdev, index, dma_addr);
+
+		if (!(i % (VGT_APERTURE_PAGES / 20)))
+			printk("vGT: write GTT-%x phys: %llx, dma: %llx\n",
+				index, page_to_phys(page), dma_addr);
+	}
+
+	check_gtt(pdev);
+	/* any cache flush required here? */
+	return 0;
+err_out:
+	for (i = 0; i < VGT_APERTURE_PAGES; i++)
+		if (pages[i]) {
+			put_page(pages[i]);
+			__free_page(pages[i]);
+		}
+
+	return ret;
+}
+
 /*
  * Initialize the vgt driver.
  *  return 0: success
@@ -1316,6 +1474,11 @@ int vgt_initialize(struct pci_dev *dev)
 #endif
 	dprintk("create dom0 instance succeeds\n");
 
+	check_initial_settings(pdev);
+
+	if (setup_gtt(pdev))
+		goto err;
+
 	if (xen_register_vgt_device(0, vgt_dom0) != 0) {
 		xen_deregister_vgt_device(vgt_dom0);
 		goto err;
@@ -1342,6 +1505,7 @@ void vgt_destroy()
 	struct list_head *pos, *next;
 	struct vgt_device *vgt;
 	struct pgt_device *pdev = &default_device;
+	int i;
 
 	/* do we need the thread actually stopped? */
 	kthread_stop(pdev->p_thread);
@@ -1351,6 +1515,14 @@ void vgt_destroy()
 		list_for_each (pos, &pdev->rendering_runq_head)
 			vgt_deactive(pdev, pos);
 	};
+
+	intel_gtt_clear_range(0, VGT_TOTAL_APERTURE_SZ - GTT_PAGE_SIZE);
+	for (i = 0; i < VGT_APERTURE_PAGES; i++)
+		if (pages[i]) {
+			put_page(pages[i]);
+			__free_page(pages[i]);
+		}
+
 	if (pdev->gttmmio_base_va)
 		iounmap(pdev->gttmmio_base_va);
 	if (pdev->phys_gmadr_va)
