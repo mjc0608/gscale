@@ -311,6 +311,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_MI_MODE	0x209C
 #define		_REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE	(1 << 14)
 #define		_REGBIT_MI_FLUSH_PERFORMANCE_MODE	(1 << 13)
+//#define		_REGBIT_MI_FLUSH			(3 << 11)
 #define		_REGBIT_MI_FLUSH			(1 << 12)
 #define		_REGBIT_MI_INVALIDATE_UHPTR		(1 << 11)
 #define _REG_GFX_MODE	0x2520
@@ -378,7 +379,7 @@ struct pgt_device {
 	void *gtt_base_va;	/* virtual base of GTT */
 	uint64_t vgt_aperture_base;	/* aperture used for vGT driver itself */
 	uint64_t gmadr_base;	/* base of GMADR */
-	void *phys_gmadr_va;	/* virtual base of GMADR */
+	void *gmadr_va;	/* virtual base of GMADR */
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
@@ -466,17 +467,18 @@ vgt_reg_t h2g_gmadr(struct vgt_device *vgt, vgt_reg_t h_gm_addr);
 
 static inline bool is_ring_empty(struct pgt_device *pgt, int ring_id)
 {
-	vgt_reg_t head = VGT_MMIO_READ(pgt, RB_HEAD(ring_id));
-	vgt_reg_t tail = VGT_MMIO_READ(pgt, RB_TAIL(ring_id));
+	vgt_reg_t phead = VGT_MMIO_READ(pgt, RB_HEAD(ring_id));
+	vgt_reg_t ptail = VGT_MMIO_READ(pgt, RB_TAIL(ring_id));
+	vgt_reg_t head, tail;
 
-	head = (head & RB_HEAD_OFF_MASK) >> RB_HEAD_OFF_SHIFT;
+	head = phead & RB_HEAD_OFF_MASK;
 	/*
 	 * FIXME: PRM said bit2-20 for head count, but bit3-20 for tail count
 	 * however doing that makes tail always head/2.
 	 */
-	tail = (tail & RB_TAIL_OFF_MASK) >> RB_HEAD_OFF_SHIFT;
+	tail = ptail & RB_HEAD_OFF_MASK;
 	if (head != tail)
-		printk("....head(%x) vs. tail (%x)\n", head, tail);
+		printk("....head(%x) vs. tail (%x), (%x, %x)\n", head, tail, phead, ptail);
 	return (head == tail);
 }
 

@@ -179,7 +179,9 @@ static void enforce_mode_setting(struct pgt_device *pdev)
 	reg = VGT_MMIO_READ(pdev, _REG_MI_MODE);
 	if (!(reg & _REGBIT_MI_FLUSH)) {
 		printk("(vGT): force enabling MI_FLUSH\n");
-		reg += (_REGBIT_MI_FLUSH << 16) | _REGBIT_MI_FLUSH;
+		reg |= (_REGBIT_MI_FLUSH << 16) | _REGBIT_MI_FLUSH;
+		VGT_MMIO_WRITE(pdev, _REG_MI_MODE, reg);
+		printk("(vGT): new value : %x\n", VGT_MMIO_READ(pdev, _REG_MI_MODE));
 	}
 }
 
@@ -333,6 +335,32 @@ static inline char *__aperture(struct vgt_device *vgt)
 	return p_contents;
 }
 
+static void show_ringbuffer(struct vgt_device *vgt, int ring_id, int bytes)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_state_ring_t *rb = &vgt->rb[ring_id];
+	vgt_reg_t p_tail, p_head;
+	char *p_contents;
+	int i;
+
+	p_tail = VGT_MMIO_READ(pdev, RB_TAIL(ring_id));
+	p_head = VGT_MMIO_READ(pdev, RB_HEAD(ring_id));
+	printk("ring buffer: p[%x, %x], s[%x, %x]\n", p_head, p_tail,
+		rb->sring.head, rb->sring.tail);
+
+	p_head &= RB_HEAD_OFF_MASK;
+	p_contents = __aperture(vgt) + rb->sring.start + p_head;
+	/* FIXME: consider wrap */
+	for (i = -(bytes/4); i < bytes/4; i++) {
+		if (!(i % 8))
+			printk("\n[%08x]:", p_head + i * 4);
+		printk(" %8x", *((u32*)p_contents + i));
+		if (!i)
+			printk("(*)");
+	}
+	printk("\n");
+}
+
 /*
  * Emulate the VGT MMIO register read ops.
  * Return : true/false
@@ -476,6 +504,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 
 	if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE) {
 		printk("vGT: write to global registers (%x)\n", offset);
+		//enforce_mode_setting(vgt->pdev);
 		show_mode_settings(vgt->pdev);
 	}
 
@@ -563,6 +592,7 @@ int vgt_thread(void *priv)
 	struct vgt_device *next, *vgt = priv, *prev;
 	struct pgt_device *pdev = vgt->pdev;
 	static u64 cnt = 0, switched = 0;
+	static int first = 0;
 
 	ASSERT(current_render_owner(pdev));
 	dprintk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
@@ -572,7 +602,11 @@ int vgt_thread(void *priv)
 		 * 	mechanism for QoS. schedule in 50ms now.
 		 */
 		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(HZ*period);
+		if (!first) {
+			schedule_timeout(HZ*period);
+			first = 1;
+		} else
+			schedule_timeout(HZ*5);
 
 		cnt++;
 		printk("vGT: check %lldth context switch\n", cnt);
@@ -601,14 +635,6 @@ int vgt_thread(void *priv)
 			if ( next != current_render_owner(pdev) )
 #endif
 			{
-#if 1
-				static int first = 0;
-
-				if (first > 1)
-					continue;
-				else
-					first++;
-#endif
 				prev = current_render_owner(pdev);
 				switched++;
 				printk("....the %lldth switch (%d->%d)\n", switched, prev->vgt_id, next->vgt_id);
@@ -623,8 +649,10 @@ int vgt_thread(void *priv)
 			else
 				printk("....no other instance\n");
 #endif
-		} else
+		} else {
 			printk("....ring is busy\n");
+			show_ringbuffer(vgt, 0, 16 * sizeof(vgt_reg_t));
+		}
 	}
 	return 0;
 }
@@ -658,7 +686,9 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
  */
 static inline void disable_ring(struct pgt_device *pdev, int ring_id)
 {
+	//vgt_reg_t reg;
 	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), 0);
+	//reg = VGT_MMIO_READ(pdev, RB_CTL(ring_id));
 	//need a post read?
 }
 
@@ -675,6 +705,9 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
 	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
 	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), srb->ctl);
+
+	//printk("shadow 2 phys: [%x, %x]\n", VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
+	//	VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 }
 
 /*
@@ -692,6 +725,8 @@ void ring_pre_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer
 	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
 	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
 	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), srb->ctl);
+	//printk("pre shadow 2 phys: [%x, %x]\n", VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
+	//	VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 }
 
 #if 0
@@ -871,8 +906,8 @@ static rb_dword	cmds_save_context[8] =
 	//MI_SUSPEND_FLUSH,
 	MI_NOOP,
 	MI_NOOP,
-	//MI_FLUSH,
-	MI_NOOP,
+	MI_FLUSH,
+	//MI_NOOP,
 	MI_NOOP};
 
 static rb_dword	cmds_restore_context[8] =
@@ -880,11 +915,11 @@ static rb_dword	cmds_restore_context[8] =
 	MI_NOOP,
 	MI_SET_CONTEXT, MI_MM_SPACE_GTT | MI_FORCE_RESTORE,
 	MI_NOOP,
-	MI_NOOP,
 	//MI_SUSPEND_FLUSH,
 	MI_NOOP,
 	MI_NOOP,
-	//MI_FLUSH,
+	//MI_NOOP,
+	MI_FLUSH,
 	MI_NOOP};
 
 /*
@@ -966,11 +1001,11 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 #endif
 
 	printk("before load [%x, %x]\n", VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)), VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)));
-	show_debug(vgt->pdev);
+	//show_debug(vgt->pdev);
 	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
 	VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
 	printk("after load [%x, %x]\n", VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)), VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)));
-	show_debug(vgt->pdev);
+	//show_debug(vgt->pdev);
 
 	return wait_ccid_to_renew(vgt->pdev, cmds[2]);
 }
@@ -1033,6 +1068,35 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 	}
 }
 
+static void show_context(struct vgt_device *vgt, uint64_t context, bool clobber)
+{
+	uint64_t ptr;
+	u32 *vptr;
+	int i;
+
+	ptr = (uint64_t)vgt->pdev->gmadr_va + context - vgt->pdev->gmadr_base;
+	printk("===================\n");
+	printk("Context (%llx, %llx): %s\n", context, ptr, clobber ? "clobbered" : "");
+
+	vptr = (u32 *)ptr;
+	if (clobber) {
+		printk("Clobber the context!\n");
+		*vptr = 0x12345678;
+		*(vptr + 0x4A) = 0x12345678;	// CACHE_MODE_0
+		*(vptr + 0x4D)= 0x12345678;	// INSTPM
+		*(vptr + 0x4F)= 0x12345678;	// MI_MODE
+		*(vptr + 0x5C)= 0x12345678;	// TIMESTAMP
+		*(vptr + 0x70)= 0x12345678;	// STATE_SIP
+	}
+	for (i = 0; i < 0x100; i++) {
+		if (!(i % 8))
+			printk("\n[%03x]:", i);
+		printk(" %8x", *(vptr + i));
+	}
+	printk("\n");
+	printk("===================\n");
+}
+
 /*
  * Rendering engine context switch
  *
@@ -1046,10 +1110,10 @@ void vgt_save_context (struct vgt_device *vgt)
 	if (vgt == NULL)
 		return;
 	/* disable Power */
-	disable_power_management(vgt);
+	//disable_power_management(vgt);
 
 	/* save MMIO: IntelGpuRegSave in WR */
-	vgt_rendering_save_mmio(vgt);
+	//vgt_rendering_save_mmio(vgt);
 
 	/*
 	 * FIXME: VCS and BCS has different context switch methods, relying on
@@ -1103,8 +1167,10 @@ void vgt_save_context (struct vgt_device *vgt)
 			return;
 		}
 #endif
+		//show_context(vgt, rb->context_save_area, true);
 		(*submit_context_command[i]) (vgt, i, cmds_save_context,
 				sizeof(cmds_save_context));
+		//show_context(vgt, rb->context_save_area, false);
 		restore_ring_buffer (vgt, i);
 		rb->initialized = true;
 		printk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
@@ -1160,19 +1226,23 @@ void vgt_restore_context (struct vgt_device *vgt)
 			(*submit_context_command[i]) (vgt, i, cmds_save_context,
 				sizeof(cmds_save_context));
 
+			//mdelay(1);
+			//show_context(vgt, rb->context_save_area, false);
 			/* reset the head/tail */
 			ring_pre_shadow_2_phys (vgt->pdev, i, &rb->sring);
 			printk("real switch\n");
 #endif
 			(*submit_context_command[i]) (vgt, i, cmds_restore_context,
 				sizeof(cmds_restore_context));
+			//mdelay(1);
+			//show_context(vgt, rb->context_save_area, false);
 
 			/* restore 32 dwords of the ring */
 			restore_ring_buffer (vgt, i);
 		}
 	}
 	/* MMIO restore: intelGpuRegRestore in WR */
-	vgt_rendering_restore_mmio(vgt);
+	//vgt_rendering_restore_mmio(vgt);
 
 	/* Restore ring registers */
 #if 0
@@ -1187,7 +1257,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 	}
 
 	/* Restore the PM */
-	restore_power_management(vgt);
+	//restore_power_management(vgt);
 	printk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
 }
 
@@ -1283,14 +1353,14 @@ dprintk("create_vgt_instance\n");
 	if (vgt->vgt_id == 0) {	/* dom0 GFX driver */
 		vgt->state.aperture_base_pa = pdev->gmadr_base +
 				VGT_DOM0_GFX_APERTURE_BASE;
-		vgt->aperture_base_va = pdev->phys_gmadr_va +
+		vgt->aperture_base_va = pdev->gmadr_va +
 				VGT_DOM0_GFX_APERTURE_BASE;
 //		vgt->state.gt_gmadr_base = ;
 	} else {
 		vgt->state.aperture_base_pa = pdev->gmadr_base +
 				VGT_VM1_APERTURE_BASE +
 				VGT_GUEST_APERTURE_SZ * (vgt->vgt_id-1);
-		vgt->aperture_base_va = pdev->phys_gmadr_va +
+		vgt->aperture_base_va = pdev->gmadr_va +
 				VGT_VM1_APERTURE_BASE +
 				VGT_GUEST_APERTURE_SZ * (vgt->vgt_id-1);
 	}
@@ -1436,13 +1506,13 @@ dprintk("VGT: Initial_phys_states\n");
 	printk("gttmmio_base_va: %llx, gtt_base_va, %llx\n", (uint64_t)pdev->gttmmio_base_va, (uint64_t)pdev->gtt_base_va);
 #if 1		// TODO: runtime sanity check warning...
 	//pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
-	pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, pdev->bar_size[1]);
-	if ( pdev->phys_gmadr_va == NULL ) {
+	pdev->gmadr_va = ioremap (pdev->gmadr_base, pdev->bar_size[1]);
+	if ( pdev->gmadr_va == NULL ) {
 		iounmap(pdev->gttmmio_base_va);
 		printk("Insufficient memory for ioremap2\n");
 		return false;
 	}
-	printk("gmadr_va: %llx\n", (uint64_t)pdev->phys_gmadr_va);
+	printk("gmadr_va: %llx\n", (uint64_t)pdev->gmadr_va);
 #endif
 
 #if 0
@@ -1578,6 +1648,8 @@ int vgt_initialize(struct pci_dev *dev)
 #endif
 	dprintk("create dom0 instance succeeds\n");
 
+	/* FIXME: not sure why? update MI_MODE at this point has no effect! */
+	//enforce_mode_setting(pdev);
 	show_mode_settings(pdev);
 
 	if (setup_gtt(pdev))
@@ -1630,8 +1702,8 @@ void vgt_destroy()
 
 	if (pdev->gttmmio_base_va)
 		iounmap(pdev->gttmmio_base_va);
-	if (pdev->phys_gmadr_va)
-		iounmap(pdev->phys_gmadr_va);
+	if (pdev->gmadr_va)
+		iounmap(pdev->gmadr_va);
 	while ( !list_empty(&pdev->rendering_idleq_head)) {
 		for (pos = pdev->rendering_idleq_head.next;
 			pos != &pdev->rendering_idleq_head; pos = next) {
