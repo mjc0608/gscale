@@ -118,15 +118,69 @@ static inline bool is_current_vgt(struct vgt_device *vgt)
 
 static void show_debug(struct pgt_device *pdev)
 {
+	vgt_reg_t reg;
 	printk("debug registers:\n");
-	printk(".... IPEHR(instruction error): %x\n", VGT_MMIO_READ(pdev, 0x2068));
-	printk("....INSTDONE_1: %x\n", VGT_MMIO_READ(pdev, 0x206C));
-	printk("....INSTPS: %x\n", VGT_MMIO_READ(pdev, 0x2070));
+	printk("....EIR: %x\n", VGT_MMIO_READ(pdev, _REG_RDR_EIR));
+	printk("....ESR: %x\n", VGT_MMIO_READ(pdev, _REG_RDR_ESR));
+	printk("....blit EIR: %x\n", VGT_MMIO_READ(pdev, _REG_BLIT_EIR));
+	printk("....blit ESR: %x\n", VGT_MMIO_READ(pdev, _REG_BLIT_ESR));
+	printk("....IPEHR(last executed inst): %x\n", VGT_MMIO_READ(pdev, 0x2068));
+	reg = VGT_MMIO_READ(pdev, 0x2070);
+	printk("....INSTPS (parser state): %x :\n", reg);
 	printk("....ACTHD(active header): %x\n", VGT_MMIO_READ(pdev, 0x2074));
-	printk("....DMA_FADD_P(current DMA): %x\n", VGT_MMIO_READ(pdev, 0x2078));
-	printk("....INSTDONE_2: %x\n", VGT_MMIO_READ(pdev, 0x207C));
+	printk("....DMA_FADD_P(current fetch DMA): %x\n", VGT_MMIO_READ(pdev, 0x2078));
 	printk("....CSCMDOP (instruction DWORD): %x\n", VGT_MMIO_READ(pdev, 0x220C));
 	printk("....CSCMDVLD (command buffer valid): %x\n", VGT_MMIO_READ(pdev, 0x2210));
+	printk("(informative)\n");
+	printk("....INSTDONE_1(FYI): %x\n", VGT_MMIO_READ(pdev, 0x206C));
+	printk("....INSTDONE_2: %x\n", VGT_MMIO_READ(pdev, 0x207C));
+}
+
+static void show_mode_settings(struct pgt_device *pdev)
+{
+	vgt_reg_t reg;
+
+#define ENABLED_STR(val, bit)		\
+	((val & bit) ? "enabled" : "disabled")
+	reg = VGT_MMIO_READ(pdev, _REG_GFX_MODE);
+	printk("vGT: GFX_MODE: (%x)\n", reg);
+	printk("....(%x)Flush TLB invalidation mode: %s\n",
+		_REGBIT_FLUSH_TLB_INVALIDATION_MODE,
+		ENABLED_STR(reg, _REGBIT_FLUSH_TLB_INVALIDATION_MODE));
+	printk("....(%x)Replay mode: %x\n",
+		_REGBIT_REPLAY_MODE, reg & _REGBIT_REPLAY_MODE);
+	printk("....(%x)PPGTT: %s\n", _REGBIT_PPGTT,
+		ENABLED_STR(reg, _REGBIT_PPGTT));
+
+	reg = VGT_MMIO_READ(pdev, _REG_MI_MODE);
+	printk("VGT: MI_MODE: (%x)\n", reg);
+	printk("....(%x)Async Flip Performance mode: %s\n",
+		_REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE,
+		ENABLED_STR(reg, _REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE));
+	printk("....(%x)Flush performance mode: %s\n",
+		_REGBIT_MI_FLUSH_PERFORMANCE_MODE,
+		ENABLED_STR(reg, _REGBIT_MI_FLUSH_PERFORMANCE_MODE));
+	printk("....(%x)MI_FLUSH: %s\n",
+		_REGBIT_MI_FLUSH,
+		ENABLED_STR(reg, _REGBIT_MI_FLUSH));
+	printk("....(%x)Invalidate UHPTR: %s\n",
+		_REGBIT_MI_INVALIDATE_UHPTR,
+		ENABLED_STR(reg, _REGBIT_MI_INVALIDATE_UHPTR));
+
+	reg = VGT_MMIO_READ(pdev, _REG_ARB_MODE);
+	printk("VGT: ARB_MODE: (%x)\n", reg);
+	printk("....address swizzling: %s\n",
+		(reg & _REGBIT_ADDRESS_SWIZZLING) ? "bit 6 used" : "no");
+}
+
+static void enforce_mode_setting(struct pgt_device *pdev)
+{
+	vgt_reg_t reg;
+	reg = VGT_MMIO_READ(pdev, _REG_MI_MODE);
+	if (!(reg & _REGBIT_MI_FLUSH)) {
+		printk("(vGT): force enabling MI_FLUSH\n");
+		reg += (_REGBIT_MI_FLUSH << 16) | _REGBIT_MI_FLUSH;
+	}
 }
 
 #ifndef SINGLE_VM_DEBUG
@@ -382,9 +436,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	if (bytes > 4)
 		dprintk("vGT: capture 8 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
 
-	if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE)
-		printk("vGT: write to global registers (%x)\n", offset);
-
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
@@ -423,6 +474,10 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 		/* TODO: figure out pass through registers */
 	}
 
+	if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE) {
+		printk("vGT: write to global registers (%x)\n", offset);
+		show_mode_settings(vgt->pdev);
+	}
 
 	return true;
 }
@@ -809,7 +864,8 @@ static void restore_power_management(struct vgt_device *vgt)
 
 
 static rb_dword	cmds_save_context[8] =
-	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
+	{//MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
+	MI_NOOP,
 	MI_SET_CONTEXT, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT,
 	MI_NOOP,
 	//MI_SUSPEND_FLUSH,
@@ -820,7 +876,8 @@ static rb_dword	cmds_save_context[8] =
 	MI_NOOP};
 
 static rb_dword	cmds_restore_context[8] =
-	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
+	{//MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
+	MI_NOOP,
 	MI_SET_CONTEXT, MI_MM_SPACE_GTT | MI_FORCE_RESTORE,
 	MI_NOOP,
 	MI_NOOP,
@@ -866,11 +923,11 @@ static bool wait_ccid_to_renew(struct pgt_device *pdev, vgt_reg_t new_ccid)
 		sleep_us(1);		/* 1us delay */
 	}
 	if (timeout <= 0) {
-		printk("Update CCID failed at %s %d %x %x\n",
+		printk("====Update CCID failed at %s %d %x %x\n",
 			__FUNCTION__, __LINE__,	ccid, new_ccid);
 		return false;
 	}
-	printk("Update CCID successfully to %x\n", ccid);
+	printk("====Update CCID successfully to %x\n", ccid);
 	return true;
 }
 
@@ -1413,43 +1470,6 @@ static void vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
 }
 
-static void check_initial_settings(struct pgt_device *pdev)
-{
-	vgt_reg_t reg;
-
-#define ENABLED_STR(val, bit)		\
-	((val & bit) ? "enabled" : "disabled")
-	reg = VGT_MMIO_READ(pdev, _REG_GFX_MODE);
-	printk("vGT: GFX_MODE: (%x)\n", reg);
-	printk("....(%x)Flush TLB invalidation mode: %s\n",
-		_REGBIT_FLUSH_TLB_INVALIDATION_MODE,
-		ENABLED_STR(reg, _REGBIT_FLUSH_TLB_INVALIDATION_MODE));
-	printk("....(%x)Replay mode: %d\n",
-		_REGBIT_REPLAY_MODE, reg & _REGBIT_REPLAY_MODE);
-	printk("....(%x)PPGTT: %s\n", _REGBIT_PPGTT,
-		ENABLED_STR(reg, _REGBIT_PPGTT));
-
-	reg = VGT_MMIO_READ(pdev, _REG_MI_MODE);
-	printk("VGT: MI_MODE: (%x)\n", reg);
-	printk("....(%x)Async Flip Performance mode: %s\n",
-		_REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE,
-		ENABLED_STR(reg, _REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE));
-	printk("....(%x)Flush performance mode: %s\n",
-		_REGBIT_MI_FLUSH_PERFORMANCE_MODE,
-		ENABLED_STR(reg, _REGBIT_MI_FLUSH_PERFORMANCE_MODE));
-	printk("....(%x)MI_FLUSH: %s\n",
-		_REGBIT_MI_FLUSH,
-		ENABLED_STR(reg, _REGBIT_MI_FLUSH));
-	printk("....(%x)Invalidate UHPTR: %s\n",
-		_REGBIT_MI_INVALIDATE_UHPTR,
-		ENABLED_STR(reg, _REGBIT_MI_INVALIDATE_UHPTR));
-
-	reg = VGT_MMIO_READ(pdev, _REG_ARB_MODE);
-	printk("VGT: ARB_MODE: (%x)\n", reg);
-	printk("....address swizzling: %s\n",
-		(reg & _REGBIT_ADDRESS_SWIZZLING) ? "no" : "bit 6 used");
-}
-
 static struct page *pages[VGT_APERTURE_PAGES];
 static struct page *dummy_page;
 /* TODO: check license. May move to another file */
@@ -1558,7 +1578,7 @@ int vgt_initialize(struct pci_dev *dev)
 #endif
 	dprintk("create dom0 instance succeeds\n");
 
-	check_initial_settings(pdev);
+	show_mode_settings(pdev);
 
 	if (setup_gtt(pdev))
 		goto err;
