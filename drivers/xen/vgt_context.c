@@ -658,13 +658,23 @@ static void check_gtt(struct pgt_device *pdev)
 		GTT_INDEX(pdev, 0xCFFFF000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xCFFFF000)));
 }
 
-static int period = 10; /* in unit of second */
+static int start_period = 10; /* in unit of second */
 static int __init period_setup(char *str)
 {
-	period = simple_strtoul(str, NULL, 10);
+	start_period = simple_strtoul(str, NULL, 10);
 	return 1;
 }
-__setup("vgt_period=", period_setup);
+__setup("vgt_start_period=", period_setup);
+
+static int fastmode = 0;
+static int __init mode_setup(char *str)
+{
+	fastmode = 1;
+	return 1;
+}
+__setup("vgt_fastmode", mode_setup);
+
+static int period = 5*HZ;	/* default slow mode */
 /*
  * The thread to perform the VGT ownership switch.
  *
@@ -676,9 +686,16 @@ int vgt_thread(void *priv)
 	static u64 cnt = 0, switched = 0;
 	static int first = 0;
 	int timeout = 100; /* microsecond */
+	int threshold = 2; /* print every 10s */
 
 	ASSERT(current_render_owner(pdev));
-	dprintk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
+	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
+	if (fastmode) {
+		printk("vGT: fastmode switch (in 50ms)\n");
+		period = HZ/20;
+		threshold = 200;
+	}
+
 	while (!kthread_should_stop()) {
 		/*
 		 * TODO: Use high priority task and timeout based event
@@ -686,13 +703,14 @@ int vgt_thread(void *priv)
 		 */
 		set_current_state(TASK_INTERRUPTIBLE);
 		if (!first) {
-			schedule_timeout(HZ*period);
+			schedule_timeout(HZ*start_period);
 			first = 1;
 		} else
-			schedule_timeout(HZ*5);
+			schedule_timeout(period);
 
+		if (!(cnt % threshold))
+			printk("vGT: %lldth checks, %lld switches\n", cnt, switched);
 		cnt++;
-		dprintk("vGT: check %lldth context switch\n", cnt);
 #ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
 		if (next_monitor_owner != INVLID_MONITOR_SW_REQ) {
@@ -728,8 +746,8 @@ int vgt_thread(void *priv)
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("vGT: (%lldth switch<%d->%d>): fail to save context\n",
-						switched, prev->vgt_id, next->vgt_id);
+					printk("vGT: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
+						cnt, switched, prev->vgt_id, next->vgt_id);
 
 					/* TODO: any recovery to do here. Now simply exits the thread */
 					break;
@@ -742,8 +760,8 @@ int vgt_thread(void *priv)
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("vGT: (%lldth switch<%d->%d>): fail to restore context\n",
-						switched, prev->vgt_id, next->vgt_id);
+					printk("vGT: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
+						cnt, switched, prev->vgt_id, next->vgt_id);
 
 					/* TODO: any recovery to do here. Now simply exits the thread */
 					break;
