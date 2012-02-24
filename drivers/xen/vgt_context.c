@@ -80,6 +80,7 @@
  * 	- need a check on "unsigned long" vs. "u64" usage
  * 	- need consider cache related issues, e.g. Linux/Windows may have different
  * 	  TLB invalidation mode setting, which may impact vGT's context switch logic
+ * 	- Need another way to ensure ring commands finished. Now check head==tail
  */
 void vgt_restore_context (struct vgt_device *vgt);
 void vgt_save_context (struct vgt_device *vgt);
@@ -568,21 +569,44 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 
 bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 {
-	if ( is_ring_enabled(pdev, ring_id) && !is_ring_empty(pdev, ring_id) ) {
-		printk("vGT: ring-%d is busy\n", ring_id);
+	if ( is_ring_enabled(pdev, ring_id) && !is_ring_empty(pdev, ring_id) )
 		return false;
-	}
 
-	dprintk("vGT: ring-%d is empty\n", ring_id);
 	return true;
 }
 
-bool is_rendering_engines_empty(struct pgt_device *pdev)
+/*
+ * Wait for the empty of RB.
+ * TODO: Empty of RB doesn't mean the commands are retired. May need a STORE_IMM
+ * after MI_FLUSH, but that needs our own hardware satus page.
+ */
+static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, int timeout)
+{
+	bool r = true;
+
+	/* wait to be completed: TO CHECK: WR uses CCID register */
+	while (--timeout > 0 ) {
+		if (is_rendering_engine_empty(pdev, ring_id))
+			break;
+		sleep_us(1);		/* 1us delay */
+	}
+
+	if (timeout <= 0)
+		r = false;
+
+	return r;
+}
+
+bool is_rendering_engines_empty(struct pgt_device *pdev, int timeout)
 {
 	int i;
 
+	/*
+	 * TODO: timeout for 3 engines are not synchronous. Need suspend
+	 * command parser later
+	 */
 	for (i=0; i < MAX_ENGINES; i++)
-		if ( !is_rendering_engine_empty(pdev, i) )
+		if ( !ring_wait_for_empty(pdev, i, timeout) )
 			return false;
 	return true;
 }
@@ -651,6 +675,7 @@ int vgt_thread(void *priv)
 	struct pgt_device *pdev = vgt->pdev;
 	static u64 cnt = 0, switched = 0;
 	static int first = 0;
+	int timeout = 100; /* microsecond */
 
 	ASSERT(current_render_owner(pdev));
 	dprintk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
@@ -687,7 +712,7 @@ int vgt_thread(void *priv)
 
 		/* TODO: need stop command parser from further adding content */
 
-		if (is_rendering_engines_empty(pdev)) {
+		if (is_rendering_engines_empty(pdev, timeout)) {
 			next = next_vgt(&pdev->rendering_runq_head, vgt);
 #ifndef SINGLE_VM_DEBUG
 			if ( next != current_render_owner(pdev) )
@@ -707,7 +732,8 @@ int vgt_thread(void *priv)
 				dprintk("....no other instance\n");
 #endif
 		} else {
-			dprintk("....ring is busy\n");
+			printk("vGT: (%lldth switch<%d>)...ring is busy for %dus\n",
+				switched, current_render_owner(pdev)->vgt_id, timeout);
 			show_ringbuffer(vgt, 0, 16 * sizeof(vgt_reg_t));
 		}
 	}
@@ -989,28 +1015,12 @@ static rb_dword	cmds_restore_context[8] =
 	MI_FLUSH,
 	MI_NOOP};
 
+#if 0
 /*
- * Wait for the empty of RB.
- * NOTES: Empty of RB doesn't mean the commands are retired.
+ * CCID change doesn't implicate the finish of all the commands.
+ *
+ * don't use this interface
  */
-static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, int timeout)
-{
-	bool r = true;
-
-	/* wait to be completed: TO CHECK: WR uses CCID register */
-	while (--timeout > 0 ) {
-		if (is_rendering_engine_empty(pdev, ring_id))
-			break;
-		sleep_us(1);		/* 1us delay */
-	}
-	if (timeout <= 0) {
-		printk("ring_wait_for_empty timeout\n");
-		ASSERT(0);
-		r = false;
-	}
-	return r;
-}
-
 static bool wait_ccid_to_renew(struct pgt_device *pdev, vgt_reg_t new_ccid)
 {
 	int	timeout;
@@ -1032,6 +1042,7 @@ static bool wait_ccid_to_renew(struct pgt_device *pdev, vgt_reg_t new_ccid)
 	dprintk("XXXX: Update CCID successfully to %x\n", ccid);
 	return true;
 }
+#endif
 
 /*
  * Submit a series of context save/restore commands to ring engine,
@@ -1044,14 +1055,15 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 	int ring_id, rb_dword *cmds, int bytes)
 {
 	vgt_state_ring_t	*rb;
-//	vgt_reg_t	ccid;
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_reg_t	ccid;
 
 	//ASSERT ((ccid_addr & ~GTT_PAGE_MASK) == 0 );
 
 	rb = &vgt->rb[ring_id];
 
 	dprintk("vGT: CCID is %x, new cmd is %x\n",
-		VGT_MMIO_READ(vgt->pdev, _REG_CCID), cmds[2]);
+		VGT_MMIO_READ(pdev, _REG_CCID), cmds[2]);
 	/*
 	 * No need to program CCID. Per the PRM, CCID will be
 	 * updated as the result of MI_SET_CONTEXT. In such
@@ -1071,23 +1083,26 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 #endif
 
 	dprintk("before load [%x, %x]\n",
-		VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)),
-		VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)));
+		VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
+		VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 
 	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
-	VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
-	mdelay(1);
+	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
+	//mdelay(1);
 
-	{
-		vgt_reg_t head, tail;
-		head = VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id));
-		tail = VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id));
-		dprintk("after load [%x, %x]\n", head, tail);
-		if ((head & RB_HEAD_OFF_MASK) != (tail & RB_HEAD_OFF_MASK))
-			printk("XXXX: commands unfinished [%x, %x]\n", head, tail);
+	if (!ring_wait_for_empty(pdev, ring_id, 100)) {
+		printk("vGT: context switch commands unfinished\n");
+		show_ringbuffer(vgt, ring_id, 16 * sizeof(vgt_reg_t));
+		return false;
 	}
 
-	return wait_ccid_to_renew(vgt->pdev, cmds[2]);
+	ccid = VGT_MMIO_READ (pdev, _REG_CCID);
+	if ((ccid & GTT_PAGE_MASK) != (cmds[2] & GTT_PAGE_MASK)) {
+		printk("vGT: CCID isn't changed [%x, %x]\n", ccid, cmds[2]);
+		return false;
+	}
+
+	return true;
 }
 
 bool default_submit_context_command (struct vgt_device *vgt,

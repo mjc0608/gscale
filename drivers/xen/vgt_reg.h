@@ -467,18 +467,15 @@ vgt_reg_t h2g_gmadr(struct vgt_device *vgt, vgt_reg_t h_gm_addr);
 
 static inline bool is_ring_empty(struct pgt_device *pgt, int ring_id)
 {
-	vgt_reg_t phead = VGT_MMIO_READ(pgt, RB_HEAD(ring_id));
-	vgt_reg_t ptail = VGT_MMIO_READ(pgt, RB_TAIL(ring_id));
-	vgt_reg_t head, tail;
+	vgt_reg_t head = VGT_MMIO_READ(pgt, RB_HEAD(ring_id));
+	vgt_reg_t tail = VGT_MMIO_READ(pgt, RB_TAIL(ring_id));
 
-	head = phead & RB_HEAD_OFF_MASK;
+	head &= RB_HEAD_OFF_MASK;
 	/*
 	 * FIXME: PRM said bit2-20 for head count, but bit3-20 for tail count
 	 * however doing that makes tail always head/2.
 	 */
-	tail = ptail & RB_HEAD_OFF_MASK;
-	if (head != tail)
-		printk("....s[%x, %x], p[%x, %x]\n", head, tail, phead, ptail);
+	tail &= RB_HEAD_OFF_MASK;
 	return (head == tail);
 }
 
