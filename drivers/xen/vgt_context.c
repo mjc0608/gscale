@@ -899,26 +899,21 @@ static void restore_power_management(struct vgt_device *vgt)
 
 
 static rb_dword	cmds_save_context[8] =
-	{//MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
-	MI_NOOP,
+	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
 	MI_SET_CONTEXT, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT,
 	MI_NOOP,
-	//MI_SUSPEND_FLUSH,
-	MI_NOOP,
+	MI_SUSPEND_FLUSH,
 	MI_NOOP,
 	MI_FLUSH,
-	//MI_NOOP,
 	MI_NOOP};
 
+/* TODO: MI_FORCE_RESTORE is only required for initialization */
 static rb_dword	cmds_restore_context[8] =
-	{//MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
-	MI_NOOP,
+	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
 	MI_SET_CONTEXT, MI_MM_SPACE_GTT | MI_FORCE_RESTORE,
 	MI_NOOP,
-	//MI_SUSPEND_FLUSH,
+	MI_SUSPEND_FLUSH,
 	MI_NOOP,
-	MI_NOOP,
-	//MI_NOOP,
 	MI_FLUSH,
 	MI_NOOP};
 
@@ -958,8 +953,9 @@ static bool wait_ccid_to_renew(struct pgt_device *pdev, vgt_reg_t new_ccid)
 		sleep_us(1);		/* 1us delay */
 	}
 	if (timeout <= 0) {
-		printk("====Update CCID failed at %s %d %x %x\n",
+		printk("Update CCID failed at %s %d %x %x\n",
 			__FUNCTION__, __LINE__,	ccid, new_ccid);
+		printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 		return false;
 	}
 	printk("====Update CCID successfully to %x\n", ccid);
@@ -1004,7 +1000,15 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 	//show_debug(vgt->pdev);
 	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
 	VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
-	printk("after load [%x, %x]\n", VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)), VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)));
+	mdelay(1);
+	{
+		vgt_reg_t head, tail;
+		head = VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id));
+		tail = VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id));
+		printk("after load [%x, %x]\n", head, tail);
+		if ((head & RB_HEAD_OFF_MASK) != (tail & RB_HEAD_OFF_MASK))
+			printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+	}
 	//show_debug(vgt->pdev);
 
 	return wait_ccid_to_renew(vgt->pdev, cmds[2]);
@@ -1110,10 +1114,10 @@ void vgt_save_context (struct vgt_device *vgt)
 	if (vgt == NULL)
 		return;
 	/* disable Power */
-	//disable_power_management(vgt);
+	disable_power_management(vgt);
 
 	/* save MMIO: IntelGpuRegSave in WR */
-	//vgt_rendering_save_mmio(vgt);
+	vgt_rendering_save_mmio(vgt);
 
 	/*
 	 * FIXME: VCS and BCS has different context switch methods, relying on
@@ -1149,7 +1153,7 @@ void vgt_save_context (struct vgt_device *vgt)
 			//rb->context_save_area = 0xC2000000;
 			/* Does VM want the ext state to be saved? */
 			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
-				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | rb->context_save_area;
+				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | (rb->context_save_area - 0xC0000000);
 			break;
 		default:
 			printk("vGT: unsupported engine (%d) switch \n", i);
@@ -1205,7 +1209,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 			 */
 			switch (i) {
 				case RING_BUFFER_RCS:
-					cmds_restore_context[2] = rb->context_save_area |
+					cmds_restore_context[2] = (rb->context_save_area - 0xC0000000) |
 //						MI_MM_SPACE_GTT | MI_FORCE_RESTORE | MI_RESTORE_EXT_STATE_EN;
 						MI_MM_SPACE_GTT | MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN |
 						MI_FORCE_RESTORE;
@@ -1222,11 +1226,10 @@ void vgt_restore_context (struct vgt_device *vgt)
 			 */
 			printk("dummy switch\n");
 			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
-				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | 0xCE000000;
+				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | 0xE000000;
 			(*submit_context_command[i]) (vgt, i, cmds_save_context,
 				sizeof(cmds_save_context));
 
-			//mdelay(1);
 			//show_context(vgt, rb->context_save_area, false);
 			/* reset the head/tail */
 			ring_pre_shadow_2_phys (vgt->pdev, i, &rb->sring);
@@ -1234,15 +1237,15 @@ void vgt_restore_context (struct vgt_device *vgt)
 #endif
 			(*submit_context_command[i]) (vgt, i, cmds_restore_context,
 				sizeof(cmds_restore_context));
-			//mdelay(1);
-			//show_context(vgt, rb->context_save_area, false);
+			show_context(vgt, rb->context_save_area, false);
+			show_debug(vgt->pdev);
 
 			/* restore 32 dwords of the ring */
 			restore_ring_buffer (vgt, i);
 		}
 	}
 	/* MMIO restore: intelGpuRegRestore in WR */
-	//vgt_rendering_restore_mmio(vgt);
+	vgt_rendering_restore_mmio(vgt);
 
 	/* Restore ring registers */
 #if 0
@@ -1257,7 +1260,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 	}
 
 	/* Restore the PM */
-	//restore_power_management(vgt);
+	restore_power_management(vgt);
 	printk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
 }
 
