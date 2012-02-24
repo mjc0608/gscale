@@ -82,8 +82,8 @@
  * 	  TLB invalidation mode setting, which may impact vGT's context switch logic
  * 	- Need another way to ensure ring commands finished. Now check head==tail
  */
-void vgt_restore_context (struct vgt_device *vgt);
-void vgt_save_context (struct vgt_device *vgt);
+bool vgt_restore_context (struct vgt_device *vgt);
+bool vgt_save_context (struct vgt_device *vgt);
 
 unsigned int ring_mmio_base [MAX_ENGINES] = {
 	/* must be in the order of ring ID definition */
@@ -720,10 +720,34 @@ int vgt_thread(void *priv)
 			{
 				prev = current_render_owner(pdev);
 				switched++;
-				printk("....the %lldth switch (%d->%d)\n", switched, prev->vgt_id, next->vgt_id);
 
-				vgt_save_context(prev);
-				vgt_restore_context(next);
+				if (!vgt_save_context(prev)) {
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("vGT: (%lldth switch<%d->%d>): fail to save context\n",
+						switched, prev->vgt_id, next->vgt_id);
+
+					/* TODO: any recovery to do here. Now simply exits the thread */
+					break;
+				}
+
+				if (!vgt_restore_context(next)) {
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+					printk("vGT: (%lldth switch<%d->%d>): fail to restore context\n",
+						switched, prev->vgt_id, next->vgt_id);
+
+					/* TODO: any recovery to do here. Now simply exits the thread */
+					break;
+				}
 
 				current_render_owner(pdev) = next;
 			}
@@ -1168,13 +1192,14 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
  *
  */
 
-void vgt_save_context (struct vgt_device *vgt)
+bool vgt_save_context (struct vgt_device *vgt)
 {
 	int 			i;
 	vgt_state_ring_t	*rb;
+	bool rc = true;
 
 	if (vgt == NULL)
-		return;
+		return false;
 	/* disable Power */
 	disable_power_management(vgt);
 
@@ -1222,21 +1247,26 @@ void vgt_save_context (struct vgt_device *vgt)
 			break;
 		}
 
-		(*submit_context_command[i]) (vgt, i, cmds_save_context,
+		rc = (*submit_context_command[i]) (vgt, i, cmds_save_context,
 				sizeof(cmds_save_context));
 		restore_ring_buffer (vgt, i);
-		rb->initialized = true;
+
+		if (rc)
+			rb->initialized = true;
 		dprintk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
+
 	}
+	return rc;
 }
 
-void vgt_restore_context (struct vgt_device *vgt)
+bool vgt_restore_context (struct vgt_device *vgt)
 {
 	int i;
 	vgt_state_ring_t	*rb;
+	bool rc;
 
 	if (vgt == NULL)
-		return ;
+		return false;
 
 #if 0
 	for (i=0; i < MAX_ENGINES; i++) {
@@ -1276,18 +1306,25 @@ void vgt_restore_context (struct vgt_device *vgt)
 			dprintk("dummy switch\n");
 			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
 				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | 0xE000000;
-			(*submit_context_command[i]) (vgt, i, cmds_save_context,
+			rc = (*submit_context_command[i]) (vgt, i, cmds_save_context,
 				sizeof(cmds_save_context));
 
 			/* reset the head/tail */
 			ring_pre_shadow_2_phys (vgt->pdev, i, &rb->sring);
+
+			if (!rc)
+				goto err;
+
 			dprintk("real switch\n");
 #endif
-			(*submit_context_command[i]) (vgt, i, cmds_restore_context,
+			rc = (*submit_context_command[i]) (vgt, i, cmds_restore_context,
 				sizeof(cmds_restore_context));
 
 			/* restore 32 dwords of the ring */
 			restore_ring_buffer (vgt, i);
+
+			if (!rc)
+				goto err;
 		}
 	}
 	/* MMIO restore: intelGpuRegRestore in WR */
@@ -1308,6 +1345,10 @@ void vgt_restore_context (struct vgt_device *vgt)
 	/* Restore the PM */
 	restore_power_management(vgt);
 	dprintk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
+	return true;
+err:
+	/* TODO: need fall back to original VM's context */
+	return false;
 }
 
 static void state_reg_v2s(struct vgt_device *vgt)
