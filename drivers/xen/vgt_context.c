@@ -78,6 +78,8 @@
  * 	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
  * 	- GTT aperture and gfx memory size check (now hardcode from intel-gtt.c)
  * 	- need a check on "unsigned long" vs. "u64" usage
+ * 	- need consider cache related issues, e.g. Linux/Windows may have different
+ * 	  TLB invalidation mode setting, which may impact vGT's context switch logic
  */
 void vgt_restore_context (struct vgt_device *vgt);
 void vgt_save_context (struct vgt_device *vgt);
@@ -109,13 +111,11 @@ static struct pgt_device default_device = {
 };
 
 /*
- * Gfx ownership
+ * Print debug registers for CP
+ *
+ * Hope to introduce a sysfs interface to dump this information on demand
+ * in the future
  */
-static inline bool is_current_vgt(struct vgt_device *vgt)
-{
-	return vgt == current_render_owner(vgt->pdev);
-}
-
 static void show_debug(struct pgt_device *pdev)
 {
 	vgt_reg_t reg;
@@ -136,6 +136,13 @@ static void show_debug(struct pgt_device *pdev)
 	printk("....INSTDONE_2: %x\n", VGT_MMIO_READ(pdev, 0x207C));
 }
 
+/*
+ * Show some global register settings, if we care about bits
+ * in those registers.
+ *
+ * normally invoked from initialization phase, and mmio emulation
+ * logic
+ */
 static void show_mode_settings(struct pgt_device *pdev)
 {
 	vgt_reg_t reg;
@@ -163,6 +170,9 @@ static void show_mode_settings(struct pgt_device *pdev)
 	printk("....(%x)MI_FLUSH: %s\n",
 		_REGBIT_MI_FLUSH,
 		ENABLED_STR(reg, _REGBIT_MI_FLUSH));
+	printk("....MI_FLUSH enable may be problematic on some "
+	       "    some platforms, which should be abandoned\n"
+	       "    On SNB it's parsed regardless of this bit\n");
 	printk("....(%x)Invalidate UHPTR: %s\n",
 		_REGBIT_MI_INVALIDATE_UHPTR,
 		ENABLED_STR(reg, _REGBIT_MI_INVALIDATE_UHPTR));
@@ -173,8 +183,46 @@ static void show_mode_settings(struct pgt_device *pdev)
 		(reg & _REGBIT_ADDRESS_SWIZZLING) ? "bit 6 used" : "no");
 }
 
+/*
+ * Show the content of a saved render context
+ */
+static void show_context(struct vgt_device *vgt, uint64_t context, bool clobber)
+{
+	uint64_t ptr;
+	u32 *vptr;
+	int i;
+
+	ptr = (uint64_t)vgt->pdev->gmadr_va + context - vgt->pdev->gmadr_base;
+	printk("===================\n");
+	printk("Context (%llx, %llx): %s\n", context, ptr, clobber ? "clobbered" : "");
+
+	vptr = (u32 *)ptr;
+	if (clobber) {
+		printk("Clobber the context!\n");
+		*vptr = 0x12345678;
+		*(vptr + 0x4A) = 0x12345678;	// CACHE_MODE_0
+		*(vptr + 0x4D)= 0x12345678;	// INSTPM
+		*(vptr + 0x4F)= 0x12345678;	// MI_MODE
+		*(vptr + 0x5C)= 0x12345678;	// TIMESTAMP
+		*(vptr + 0x70)= 0x12345678;	// STATE_SIP
+	}
+	for (i = 0; i < 0x100; i++) {
+		if (!(i % 8))
+			printk("\n[%03x]:", i);
+		printk(" %8x", *(vptr + i));
+	}
+	printk("\n");
+	printk("===================\n");
+}
+
+/*
+ * Global mode setting that vGT needs to ensure
+ *
+ * Now leave it empty
+ */
 static void enforce_mode_setting(struct pgt_device *pdev)
 {
+#if 0
 	vgt_reg_t reg;
 	reg = VGT_MMIO_READ(pdev, _REG_MI_MODE);
 	if (!(reg & _REGBIT_MI_FLUSH)) {
@@ -183,6 +231,7 @@ static void enforce_mode_setting(struct pgt_device *pdev)
 		VGT_MMIO_WRITE(pdev, _REG_MI_MODE, reg);
 		printk("(vGT): new value : %x\n", VGT_MMIO_READ(pdev, _REG_MI_MODE));
 	}
+#endif
 }
 
 #ifndef SINGLE_VM_DEBUG
@@ -322,6 +371,9 @@ vgt_reg_t h2g_gmadr(struct vgt_device *vgt, vgt_reg_t h_gm_addr)
 }
 
 /*
+ * ABANDON IN THE FUTURE!!!! we should use explict VGT_MMIO interfaces
+ * to avoid unnecessary GP faults
+ *
  * Get the VA of vgt guest aperture base.
  * (NOTES: Aperture base is equal to GMADR base)
  */
@@ -335,6 +387,9 @@ static inline char *__aperture(struct vgt_device *vgt)
 	return p_contents;
 }
 
+/*
+ * Given a ring buffer, print out the current data [-bytes, bytes]
+ */
 static void show_ringbuffer(struct vgt_device *vgt, int ring_id, int bytes)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -504,7 +559,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 
 	if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE) {
 		printk("vGT: write to global registers (%x)\n", offset);
-		//enforce_mode_setting(vgt->pdev);
+		enforce_mode_setting(vgt->pdev);
 		show_mode_settings(vgt->pdev);
 	}
 
@@ -518,7 +573,7 @@ bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 		return false;
 	}
 
-	printk("vGT: ring-%d is empty\n", ring_id);
+	dprintk("vGT: ring-%d is empty\n", ring_id);
 	return true;
 }
 
@@ -562,6 +617,9 @@ static struct vgt_device *next_vgt(
 	return list_entry(next, struct vgt_device, list);
 }
 
+/*
+ * random GTT entry check
+ */
 static void check_gtt(struct pgt_device *pdev)
 {
 	printk("GMADR: 0xC0000000, GTT INDEX: %x, GTT VALUE: %x\n",
@@ -609,7 +667,7 @@ int vgt_thread(void *priv)
 			schedule_timeout(HZ*5);
 
 		cnt++;
-		printk("vGT: check %lldth context switch\n", cnt);
+		dprintk("vGT: check %lldth context switch\n", cnt);
 #ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
 		if (next_monitor_owner != INVLID_MONITOR_SW_REQ) {
@@ -623,7 +681,7 @@ int vgt_thread(void *priv)
 
 		if (list_empty(&pdev->rendering_runq_head)) {
 			/* Idle now, and no pending activity */
-			printk("....idle\n");
+			dprintk("....idle\n");
 			continue;
 		}
 
@@ -639,18 +697,17 @@ int vgt_thread(void *priv)
 				switched++;
 				printk("....the %lldth switch (%d->%d)\n", switched, prev->vgt_id, next->vgt_id);
 
-				check_gtt(pdev);
 				vgt_save_context(prev);
-				mdelay(1); // now only one context, to make sure commands finished
 				vgt_restore_context(next);
+
 				current_render_owner(pdev) = next;
 			}
 #ifndef SINGLE_VM_DEBUG
 			else
-				printk("....no other instance\n");
+				dprintk("....no other instance\n");
 #endif
 		} else {
-			printk("....ring is busy\n");
+			dprintk("....ring is busy\n");
 			show_ringbuffer(vgt, 0, 16 * sizeof(vgt_reg_t));
 		}
 	}
@@ -662,9 +719,9 @@ int vgt_thread(void *priv)
  */
 void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	printk("old head(%x), old tail(%x)\n", srb->head, srb->tail);
+	dprintk("old head(%x), old tail(%x)\n", srb->head, srb->tail);
 	srb->head = VGT_MMIO_READ(pdev, RB_HEAD(ring_id));
-	printk("new head(%x), new tail(%x)\n", srb->head, VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
+	dprintk("new head(%x), new tail(%x)\n", srb->head, VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 #if 0
 	srb->tail = VGT_MMIO_READ(pdev, &prb->tail);
 	srb->start = VGT_MMIO_READ(pdev, &prb->start);
@@ -686,10 +743,9 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
  */
 static inline void disable_ring(struct pgt_device *pdev, int ring_id)
 {
-	//vgt_reg_t reg;
 	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), 0);
-	//reg = VGT_MMIO_READ(pdev, RB_CTL(ring_id));
-	//need a post read?
+	/* by ktian1. no source for this trick */
+	VGT_POST_READ(pdev, RB_CTL(ring_id));
 }
 
 /*
@@ -697,7 +753,7 @@ static inline void disable_ring(struct pgt_device *pdev, int ring_id)
  */
 void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	printk("shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
+	dprintk("shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
 
 	ASSERT(srb->ctl & _RING_CTL_ENABLE);
 	disable_ring(pdev, ring_id);
@@ -705,9 +761,10 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
 	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
 	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), srb->ctl);
+	VGT_POST_READ(pdev, RB_CTL(ring_id)); /* by ktian1 */
 
-	//printk("shadow 2 phys: [%x, %x]\n", VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
-	//	VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
+	dprintk("shadow 2 phys: [%x, %x]\n", VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
+		VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 }
 
 /*
@@ -717,7 +774,7 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
  */
 void ring_pre_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	printk("pre shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
+	dprintk("pre shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
 
 	ASSERT(srb->ctl & _RING_CTL_ENABLE);
 	disable_ring(pdev, ring_id);
@@ -725,8 +782,10 @@ void ring_pre_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer
 	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
 	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
 	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), srb->ctl);
-	//printk("pre shadow 2 phys: [%x, %x]\n", VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
-	//	VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
+	VGT_POST_READ(pdev, RB_CTL(ring_id));	/* by ktian1 */
+
+	dprintk("pre shadow 2 phys: [%x, %x]\n", VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
+		VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 }
 
 #if 0
@@ -780,7 +839,6 @@ static  void ring_save_commands (vgt_state_ring_t *rb,
 	char	*p_contents;
 	vgt_reg_t	rbtail;
 	vgt_reg_t  ring_size, to_tail;
-	int i;
 
 	ASSERT ((bytes & 3) == 0);
 	p_contents = p_aperture + rb->sring.start;
@@ -788,10 +846,11 @@ static  void ring_save_commands (vgt_state_ring_t *rb,
 
 	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
 	to_tail = ring_size - rbtail;
-	printk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x, start: %x\n",
+	dprintk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x, start: %x\n",
 		(unsigned long)p_contents, rbtail, ring_size, to_tail,
 		rb->sring.start);
 
+#if 0
 	printk("current buffer: ");
 	for (i = 0; i < bytes/4; i++)
 		printk(" %x", (*((u32*)buf + i)));
@@ -800,6 +859,7 @@ static  void ring_save_commands (vgt_state_ring_t *rb,
 	for (i = 0; i < bytes/4; i++)
 		printk(" %x", *((u32*)p_contents + rbtail/4 + i));
 	printk("\n");
+#endif
 
 	if ( likely(to_tail >= bytes) )
 	{
@@ -810,10 +870,12 @@ static  void ring_save_commands (vgt_state_ring_t *rb,
 		memcpy (buf + to_tail, p_contents, bytes - to_tail);
 	}
 
+#if 0
 	printk("saved content: ");
 	for (i = 0; i < bytes/4; i++)
 		printk(" %x", (*((u32*)buf + i)));
 	printk("\n");
+#endif
 }
 
 static void ring_load_commands(vgt_state_ring_t *rb,
@@ -822,7 +884,6 @@ static void ring_load_commands(vgt_state_ring_t *rb,
 	char	*p_contents;
 	vgt_reg_t	rbtail;
 	vgt_reg_t  ring_size, to_tail;	/* bytes */
-	int i;
 
 	p_contents = p_aperture + rb->sring.start;
 	/* reset to the tail for every load */
@@ -830,10 +891,11 @@ static void ring_load_commands(vgt_state_ring_t *rb,
 
 	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
 	to_tail = ring_size - rbtail;
-	printk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x, start: %x\n",
+	dprintk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x, start: %x\n",
 		(unsigned long)p_contents, rbtail, ring_size, to_tail,
 		rb->sring.start);
 
+#if 0
 	printk("current command: ");
 	for (i = 0; i < bytes/4; i++)
 		printk(" %x", (*((u32*)buf + i)));
@@ -844,6 +906,8 @@ static void ring_load_commands(vgt_state_ring_t *rb,
 	printk("\n");
 
 	printk("copy to %lx\n", (unsigned long)((rb_dword *)p_contents + rbtail));
+#endif
+
 	if ( likely(to_tail >= bytes) )
 	{
 		/* FIXME: need using VGT_MMIO_WRITE */
@@ -854,17 +918,20 @@ static void ring_load_commands(vgt_state_ring_t *rb,
 		memcpy (p_contents, buf + to_tail, bytes - to_tail);
 		rb->phys_tail = bytes - to_tail;
 	}
+
+#if 0
 	//wbinvd();
 	printk("updated ring buffer: ");
 	for (i = 0; i < bytes/4; i++)
 		printk(" %x", *((u32*)p_contents + rbtail/4 + i));
 	printk("\n");
 	printk("phys_tail: %x\n", rb->phys_tail);
+#endif
 }
 
 static inline void save_ring_buffer(struct vgt_device *vgt, int ring_id)
 {
-	printk("<vgt-%d>save ring buffer\n", vgt->vgt_id);
+	dprintk("<vgt-%d>save ring buffer\n", vgt->vgt_id);
 	ring_save_commands (&vgt->rb[ring_id],
 			__aperture(vgt),
 			(char*)vgt->rb[ring_id].save_buffer,
@@ -873,7 +940,7 @@ static inline void save_ring_buffer(struct vgt_device *vgt, int ring_id)
 
 static void restore_ring_buffer(struct vgt_device *vgt, int ring_id)
 {
-	printk("<vgt-%d>restore ring buffer\n", vgt->vgt_id);
+	dprintk("<vgt-%d>restore ring buffer\n", vgt->vgt_id);
 	ring_load_commands (&vgt->rb[ring_id],
 			__aperture(vgt),
 			(char *)vgt->rb[ring_id].save_buffer,
@@ -897,7 +964,12 @@ static void restore_power_management(struct vgt_device *vgt)
 	val = VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
 }
 
-
+/*
+ * TODO:
+ * MI_SUSPEND_FLUSH is necessary for GEN5, but not SNB.
+ * IVB furthers requires MI_ARB_ON_OFF to disable preemption
+ * (from intel-gfx community)
+ */
 static rb_dword	cmds_save_context[8] =
 	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
 	MI_SET_CONTEXT, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT,
@@ -953,18 +1025,20 @@ static bool wait_ccid_to_renew(struct pgt_device *pdev, vgt_reg_t new_ccid)
 		sleep_us(1);		/* 1us delay */
 	}
 	if (timeout <= 0) {
-		printk("Update CCID failed at %s %d %x %x\n",
+		printk("XXXX: Update CCID failed at %s %d %x %x\n",
 			__FUNCTION__, __LINE__,	ccid, new_ccid);
-		printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 		return false;
 	}
-	printk("====Update CCID successfully to %x\n", ccid);
+	dprintk("XXXX: Update CCID successfully to %x\n", ccid);
 	return true;
 }
 
 /*
  * Submit a series of context save/restore commands to ring engine,
  * and wait till it is executed.
+ *
+ * FIXME: currently only one series of commands can be issued, and a
+ * ring buffer reset is required to issue another set of commands
  */
 bool rcs_submit_context_command (struct vgt_device *vgt,
 	int ring_id, rb_dword *cmds, int bytes)
@@ -976,7 +1050,7 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 
 	rb = &vgt->rb[ring_id];
 
-	printk("vGT: CCID is %x, new cmd is %x\n",
+	dprintk("vGT: CCID is %x, new cmd is %x\n",
 		VGT_MMIO_READ(vgt->pdev, _REG_CCID), cmds[2]);
 	/*
 	 * No need to program CCID. Per the PRM, CCID will be
@@ -996,20 +1070,22 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 		return false;
 #endif
 
-	printk("before load [%x, %x]\n", VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)), VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)));
-	//show_debug(vgt->pdev);
+	dprintk("before load [%x, %x]\n",
+		VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id)),
+		VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)));
+
 	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
 	VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
 	mdelay(1);
+
 	{
 		vgt_reg_t head, tail;
 		head = VGT_MMIO_READ(vgt->pdev, RB_HEAD(ring_id));
 		tail = VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id));
-		printk("after load [%x, %x]\n", head, tail);
+		dprintk("after load [%x, %x]\n", head, tail);
 		if ((head & RB_HEAD_OFF_MASK) != (tail & RB_HEAD_OFF_MASK))
-			printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+			printk("XXXX: commands unfinished [%x, %x]\n", head, tail);
 	}
-	//show_debug(vgt->pdev);
 
 	return wait_ccid_to_renew(vgt->pdev, cmds[2]);
 }
@@ -1036,7 +1112,7 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 		__sreg(vgt, rendering_ctx_regs[i]) =
 			VGT_MMIO_READ(vgt->pdev, rendering_ctx_regs[i]);
 
-		printk("....save mmio (%x) with (%x)\n", rendering_ctx_regs[i],
+		dprintk("....save mmio (%x) with (%x)\n", rendering_ctx_regs[i],
 			__sreg(vgt, rendering_ctx_regs[i]));
 		/*
 		 * TODO: Fix address.
@@ -1064,41 +1140,12 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 	vreg = vgt->state.vReg;
 
 	for (i=0; i<num; i++) {
-		printk("....restore mmio (%x) with (%x)\n", rendering_ctx_regs[i],
+		dprintk("....restore mmio (%x) with (%x)\n", rendering_ctx_regs[i],
 			__sreg(vgt, rendering_ctx_regs[i]));
 		/* Address is fixed previously */
 		VGT_MMIO_WRITE(vgt->pdev, rendering_ctx_regs[i],
 			__sreg(vgt, rendering_ctx_regs[i]));
 	}
-}
-
-static void show_context(struct vgt_device *vgt, uint64_t context, bool clobber)
-{
-	uint64_t ptr;
-	u32 *vptr;
-	int i;
-
-	ptr = (uint64_t)vgt->pdev->gmadr_va + context - vgt->pdev->gmadr_base;
-	printk("===================\n");
-	printk("Context (%llx, %llx): %s\n", context, ptr, clobber ? "clobbered" : "");
-
-	vptr = (u32 *)ptr;
-	if (clobber) {
-		printk("Clobber the context!\n");
-		*vptr = 0x12345678;
-		*(vptr + 0x4A) = 0x12345678;	// CACHE_MODE_0
-		*(vptr + 0x4D)= 0x12345678;	// INSTPM
-		*(vptr + 0x4F)= 0x12345678;	// MI_MODE
-		*(vptr + 0x5C)= 0x12345678;	// TIMESTAMP
-		*(vptr + 0x70)= 0x12345678;	// STATE_SIP
-	}
-	for (i = 0; i < 0x100; i++) {
-		if (!(i % 8))
-			printk("\n[%03x]:", i);
-		printk(" %8x", *(vptr + i));
-	}
-	printk("\n");
-	printk("===================\n");
 }
 
 /*
@@ -1160,24 +1207,11 @@ void vgt_save_context (struct vgt_device *vgt)
 			break;
 		}
 
-#if 0
-		{
-		vgt_reg_t ccid;
-		ccid =  0xCE000000 | CCID_MBO_BITS | CCID_VALID;
-//			CCID_VALID| CCID_EXTENDED_STATE_SAVE_ENABLE;
-		VGT_MMIO_WRITE(vgt->pdev, _REG_CCID, ccid);
-
-		if ( !wait_ccid_to_renew (vgt->pdev, ccid) )
-			return;
-		}
-#endif
-		//show_context(vgt, rb->context_save_area, true);
 		(*submit_context_command[i]) (vgt, i, cmds_save_context,
 				sizeof(cmds_save_context));
-		//show_context(vgt, rb->context_save_area, false);
 		restore_ring_buffer (vgt, i);
 		rb->initialized = true;
-		printk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
+		dprintk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
 	}
 }
 
@@ -1188,7 +1222,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 
 	if (vgt == NULL)
 		return ;
-	/* Restore rb registers */
+
 #if 0
 	for (i=0; i < MAX_ENGINES; i++) {
 #else
@@ -1224,21 +1258,18 @@ void vgt_restore_context (struct vgt_device *vgt)
 			 * for single VM debug, we need a dummy context to make sure
 			 * context save actually conducted
 			 */
-			printk("dummy switch\n");
+			dprintk("dummy switch\n");
 			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
 				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | 0xE000000;
 			(*submit_context_command[i]) (vgt, i, cmds_save_context,
 				sizeof(cmds_save_context));
 
-			//show_context(vgt, rb->context_save_area, false);
 			/* reset the head/tail */
 			ring_pre_shadow_2_phys (vgt->pdev, i, &rb->sring);
-			printk("real switch\n");
+			dprintk("real switch\n");
 #endif
 			(*submit_context_command[i]) (vgt, i, cmds_restore_context,
 				sizeof(cmds_restore_context));
-			show_context(vgt, rb->context_save_area, false);
-			show_debug(vgt->pdev);
 
 			/* restore 32 dwords of the ring */
 			restore_ring_buffer (vgt, i);
@@ -1261,7 +1292,7 @@ void vgt_restore_context (struct vgt_device *vgt)
 
 	/* Restore the PM */
 	restore_power_management(vgt);
-	printk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
+	dprintk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
 }
 
 static void state_reg_v2s(struct vgt_device *vgt)
@@ -1279,7 +1310,7 @@ static void state_reg_v2s(struct vgt_device *vgt)
 		/* reuse vgt_emulate_write logic to fix address. */
 		__sreg(vgt, off) =
 			mmio_address_v2p (vgt, i, __vreg(vgt, off), 1);
-		printk("vGT: address fix (%d) for reg (%x): (%x->%x)\n",
+		dprintk("vGT: address fix (%d) for reg (%x): (%x->%x)\n",
 			i, off, __vreg(vgt, off), __sreg(vgt, off));
 
 	}
@@ -1414,7 +1445,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 			return ;
 		}
 	/* The vgt may be still in executing. */
-	while ( is_current_vgt(vgt) )
+	while ( is_current_render_owner(vgt) )
 		schedule();
 
 	/* already idle */
@@ -1652,7 +1683,7 @@ int vgt_initialize(struct pci_dev *dev)
 	dprintk("create dom0 instance succeeds\n");
 
 	/* FIXME: not sure why? update MI_MODE at this point has no effect! */
-	//enforce_mode_setting(pdev);
+	enforce_mode_setting(pdev);
 	show_mode_settings(pdev);
 
 	if (setup_gtt(pdev))

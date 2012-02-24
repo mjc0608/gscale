@@ -478,9 +478,15 @@ static inline bool is_ring_empty(struct pgt_device *pgt, int ring_id)
 	 */
 	tail = ptail & RB_HEAD_OFF_MASK;
 	if (head != tail)
-		printk("....head(%x) vs. tail (%x), (%x, %x)\n", head, tail, phead, ptail);
+		printk("....s[%x, %x], p[%x, %x]\n", head, tail, phead, ptail);
 	return (head == tail);
 }
+
+#define VGT_POST_READ(pdev, reg)		\
+	do {					\
+		vgt_reg_t val;			\
+		val = VGT_MMIO_READ(pdev, reg);	\
+	} while (0)
 
 static inline bool is_ring_enabled (struct pgt_device *pgt, int ring_id)
 {
