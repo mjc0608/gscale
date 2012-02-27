@@ -61,6 +61,20 @@
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/list.h>
+#include <linux/slab.h>
+
+#include <asm/xen/hypercall.h>
+#include <asm/xen/hypervisor.h>
+
+#include <xen/xen.h>
+#include <xen/page.h>
+#include <xen/events.h>
+#include <xen/xen-ops.h>
+#include <xen/interface/xen.h>
+#include <xen/interface/hvm/hvm_op.h>
+#include <xen/interface/hvm/params.h>
+#include <xen/interface/hvm/ioreq.h>
+
 #include <xen/vgt.h>
 #include "vgt_reg.h"
 
@@ -265,3 +279,148 @@ printk("mmio hooks initialized\n");
 	return true;
 }
 
+static int xen_get_nr_vcpu(int vm_id)
+{
+	/* get number of the VCPUs */
+	/* TODO: add hypervisor specific implementation */
+	return 1;
+}
+
+static int hvm_get_parameter_by_dom(domid_t domid, int idx, uint64_t *value)
+{
+	struct xen_hvm_param xhv;
+	int r;
+
+	xhv.domid = domid;
+	xhv.index = idx;
+	r = HYPERVISOR_hvm_op(HVMOP_get_param, &xhv);
+	if (r < 0) {
+		printk(KERN_ERR "Cannot get hvm parameter %d: %d!\n",
+			idx, r);
+		return r;
+	}
+	*value = xhv.value;
+	return r;
+}
+
+static shared_iopage_t *map_hvm_iopage(struct vgt_device *vgt)
+{
+	uint64_t ioreq_pfn;
+	int rc;
+
+	rc =hvm_get_parameter_by_dom(vgt->vm_id, HVM_PARAM_IOREQ_PFN, &ioreq_pfn);
+	if (rc < 0)
+		return NULL;
+
+	return xen_remap_domain_mfn_range_in_kernel(ioreq_pfn, 1, vgt->vm_id);
+}
+
+static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
+{
+	/*TODO: handle the HVM IO (mmio/pio) request */
+	return 0;
+}
+
+static irqreturn_t vgt_hvm_io_req_handler(int irq, void* dev)
+{
+	struct vgt_device *vgt;
+	struct vgt_hvm_info *info;
+	int vcpu;
+	struct ioreq *ioreq;
+
+	vgt = (struct vgt_device *)dev;
+	info = vgt->hvm_info;
+
+	for(vcpu=0; vcpu < info->nr_vcpu; vcpu++){
+		if(info->evtchn_irq[vcpu] == irq)
+			break;
+	}
+	if (vcpu == info->nr_vcpu){
+		/*opps, irq is not the registered one*/
+		return IRQ_NONE;
+	}
+
+	ioreq = vgt_get_hvm_ioreq(vgt, vcpu);
+
+	vgt_hvm_do_ioreq(vgt, ioreq);
+
+	notify_remote_via_irq(irq);
+
+	return IRQ_HANDLED;
+}
+
+int vgt_hvm_info_init(struct vgt_device *vgt)
+{
+	struct vgt_hvm_info *info;
+	int vcpu, rc;
+
+	info = kzalloc(sizeof(struct vgt_hvm_info), GFP_KERNEL);
+	if (info == NULL)
+		return -ENOMEM;
+
+	vgt->hvm_info = info;
+
+	info->iopage = map_hvm_iopage(vgt);
+	if (info->iopage == NULL){
+		printk(KERN_ERR "Failed to map HVM I/O page for VM%d\n", vgt->vm_id);
+		rc = -EFAULT;
+		goto err;
+	}
+
+	info->nr_vcpu = xen_get_nr_vcpu(vgt->vm_id);
+	ASSERT(info->nr_vcpu > 0);
+
+	info->evtchn_irq = kmalloc(info->nr_vcpu * sizeof(int), GFP_KERNEL);
+	if (info->evtchn_irq == NULL){
+		rc = -ENOMEM;
+		goto err;
+	}
+	for( vcpu = 0; vcpu < info->nr_vcpu; vcpu++ )
+		info->evtchn_irq[vcpu] = -1;
+
+	for( vcpu = 0; vcpu < info->nr_vcpu; vcpu++ ){
+		rc = bind_interdomain_evtchn_to_irqhandler( vgt->vm_id,
+				info->iopage->vcpu_ioreq[vcpu].vgt_eport,
+				vgt_hvm_io_req_handler, 0,
+				"vgt", vgt );
+		if ( rc < 0 ){
+			printk(KERN_ERR "Failed to bind event channle for vgt HVM IO handler, rc=%d\n", rc);
+			goto err;
+		}
+		info->evtchn_irq[vcpu] = rc;
+	}
+
+	return 0;
+
+err:
+	vgt_hvm_info_deinit(vgt);
+	return rc;
+}
+
+void vgt_hvm_info_deinit(struct vgt_device *vgt)
+{
+	struct vgt_hvm_info *info;
+	int vcpu;
+
+	info = vgt->hvm_info;
+
+	if (info == NULL)
+		return;
+
+	/*TODO: unmap io page */
+
+	if (!info->nr_vcpu || info->evtchn_irq == NULL)
+		goto out1;
+
+	for (vcpu=0; vcpu < info->nr_vcpu; vcpu++){
+		if( info->evtchn_irq[vcpu] >= 0)
+			unbind_from_irqhandler(info->evtchn_irq[vcpu], vgt);
+	}
+
+	kfree(info->evtchn_irq);
+
+out1:
+	kfree(info);
+
+	return;
+}

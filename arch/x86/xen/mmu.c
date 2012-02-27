@@ -2662,3 +2662,55 @@ int xen_unmap_domain_mfn_range(struct vm_area_struct *vma,
 #endif
 }
 EXPORT_SYMBOL_GPL(xen_unmap_domain_mfn_range);
+
+void* xen_remap_domain_mfn_range_in_kernel(unsigned long mfn, int nr,
+		unsigned domid)
+
+{
+	struct vm_struct *area;
+	struct remap_data rmd;
+	struct mmu_update mmu_update[REMAP_BATCH_SIZE];
+	int batch;
+	unsigned long range, addr;
+	pgprot_t prot;
+	int err;
+
+	area = alloc_vm_area(nr << PAGE_SHIFT, NULL);
+	if (!area)
+		return NULL;
+
+	addr = (unsigned long)area->addr;
+
+	prot = __pgprot(pgprot_val(PAGE_KERNEL));
+
+	rmd.mfn = mfn;
+	rmd.prot = prot;
+
+	while (nr) {
+		batch = min(REMAP_BATCH_SIZE, nr);
+		range = (unsigned long)batch << PAGE_SHIFT;
+
+		rmd.mmu_update = mmu_update;
+		err = apply_to_page_range(&init_mm, addr, range,
+					  remap_area_mfn_pte_fn, &rmd);
+		if (err)
+		{
+			area->addr = NULL;
+			goto out;
+		}
+
+		if (HYPERVISOR_mmu_update(mmu_update, batch, NULL, domid) < 0){
+			area->addr = NULL;
+			goto out;
+		}
+
+		nr -= batch;
+		addr += range;
+	}
+
+out:
+
+	flush_tlb_all();
+	return area->addr;
+}
+EXPORT_SYMBOL_GPL(xen_remap_domain_mfn_range_in_kernel);

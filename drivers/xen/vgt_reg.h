@@ -61,6 +61,7 @@
 
 #include <linux/hrtimer.h>
 #include <linux/interrupt.h>
+#include <xen/interface/hvm/ioreq.h>
 
 #define SINGLE_VM_DEBUG
 #define SANDY_BRIDGE
@@ -328,8 +329,18 @@ extern int vgt_initialize(struct pci_dev *dev);
 extern bool vgt_register_mmio_handler(int start, int end,
 	vgt_mmio_read read, vgt_mmio_write write);
 extern bool vgt_initialize_mmio_hooks(void);
+extern int vgt_hvm_info_init(struct vgt_device *vgt);
+extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
 
 struct vgt_irq_virt_state;
+
+struct vgt_hvm_info{
+	shared_iopage_t *iopage;
+	int nr_vcpu;
+	int* evtchn_irq; /* the event channle irqs to handle HVM io request
+				 index is vcpu id */
+};
+
 /* per-VM structure */
 struct vgt_device {
 	int vgt_id;		/* 0 is always for dom0 */
@@ -345,6 +356,7 @@ struct vgt_device {
 	vgt_reg_t		saved_wakeup;	/* disable PM before switching */
 
 	struct vgt_irq_virt_state *irq_vstate;
+	struct vgt_hvm_info  *hvm_info;
 };
 
 enum vgt_owner_type {
@@ -388,6 +400,10 @@ struct pgt_device {
 	bool switch_inprogress;	/* an ownership switch in progress */
 	enum vgt_owner_type switch_owner;	/* the type of the owner in switch */
 
+static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
+{
+	return &(vgt->hvm_info->iopage->vcpu_ioreq[vcpu]);
+}
 
 	struct vgt_irq_host_state *irq_hstate;
 };

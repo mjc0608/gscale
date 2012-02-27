@@ -46,4 +46,6 @@ static inline efi_system_table_t __init *xen_efi_probe(void)
 }
 #endif
 
+void* xen_remap_domain_mfn_range_in_kernel(unsigned long mfn, int nr,
+		unsigned domid);
 #endif /* INCLUDE_XEN_OPS_H */
