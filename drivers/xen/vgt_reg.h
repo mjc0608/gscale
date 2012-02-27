@@ -400,13 +400,13 @@ struct pgt_device {
 	bool switch_inprogress;	/* an ownership switch in progress */
 	enum vgt_owner_type switch_owner;	/* the type of the owner in switch */
 
+	struct vgt_irq_host_state *irq_hstate;
+};
+
 static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
 {
 	return &(vgt->hvm_info->iopage->vcpu_ioreq[vcpu]);
 }
-
-	struct vgt_irq_host_state *irq_hstate;
-};
 
 #define vgt_get_owner(d, t)             (d->owner[t])
 #define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_GT))
