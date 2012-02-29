@@ -431,6 +431,10 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 	unsigned int flags=0, off2;
 	unsigned long wvalue;
 
+#ifdef SINGLE_VM_DEBUG
+	/* for single-VM UP dom0 case, no nest is expected */
+	ASSERT(!spin_is_locked(&pdev->lock));
+#endif
 	spin_lock(&pdev->lock);
 	offset -= pdev->gttmmio_base;
 	ASSERT (offset + bytes <= vgt->state.regNum *
@@ -517,6 +521,9 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	struct mmio_hash_table *mht;
 	int id;
 
+#ifdef SINGLE_VM_DEBUG
+	ASSERT(!spin_is_locked(&pdev->lock));
+#endif
 	spin_lock(&pdev->lock);
 	offset -= pdev->gttmmio_base;
 	ASSERT (offset + bytes <= vgt->state.regNum *
@@ -771,7 +778,18 @@ int vgt_thread(void *priv)
 			if ( next != current_render_owner(pdev) )
 #endif
 			{
-				spin_lock(&pdev->lock);
+				/*
+				 * FIXME: now acquire the lock with interrupt disabled.
+				 * So far vGT's own interrupt handler hasn't been
+				 * registered, so that a GEN interrupt may comes in the
+				 * middle of the context switch. the i915 interrupt
+				 * handler requires GP fault for emulation, and thus
+				 * result in dead lock.
+				 *
+				 * Later remove the irq disable when integrating
+				 * interrupt part.
+				 */
+				spin_lock_irq(&pdev->lock);
 				prev = current_render_owner(pdev);
 				switched++;
 
@@ -804,7 +822,7 @@ int vgt_thread(void *priv)
 				}
 
 				current_render_owner(pdev) = next;
-				spin_unlock(&pdev->lock);
+				spin_unlock_irq(&pdev->lock);
 			}
 #ifndef SINGLE_VM_DEBUG
 			else
