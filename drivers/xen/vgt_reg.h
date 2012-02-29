@@ -106,66 +106,19 @@ typedef struct {
 
 #define SIZE_1MB			(1024UL*1024UL)
 
-#if 0
-#define VGT_GUEST_APERTURE_SZ		(128*SIZE_1MB)
+/* Maximum VMs supported by vGT. Actual number is device specific */
+#define VGT_MAX_VMS			2
+#define VGT_RSVD_APERTURE_SZ		(64*SIZE_1MB)	/* reserve 64MB for vGT itself */
 #define VGT_DOM0_APERTURE_SZ		(64*SIZE_1MB)	/* 64MB for dom0 */
-#define VGT_APERTURE_SZ			(64*SIZE_1MB)	/* reserve 64MB */
-#define VGT_MAX_VMS		4	/* the maximum # of VMs VGT can support */
-#else	/* Initial Configuration */
-/*
- * Only 256M gfx memory available on SNB. Need turn this static configuration
- * into model based or dynamically
- */
-#define VGT_GUEST_APERTURE_SZ		(128*SIZE_1MB)
-#define VGT_DOM0_APERTURE_SZ		(64*SIZE_1MB)	/* 64MB for dom0 */
-#define VGT_APERTURE_SZ			(64*SIZE_1MB)	/* reserve 64MB */
-#define VGT_TOTAL_APERTURE_SZ		(256*SIZE_1MB)
-
-#define VGT_TOTAL_APERTURE_PAGES	(VGT_TOTAL_APERTURE_SZ >> GTT_PAGE_SHIFT)
-#define VGT_APERTURE_PAGES		(VGT_APERTURE_SZ >> GTT_PAGE_SHIFT)
-/*
- * SNB support 1G/2G graphics memory size
- * Assume dom0 and vGT itself has no extra gfx memory requirement except aperture
- */
-#define VGT_GUEST_GFXMEM_SZ		(512*SIZE_1MB)
-#define VGT_MAX_VMS		2	/* the maximum # of VMs VGT can support */
-#endif
+#define VGT_MIN_APERTURE_SZ		(128*SIZE_1MB)	/* minimum 128MB for other VMs */
+/* only 1G/2G is supported on SNB. Need a way to enlighten the driver */
+#define VGT_MIN_GM_SZ			(256*SIZE_1MB)	/* the power of 2 */
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
 #define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 64 KB for now */
+#define VGT_APERTURE_PER_INSTANCE_SZ		(4*SIZE_1MB)	/* 4MB per instance (?) */
 extern unsigned long vgt_id_alloc_bitmap;
 #define VGT_ID_ALLOC_BITMAP		((1UL << VGT_MAX_VMS) - 1)
-
-#ifdef SINGLE_VM_DEBUG
-
-/* SNB only support one VM now */
-#define VGT_DOM0_GFX_APERTURE_BASE		0
-#define VGT_VM1_APERTURE_BASE	(VGT_DOM0_GFX_APERTURE_BASE + VGT_DOM0_APERTURE_SZ)
-#define VGT_VM2_APERTURE_BASE	(VGT_VM1_APERTURE_BASE)
-#define VGT_APERTURE_BASE	(VGT_VM2_APERTURE_BASE+VGT_GUEST_APERTURE_SZ)
-
-#else
-/*
- * Layout of APERTURE (total 512MB):
- *	VM1: 0-128MB
- *	VM2: 128MB-256MB
- *	VM3: 256-384MB
- *	DOM0: GFX driver: 384MB-448MB
- *	VGT driver (in Dom0): 448MB-512MB (64MB)
- *		Used for context save area (128KB per VGT instance)
- *			4KB per ring context save area
- * TODO: This may require Gfx driver modification!!!
- */
-#define VGT_VM1_APERTURE_BASE	0
-#define VGT_VM2_APERTURE_BASE	(VGT_VM1_APERTURE_BASE+VGT_GUEST_APERTURE_SZ)
-#define VGT_VM3_APERTURE_BASE	(VGT_VM2_APERTURE_BASE+VGT_GUEST_APERTURE_SZ)
-#define VGT_DOM0_GFX_APERTURE_BASE		\
-		(VGT_VM3_APERTURE_BASE+VGT_GUEST_APERTURE_SZ)
-#define VGT_MANAGE_APERTURE_BASE		\
-		(VGT_DOM0_GFX_APERTURE_BASE + VGT_DOM0_APERTURE_SZ)
-#endif
-#define VGT_APERTURE_PER_INSTANCE_SZ		(4*SIZE_1MB)	/* 4MB per instance (?) */
-
 
 #define REG_SIZE    sizeof(vgt_reg_t)        /* size of gReg/sReg[0] */
 #define VGT_MMIO_SPACE_SZ	(2*SIZE_1MB)
@@ -178,7 +131,7 @@ typedef struct {
     vgt_reg_t	*sReg;		/* Shadow (used by hardware) state of the register */
     uint8_t	cfg_space[VGT_CFG_SPACE_SZ];
     uint64_t	gt_mmio_base;	/* bar0/GTTMMIO  */
-    uint64_t	aperture_base_pa;	/* bar1: guest aperture base */
+    uint64_t	aperture_base;	/* bar1: guest aperture base */
 //    uint64_t	gt_gmadr_base;	/* bar1/GMADR */
 
     uint32_t	bar_size[3];	/* 0: GTTMMIO, 1: GMADR, 2: PIO bar size */
@@ -289,14 +242,6 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define RB_TAIL_OFF_SHIFT	3
 
 #define RB_TAIL_SIZE_MASK	((1UL << 21) - (1UL << 12))	/* bit 12 to 20 */
-#define GTT_PAGE_SHIFT		12
-#define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
-#define GTT_PAGE_MASK		(~(GTT_PAGE_SIZE-1))
-#define GTT_ENTRY_SIZE		4
-#define GTT_INDEX(pdev, addr)		\
-	((u32)((addr - pdev->gmadr_base) >> GTT_PAGE_SHIFT))
-#define GTT_ADDR(pdev, index)		\
-	(pdev->gtt_base + index * GTT_ENTRY_SIZE)
 #define _RING_CTL_BUF_SIZE(ctl)	(((ctl) & RB_TAIL_SIZE_MASK) + GTT_PAGE_SIZE)
 #define _RING_CTL_ENABLE	0x1	/* bit 0 */
 
@@ -306,8 +251,6 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define CCID_EXTENDED_STATE_RESTORE_ENABLE	0x4
 #define CCID_VALID		0x1
 #define CCID_TIMEOUT_LIMIT	150
-
-#define _REG_ISR		    0x020AC
 
 #define _REG_MI_MODE	0x209C
 #define		_REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE	(1 << 14)
@@ -349,10 +292,15 @@ struct vgt_device {
 	struct list_head	list;
 	vgt_state_t	state;		/* MMIO state except ring buffers */
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
+
+	uint64_t	aperture_base;
 	void		*aperture_base_va;
-	unsigned int	aperture_offset;	/* TODO: for aperture virtualization */
-	void	*priv;
-	uint64_t  vgt_aperture_base;	/* aperture used for VGT driver */
+	uint64_t 	aperture_sz;
+	uint64_t 	gm_sz;
+	uint64_t	aperture_offset;	/* address fix for visible GM */
+	uint64_t	hidden_gm_offset;	/* address fix for invisible GM */
+
+	uint64_t  	rsvd_aperture_base;	/* aperture used for VGT driver */
 	vgt_reg_t		saved_wakeup;	/* disable PM before switching */
 
 	struct vgt_irq_virt_state *irq_vstate;
@@ -385,13 +333,20 @@ struct pgt_device {
 	vgt_reg_t initial_mmio_state[VGT_MMIO_REG_NUM];	/* copy from physical at start */
 	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */
 	uint32_t bar_size[3];
+	uint64_t total_gm_sz;	/* size of available GM space */
+
 	uint64_t gttmmio_base;	/* base of GTT and MMIO */
 	void *gttmmio_base_va;	/* virtual base of mmio */
-	uint64_t gtt_base;		/* base of GTT */
-	void *gtt_base_va;	/* virtual base of GTT */
-	uint64_t vgt_aperture_base;	/* aperture used for vGT driver itself */
 	uint64_t gmadr_base;	/* base of GMADR */
-	void *gmadr_va;	/* virtual base of GMADR */
+	void *gmadr_va;		/* virtual base of GMADR */
+
+	int max_vms;		/* maximum supported VMs */
+	uint64_t rsvd_aperture_sz;
+	uint64_t rsvd_aperture_base;
+	uint64_t dom0_aperture_sz;
+	uint64_t dom0_aperture_base;
+	uint64_t vm_aperture_sz;
+	uint64_t vm_gm_sz;
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
@@ -404,11 +359,6 @@ struct pgt_device {
 	struct vgt_irq_host_state *irq_hstate;
 };
 
-static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
-{
-	return &(vgt->hvm_info->iopage->vcpu_ioreq[vcpu]);
-}
-
 #define vgt_get_owner(d, t)             (d->owner[t])
 #define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_GT))
 #define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
@@ -416,7 +366,263 @@ static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
 #define vgt_switch_inprogress(d)        (d->switch_inprogress)
 #define vgt_switch_owner_type(d)        (d->switch_owner)
 
-#define APERTURE_2_GM(pdev, addr)	(addr - pdev->gmadr_base)
+/* definitions for physical aperture/GM space */
+#define aperture_sz(pdev)		(pdev->bar_size[1])
+#define aperture_pages(pdev)		(aperture_sz(pdev) >> GTT_PAGE_SHIFT)
+#define aperture_base(pdev)		(pdev->gmadr_base)
+#define aperture_vbase(pdev)		(pdev->gmadr_va)
+
+#define gm_sz(pdev)			(pdev->total_gm_sz)
+#define gm_base(pdev)			(0ULL)
+#define hidden_gm_base(pdev)		(aperture_sz(pdev))
+
+#define aperture_2_gm(pdev, addr)	(addr - aperture_base(pdev))
+
+#define rsvd_aperture_sz(pdev)		(pdev->rsvd_aperture_sz)
+#define rsvd_aperture_base(pdev)	(pdev->rsvd_aperture_base)
+#define rsvd_aperture_end(pdev)		\
+	(rsvd_aperture_base(pdev) + rsvd_aperture_sz(pdev) - 1)
+#define rsvd_aperture_pages(pdev)	(rsvd_aperture_sz(pdev) >> GTT_PAGE_SHIFT)
+
+#define dom0_aperture_sz(pdev)		(pdev->dom0_aperture_sz)
+#define dom0_aperture_base(pdev)	(pdev->dom0_aperture_base)
+#define dom0_aperture_end(pdev)		\
+	(dom0_aperture_base(pdev) + dom0_aperture_sz(pdev) - 1)
+
+#define vm_aperture_sz(pdev)		(pdev->vm_aperture_sz)
+#define vm_gm_sz(pdev)			(pdev->vm_gm_sz)
+#define vm_gm_hidden_sz(pdev)		(vm_gm_sz(pdev) - vm_aperture_sz(pdev))
+
+/*
+ * Aperture/GM virtualization
+ *
+ * GM is split into two parts: the 1st part visible to CPU through an aperture
+ * window mapping, and the 2nd part only accessible from GPU. The virtualization
+ * policy is like below:
+ *
+ *                | VM1 | VM2 | DOM0| RSVD|    VM1   |    VM2   |
+ *                ------------------------------------------------
+ * Aperture Space |/////|\\\\\|xxxxx|ooooo|                     v
+ * (Dev2_BAR)     v                       v                     v
+ *                v                       v                     v
+ * GM space       v   (visibale part)     v   (invisible part)  v
+ * (start from 0) |/////|\\\\\|xxxxx|ooooo|//////////|\\\\\\\\\\|
+ *                ^     ^                 ^          ^
+ *                |     |  _______________|          |
+ *                |     | /          ________________|
+ * VM1 GM space   |     |/          /
+ * (start from 0) |/////|//////////|
+ */
+static inline uint64_t get_vm_aperture_base(struct pgt_device *pdev, int i)
+{
+	return aperture_base(pdev) + i * vm_aperture_sz(pdev);
+}
+
+static inline uint64_t get_vm_aperture_end(struct pgt_device *pdev, int i)
+{
+	return get_vm_aperture_base(pdev, i) + vm_aperture_sz(pdev) - 1;
+}
+
+static inline uint64_t get_vm_visible_gm_base(struct pgt_device *pdev, int i)
+{
+	return gm_base(pdev) + i * vm_aperture_sz(pdev);
+}
+
+static inline uint64_t get_vm_visible_gm_end(struct pgt_device *pdev, int i)
+{
+	return get_vm_visible_gm_base(pdev, i) + vm_aperture_sz(pdev) - 1;
+}
+
+static inline uint64_t get_vm_hidden_gm_base(struct pgt_device *pdev, int i)
+{
+	return hidden_gm_base(pdev) + i * vm_gm_hidden_sz(pdev);
+}
+
+static inline uint64_t get_vm_hidden_gm_end(struct pgt_device *pdev, int i)
+{
+	return get_vm_hidden_gm_base(pdev, i) + vm_gm_hidden_sz(pdev) - 1;
+}
+
+/* definitions for vgt's aperture/gm space */
+#define vgt_aperture_base(vgt)		(vgt->aperture_base)
+#define vgt_aperture_vbase(vgt)		(vgt->aperture_base_va)
+#define vgt_aperture_offset(vgt)	(vgt->aperture_offset)
+#define vgt_hidden_gm_offset(vgt)	(vgt->hidden_gm_offset)
+#define vgt_aperture_sz(vgt)		(vgt->aperture_sz)
+#define vgt_gm_sz(vgt)			(vgt->gm_sz)
+#define vgt_hidden_gm_sz(vgt)		(vgt_gm_sz(vgt) - vgt_aperture_sz(vgt))
+
+#define vgt_aperture_end(vgt)		\
+	(vgt_aperture_base(vgt) + vgt_aperture_sz(vgt) - 1)
+#define vgt_visible_gm_base(vgt)	\
+	(gm_base(vgt->pdev) + vgt_aperture_offset(vgt))
+#define vgt_visible_gm_end(vgt)		\
+	(vgt_visible_gm_base(vgt) + vgt_aperture_sz(vgt) - 1)
+#define vgt_hidden_gm_base(vgt)	\
+	(gm_base(vgt->pdev) + vgt_hidden_gm_offset(vgt))
+#define vgt_hidden_gm_end(vgt)		\
+	(vgt_hidden_gm_base(vgt) + vgt_hidden_gm_sz(vgt) - 1)
+
+/* definitions in guest's aperture/gm space */
+#define vgt_guest_gm_base(vgt)		(0LL)
+#define vgt_guest_aperture_base(vgt)	(vgt->state.aperture_base)
+#define vgt_guest_aperture_end(vgt)	\
+	(vgt_guest_aperture_base(vgt) + vgt_aperture_sz(vgt) - 1)
+#define vgt_guest_visible_gm_base(vgt)	(vgt_guest_gm_base(vgt))
+#define vgt_guest_visible_gm_end(vgt)	\
+	(vgt_guest_visible_gm_base(vgt) + vgt_aperture_sz(vgt) - 1)
+#define vgt_guest_hidden_gm_base(vgt)	\
+	(vgt_guest_gm_base(vgt) + vgt_aperture_sz(vgt))
+#define vgt_guest_hidden_gm_end(vgt)	\
+	(vgt_guest_hidden_gm_base(vgt) + vgt_hidden_gm_sz(vgt) - 1)
+
+/* translate a guest aperture address to host aperture address */
+static inline uint64_t g2h_aperture(struct vgt_device *vgt, uint64_t g_addr)
+{
+	uint64_t offset;
+
+	ASSERT((g_addr >= vgt_guest_aperture_base(vgt)) &&
+		(g_addr <= vgt_guest_aperture_end(vgt)));
+
+	offset = g_addr - vgt_guest_aperture_base(vgt);
+	return vgt_aperture_base(vgt) + offset;
+}
+
+/* translate a host aperture address to guest aperture address */
+static inline uint64_t h2g_aperture(struct vgt_device *vgt, uint64_t h_addr)
+{
+	uint64_t offset;
+
+	ASSERT((h_addr >= vgt_aperture_base(vgt)) &&
+		(h_addr <= vgt_aperture_end(vgt)));
+
+	offset = h_addr - vgt_aperture_base(vgt);
+	return vgt_guest_aperture_base(vgt) + offset;
+}
+
+/* check whether a guest GM address is within the CPU visible range */
+static inline bool g_gm_is_visible(struct vgt_device *vgt, uint64_t g_addr)
+{
+	return (g_addr >= vgt_guest_visible_gm_base(vgt)) &&
+		(g_addr <= vgt_guest_visible_gm_end(vgt));
+}
+
+/* check whether a guest GM address is out of the CPU visible range */
+static inline bool g_gm_is_hidden(struct vgt_device *vgt, uint64_t g_addr)
+{
+	return (g_addr >= vgt_guest_hidden_gm_base(vgt)) &&
+		(g_addr <= vgt_guest_hidden_gm_end(vgt));
+}
+
+/* check whether a host GM address is within the CPU visible range */
+static inline bool h_gm_is_visible(struct vgt_device *vgt, uint64_t h_addr)
+{
+	return (h_addr >= vgt_visible_gm_base(vgt)) &&
+		(h_addr <= vgt_visible_gm_end(vgt));
+}
+
+/* check whether a host GM address is out of the CPU visible range */
+static inline bool h_gm_is_hidden(struct vgt_device *vgt, uint64_t h_addr)
+{
+	return (h_addr >= vgt_hidden_gm_base(vgt)) &&
+		(h_addr <= vgt_hidden_gm_end(vgt));
+}
+
+/* for a guest GM address, return the offset within the CPU visible range */
+static inline uint64_t g_gm_visible_offset(struct vgt_device *vgt, uint64_t g_addr)
+{
+	return g_addr - vgt_guest_visible_gm_base(vgt);
+}
+
+/* for a guest GM address, return the offset within the hidden range */
+static inline uint64_t g_gm_hidden_offset(struct vgt_device *vgt, uint64_t g_addr)
+{
+	return g_addr - vgt_guest_hidden_gm_base(vgt);
+}
+
+/* for a host GM address, return the offset within the CPU visible range */
+static inline uint64_t h_gm_visible_offset(struct vgt_device *vgt, uint64_t h_addr)
+{
+	return h_addr - vgt_visible_gm_base(vgt);
+}
+
+/* for a host GM address, return the offset within the hidden range */
+static inline uint64_t h_gm_hidden_offset(struct vgt_device *vgt, uint64_t h_addr)
+{
+	return h_addr - vgt_hidden_gm_base(vgt);
+}
+
+/* translate a guest gm address to host gm address */
+static inline uint64_t g2h_gm(struct vgt_device *vgt, uint64_t g_addr)
+{
+	uint64_t h_addr;
+
+	ASSERT(g_gm_is_visible(vgt, g_addr) | g_gm_is_hidden(vgt, g_addr));
+
+	if (g_gm_is_visible(vgt, g_addr))	/* aperture */
+		h_addr = vgt_visible_gm_base(vgt) +
+			g_gm_visible_offset(vgt, g_addr);
+	else	/* hidden GM space */
+		h_addr = vgt_hidden_gm_base(vgt) +
+			g_gm_hidden_offset(vgt, g_addr);
+
+	return h_addr;
+}
+
+/* translate a host gm address to guest gm address */
+static inline uint64_t h2g_gm(struct vgt_device *vgt, uint64_t h_addr)
+{
+	uint64_t g_addr;
+
+	ASSERT(h_gm_is_visible(vgt, h_addr) | h_gm_is_hidden(vgt, h_addr));
+
+	if (h_gm_is_visible(vgt, h_addr))
+		g_addr = vgt_guest_visible_gm_base(vgt) +
+			h_gm_visible_offset(vgt, h_addr);
+	else
+		g_addr = vgt_guest_hidden_gm_base(vgt) +
+			h_gm_hidden_offset(vgt, h_addr);
+
+	return g_addr;
+}
+
+/*
+ * check whether a structure pointed by MMIO, or an instruction filled in
+ * the command buffer, may cross the visible and invisible boundary. That
+ * should be avoid since physically two parts are not contiguous
+ */
+static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
+	uint64_t g_start, uint64_t size)
+{
+	if (!vgt_hidden_gm_offset(vgt))
+		return false;
+
+	return g_gm_is_visible(vgt, g_start) &&
+		g_gm_is_hidden(vgt, g_start + size - 1);
+}
+
+#define GTT_BASE(pdev)			(pdev->gttmmio_base + VGT_MMIO_SPACE_SZ)
+#define GTT_VBASE(pdev)			(pdev->gttmmio_base_va + VGT_MMIO_SPACE_SZ)
+
+#define GTT_PAGE_SHIFT		12
+#define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
+#define GTT_PAGE_MASK		(~(GTT_PAGE_SIZE-1))
+#define GTT_ENTRY_SIZE		4
+
+#define GTT_INDEX(pdev, addr)		\
+	((u32)((addr - gm_base(pdev)) >> GTT_PAGE_SHIFT))
+
+#define GTT_ADDR(pdev, index)		\
+	(GTT_BASE(pdev) + index * GTT_ENTRY_SIZE)
+
+#define GTT_VADDR(pdev, index)		\
+	((u32*)GTT_VBASE(pdev) + index)
+
+static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
+{
+	return &(vgt->hvm_info->iopage->vcpu_ioreq[vcpu]);
+}
+
 static inline void __REG_WRITE(unsigned long preg, unsigned long val, int bytes)
 {
 	int ret;
@@ -511,14 +717,14 @@ static inline bool is_ring_enabled (struct pgt_device *pgt, int ring_id)
 /* FIXME: use readl/writel as Xen doesn't trap GTT access now */
 static inline u32 vgt_read_gtt(struct pgt_device *pdev, u32 index)
 {
-	//return VGT_MMIO_READ(pdev, pdev->gtt_base + index * GTT_ENTRY_SIZE);
-	return readl((u32*)pdev->gtt_base_va + index);
+	//return VGT_MMIO_READ(pdev, GTT_ADDR(pdev, index));
+	return readl(GTT_VADDR(pdev, index));
 }
 
 static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 {
-	//VGT_MMIO_WRITE(pdev, pdev->gtt_base + index * GTT_ENTRY_SIZE, val);
-	writel(val, (u32*)pdev->gtt_base_va + index);
+	//VGT_MMIO_WRITE(pdev, GTT_ADDR(pdev, index), val);
+	writel(val, GTT_VADDR(pdev, index));
 }
 
 /*

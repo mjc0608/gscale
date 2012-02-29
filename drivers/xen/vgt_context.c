@@ -74,13 +74,14 @@
 #include "vgt_wr.c"
 
 /*
- * WORKAROUND list:
+ * NOTE list:
  * 	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
  * 	- GTT aperture and gfx memory size check (now hardcode from intel-gtt.c)
  * 	- need a check on "unsigned long" vs. "u64" usage
  * 	- need consider cache related issues, e.g. Linux/Windows may have different
  * 	  TLB invalidation mode setting, which may impact vGT's context switch logic
  * 	- Need another way to ensure ring commands finished. Now check head==tail
+ * 	- different GEN may have different register address. Caution to support IVB
  */
 bool vgt_restore_context (struct vgt_device *vgt);
 bool vgt_save_context (struct vgt_device *vgt);
@@ -384,9 +385,7 @@ static inline char *__aperture(struct vgt_device *vgt)
 {
 	char *p_contents;
 
-	p_contents = vgt->aperture_base_va;
-	/* TODO: check */
-	p_contents += vgt->aperture_offset;	/* WR use "-" */
+	p_contents = vgt_aperture_vbase(vgt);
 	return p_contents;
 }
 
@@ -1318,7 +1317,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 				MI_MM_SPACE_GTT |
 				MI_SAVE_EXT_STATE_EN |
 				MI_RESTORE_EXT_STATE_EN |
-				APERTURE_2_GM(pdev, rb->context_save_area);
+				aperture_2_gm(pdev, rb->context_save_area);
 			break;
 		default:
 			printk("vGT: unsupported engine (%d) switch \n", i);
@@ -1368,7 +1367,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 			switch (i) {
 				case RING_BUFFER_RCS:
 					cmds_restore_context[2] =
-						APERTURE_2_GM(pdev, rb->context_save_area) |
+						aperture_2_gm(pdev, rb->context_save_area) |
 						MI_MM_SPACE_GTT |
 						MI_SAVE_EXT_STATE_EN |
 						MI_RESTORE_EXT_STATE_EN |
@@ -1482,14 +1481,14 @@ dprintk("create_state_instance\n");
 /*
  * priv: VCPU ?
  */
-struct vgt_device *create_vgt_instance(struct pgt_device *pdev, void *priv)
+struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 {
 	int i;
 	struct vgt_device *vgt;
 	vgt_state_ring_t	*rb;
 	char *cfg_space;
 
-dprintk("create_vgt_instance\n");
+	dprintk("create_vgt_instance\n");
 	vgt = kmalloc (sizeof(*vgt), GFP_KERNEL);
 	if (vgt == NULL) {
 		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
@@ -1508,7 +1507,6 @@ dprintk("create_vgt_instance\n");
 	vgt->vgt_id = vgt_id;
 	vgt->vm_id = ...;
 #endif
-	vgt->priv = priv;
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
 
@@ -1520,39 +1518,54 @@ dprintk("create_vgt_instance\n");
 		return NULL;
 	}
 
-	if (vgt->vgt_id == 0) {	/* dom0 GFX driver */
-		vgt->state.aperture_base_pa = pdev->gmadr_base +
-				VGT_DOM0_GFX_APERTURE_BASE;
-		vgt->aperture_base_va = pdev->gmadr_va +
-				VGT_DOM0_GFX_APERTURE_BASE;
-//		vgt->state.gt_gmadr_base = ;
-	} else {
-		vgt->state.aperture_base_pa = pdev->gmadr_base +
-				VGT_VM1_APERTURE_BASE +
-				VGT_GUEST_APERTURE_SZ * (vgt->vgt_id-1);
-		vgt->aperture_base_va = pdev->gmadr_va +
-				VGT_VM1_APERTURE_BASE +
-				VGT_GUEST_APERTURE_SZ * (vgt->vgt_id-1);
-	}
-printk("aperture_base_pa: %llx, va: %llx\n", vgt->state.aperture_base_pa, (uint64_t)vgt->aperture_base_va);
-	vgt->aperture_offset = 0;
+	/* present aperture to the guest at the same host address */
+	vgt->state.aperture_base = aperture_base(pdev);
 
-	vgt->vgt_aperture_base = pdev->vgt_aperture_base +
+	/* init aperture/gm ranges allocated to this vgt */
+	if (vgt->vgt_id == 0) {
+		vgt->aperture_base = dom0_aperture_base(pdev);
+		vgt->aperture_sz = dom0_aperture_sz(pdev);
+		vgt->gm_sz = dom0_aperture_sz(pdev);
+		vgt->hidden_gm_offset = 0;	/* dom0 has no hidden part */
+	} else {
+		vgt->aperture_base = get_vm_aperture_base(pdev, vgt->vgt_id);
+		vgt->aperture_sz = vm_aperture_sz(pdev);
+		vgt->gm_sz = vm_gm_sz(pdev);
+		vgt->hidden_gm_offset = get_vm_hidden_gm_base(pdev, vgt->vgt_id);
+	}
+
+	vgt->aperture_offset = aperture_2_gm(pdev, vgt->aperture_base);
+	vgt->aperture_base_va = aperture_vbase(pdev) +
+		vgt->aperture_offset;
+
+	printk("Aperture: [%llx, %llx] guest [%llx, %llx] va(%llx)\n",
+		vgt_aperture_base(vgt),
+		vgt_aperture_end(vgt),
+		vgt_guest_aperture_base(vgt),
+		vgt_guest_aperture_end(vgt),
+		(uint64_t)vgt->aperture_base_va);
+
+	printk("GM: [%llx, %llx], [%llx, %llx], guest[%llx, %llx]\n",
+		vgt_visible_gm_base(vgt),
+		vgt_visible_gm_end(vgt),
+		vgt_hidden_gm_base(vgt),
+		vgt_hidden_gm_end(vgt),
+		vgt_guest_gm_base(vgt),
+		vgt_gm_sz(vgt));
+
+	vgt->rsvd_aperture_base = rsvd_aperture_base(pdev) +
 		vgt->vgt_id * VGT_APERTURE_PER_INSTANCE_SZ;
-printk("vgt_aperture_base: %llx\n", vgt->vgt_aperture_base);
+	printk("rsvd_aperture_base: %llx\n", vgt->rsvd_aperture_base);
 
 	for (i=0; i< MAX_ENGINES; i++) {
 		rb = &vgt->rb[i];
-		rb->context_save_area = vgt->vgt_aperture_base +
+		rb->context_save_area = vgt->rsvd_aperture_base +
 			i * SZ_CONTEXT_AREA_PER_RING;
 		rb->initialized = false;
 	}
 
 	vgt->state.bar_size[0] = pdev->bar_size[0];	/* MMIOGTT */
-	if (vgt->vgt_id == 0)
-		vgt->state.bar_size[1] = VGT_DOM0_APERTURE_SZ;	/* GMADR */
-	else
-		vgt->state.bar_size[1] = VGT_GUEST_APERTURE_SZ;	/* GMADR */
+	vgt->state.bar_size[1] = vgt_aperture_sz(vgt);	/* Aperture */
 	vgt->state.bar_size[2] = pdev->bar_size[2];	/* PIO */
 
 	/* Set initial configuration space and MMIO space registers. */
@@ -1560,7 +1573,7 @@ printk("vgt_aperture_base: %llx\n", vgt->vgt_aperture_base);
 	memcpy (cfg_space, pdev->initial_cfg_space, VGT_CFG_SPACE_SZ);
 	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
 	*(uint32_t *)(cfg_space + VGT_REG_CFG_SPACE_BAR1) =
-		vgt->state.aperture_base_pa | 0x4;	/* 64-bit MMIO bar */
+		vgt_guest_aperture_base(vgt) | 0x4;	/* 64-bit MMIO bar */
 
 	memcpy (vgt->state.vReg, pdev->initial_mmio_state, VGT_MMIO_SPACE_SZ);
 	state_reg_v2s (vgt);
@@ -1661,19 +1674,16 @@ dprintk("VGT: Initial_phys_states\n");
 	ASSERT ((bar1 & 7) == 4);
 	/* memory, 64 bits bar */
 	pdev->gmadr_base = bar1 & ~0xf;
-	pdev->vgt_aperture_base = pdev->gmadr_base + VGT_APERTURE_BASE;
-	printk("gttmmio: %llx, gmadr:%llx, vgt aperture: %llx\n",
-			pdev->gttmmio_base, pdev->gmadr_base,
-			pdev->vgt_aperture_base);
+	printk("gttmmio: %llx, gmadr:%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
+
 	/* TODO: no need for this mapping since hypercall is used */
 	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, 2 * VGT_MMIO_SPACE_SZ);
 	if ( pdev->gttmmio_base_va == NULL ) {
 		printk("Insufficient memory for ioremap1\n");
 		return false;
 	}
-	pdev->gtt_base_va = pdev->gttmmio_base_va + VGT_MMIO_SPACE_SZ;
-	pdev->gtt_base = pdev->gttmmio_base + VGT_MMIO_SPACE_SZ;
-	printk("gttmmio_base_va: %llx, gtt_base_va, %llx\n", (uint64_t)pdev->gttmmio_base_va, (uint64_t)pdev->gtt_base_va);
+	printk("gttmmio_base_va: %llx\n", (uint64_t)pdev->gttmmio_base_va);
+
 #if 1		// TODO: runtime sanity check warning...
 	//pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
 	pdev->gmadr_va = ioremap (pdev->gmadr_base, pdev->bar_size[1]);
@@ -1698,6 +1708,8 @@ dprintk("VGT: Initial_phys_states\n");
 		pdev->initial_mmio_state[i] = *((vgt_reg_t *)pdev->gttmmio_base_va + i);
 	}
 #endif
+
+
 	return true;
 }
 
@@ -1710,6 +1722,8 @@ static void vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
 }
 
+/* FIXME: allocate instead of static */
+#define VGT_APERTURE_PAGES	VGT_RSVD_APERTURE_SZ >> GTT_PAGE_SHIFT
 static struct page *pages[VGT_APERTURE_PAGES];
 static struct page *dummy_page;
 /* TODO: check license. May move to another file */
@@ -1734,7 +1748,7 @@ static int setup_gtt(struct pgt_device *pdev)
 	dma_addr |= (dma_addr >> 28) & 0xff0;
 	dma_addr |= 0x1;	/* UC, valid */
 	printk("....dummy page (%llx, %llx)\n", page_to_phys(dummy_page), dma_addr);
-	for (i = 0; i < VGT_TOTAL_APERTURE_PAGES; i++)
+	for (i = 0; i < aperture_pages(pdev); i++)
 		vgt_write_gtt(pdev, i, dma_addr);
 
 	check_gtt(pdev);
@@ -1763,7 +1777,7 @@ static int setup_gtt(struct pgt_device *pdev)
 
 		dma_addr |= (dma_addr >> 28) & 0xff0;
 		dma_addr |= 0x1;	/* UC, valid */
-		index = GTT_INDEX(pdev, pdev->vgt_aperture_base) + i;
+		index = GTT_INDEX(pdev, rsvd_aperture_base(pdev)) + i;
 		vgt_write_gtt(pdev, index, dma_addr);
 
 		if (!(i % (VGT_APERTURE_PAGES / 20)))
@@ -1784,6 +1798,75 @@ err_out:
 	return ret;
 }
 
+void vgt_calculate_max_vms(struct pgt_device *pdev)
+{
+	uint64_t avail_ap, avail_gm;
+	int possible_ap, possible_gm, possible;
+	int i;
+	uint64_t dom0_start = aperture_base(pdev);
+
+	printk("vGT: total aperture (%x), total GM space (%llx)\n",
+		aperture_sz(pdev), gm_sz(pdev));
+
+#ifdef SINGLE_VM_DEBUG
+	pdev->max_vms = 1;		/* dom0 only */
+#else
+	pdev->max_vms = VGT_MAX_VMS;
+#endif
+
+	rsvd_aperture_sz(pdev) = VGT_RSVD_APERTURE_SZ;
+	dom0_aperture_sz(pdev) = VGT_DOM0_APERTURE_SZ;
+
+	avail_ap = aperture_sz(pdev) - rsvd_aperture_sz(pdev) -
+			dom0_aperture_sz(pdev);
+	possible_ap = avail_ap / VGT_MIN_APERTURE_SZ;
+
+	avail_gm = gm_sz(pdev) - rsvd_aperture_sz(pdev) -
+			dom0_aperture_sz(pdev);
+	possible_gm = avail_gm / VGT_MIN_GM_SZ;
+
+	possible = (possible_ap < possible_gm) ? possible_ap : possible_gm;
+	possible++;	/* count on dom0 */
+	if (possible < VGT_MAX_VMS) {
+		printk("vGT: request to support %d VMs, but only %d VMs can be allowed\n",
+			VGT_MAX_VMS, possible);
+		pdev->max_vms = possible;
+	}
+
+	printk("vGT: support %d VMs:\n", pdev->max_vms);
+
+	/* TODO: instead of using min size, calculate an optimal size for requested VMs */
+	vm_aperture_sz(pdev) = VGT_MIN_APERTURE_SZ;
+	vm_gm_sz(pdev) = VGT_MIN_GM_SZ;
+	for (i = 0; i < pdev->max_vms - 1; i++) {
+		printk("....VM#%d:\n", i);
+		printk("........aperture: [%llx, %llx]\n",
+			get_vm_aperture_base(pdev, i),
+			get_vm_aperture_end(pdev, i));
+		printk("........gm: [%llx, %llx], [%llx, %llx]\n",
+			get_vm_visible_gm_base(pdev, i),
+			get_vm_visible_gm_end(pdev, i),
+			get_vm_hidden_gm_base(pdev, i),
+			get_vm_hidden_gm_end(pdev, i));
+
+		dom0_start = get_vm_aperture_end(pdev, i) + 1;
+	}
+
+	ASSERT(dom0_start + dom0_aperture_sz(pdev) +
+		rsvd_aperture_sz(pdev) <=
+		aperture_base(pdev) + aperture_sz(pdev));
+
+	dom0_aperture_base(pdev) = dom0_start;
+	printk("....dom0 aperture: [%llx, %llx]\n",
+			dom0_aperture_base(pdev),
+			dom0_aperture_end(pdev));
+
+	rsvd_aperture_base(pdev) = dom0_aperture_end(pdev) + 1;
+	printk("....reserved aperture: [%llx, %llx]\n",
+			rsvd_aperture_base(pdev),
+			rsvd_aperture_end(pdev) );
+}
+
 /*
  * Initialize the vgt driver.
  *  return 0: success
@@ -1796,6 +1879,7 @@ int vgt_initialize(struct pci_dev *dev)
 	struct task_struct *p_thread;
 
 	spin_lock_init(&pdev->lock);
+
 	memset (mtable, 0, sizeof(mtable));
 
 	vgt_initialize_pgt_device(dev, pdev);
@@ -1804,6 +1888,8 @@ int vgt_initialize(struct pci_dev *dev)
 	if ( !initial_phys_states(pdev) )
 		goto err;
 
+	vgt_calculate_max_vms(pdev);
+
 	/* TODO: no need for this mapping since hypercall is used */
 	for (i=0; i < MAX_ENGINES; i++) {
 		pdev->ring_base_vaddr[i] =
@@ -1811,7 +1897,7 @@ int vgt_initialize(struct pci_dev *dev)
 		printk("ring_base_vaddr[%d]: %llx\n", i, (uint64_t)pdev->ring_base_vaddr[i]);
 	}
 	/* create domain 0 instance */
-	vgt_dom0 = create_vgt_instance(pdev, NULL);   /* TODO: */
+	vgt_dom0 = create_vgt_instance(pdev);   /* TODO: */
 	if (vgt_dom0 == NULL)
 		goto err;
 #ifndef SINGLE_VM_DEBUG
@@ -1864,8 +1950,8 @@ void vgt_destroy()
 			vgt_deactive(pdev, pos);
 	};
 
-	intel_gtt_clear_range(0, VGT_TOTAL_APERTURE_SZ - GTT_PAGE_SIZE);
-	for (i = 0; i < VGT_APERTURE_PAGES; i++)
+	intel_gtt_clear_range(0, aperture_sz(pdev) - GTT_PAGE_SIZE);
+	for (i = 0; i < aperture_pages(pdev); i++)
 		if (pages[i]) {
 			put_page(pages[i]);
 			__free_page(pages[i]);
