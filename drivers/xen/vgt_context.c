@@ -424,11 +424,13 @@ static void show_ringbuffer(struct vgt_device *vgt, int ring_id, int bytes)
 bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,int bytes)
 {
 	struct mmio_hash_table *mht;
+	struct pgt_device *pdev = vgt->pdev;
 	int id;
 	unsigned int flags=0, off2;
 	unsigned long wvalue;
 
-	offset -= vgt->pdev->gttmmio_base;
+	spin_lock(&pdev->lock);
+	offset -= pdev->gttmmio_base;
 	ASSERT (offset + bytes <= vgt->state.regNum *
 				sizeof(vgt->state.vReg[0]));
 	ASSERT (bytes <= 8);
@@ -457,7 +459,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 #endif
 		) {
 			/* need to update hardware */
-			wvalue = VGT_MMIO_READ_BYTES(vgt->pdev, off2, bytes);
+			wvalue = VGT_MMIO_READ_BYTES(pdev, off2, bytes);
 			/* FIXME: only address fix, not the whole reg val */
 			if (flags & I915_REG_FLAG_GRAPHICS_ADDRESS)
 				wvalue = h2g_gmadr(vgt, wvalue);
@@ -473,6 +475,8 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 
 		memcpy(p_data, &wvalue + (offset & (bytes - 1)), bytes);
 	}
+
+	spin_unlock(&pdev->lock);
 	return true;
 }
 
@@ -507,10 +511,12 @@ vgt_reg_t mmio_address_v2p(
 bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, int bytes)
 {
+	struct pgt_device *pdev = vgt->pdev;
 	struct mmio_hash_table *mht;
 	int id;
 
-	offset -= vgt->pdev->gttmmio_base;
+	spin_lock(&pdev->lock);
+	offset -= pdev->gttmmio_base;
 	ASSERT (offset + bytes <= vgt->state.regNum *
 				sizeof(vgt->state.vReg[0]));
 	/* at least FENCE registers are accessed in 8 bytes */
@@ -553,7 +559,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 		 * MMIOs are switched at ownership switch
 		 */
 		if (vgt_ops->boot_time)
-			VGT_MMIO_WRITE_BYTES(vgt->pdev, offset, sreg_64, bytes);
+			VGT_MMIO_WRITE_BYTES(pdev, offset, sreg_64, bytes);
 
 		/* TODO: figure out pass through registers */
 	}
@@ -564,6 +570,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 		show_mode_settings(vgt->pdev);
 	}
 
+	spin_unlock(&pdev->lock);
 	return true;
 }
 
@@ -678,6 +685,32 @@ static int period = 5*HZ;	/* default slow mode */
 /*
  * The thread to perform the VGT ownership switch.
  *
+ * We need to handle race conditions from different paths around
+ * vreg/sreg/hwreg. So far there're 4 paths at least:
+ *   a) the vgt thread to conduct context switch
+ *   b) the GP handler to emulate MMIO for dom0
+ *   c) the event handler to emulate MMIO for other VMs
+ *   d) the interrupt handler to do interrupt virtualization
+ *
+ * It's possible for all 4 paths to touch vreg/sreg/hwreg:
+ *   a) the vgt thread may need to update HW updated regs into
+ *      vreg/sreg of the prev owner
+ *   b) the GP handler and event handler always updates vreg/sreg,
+ *      and may touch hwreg if vgt is the current owner
+ *   c) the interrupt handler touches hwreg to clear physical events,
+ *      and then update vreg for interrupt virtualization
+ *
+ * To simplify the lock design, we make below assumptions:
+ *   a) the vgt thread doesn't trigger GP fault itself, i.e. always
+ *      issues hypercall to do hwreg access
+ *   b) the event handler simply notifies another kernel thread, leaving
+ *      to that thread for actual MMIO emulation
+ *   c) the interrupt handler is registered as the interrupt thread
+ *
+ * Given above assumption, no nest would happen among 4 paths, and a
+ * simple global spinlock now should be enough to protect the whole
+ * vreg/sreg/ hwreg. In the future we can futher tune this part on
+ * a necessary base.
  */
 int vgt_thread(void *priv)
 {
@@ -736,6 +769,7 @@ int vgt_thread(void *priv)
 			if ( next != current_render_owner(pdev) )
 #endif
 			{
+				spin_lock(&pdev->lock);
 				prev = current_render_owner(pdev);
 				switched++;
 
@@ -768,6 +802,7 @@ int vgt_thread(void *priv)
 				}
 
 				current_render_owner(pdev) = next;
+				spin_unlock(&pdev->lock);
 			}
 #ifndef SINGLE_VM_DEBUG
 			else
@@ -1733,6 +1768,7 @@ int vgt_initialize(struct pci_dev *dev)
 	struct pgt_device *pdev = &default_device;
 	struct task_struct *p_thread;
 
+	spin_lock_init(&pdev->lock);
 	memset (mtable, 0, sizeof(mtable));
 
 	vgt_initialize_pgt_device(dev, pdev);

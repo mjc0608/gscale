@@ -397,6 +397,7 @@ struct pgt_device {
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
 	struct list_head rendering_runq_head;	/* ??? */
 	struct list_head rendering_idleq_head;	/* ??? */
+	spinlock_t lock;
 	bool switch_inprogress;	/* an ownership switch in progress */
 	enum vgt_owner_type switch_owner;	/* the type of the owner in switch */
 
