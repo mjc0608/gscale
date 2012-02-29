@@ -416,6 +416,7 @@ static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
 #define vgt_switch_inprogress(d)        (d->switch_inprogress)
 #define vgt_switch_owner_type(d)        (d->switch_owner)
 
+#define APERTURE_2_GM(pdev, addr)	(addr - pdev->gmadr_base)
 static inline void __REG_WRITE(unsigned long preg, unsigned long val, int bytes)
 {
 	int ret;

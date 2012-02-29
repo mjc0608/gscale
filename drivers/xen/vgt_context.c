@@ -189,11 +189,13 @@ static void show_mode_settings(struct pgt_device *pdev)
  */
 static void show_context(struct vgt_device *vgt, uint64_t context, bool clobber)
 {
+	struct pgt_device *pdev = vgt->pdev;
 	uint64_t ptr;
 	u32 *vptr;
 	int i;
 
-	ptr = (uint64_t)vgt->pdev->gmadr_va + context - vgt->pdev->gmadr_base;
+	/* GM is not trapped. So safe to access it directly */
+	ptr = (uint64_t)pdev->gmadr_va + context;
 	printk("===================\n");
 	printk("Context (%llx, %llx): %s\n", context, ptr, clobber ? "clobbered" : "");
 
@@ -1247,6 +1249,7 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 
 bool vgt_save_context (struct vgt_device *vgt)
 {
+	struct pgt_device *pdev = vgt->pdev;
 	int 			i;
 	vgt_state_ring_t	*rb;
 	bool rc = true;
@@ -1270,7 +1273,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 	for (i=0; i < 1; i++) {
 #endif
 		rb = &vgt->rb[i];
-		ring_phys_2_shadow (vgt->pdev, i, &rb->sring);
+		ring_phys_2_shadow (pdev, i, &rb->sring);
 
 		sring_2_vring(vgt, &rb->sring, &rb->vring);
 
@@ -1292,8 +1295,12 @@ bool vgt_save_context (struct vgt_device *vgt)
 		case RING_BUFFER_RCS:
 			//rb->context_save_area = 0xC2000000;
 			/* Does VM want the ext state to be saved? */
-			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
-				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | (rb->context_save_area - 0xC0000000);
+			cmds_save_context[2] =
+				MI_RESTORE_INHIBIT |
+				MI_MM_SPACE_GTT |
+				MI_SAVE_EXT_STATE_EN |
+				MI_RESTORE_EXT_STATE_EN |
+				APERTURE_2_GM(pdev, rb->context_save_area);
 			break;
 		default:
 			printk("vGT: unsupported engine (%d) switch \n", i);
@@ -1314,6 +1321,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 
 bool vgt_restore_context (struct vgt_device *vgt)
 {
+	struct pgt_device *pdev = vgt->pdev;
 	int i;
 	vgt_state_ring_t	*rb;
 	bool rc;
@@ -1330,7 +1338,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 
 		if (rb->initialized ) {	/* has saved context */
 			//vring_2_sring(vgt, rb);
-			ring_pre_shadow_2_phys (vgt->pdev, i, &rb->sring);
+			ring_pre_shadow_2_phys (pdev, i, &rb->sring);
 
 			/* save 32 dwords of the ring */
 			save_ring_buffer (vgt, i);
@@ -1341,11 +1349,12 @@ bool vgt_restore_context (struct vgt_device *vgt)
 			 */
 			switch (i) {
 				case RING_BUFFER_RCS:
-					cmds_restore_context[2] = (rb->context_save_area - 0xC0000000) |
-//						MI_MM_SPACE_GTT | MI_FORCE_RESTORE | MI_RESTORE_EXT_STATE_EN;
-						MI_MM_SPACE_GTT | MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN |
+					cmds_restore_context[2] =
+						APERTURE_2_GM(pdev, rb->context_save_area) |
+						MI_MM_SPACE_GTT |
+						MI_SAVE_EXT_STATE_EN |
+						MI_RESTORE_EXT_STATE_EN |
 						MI_FORCE_RESTORE;
-//						MI_MM_SPACE_GTT | MI_RESTORE_EXT_STATE_EN;
 					break;
 				default:
 					printk("vGT: unsupported engine (%d) switch \n", i);
@@ -1363,7 +1372,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 				sizeof(cmds_save_context));
 
 			/* reset the head/tail */
-			ring_pre_shadow_2_phys (vgt->pdev, i, &rb->sring);
+			ring_pre_shadow_2_phys (pdev, i, &rb->sring);
 
 			if (!rc)
 				goto err;
@@ -1392,7 +1401,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 		rb = &vgt->rb[i];
 		/* vring->sring */
 		//vring_2_sring(vgt, rb);
-		ring_shadow_2_phys (vgt->pdev, i, &rb->sring);
+		ring_shadow_2_phys (pdev, i, &rb->sring);
 	}
 
 	/* Restore the PM */
