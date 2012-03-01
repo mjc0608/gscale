@@ -507,11 +507,14 @@ static unsigned int i965_gtt_total_entries(void)
 	return size/4;
 }
 
+extern void vgt_update_gtt_info(uint64_t gm_size);
 static unsigned int intel_gtt_total_entries(void)
 {
 	if (IS_G33 || INTEL_GTT_GEN == 4 || INTEL_GTT_GEN == 5)
 		return i965_gtt_total_entries();
 	else {
+		vgt_update_gtt_info((uint64_t)intel_private.gtt_mappable_entries*4096);
+
 		/* On previous hardware, the GTT size was just what was
 		 * required to map the aperture.
 		 */

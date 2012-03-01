@@ -76,6 +76,7 @@
 /*
  * NOTE list:
  * 	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
+ * 	  also the hooks in AGP driver
  * 	- GTT aperture and gfx memory size check (now hardcode from intel-gtt.c)
  * 	- need a check on "unsigned long" vs. "u64" usage
  * 	- need consider cache related issues, e.g. Linux/Windows may have different
@@ -1798,6 +1799,14 @@ err_out:
 	return ret;
 }
 
+/* FIXME: invoked by AGP GTT code */
+static uint64_t tot_gm_size;
+void vgt_update_gtt_info(uint64_t gm_size)
+{
+	printk("GTT: tell vGT about total gm_size: %llx\n", gm_size);
+	tot_gm_size = gm_size;
+}
+
 void vgt_calculate_max_vms(struct pgt_device *pdev)
 {
 	uint64_t avail_ap, avail_gm;
@@ -1805,6 +1814,11 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 	int i;
 	uint64_t dom0_start = aperture_base(pdev);
 
+	if (!tot_gm_size) {
+		printk("vGT: ZERO GM space !!!!\n");
+		tot_gm_size = aperture_sz(pdev);
+	}
+	gm_sz(pdev) = tot_gm_size;
 	printk("vGT: total aperture (%x), total GM space (%llx)\n",
 		aperture_sz(pdev), gm_sz(pdev));
 
