@@ -374,6 +374,7 @@ struct pgt_device {
 
 #define gm_sz(pdev)			(pdev->total_gm_sz)
 #define gm_base(pdev)			(0ULL)
+#define gm_pages(pdev)			(gm_sz(pdev) >> GTT_PAGE_SHIFT)
 #define hidden_gm_base(pdev)		(aperture_sz(pdev))
 
 #define aperture_2_gm(pdev, addr)	(addr - aperture_base(pdev))

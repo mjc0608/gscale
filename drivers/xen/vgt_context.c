@@ -197,7 +197,7 @@ static void show_context(struct vgt_device *vgt, uint64_t context, bool clobber)
 	int i;
 
 	/* GM is not trapped. So safe to access it directly */
-	ptr = (uint64_t)pdev->gmadr_va + context;
+	ptr = (uint64_t)aperture_vbase(pdev) + context;
 	printk("===================\n");
 	printk("Context (%llx, %llx): %s\n", context, ptr, clobber ? "clobbered" : "");
 
@@ -662,16 +662,42 @@ static struct vgt_device *next_vgt(
  */
 static void check_gtt(struct pgt_device *pdev)
 {
-	printk("GMADR: 0xC0000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0xC0000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xC0000000)));
-	printk("GMADR: 0xC2000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0xC2000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xC2000000)));
-	printk("GMADR: 0xC8000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0xC8000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xC8000000)));
-	printk("GMADR: 0xCC000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0xCC000000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xCC000000)));
-	printk("GMADR: 0xCFFFF000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0xCFFFF000), vgt_read_gtt(pdev, GTT_INDEX(pdev, 0xCFFFF000)));
+	printk("GMADR: 0x00000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x00000000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x00000000)));
+	printk("GMADR: 0x02000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x02000000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x02000000)));
+	printk("GMADR: 0x04000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x04000000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x04000000)));
+	printk("GMADR: 0x08000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x08000000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x08000000)));
+	printk("GMADR: 0x0C000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x0C000000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x0C000000)));
+	printk("GMADR: 0x0FFFF000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x0FFFF000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x0FFFF000)));
+	printk("GMADR: 0x10000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x10000000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x10000000)));
+	printk("GMADR: 0x10000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x10000000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x10000000)));
+	printk("GMADR: 0x20000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x20000000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x20000000)));
+	printk("GMADR: 0x40000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x20000000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x40000000)));
+	printk("GMADR: 0x60000000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x60000000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x60000000)));
+	printk("GMADR: 0x7ffff000, GTT INDEX: %x, GTT VALUE: %x\n",
+		GTT_INDEX(pdev, 0x7ffff000),
+		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x7ffff000)));
 }
 
 static int start_period = 10; /* in unit of second */
@@ -1318,7 +1344,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 				MI_MM_SPACE_GTT |
 				MI_SAVE_EXT_STATE_EN |
 				MI_RESTORE_EXT_STATE_EN |
-				aperture_2_gm(pdev, rb->context_save_area);
+				rb->context_save_area;
 			break;
 		default:
 			printk("vGT: unsupported engine (%d) switch \n", i);
@@ -1368,7 +1394,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 			switch (i) {
 				case RING_BUFFER_RCS:
 					cmds_restore_context[2] =
-						aperture_2_gm(pdev, rb->context_save_area) |
+						rb->context_save_area |
 						MI_MM_SPACE_GTT |
 						MI_SAVE_EXT_STATE_EN |
 						MI_RESTORE_EXT_STATE_EN |
@@ -1489,7 +1515,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 	vgt_state_ring_t	*rb;
 	char *cfg_space;
 
-	dprintk("create_vgt_instance\n");
+	printk("create_vgt_instance\n");
 	vgt = kmalloc (sizeof(*vgt), GFP_KERNEL);
 	if (vgt == NULL) {
 		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
@@ -1527,7 +1553,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 		vgt->aperture_base = dom0_aperture_base(pdev);
 		vgt->aperture_sz = dom0_aperture_sz(pdev);
 		vgt->gm_sz = dom0_aperture_sz(pdev);
-		vgt->hidden_gm_offset = 0;	/* dom0 has no hidden part */
+		vgt->hidden_gm_offset = gm_sz(pdev);	/* dom0 has no hidden part */
 	} else {
 		vgt->aperture_base = get_vm_aperture_base(pdev, vgt->vgt_id);
 		vgt->aperture_sz = vm_aperture_sz(pdev);
@@ -1552,7 +1578,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 		vgt_hidden_gm_base(vgt),
 		vgt_hidden_gm_end(vgt),
 		vgt_guest_gm_base(vgt),
-		vgt_gm_sz(vgt));
+		vgt_guest_gm_base(vgt) + vgt_gm_sz(vgt) - 1);
 
 	vgt->rsvd_aperture_base = rsvd_aperture_base(pdev) +
 		vgt->vgt_id * VGT_APERTURE_PER_INSTANCE_SZ;
@@ -1560,8 +1586,8 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 
 	for (i=0; i< MAX_ENGINES; i++) {
 		rb = &vgt->rb[i];
-		rb->context_save_area = vgt->rsvd_aperture_base +
-			i * SZ_CONTEXT_AREA_PER_RING;
+		rb->context_save_area = aperture_2_gm(pdev, vgt->rsvd_aperture_base +
+			i * SZ_CONTEXT_AREA_PER_RING);
 		rb->initialized = false;
 	}
 
@@ -1749,12 +1775,14 @@ static int setup_gtt(struct pgt_device *pdev)
 	dma_addr |= (dma_addr >> 28) & 0xff0;
 	dma_addr |= 0x1;	/* UC, valid */
 	printk("....dummy page (%llx, %llx)\n", page_to_phys(dummy_page), dma_addr);
-	for (i = 0; i < aperture_pages(pdev); i++)
+	/* clear all GM space, instead of only aperture */
+	for (i = 0; i < gm_pages(pdev); i++)
 		vgt_write_gtt(pdev, i, dma_addr);
 
 	check_gtt(pdev);
 	printk("vGT: allocate vGT aperture\n");
 	/* Fill GTT range owned by vGT driver */
+	index = GTT_INDEX(pdev, aperture_2_gm(pdev, rsvd_aperture_base(pdev)));
 	for (i = 0; i < VGT_APERTURE_PAGES; i++) {
 		/* need a DMA flag? */
 		page = alloc_page(GFP_KERNEL | __GFP_ZERO);
@@ -1778,18 +1806,18 @@ static int setup_gtt(struct pgt_device *pdev)
 
 		dma_addr |= (dma_addr >> 28) & 0xff0;
 		dma_addr |= 0x1;	/* UC, valid */
-		index = GTT_INDEX(pdev, rsvd_aperture_base(pdev)) + i;
-		vgt_write_gtt(pdev, index, dma_addr);
+		vgt_write_gtt(pdev, index + i, dma_addr);
 
-		if (!(i % (VGT_APERTURE_PAGES / 20)))
+		if (!(i % 1024))
 			printk("vGT: write GTT-%x phys: %llx, dma: %llx\n",
-				index, page_to_phys(page), dma_addr);
+				index + i, page_to_phys(page), dma_addr);
 	}
 
 	check_gtt(pdev);
 	/* any cache flush required here? */
 	return 0;
 err_out:
+	printk("vGT: error in GTT initialization\n");
 	for (i = 0; i < VGT_APERTURE_PAGES; i++)
 		if (pages[i]) {
 			put_page(pages[i]);
