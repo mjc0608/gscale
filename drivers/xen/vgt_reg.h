@@ -141,6 +141,14 @@ typedef struct {
 #define __sreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.sReg + off))
 #define __vreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.vReg + off))
 #define __sreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.sReg + off))
+#define get_vreg_bytes(vgt, off, bytes)	\
+	(bytes <= 4 ? __vreg(vgt, off) : __vreg64(vgt, off))
+#define get_sreg_bytes(vgt, off, bytes)	\
+	(bytes <= 4 ? __sreg(vgt, off) : __sreg64(vgt, off))
+#define set_vreg_bytes(vgt, off, bytes, value)	\
+	(bytes <= 4 ? (__vreg(vgt, off) = value) : (__vreg64(vgt, off) = value))
+#define set_sreg_bytes(vgt, off, bytes, value)	\
+	(bytes <= 4 ? (__sreg(vgt, off) = value) : (__sreg64(vgt, off) = value))
 #define vgt_vreg(vgt, off)	((vgt_reg_t *)vgt->state.vReg + off)
 #define vgt_sreg(vgt, off)	((vgt_reg_t *)vgt_>state.vReg + off)
 
@@ -319,6 +327,22 @@ enum vgt_owner_type {
 	VGT_OT_MAX,
 };
 
+/* owner type of the reg, up to 16 owner type */
+#define VGT_REG_OWNER		(0xF)
+/* reg access is reflected pReg, if vgt is the current owner */
+#define VGT_REG_PT		(1 << 4)
+/* reg contains address, requiring fix */
+#define VGT_REG_ADDR_FIX	(1 << 5)
+/* HW updated regs */
+#define VGT_REG_HW_UPDATE	(1 << 6)
+/* index into the address-fix table. Maximum 256 entries now */
+#define VGT_REG_INDEX_SHIFT	8
+#define VGT_REG_INDEX_MASK	(0xFF << 8)
+typedef u16 reg_info_t;
+
+#define VGT_ADDR_FIX_NUM	256
+typedef vgt_reg_t vgt_addr_mask_t;
+
 struct vgt_irq_host_state;
 /* per-device structure */
 struct pgt_device {
@@ -356,6 +380,7 @@ struct pgt_device {
 	bool switch_inprogress;	/* an ownership switch in progress */
 	enum vgt_owner_type switch_owner;	/* the type of the owner in switch */
 
+	reg_info_t *reg_info;	/* virtualization policy for a given reg */
 	struct vgt_irq_host_state *irq_hstate;
 };
 
@@ -365,6 +390,57 @@ struct pgt_device {
 #define current_display_owner(d)	((vgt_get_owner(d, VGT_OT_DISPLAY))->id)
 #define vgt_switch_inprogress(d)        (d->switch_inprogress)
 #define vgt_switch_owner_type(d)        (d->switch_owner)
+
+#define reg_pt(pdev, reg)		(pdev->reg_info[reg] & VGT_REG_PT)
+#define reg_addr_fix(pdev, reg)		(pdev->reg_info[reg] & VGT_REG_ADDR_FIX)
+#define reg_hw_update(pdev, reg)	(pdev->reg_info[reg] & VGT_REG_HW_UPDATE)
+#define reg_addr_index(pdev, reg)	\
+	((pdev->reg_info[reg] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
+static inline void reg_set_pt(struct pgt_device *pdev, vgt_reg_t reg)
+{
+	pdev->reg_info[reg] |= VGT_REG_PT;
+}
+
+static inline void reg_set_hw_update(struct pgt_device *pdev, vgt_reg_t reg)
+{
+	pdev->reg_info[reg] |= VGT_REG_HW_UPDATE;
+}
+
+static inline void reg_set_addr_fix(struct pgt_device *pdev,
+	vgt_reg_t reg, int index)
+{
+	//ASSERT(reg_pt(pdev, reg));
+	pdev->reg_info[reg] |= VGT_REG_ADDR_FIX |
+		(index << VGT_REG_INDEX_SHIFT);
+}
+
+extern vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];
+extern int ai_index;
+/* mask bits for addr fix */
+static inline void vgt_set_addr_mask(struct pgt_device *pdev,
+	vgt_reg_t reg, vgt_addr_mask_t mask)
+{
+	ASSERT(ai_index < VGT_ADDR_FIX_NUM - 1);
+	//ASSERT(!(pdev->reg_info[reg] & VGT_REG_OWNER));
+
+	vgt_addr_table[ai_index] = mask;
+	reg_set_addr_fix(pdev, reg, ai_index);
+	ai_index++;
+}
+
+static inline bool reg_is_owner(struct vgt_device *vgt, vgt_reg_t reg)
+{
+	enum vgt_owner_type type;
+
+	type = vgt->pdev->reg_info[reg] & VGT_REG_OWNER;
+	return vgt == vgt_get_owner(vgt->pdev, type);
+}
+
+static inline void reg_set_owner(struct pgt_device *pdev,
+	vgt_reg_t reg, enum vgt_owner_type type)
+{
+	pdev->reg_info[reg] |= type & VGT_REG_OWNER;
+}
 
 /* definitions for physical aperture/GM space */
 #define aperture_sz(pdev)		(pdev->bar_size[1])
@@ -687,8 +763,8 @@ static inline void vgt_deactive(struct pgt_device *pdev, struct list_head *rq)
 	list_add(rq, &pdev->rendering_idleq_head);	/* add to idle queue */
 }
 
-vgt_reg_t g2h_gmadr(struct vgt_device *vgt, vgt_reg_t g_gm_addr);
-vgt_reg_t h2g_gmadr(struct vgt_device *vgt, vgt_reg_t h_gm_addr);
+unsigned long g2h_gmadr(struct vgt_device *vgt, unsigned long reg, unsigned long g_value);
+unsigned long h2g_gmadr(struct vgt_device *vgt, unsigned long reg, unsigned long h_value);
 
 static inline bool is_ring_empty(struct pgt_device *pgt, int ring_id)
 {

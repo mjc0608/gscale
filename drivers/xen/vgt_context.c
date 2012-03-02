@@ -113,6 +113,11 @@ static struct pgt_device default_device = {
 	.devfn = 0x10,		/* BDF: 0:2:0 */
 };
 
+/* FIXME: move to pdev */
+/* contains mask info for regs requiring addr fix */
+vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];
+int ai_index;
+
 /*
  * Print debug registers for CP
  *
@@ -356,23 +361,51 @@ void free_vgt_id(int vgt_id)
 	clear_bit(vgt_id, &vgt_id_alloc_bitmap);
 }
 
-
 /*
  * Guest to host GMADR (include aperture) converting.
+ *
+ * FIXME: need to handle 8 bytes
  */
-vgt_reg_t g2h_gmadr(struct vgt_device *vgt, vgt_reg_t g_gm_addr)
+unsigned long g2h_gmadr(struct vgt_device *vgt, unsigned long reg, unsigned long g_value)
 {
-	/* TODO: for offseting */
-	return g_gm_addr;
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_reg_t h_value;
+	vgt_reg_t mask;
+
+#ifdef SINGLE_VM_DEBUG
+	return g_value;
+#endif
+
+	if (!reg_addr_fix(pdev, reg))
+		return g_value;
+
+	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
+	/* FIXME: there may have some complex mask pattern */
+	h_value = g2h_gm(vgt, g_value & mask);
+	return (h_value & mask) | (g_value & ~mask);
 }
 
 /*
  * Host to guest GMADR (include aperture) converting.
+ *
+ * FIXME: need to handle 8 bytes
  */
-vgt_reg_t h2g_gmadr(struct vgt_device *vgt, vgt_reg_t h_gm_addr)
+unsigned long h2g_gmadr(struct vgt_device *vgt, unsigned long reg, unsigned long h_value)
 {
-	/* TODO: for offseting */
-	return h_gm_addr;
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_reg_t g_value;
+	vgt_reg_t mask;
+
+#ifdef SINGLE_VM_DEBUG
+	return h_value;
+#endif
+	if (!reg_addr_fix(pdev, reg))
+		return h_value;
+
+	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
+	/* FIXME: there may have some complex mask pattern */
+	g_value = g2h_gm(vgt, h_value & mask);
+	return (g_value & mask) | (h_value & ~mask);
 }
 
 /*
@@ -427,8 +460,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 {
 	struct mmio_hash_table *mht;
 	struct pgt_device *pdev = vgt->pdev;
-	int id;
-	unsigned int flags=0, off2;
+	unsigned int off2;
 	unsigned long wvalue;
 
 #ifdef SINGLE_VM_DEBUG
@@ -450,32 +482,17 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 		mht->read(vgt, offset, p_data, bytes);
 	else {
 		off2 = offset & ~(bytes - 1);
-		id = gpuRegIndex(off2);
-		if ( id >= 0 )
-			flags = gpuregs[id].flags;
 
-		/*
-		 * PIPE registers are pass thru, and need to come
-		 * from real HW register.
-		 */
+		/* check whether to update vreg from HW */
 		if (vgt_ops->boot_time ||
-		    (flags & (I915_REG_FLAG_PIPE_A | I915_REG_FLAG_PIPE_B))
-#ifndef SINGLE_VM_DEBUG
-            && (vgt->vgt_id == curr_monitor_owner(pdev))
-#endif
-		) {
-			/* need to update hardware */
+		    (reg_pt(pdev, off2) && reg_is_owner(vgt, off2))) {
 			wvalue = VGT_MMIO_READ_BYTES(pdev, off2, bytes);
-			/* FIXME: only address fix, not the whole reg val */
-			if (flags & I915_REG_FLAG_GRAPHICS_ADDRESS)
-				wvalue = h2g_gmadr(vgt, wvalue);
-
-		} else {
-			if (bytes <= 4)
-				wvalue = (unsigned long)__vreg(vgt, off2);
-			else
-				wvalue = __vreg64(vgt, off2);
+			set_sreg_bytes(vgt, off2, bytes, wvalue);
+			set_vreg_bytes(vgt, off2, bytes, h2g_gmadr(vgt, off2, wvalue));
 		}
+
+		/* return vreg for the read */
+		wvalue = get_vreg_bytes(vgt, off2, bytes);
 
 		/* FIXME: also need to find other registers updaetd by HW, which should be passed through too */
 
@@ -484,30 +501,6 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 
 	spin_unlock(&pdev->lock);
 	return true;
-}
-
-vgt_reg_t mmio_address_v2p(
-	struct vgt_device *vgt, int id, vgt_reg_t vreg, int shadow_only)
-{
-	unsigned int flags = 0;
-	vgt_reg_t	sreg = vreg;
-
-	if ( id >= 0 )
-		flags = gpuregs[id].flags;
-
-	/*
-	 * We need to fix address for GRAPHICS register here.
-	 * But we want to ignore the ring buffer register.
-	 * The pipe registers must be passthru
-	 */
-	if (flags & I915_REG_FLAG_GRAPHICS_ADDRESS)
-		sreg = g2h_gmadr(vgt, vreg);
-
-	if (!shadow_only &&
-		(flags & (I915_REG_FLAG_PIPE_A | I915_REG_FLAG_PIPE_B)))
-		/* need to update hardware */
-		VGT_MMIO_WRITE(vgt->pdev, gpuregs[id].offset, sreg);
-	return sreg;
 }
 
 /*
@@ -519,7 +512,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 {
 	struct pgt_device *pdev = vgt->pdev;
 	struct mmio_hash_table *mht;
-	int id;
 
 #ifdef SINGLE_VM_DEBUG
 	ASSERT(!spin_is_locked(&pdev->lock));
@@ -539,38 +531,25 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
 	else {
-		vgt_reg_t	sreg;
-		unsigned long	sreg_64;
-
 		memcpy((char *)vgt->state.vReg + offset,
 				p_data, bytes);
-		offset &= ~(bytes - 1);
-		id = gpuRegIndex(offset);
 
-		if (bytes <= 4) {
-			sreg = mmio_address_v2p (vgt, id, __vreg(vgt, offset), 0);
-			if (vgt_ops->boot_time)
-				__sreg(vgt, offset) = sreg;
-			sreg_64 = (unsigned long)sreg;
-		} else {
-			/* FIXME: need a 64bit version of mmio_address_v2p */
-			//sreg_64 = (unsigned long)mmio_address_v2p (vgt, id, __vreg(vgt, offset), 0);
-			sreg_64 = (unsigned long)__vreg64(vgt, offset);
-			if (vgt_ops->boot_time)
-				__sreg64(vgt, offset) = sreg_64;
-		}
+		/* check whether need passthrough */
+		offset &= ~(bytes - 1);
 
 		/*
-		 * Before the 2nd VM is started, we think the system is in
-		 * boot time, where we'd like all dom0's MMIO writes flushed
-		 * to the hardware since vGT driver itself doesn't do the
-		 * initialization work. After the boot phase, passed through
-		 * MMIOs are switched at ownership switch
+		 * update sreg if pass through;
+		 * update preg if boot_time or vgt is reg's cur owner
 		 */
-		if (vgt_ops->boot_time)
-			VGT_MMIO_WRITE_BYTES(pdev, offset, sreg_64, bytes);
+		if (vgt_ops->boot_time || reg_pt(pdev, offset)) {
+			set_sreg_bytes(vgt, offset, bytes,
+				g2h_gmadr(vgt, offset, get_vreg_bytes(vgt, offset, bytes)));
 
-		/* TODO: figure out pass through registers */
+			if (vgt_ops->boot_time || reg_is_owner(vgt, offset))
+				VGT_MMIO_WRITE_BYTES(pdev, offset,
+					get_sreg_bytes(vgt, offset, bytes), bytes);
+
+		}
 	}
 
 	if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE) {
@@ -966,8 +945,8 @@ static void vring_2_sring(struct vgt_device *vgt, vgt_state_ring_t *rb)
 static void sring_2_vring(struct vgt_device *vgt,
 	vgt_ringbuffer_t *sr, vgt_ringbuffer_t *vr)
 {
-	/* Fix address */
-	vr->head = h2g_gmadr(vgt, sr->head);
+	/* FIXME: need a reg offset instead of 0 */
+	vr->head = h2g_gmadr(vgt, 0, sr->head);
 }
 
 /*
@@ -1235,32 +1214,131 @@ bool default_submit_context_command (struct vgt_device *vgt,
 	return false;
 }
 
+/* TODO: borrow from WR. need fix later */
+vgt_reg_t vgt_render_regs[] = {
+	I915_REG_FENCE_0_OFFSET,
+	I915_REG_FENCE_1_OFFSET,
+	I915_REG_FENCE_2_OFFSET,
+	I915_REG_FENCE_3_OFFSET,
+	I915_REG_FENCE_4_OFFSET,
+	I915_REG_FENCE_5_OFFSET,
+	I915_REG_FENCE_6_OFFSET,
+	I915_REG_FENCE_7_OFFSET,
+	I915_REG_FENCE_8_OFFSET,
+	I915_REG_FENCE_9_OFFSET,
+	I915_REG_FENCE_10_OFFSET,
+	I915_REG_FENCE_11_OFFSET,
+	I915_REG_FENCE_12_OFFSET,
+	I915_REG_FENCE_13_OFFSET,
+	I915_REG_FENCE_14_OFFSET,
+	I915_REG_FENCE_15_OFFSET,
+	I915_REG_FENCE_16_OFFSET,
+	I915_REG_FENCE_17_OFFSET,
+	I915_REG_FENCE_18_OFFSET,
+	I915_REG_FENCE_19_OFFSET,
+	I915_REG_FENCE_20_OFFSET,
+	I915_REG_FENCE_21_OFFSET,
+	I915_REG_FENCE_22_OFFSET,
+	I915_REG_FENCE_23_OFFSET,
+	I915_REG_FENCE_24_OFFSET,
+	I915_REG_FENCE_25_OFFSET,
+	I915_REG_FENCE_26_OFFSET,
+	I915_REG_FENCE_27_OFFSET,
+	I915_REG_FENCE_28_OFFSET,
+	I915_REG_FENCE_29_OFFSET,
+	I915_REG_FENCE_30_OFFSET,
+	I915_REG_FENCE_31_OFFSET,
+
+	I915_REG_HWSTAM_OFFSET,
+	I915_REG_HSW_PGA_OFFSET,
+	I915_REG_INSTPM_OFFSET,
+	I915_REG_MEM_MODE_OFFSET,
+	I915_REG_MI_ARB_STATE_OFFSET,
+	I915_REG_EXCC_OFFSET,
+
+	I915_REG_IER_OFFSET,
+	I915_REG_FW_BLC_OFFSET,
+	I915_REG_UHPTR_OFFSET,
+	I915_REG_HWS_PGA_OFFSET,
+	I915_REG_VCS_HWS_PGA_OFFSET,
+	I915_REG_BCS_UHPTR_OFFSET,
+	I915_REG_BCS_HWS_PGA_OFFSET,
+	I915_REG_MMIO_TCNT_OFFSET,
+
+	I915_REG_VGA0_OFFSET,
+	I915_REG_VGA1_OFFSET,
+	I915_REG_VGA_PD_OFFSET,
+	I915_REG_DPLL_A_OFFSET,
+	I915_REG_FPA0_OFFSET,
+	I915_REG_FPA1_OFFSET,
+	I915_REG_D_STATE_OFFSET,
+};
+
+static void vgt_setup_render_regs(struct pgt_device *pdev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_NUM(vgt_render_regs); i++)
+		reg_set_owner(pdev, vgt_render_regs[i], VGT_OT_GT);
+}
+
+/* TODO: lots of to fill */
+vgt_reg_t vgt_display_regs[] = {
+	I915_REG_CURABASE_OFFSET,
+	I915_REG_CURBBASE_OFFSET,
+};
+
+static void vgt_setup_display_regs(struct pgt_device *pdev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_NUM(vgt_display_regs); i++)
+		reg_set_owner(pdev, vgt_display_regs[i], VGT_OT_DISPLAY);
+}
+
+/* TODO: lots of to fill */
+vgt_reg_t vgt_pm_regs[] = {
+	I915_REG_CURABASE_OFFSET, /* placeholder */
+};
+
+static void vgt_setup_pm_regs(struct pgt_device *pdev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_NUM(vgt_pm_regs); i++)
+		reg_set_owner(pdev, vgt_pm_regs[i], VGT_OT_PM);
+}
+
+/* TODO: lots of to fill */
+vgt_reg_t vgt_mgmt_regs[] = {
+	I915_REG_CURABASE_OFFSET, /* placeholder */
+};
+
+static void vgt_setup_mgmt_regs(struct pgt_device *pdev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_NUM(vgt_mgmt_regs); i++)
+		reg_set_owner(pdev, vgt_mgmt_regs[i], VGT_OT_PM);
+}
+
+
 void vgt_rendering_save_mmio(struct vgt_device *vgt)
 {
 	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
-	int num = ARRAY_NUM(rendering_ctx_regs);
+	int num = ARRAY_NUM(vgt_render_regs);
 	int i;
 
 	sreg = vgt->state.sReg;
 	vreg = vgt->state.vReg;
 
 	for (i=0; i<num; i++) {
-		ASSERT (rendering_ctx_regs[i] < vgt->state.regNum * REG_SIZE);
-		/* TODO: only update __sreg for registers updated by HW */
-		__sreg(vgt, rendering_ctx_regs[i]) =
-			VGT_MMIO_READ(vgt->pdev, rendering_ctx_regs[i]);
-
-		dprintk("....save mmio (%x) with (%x)\n", rendering_ctx_regs[i],
-			__sreg(vgt, rendering_ctx_regs[i]));
-		/*
-		 * TODO: Fix address.
-		 */
-		/*
-		 * If a register may be updated by HW as well,
-		 * how to coordinate w/ pure SW emulation?
-		 */
-		__vreg(vgt, rendering_ctx_regs[i]) =
-			__sreg(vgt, rendering_ctx_regs[i]);
+		int reg = vgt_render_regs[i];
+		if (reg_hw_update(vgt->pdev, reg)) {
+			__sreg(vgt, reg) = VGT_MMIO_READ(vgt->pdev, reg);
+			__vreg(vgt, reg) = h2g_gmadr(vgt, reg, __sreg(vgt, reg));
+			dprintk("....save mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
+		}
 	}
 }
 
@@ -1271,18 +1349,21 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 {
 	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
-	int num = ARRAY_NUM(rendering_ctx_regs);
+	int num = ARRAY_NUM(vgt_render_regs);
 	int i;
 
 	sreg = vgt->state.sReg;
 	vreg = vgt->state.vReg;
 
 	for (i=0; i<num; i++) {
-		dprintk("....restore mmio (%x) with (%x)\n", rendering_ctx_regs[i],
-			__sreg(vgt, rendering_ctx_regs[i]));
-		/* Address is fixed previously */
-		VGT_MMIO_WRITE(vgt->pdev, rendering_ctx_regs[i],
-			__sreg(vgt, rendering_ctx_regs[i]));
+		int reg = vgt_render_regs[i];
+		dprintk("....restore mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
+		/*
+		 * FIXME: there's regs only with some bits updated by HW. Need
+		 * OR vm's update with hw's bits?
+		 */
+		if (!reg_hw_update(vgt->pdev, reg))
+			VGT_MMIO_WRITE(vgt->pdev, reg, __sreg(vgt, reg));
 	}
 }
 
@@ -1466,15 +1547,13 @@ static void state_reg_v2s(struct vgt_device *vgt)
 	sreg = vgt->state.sReg;
 	memcpy (sreg, vreg, VGT_MMIO_SPACE_SZ);
 
-	/* Address fix */
-	for (i = 0; i < gpuRegEntries; i++) {
-		off = gpuregs[i].offset;
-		/* reuse vgt_emulate_write logic to fix address. */
-		__sreg(vgt, off) =
-			mmio_address_v2p (vgt, i, __vreg(vgt, off), 1);
-		dprintk("vGT: address fix (%d) for reg (%x): (%x->%x)\n",
-			i, off, __vreg(vgt, off), __sreg(vgt, off));
-
+	/* FIXME: add off in addr table to avoid checking all regs */
+	for (i = 0; i < VGT_MMIO_REG_NUM; i++) {
+		if (reg_addr_fix(vgt->pdev, i)) {
+			__sreg(vgt, off) = g2h_gmadr(vgt, i, __vreg(vgt, off));
+			dprintk("vGT: address fix (%d) for reg (%x): (%x->%x)\n",
+				i, off, __vreg(vgt, off), __sreg(vgt, off));
+		}
 	}
 }
 
@@ -1603,9 +1682,9 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 		vgt_guest_aperture_base(vgt) | 0x4;	/* 64-bit MMIO bar */
 
 	memcpy (vgt->state.vReg, pdev->initial_mmio_state, VGT_MMIO_SPACE_SZ);
+	vgt->pdev = pdev;
 	state_reg_v2s (vgt);
 
-	vgt->pdev = pdev;
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
 	/* TODO: per register special handling. */
 	return vgt;
@@ -1740,13 +1819,114 @@ dprintk("VGT: Initial_phys_states\n");
 	return true;
 }
 
-static void vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
+/* model specific reg policy setup here */
+static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
+{
+	vgt_set_addr_mask(pdev, _REG_RCS_START, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_BCS_START, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_VCS_START, 0xFFFFF000);
+
+	/*
+	 * FIXME: borrow from WR for items with I915_REG_FLAG_GRAPHICS_ADDRESS
+	 * need to check one-by-one carefully, rename the registers, add mask
+	 * bits, and also to add more in the future
+	 */
+	vgt_set_addr_mask(pdev, I915_REG_FBC_RT_ADDR_REGISTER_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_UHPTR_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_HWS_PGA_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_VCS_HWS_PGA_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_PP_PFD_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_BCS_UHPTR_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_BCS_HWS_PGA_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_CURABASE_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_CURBBASE_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_DSPASURF_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_DSPASURFLIVE_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_DSPBSURF_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_DSPBSURFLIVE_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_DVSASURFLIVE_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_DVSBSURF_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_DVBSURFLIVE_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_0_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_1_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_2_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_3_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_4_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_5_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_6_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_7_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_8_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_9_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_10_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_11_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_12_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_13_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_14_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_15_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_16_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_17_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_28_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_19_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_20_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_21_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_22_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_23_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_24_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_25_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_26_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_27_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_28_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_29_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_30_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, I915_REG_FENCE_31_OFFSET, 0xFFFFF000);
+}
+
+/*
+ * TODO:
+ * Ideally the majority of MMIO should be updated to pReg. Should
+ * we instead introduce vgt_setup_emulate_regs, by taking pt as
+ * the default?
+ */
+static void vgt_setup_pt_regs(struct pgt_device *pdev)
+{
+	reg_set_pt(pdev, I915_REG_FENCE_0_OFFSET);
+}
+
+static void vgt_setup_hw_update_regs(struct pgt_device *pdev)
+{
+	//reg_set_hw_update(pdev, TIMESTAMP);
+}
+
+static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
 {
 	pdev->pdev = dev;
 	pdev->pbus = dev->bus;
 
 	INIT_LIST_HEAD(&pdev->rendering_runq_head);
 	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
+
+	pdev->reg_info = kzalloc (VGT_MMIO_REG_NUM * sizeof(reg_info_t),
+				GFP_KERNEL);
+	if (!pdev->reg_info) {
+		printk("vGT: failed to allocate reg_info\n");
+		return false;
+	}
+
+	/* first setup the reg ownership mapping */
+	vgt_setup_render_regs(pdev);
+	vgt_setup_display_regs(pdev);
+	vgt_setup_pm_regs(pdev);
+	vgt_setup_mgmt_regs(pdev);
+
+	/* then enable pass-through flag */
+	vgt_setup_pt_regs(pdev);
+
+	/* then mark regs updated by hw */
+	vgt_setup_hw_update_regs(pdev);
+
+	/* then add addr fix info for pass-through regs */
+	vgt_setup_addr_fix_info(pdev);
+	return true;
 }
 
 /* FIXME: allocate instead of static */
@@ -1924,7 +2104,8 @@ int vgt_initialize(struct pci_dev *dev)
 
 	memset (mtable, 0, sizeof(mtable));
 
-	vgt_initialize_pgt_device(dev, pdev);
+	if ( !vgt_initialize_pgt_device(dev, pdev) )
+		goto err;
 	if ( !vgt_initialize_mmio_hooks() )
 		goto err;
 	if ( !initial_phys_states(pdev) )
@@ -2012,6 +2193,7 @@ void vgt_destroy()
 		}
 	}
 	free_mtable();
+	kfree(pdev->reg_info);
 }
 
 
