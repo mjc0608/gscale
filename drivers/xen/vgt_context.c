@@ -527,6 +527,12 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	if (bytes > 4)
 		dprintk("vGT: capture 8 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
 
+	if (reg_rdonly(pdev, offset & (~(bytes - 1)))) {
+		printk("vGT: captured write to read-only reg (%x)\n", offset);
+		spin_unlock(&pdev->lock);
+		return true;
+	}
+
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
@@ -536,6 +542,9 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 
 		/* check whether need passthrough */
 		offset &= ~(bytes - 1);
+
+		/* FIXME: kill the instance instead of crash the whole kernel */
+		ASSERT(!reg_rdonly(pdev, offset));
 
 		/*
 		 * update sreg if pass through;
@@ -1819,7 +1828,11 @@ dprintk("VGT: Initial_phys_states\n");
 	return true;
 }
 
-/* model specific reg policy setup here */
+/*
+ * model specific reg policy setup here
+ *
+ * based on search of the keyword "GraphicsAddress" in PRM
+ */
 static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 {
 	vgt_set_addr_mask(pdev, _REG_RCS_START, 0xFFFFF000);
@@ -1827,58 +1840,88 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 	vgt_set_addr_mask(pdev, _REG_VCS_START, 0xFFFFF000);
 
 	/*
-	 * FIXME: borrow from WR for items with I915_REG_FLAG_GRAPHICS_ADDRESS
-	 * need to check one-by-one carefully, rename the registers, add mask
-	 * bits, and also to add more in the future
+	 * FIXME: a separate handler maybe required, since a blind address
+	 * translation when valid bit is cleared is problematic
 	 */
-	vgt_set_addr_mask(pdev, I915_REG_FBC_RT_ADDR_REGISTER_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_UHPTR_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_HWS_PGA_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_VCS_HWS_PGA_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_PP_PFD_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_BCS_UHPTR_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_BCS_HWS_PGA_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_CURABASE_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_CURBBASE_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_DSPASURF_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_DSPASURFLIVE_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_DSPBSURF_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_DSPBSURFLIVE_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_DVSASURFLIVE_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_DVSBSURF_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_DVBSURFLIVE_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_0_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_1_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_2_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_3_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_4_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_5_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_6_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_7_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_8_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_9_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_10_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_11_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_12_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_13_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_14_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_15_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_16_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_17_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_28_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_19_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_20_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_21_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_22_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_23_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_24_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_25_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_26_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_27_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_28_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_29_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_30_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, I915_REG_FENCE_31_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_RCS_BB_ADDR, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_VCS_BB_ADDR, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_BCS_BB_ADDR, 0xFFFFF000);
+
+	vgt_set_addr_mask(pdev, _REG_RCS_HWS_PGA, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_VCS_HWS_PGA, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_BCS_HWS_PGA, 0xFFFFF000);
+
+	vgt_set_addr_mask(pdev, _REG_RCS_UHPTR, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_VCS_UHPTR, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_BCS_UHPTR, 0xFFFFF000);
+
+
+	vgt_set_addr_mask(pdev, _REG_RCS_BB_PREEMPT_ADDR, 0xFFFFF000);
+	//vgt_set_addr_mask(pdev, _REG_RCS_BB_ADDR_DIFF, 0xFFFFF000);
+	//vgt_set_addr_mask(pdev, _REG_RCS_BB_OFFSET, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_CCID, 0xFFFFF000);
+
+	vgt_set_addr_mask(pdev, _REG_RCS_FBC_RT_BASE_ADDR, 0xFFFFF000);
+
+	vgt_set_addr_mask(pdev, _REG_RCS_PP_DIR_BASE_READ, 0xFFFF0000);
+	vgt_set_addr_mask(pdev, _REG_RCS_PP_DIR_BASE_WRITE, 0xFFFF0000);
+	vgt_set_addr_mask(pdev, _REG_VCS_PP_DIR_BASE, 0xFFFF0000);
+	vgt_set_addr_mask(pdev, _REG_BCS_PP_DIR_BASE, 0xFFFF0000);
+
+	/* FIXME: similarly, a valid bit exists */
+	vgt_set_addr_mask(pdev, _REG_FENCE_0_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_0_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_1_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_1_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_2_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_2_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_3_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_3_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_4_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_4_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_5_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_5_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_6_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_6_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_7_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_7_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_8_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_8_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_9_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_9_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_10_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_10_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_11_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_11_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_12_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_12_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_13_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_13_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_14_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_14_HIGH, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_15_LOW, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_FENCE_15_HIGH, 0xFFFFF000);
+
+	vgt_set_addr_mask(pdev, _REG_CURABASE, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_CURBBASE, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_DSPASURF, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_DSPASURFLIVE, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_DSPBSURF, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_DSPBSURFLIVE, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_DVSASURF, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_DVSASURFLIVE, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_DVSBSURF, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_DVSBSURFLIVE, 0xFFFFF000);
+
+	/* ===== things to be further studied ====== */
+	/* PP_PFD: 32 PPGTT page fault data registers */
+	/* VCS context workaround ponter */
+	/* TLB registers */
+	/* performance statistics registers like OABUFFER */
+	/* debug registers */
+	vgt_set_addr_mask(pdev, _REG_RCS_ACTHD, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_VCS_ACTHD, 0xFFFFF000);
+	vgt_set_addr_mask(pdev, _REG_BCS_ACTHD, 0xFFFFF000);
 }
 
 /*
@@ -1890,6 +1933,22 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 static void vgt_setup_pt_regs(struct pgt_device *pdev)
 {
 	reg_set_pt(pdev, I915_REG_FENCE_0_OFFSET);
+}
+
+/*
+ * Is this really required? If HW just says unexpected behavior, should
+ * we just allow it?
+ */
+static void vgt_setup_rdonly(struct pgt_device *pdev)
+{
+	reg_set_rdonly(pdev, _REG_RCS_BB_ADDR);
+	reg_set_rdonly(pdev, _REG_VCS_BB_ADDR);
+	reg_set_rdonly(pdev, _REG_BCS_BB_ADDR);
+
+	reg_set_rdonly(pdev, _REG_RCS_BB_PREEMPT_ADDR);
+	reg_set_rdonly(pdev, _REG_RCS_BB_ADDR_DIFF);
+
+	reg_set_rdonly(pdev, _REG_RCS_PP_DIR_BASE_READ);
 }
 
 static void vgt_setup_hw_update_regs(struct pgt_device *pdev)
@@ -1920,6 +1979,9 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 
 	/* then enable pass-through flag */
 	vgt_setup_pt_regs(pdev);
+
+	/* then setup read-only reg */
+	vgt_setup_rdonly(pdev);
 
 	/* then mark regs updated by hw */
 	vgt_setup_hw_update_regs(pdev);

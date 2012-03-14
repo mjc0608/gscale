@@ -274,6 +274,80 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_ARB_MODE	0x4030
 #define		_REGBIT_ADDRESS_SWIZZLING		(3 << 4)
 
+#define _REG_RCS_BB_ADDR	0x2140
+#define _REG_VCS_BB_ADDR	0x12140
+#define _REG_BCS_BB_ADDR	0x22140
+
+#define _REG_RCS_HWS_PGA	0x4080
+#define _REG_VCS_HWS_PGA	0x4180
+#define _REG_BCS_HWS_PGA	0x24080
+#define _REG_IVB_BCS_HWS_PGA	0x4280
+
+#define _REG_RCS_UHPTR		0x2134
+#define _REG_VCS_UHPTR		0x12134
+#define _REG_BCS_UHPTR		0x22134
+
+#define _REG_RCS_ACTHD		0x2074
+#define _REG_VCS_ACTHD		0x12074
+#define _REG_BCS_ACTHD		0x22074
+
+#define _REG_RCS_BB_PREEMPT_ADDR	0x2148
+#define _REG_RCS_BB_ADDR_DIFF		0x2154
+#define _REG_RCS_BB_OFFSET		0x2158
+#define _REG_RCS_FBC_RT_BASE_ADDR	0x2128
+#define _REG_IVB_RCS_FBC_RT_BASE_ADDR	0X7020
+
+#define _REG_IVB_RCS_PP_DIR_BASE	0x2228
+#define _REG_RCS_PP_DIR_BASE_READ	0x2518
+#define _REG_RCS_PP_DIR_BASE_WRITE	0x2228
+#define _REG_VCS_PP_DIR_BASE		0x12228
+#define _REG_BCS_PP_DIR_BASE		0x22228
+
+#define _REG_FENCE_0_LOW	0x100000
+#define _REG_FENCE_0_HIGH	0x100004
+#define _REG_FENCE_1_LOW	0x100008
+#define _REG_FENCE_1_HIGH	0x10000C
+#define _REG_FENCE_2_LOW	0x100010
+#define _REG_FENCE_2_HIGH	0x100014
+#define _REG_FENCE_3_LOW	0x100018
+#define _REG_FENCE_3_HIGH	0x10001C
+#define _REG_FENCE_4_LOW	0x100020
+#define _REG_FENCE_4_HIGH	0x100024
+#define _REG_FENCE_5_LOW	0x100028
+#define _REG_FENCE_5_HIGH	0x10002C
+#define _REG_FENCE_6_LOW	0x100030
+#define _REG_FENCE_6_HIGH	0x100034
+#define _REG_FENCE_7_LOW	0x100038
+#define _REG_FENCE_7_HIGH	0x10003C
+#define _REG_FENCE_8_LOW	0x100040
+#define _REG_FENCE_8_HIGH	0x100044
+#define _REG_FENCE_9_LOW	0x100048
+#define _REG_FENCE_9_HIGH	0x10004C
+#define _REG_FENCE_10_LOW	0x100050
+#define _REG_FENCE_10_HIGH	0x100054
+#define _REG_FENCE_11_LOW	0x100058
+#define _REG_FENCE_11_HIGH	0x10005C
+#define _REG_FENCE_12_LOW	0x100060
+#define _REG_FENCE_12_HIGH	0x100064
+#define _REG_FENCE_13_LOW	0x100068
+#define _REG_FENCE_13_HIGH	0x10006C
+#define _REG_FENCE_14_LOW	0x100070
+#define _REG_FENCE_14_HIGH	0x100074
+#define _REG_FENCE_15_LOW	0x100078
+#define _REG_FENCE_15_HIGH	0x10007C
+
+#define _REG_CURABASE		0x70084
+#define _REG_CURBBASE		0x700C4
+#define _REG_DSPASURF		0x7019C
+#define _REG_DSPASURFLIVE	0x701AC
+#define _REG_DSPBSURF		0x7119C
+#define _REG_DSPBSURFLIVE	0x711AC
+#define _REG_DVSASURF		0x7219C
+#define _REG_DVSASURFLIVE	0x721AC
+#define _REG_DVSBSURF		0x7319C
+#define _REG_DVSBSURFLIVE	0x731AC
+
+
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
 extern int vgt_initialize(struct pci_dev *dev);
@@ -335,6 +409,8 @@ enum vgt_owner_type {
 #define VGT_REG_ADDR_FIX	(1 << 5)
 /* HW updated regs */
 #define VGT_REG_HW_UPDATE	(1 << 6)
+/* Read-only */
+#define VGT_REG_RDONLY		(1 << 7)
 /* index into the address-fix table. Maximum 256 entries now */
 #define VGT_REG_INDEX_SHIFT	8
 #define VGT_REG_INDEX_MASK	(0xFF << 8)
@@ -394,6 +470,7 @@ struct pgt_device {
 #define reg_pt(pdev, reg)		(pdev->reg_info[reg] & VGT_REG_PT)
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[reg] & VGT_REG_ADDR_FIX)
 #define reg_hw_update(pdev, reg)	(pdev->reg_info[reg] & VGT_REG_HW_UPDATE)
+#define reg_rdonly(pdev, reg)		(pdev->reg_info[reg] & VGT_REG_RDONLY)
 #define reg_addr_index(pdev, reg)	\
 	((pdev->reg_info[reg] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
 static inline void reg_set_pt(struct pgt_device *pdev, vgt_reg_t reg)
@@ -412,6 +489,11 @@ static inline void reg_set_addr_fix(struct pgt_device *pdev,
 	//ASSERT(reg_pt(pdev, reg));
 	pdev->reg_info[reg] |= VGT_REG_ADDR_FIX |
 		(index << VGT_REG_INDEX_SHIFT);
+}
+
+static inline void reg_set_rdonly(struct pgt_device *pdev, vgt_reg_t reg)
+{
+	pdev->reg_info[reg] |= VGT_REG_RDONLY;
 }
 
 extern vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];
