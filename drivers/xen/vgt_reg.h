@@ -120,7 +120,8 @@ typedef struct {
 extern unsigned long vgt_id_alloc_bitmap;
 #define VGT_ID_ALLOC_BITMAP		((1UL << VGT_MAX_VMS) - 1)
 
-#define REG_SIZE    sizeof(vgt_reg_t)        /* size of gReg/sReg[0] */
+#define REG_SIZE    		sizeof(vgt_reg_t)        /* size of gReg/sReg[0] */
+#define REG_INDEX(reg)		((reg) / REG_SIZE)
 #define VGT_MMIO_SPACE_SZ	(2*SIZE_1MB)
 #define VGT_MMIO_REG_NUM	(VGT_MMIO_SPACE_SZ/REG_SIZE)	/* 2MB space in totoal */
 #define VGT_CFG_SPACE_SZ	256
@@ -413,7 +414,7 @@ enum vgt_owner_type {
 #define VGT_REG_RDONLY		(1 << 7)
 /* index into the address-fix table. Maximum 256 entries now */
 #define VGT_REG_INDEX_SHIFT	8
-#define VGT_REG_INDEX_MASK	(0xFF << 8)
+#define VGT_REG_INDEX_MASK	(0xFF << VGT_REG_INDEX_SHIFT)
 typedef u16 reg_info_t;
 
 #define VGT_ADDR_FIX_NUM	256
@@ -467,33 +468,33 @@ struct pgt_device {
 #define vgt_switch_inprogress(d)        (d->switch_inprogress)
 #define vgt_switch_owner_type(d)        (d->switch_owner)
 
-#define reg_pt(pdev, reg)		(pdev->reg_info[reg] & VGT_REG_PT)
-#define reg_addr_fix(pdev, reg)		(pdev->reg_info[reg] & VGT_REG_ADDR_FIX)
-#define reg_hw_update(pdev, reg)	(pdev->reg_info[reg] & VGT_REG_HW_UPDATE)
-#define reg_rdonly(pdev, reg)		(pdev->reg_info[reg] & VGT_REG_RDONLY)
+#define reg_pt(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_PT)
+#define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
+#define reg_hw_update(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_UPDATE)
+#define reg_rdonly(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_RDONLY)
 #define reg_addr_index(pdev, reg)	\
-	((pdev->reg_info[reg] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
+	((pdev->reg_info[REG_INDEX(reg)] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
 static inline void reg_set_pt(struct pgt_device *pdev, vgt_reg_t reg)
 {
-	pdev->reg_info[reg] |= VGT_REG_PT;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_PT;
 }
 
 static inline void reg_set_hw_update(struct pgt_device *pdev, vgt_reg_t reg)
 {
-	pdev->reg_info[reg] |= VGT_REG_HW_UPDATE;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_HW_UPDATE;
 }
 
 static inline void reg_set_addr_fix(struct pgt_device *pdev,
 	vgt_reg_t reg, int index)
 {
 	//ASSERT(reg_pt(pdev, reg));
-	pdev->reg_info[reg] |= VGT_REG_ADDR_FIX |
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ADDR_FIX |
 		(index << VGT_REG_INDEX_SHIFT);
 }
 
 static inline void reg_set_rdonly(struct pgt_device *pdev, vgt_reg_t reg)
 {
-	pdev->reg_info[reg] |= VGT_REG_RDONLY;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_RDONLY;
 }
 
 extern vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];

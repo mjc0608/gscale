@@ -543,9 +543,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 		/* check whether need passthrough */
 		offset &= ~(bytes - 1);
 
-		/* FIXME: kill the instance instead of crash the whole kernel */
-		ASSERT(!reg_rdonly(pdev, offset));
-
 		/*
 		 * update sreg if pass through;
 		 * update preg if boot_time or vgt is reg's cur owner
