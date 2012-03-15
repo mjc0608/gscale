@@ -142,14 +142,6 @@ typedef struct {
 #define __sreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.sReg + off))
 #define __vreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.vReg + off))
 #define __sreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.sReg + off))
-#define get_vreg_bytes(vgt, off, bytes)	\
-	(bytes <= 4 ? __vreg(vgt, off) : __vreg64(vgt, off))
-#define get_sreg_bytes(vgt, off, bytes)	\
-	(bytes <= 4 ? __sreg(vgt, off) : __sreg64(vgt, off))
-#define set_vreg_bytes(vgt, off, bytes, value)	\
-	(bytes <= 4 ? (__vreg(vgt, off) = value) : (__vreg64(vgt, off) = value))
-#define set_sreg_bytes(vgt, off, bytes, value)	\
-	(bytes <= 4 ? (__sreg(vgt, off) = value) : (__sreg64(vgt, off) = value))
 #define vgt_vreg(vgt, off)	((vgt_reg_t *)vgt->state.vReg + off)
 #define vgt_sreg(vgt, off)	((vgt_reg_t *)vgt_>state.vReg + off)
 
@@ -846,8 +838,8 @@ static inline void vgt_deactive(struct pgt_device *pdev, struct list_head *rq)
 	list_add(rq, &pdev->rendering_idleq_head);	/* add to idle queue */
 }
 
-unsigned long g2h_gmadr(struct vgt_device *vgt, unsigned long reg, unsigned long g_value);
-unsigned long h2g_gmadr(struct vgt_device *vgt, unsigned long reg, unsigned long h_value);
+vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_value);
+vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_value);
 
 static inline bool is_ring_empty(struct pgt_device *pgt, int ring_id)
 {

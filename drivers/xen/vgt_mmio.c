@@ -148,7 +148,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 		sring->head = vring->head;
 		break;
 	case RB_OFFSET_START:
-		sring->start = g2h_gmadr(vgt, off, vring->start);
+		sring->start = mmio_g2h_gmadr(vgt, off, vring->start);
 		break;
 	case RB_OFFSET_CTL:
 		sring->ctl = vring->ctl;

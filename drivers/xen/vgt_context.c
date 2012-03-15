@@ -364,9 +364,9 @@ void free_vgt_id(int vgt_id)
 /*
  * Guest to host GMADR (include aperture) converting.
  *
- * FIXME: need to handle 8 bytes
+ * handle in 4 bytes granule
  */
-unsigned long g2h_gmadr(struct vgt_device *vgt, unsigned long reg, unsigned long g_value)
+vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_value)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	vgt_reg_t h_value;
@@ -388,9 +388,9 @@ unsigned long g2h_gmadr(struct vgt_device *vgt, unsigned long reg, unsigned long
 /*
  * Host to guest GMADR (include aperture) converting.
  *
- * FIXME: need to handle 8 bytes
+ * handle in 4 bytes granule
  */
-unsigned long h2g_gmadr(struct vgt_device *vgt, unsigned long reg, unsigned long h_value)
+vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_value)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	vgt_reg_t g_value;
@@ -452,6 +452,71 @@ static void show_ringbuffer(struct vgt_device *vgt, int ring_id, int bytes)
 	printk("\n");
 }
 
+static unsigned long vgt_get_reg(struct vgt_device *vgt, unsigned int reg)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	/* check whether to update vreg from HW */
+	if (vgt_ops->boot_time ||
+			(reg_pt(pdev, reg) && reg_is_owner(vgt, reg))) {
+		__sreg(vgt, reg) = VGT_MMIO_READ(pdev, reg);
+		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
+	}
+
+	return __vreg(vgt, reg);
+}
+
+/*
+ * for 64bit reg access, we split into two 32bit accesses since each part may
+ * require address fix
+ *
+ * TODO: any side effect with the split? or instead install specific handler
+ * for 64bit regs like fence?
+ */
+static unsigned long vgt_get_reg_64(struct vgt_device *vgt, unsigned int reg)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	/* check whether to update vreg from HW */
+	if (vgt_ops->boot_time ||
+			(reg_pt(pdev, reg) && reg_is_owner(vgt, reg))) {
+		__sreg64(vgt, reg) = VGT_MMIO_READ_BYTES(pdev, reg, 8);
+		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
+		__vreg(vgt, reg + 4) = mmio_h2g_gmadr(vgt, reg + 4, __sreg(vgt, reg + 4));
+	}
+
+	return __vreg64(vgt, reg);
+}
+
+static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	/*
+	 * update sreg if pass through;
+	 * update preg if boot_time or vgt is reg's cur owner
+	 */
+	if (vgt_ops->boot_time || reg_pt(pdev, reg)) {
+		__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
+
+		if (vgt_ops->boot_time || reg_is_owner(vgt, reg))
+			VGT_MMIO_WRITE(pdev, reg, __sreg(vgt, reg));
+	}
+}
+
+static void vgt_update_reg_64(struct vgt_device *vgt, unsigned int reg)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	/*
+	 * update sreg if pass through;
+	 * update preg if boot_time or vgt is reg's cur owner
+	 */
+	if (vgt_ops->boot_time || reg_pt(pdev, reg)) {
+		__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
+		__sreg(vgt, reg + 4) = mmio_g2h_gmadr(vgt, reg + 4, __vreg(vgt, reg + 4));
+
+		if (vgt_ops->boot_time || reg_is_owner(vgt, reg))
+			VGT_MMIO_WRITE_BYTES(pdev, reg, __sreg64(vgt, reg), 8);
+	}
+}
+
 /*
  * Emulate the VGT MMIO register read ops.
  * Return : true/false
@@ -463,38 +528,33 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 	unsigned int off2;
 	unsigned long wvalue;
 
+	offset -= pdev->gttmmio_base;
+
 #ifdef SINGLE_VM_DEBUG
 	/* for single-VM UP dom0 case, no nest is expected */
 	ASSERT(!spin_is_locked(&pdev->lock));
 #endif
-	spin_lock(&pdev->lock);
-	offset -= pdev->gttmmio_base;
+
 	ASSERT (offset + bytes <= vgt->state.regNum *
 				sizeof(vgt->state.vReg[0]));
 	ASSERT (bytes <= 8);
 	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 
 	if (bytes > 4)
-		dprintk("vGT: capture 8 bytes read to %x\n", offset);
+		dprintk("vGT: capture >4 bytes read to %x\n", offset);
 
+	spin_lock(&pdev->lock);
 	mht = lookup_mtable(offset);
 	if ( mht && mht->read )
 		mht->read(vgt, offset, p_data, bytes);
 	else {
 		off2 = offset & ~(bytes - 1);
 
-		/* check whether to update vreg from HW */
-		if (vgt_ops->boot_time ||
-		    (reg_pt(pdev, off2) && reg_is_owner(vgt, off2))) {
-			wvalue = VGT_MMIO_READ_BYTES(pdev, off2, bytes);
-			set_sreg_bytes(vgt, off2, bytes, wvalue);
-			set_vreg_bytes(vgt, off2, bytes, h2g_gmadr(vgt, off2, wvalue));
+		if (bytes <= 4) {
+			wvalue = vgt_get_reg(vgt, off2);
+		} else {
+			wvalue = vgt_get_reg_64(vgt, off2);
 		}
-
-		/* return vreg for the read */
-		wvalue = get_vreg_bytes(vgt, off2, bytes);
-
-		/* FIXME: also need to find other registers updaetd by HW, which should be passed through too */
 
 		memcpy(p_data, &wvalue + (offset & (bytes - 1)), bytes);
 	}
@@ -513,11 +573,11 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	struct pgt_device *pdev = vgt->pdev;
 	struct mmio_hash_table *mht;
 
+	offset -= pdev->gttmmio_base;
+
 #ifdef SINGLE_VM_DEBUG
 	ASSERT(!spin_is_locked(&pdev->lock));
 #endif
-	spin_lock(&pdev->lock);
-	offset -= pdev->gttmmio_base;
 	ASSERT (offset + bytes <= vgt->state.regNum *
 				sizeof(vgt->state.vReg[0]));
 	/* at least FENCE registers are accessed in 8 bytes */
@@ -525,14 +585,14 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 
 	if (bytes > 4)
-		dprintk("vGT: capture 8 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
+		dprintk("vGT: capture >4 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
 
 	if (reg_rdonly(pdev, offset & (~(bytes - 1)))) {
 		printk("vGT: captured write to read-only reg (%x)\n", offset);
-		spin_unlock(&pdev->lock);
 		return true;
 	}
 
+	spin_lock(&pdev->lock);
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
@@ -540,22 +600,11 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 		memcpy((char *)vgt->state.vReg + offset,
 				p_data, bytes);
 
-		/* check whether need passthrough */
 		offset &= ~(bytes - 1);
-
-		/*
-		 * update sreg if pass through;
-		 * update preg if boot_time or vgt is reg's cur owner
-		 */
-		if (vgt_ops->boot_time || reg_pt(pdev, offset)) {
-			set_sreg_bytes(vgt, offset, bytes,
-				g2h_gmadr(vgt, offset, get_vreg_bytes(vgt, offset, bytes)));
-
-			if (vgt_ops->boot_time || reg_is_owner(vgt, offset))
-				VGT_MMIO_WRITE_BYTES(pdev, offset,
-					get_sreg_bytes(vgt, offset, bytes), bytes);
-
-		}
+		if (bytes <= 4)
+			vgt_update_reg(vgt, offset);
+		else
+			vgt_update_reg_64(vgt, offset);
 	}
 
 	if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE) {
@@ -933,7 +982,7 @@ static void vring_2_sring(struct vgt_device *vgt, vgt_state_ring_t *rb)
 	rb->sring.head = rb->vring.head;
 	rb->sring.tail = rb->vring.tail;
 	/* Aperture fixes */
-	rb->sring.start = g2h_gmadr(vgt, rb->vring.start);
+	rb->sring.start = mmio_g2h_gmadr(vgt, rb->vring.start);
 
 	rb->sring.ctl = rb->vring.start;
 
@@ -952,7 +1001,7 @@ static void sring_2_vring(struct vgt_device *vgt,
 	vgt_ringbuffer_t *sr, vgt_ringbuffer_t *vr)
 {
 	/* FIXME: need a reg offset instead of 0 */
-	vr->head = h2g_gmadr(vgt, 0, sr->head);
+	vr->head = mmio_h2g_gmadr(vgt, 0, sr->head);
 }
 
 /*
@@ -1328,7 +1377,6 @@ static void vgt_setup_mgmt_regs(struct pgt_device *pdev)
 		reg_set_owner(pdev, vgt_mgmt_regs[i], VGT_OT_PM);
 }
 
-
 void vgt_rendering_save_mmio(struct vgt_device *vgt)
 {
 	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
@@ -1342,8 +1390,8 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 		int reg = vgt_render_regs[i];
 		if (reg_hw_update(vgt->pdev, reg)) {
 			__sreg(vgt, reg) = VGT_MMIO_READ(vgt->pdev, reg);
-			__vreg(vgt, reg) = h2g_gmadr(vgt, reg, __sreg(vgt, reg));
-			dprintk("....save mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
+			__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
+			printk("....save mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
 		}
 	}
 }
@@ -1556,8 +1604,8 @@ static void state_reg_v2s(struct vgt_device *vgt)
 	/* FIXME: add off in addr table to avoid checking all regs */
 	for (i = 0; i < VGT_MMIO_REG_NUM; i++) {
 		if (reg_addr_fix(vgt->pdev, i)) {
-			__sreg(vgt, off) = g2h_gmadr(vgt, i, __vreg(vgt, off));
-			dprintk("vGT: address fix (%d) for reg (%x): (%x->%x)\n",
+			__sreg(vgt, off) = mmio_g2h_gmadr(vgt, i, __vreg(vgt, off));
+			printk("vGT: address fix (%d) for reg (%x): (%x->%x)\n",
 				i, off, __vreg(vgt, off), __sreg(vgt, off));
 		}
 	}
@@ -1926,6 +1974,8 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
  * Ideally the majority of MMIO should be updated to pReg. Should
  * we instead introduce vgt_setup_emulate_regs, by taking pt as
  * the default?
+ *
+ * for 64bit reg, need sets for both low and high parts
  */
 static void vgt_setup_pt_regs(struct pgt_device *pdev)
 {
