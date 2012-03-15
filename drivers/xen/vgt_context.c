@@ -372,16 +372,14 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	vgt_reg_t h_value;
 	vgt_reg_t mask;
 
-#ifdef SINGLE_VM_DEBUG
-	return g_value;
-#endif
-
 	if (!reg_addr_fix(pdev, reg))
 		return g_value;
 
+	printk("vGT: address fix g->h for reg (%lx)\n", reg);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
 	/* FIXME: there may have some complex mask pattern */
 	h_value = g2h_gm(vgt, g_value & mask);
+	printk("....(g)%x->(h)%x\n", g_value, (h_value & mask) | (g_value & ~mask));
 	return (h_value & mask) | (g_value & ~mask);
 }
 
@@ -396,15 +394,14 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	vgt_reg_t g_value;
 	vgt_reg_t mask;
 
-#ifdef SINGLE_VM_DEBUG
-	return h_value;
-#endif
 	if (!reg_addr_fix(pdev, reg))
 		return h_value;
 
+	printk("vGT: address fix h->g for reg (%lx)\n", reg);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
 	/* FIXME: there may have some complex mask pattern */
 	g_value = g2h_gm(vgt, h_value & mask);
+	printk("....(h)%x->(g)%x\n", h_value, (g_value & mask) | (h_value & ~mask));
 	return (g_value & mask) | (h_value & ~mask);
 }
 
@@ -1594,7 +1591,7 @@ err:
 
 static void state_reg_v2s(struct vgt_device *vgt)
 {
-	int i, off;
+	int i;
 	vgt_reg_t *vreg, *sreg;
 
 	vreg = vgt->state.vReg;
@@ -1603,10 +1600,10 @@ static void state_reg_v2s(struct vgt_device *vgt)
 
 	/* FIXME: add off in addr table to avoid checking all regs */
 	for (i = 0; i < VGT_MMIO_REG_NUM; i++) {
-		if (reg_addr_fix(vgt->pdev, i)) {
-			__sreg(vgt, off) = mmio_g2h_gmadr(vgt, i, __vreg(vgt, off));
-			printk("vGT: address fix (%d) for reg (%x): (%x->%x)\n",
-				i, off, __vreg(vgt, off), __sreg(vgt, off));
+		if (reg_addr_fix(vgt->pdev, i * REG_SIZE)) {
+			__sreg(vgt, i) = mmio_g2h_gmadr(vgt, i, __vreg(vgt, i));
+			dprintk("vGT: address fix for reg (%x): (%x->%x)\n",
+				i, __vreg(vgt, i), __sreg(vgt, i));
 		}
 	}
 }
