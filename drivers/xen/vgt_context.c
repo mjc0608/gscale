@@ -73,6 +73,18 @@
 #include "vgt_reg.h"
 #include "vgt_wr.c"
 
+/* uncomment this macro so that dom0's aperture/GM starts from non-zero */
+//#define DOM0_NON_IDENTICAL
+
+/*
+ * a temporary trick:
+ *
+ * uncomment this macro so that display/cursor bases are fixed with non-zero
+ * base, while GPU rendering still happens to zero-based range. The trick is
+ * to duplicate whole [0, 64M] GTT entries into [128M, 192M] range. All MMIO
+ * addresses are fixed into [128M, 192M], except fence registers.
+ */
+//#define DOM0_NONIDEN_DISPLAY_ONLY
 /*
  * NOTE list:
  * 	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
@@ -375,11 +387,62 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	if (!reg_addr_fix(pdev, reg))
 		return g_value;
 
+#if 0
+	if (reg == 0x7019C) {
+		printk("vGT: capture DSPA setting (%x)\n", g_value);
+		return g_value;
+	}
+#endif
+
 	printk("vGT: address fix g->h for reg (%lx)(%x)\n", reg, g_value);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
 	/* FIXME: there may have some complex mask pattern */
 	h_value = g2h_gm(vgt, g_value & mask);
 	printk("....(g)%x->(h)%x\n", g_value, (h_value & mask) | (g_value & ~mask));
+
+#ifdef DOM0_NONIDEN_DISPLAY_ONLY
+	/* a workaround to test display part, before command parser is ready */
+	if (reg == _REG_DSPASURF || reg == _REG_CURABASE) {
+		int g_index = GTT_INDEX(pdev, (g_value & mask));
+		int h_index = GTT_INDEX(pdev, h_value);
+		int i;
+
+		printk("index (%x)(%x), value (%x)(%x)\n", g_index, h_index,
+			vgt_read_gtt(pdev, g_index),
+			vgt_read_gtt(pdev, h_index));
+		dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x0));
+		dprintk("content at 0x%x: %lx\n", g_value & mask, *(unsigned long *)((char *)aperture_vbase(pdev) + (g_value & mask)));
+		dprintk("content at 0x%x: %lx\n", h_value & mask, *(unsigned long *)((char *)aperture_vbase(pdev) + (h_value & mask)));
+		dprintk("DSPATILEOFF: %x, DSPLINOFF: %x, SIZE: %x\n",
+			VGT_MMIO_READ(pdev, _REG_DSPATILEOFF), VGT_MMIO_READ(pdev, _REG_DSPALINOFF),
+			VGT_MMIO_READ(pdev, 0x70190));
+		dprintk("_REG_DSPACNTR: %x, _REG_DSPASURFLIVE: %x\n",
+			VGT_MMIO_READ(pdev, _REG_DSPACNTR), VGT_MMIO_READ(pdev, _REG_DSPASURFLIVE));
+		/*
+		 * duplicate GTT entries to the same memory page
+		 * of course it may only work for display part, while 3D objects
+		 * are allocated dynamically in the middle
+		 *
+		 * now cover 16M
+		 */
+		for (i = 0; i < 4096 * 4; i++)
+			vgt_write_gtt(pdev, h_index - g_index + i, vgt_read_gtt(pdev, i));
+
+		printk("index (%x)(%x), value (%x)(%x)\n", g_index, h_index,
+			vgt_read_gtt(pdev, g_index),
+			vgt_read_gtt(pdev, h_index));
+		dprintk("DSPATILEOFF: %x, DSPLINOFF: %x, SIZE: %x\n",
+			VGT_MMIO_READ(pdev, _REG_DSPATILEOFF), VGT_MMIO_READ(pdev, _REG_DSPALINOFF),
+			VGT_MMIO_READ(pdev, 0x70190));
+		dprintk("DSPATILEOFF: %x, DSPLINOFF: %x\n",
+			VGT_MMIO_READ(pdev, _REG_DSPATILEOFF), VGT_MMIO_READ(pdev, _REG_DSPALINOFF));
+		dprintk("_REG_DSPACNTR: %x, _REG_DSPASURFLIVE: %x\n",
+			VGT_MMIO_READ(pdev, _REG_DSPACNTR), VGT_MMIO_READ(pdev, _REG_DSPASURFLIVE));
+		dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x0));
+		dprintk("content at 0x%x: %lx\n", g_value & mask, *(unsigned long *)((char *)aperture_vbase(pdev) + (g_value & mask)));
+		dprintk("content at 0x%x: %lx\n", h_value & mask, *(unsigned long *)((char *)aperture_vbase(pdev) + (h_value & mask)));
+	}
+#endif
 	return (h_value & mask) | (g_value & ~mask);
 }
 
@@ -1911,6 +1974,7 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 	vgt_set_addr_mask(pdev, _REG_VCS_PP_DIR_BASE, 0xFFFF0000);
 	vgt_set_addr_mask(pdev, _REG_BCS_PP_DIR_BASE, 0xFFFF0000);
 
+#ifndef DOM0_NONIDEN_DISPLAY_ONLY
 	/* FIXME: similarly, a valid bit exists */
 	vgt_set_addr_mask(pdev, _REG_FENCE_0_LOW, 0xFFFFF000);
 	vgt_set_addr_mask(pdev, _REG_FENCE_0_HIGH, 0xFFFFF000);
@@ -1944,6 +2008,7 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 	vgt_set_addr_mask(pdev, _REG_FENCE_14_HIGH, 0xFFFFF000);
 	vgt_set_addr_mask(pdev, _REG_FENCE_15_LOW, 0xFFFFF000);
 	vgt_set_addr_mask(pdev, _REG_FENCE_15_HIGH, 0xFFFFF000);
+#endif
 
 	vgt_set_addr_mask(pdev, _REG_CURABASE, 0xFFFFF000);
 	vgt_set_addr_mask(pdev, _REG_CURBBASE, 0xFFFFF000);
@@ -2062,9 +2127,17 @@ static int setup_gtt(struct pgt_device *pdev)
 	dma_addr |= (dma_addr >> 28) & 0xff0;
 	dma_addr |= 0x1;	/* UC, valid */
 	printk("....dummy page (%llx, %llx)\n", page_to_phys(dummy_page), dma_addr);
+
+	/* for debug purpose */
+	memset(pfn_to_kaddr(page_to_pfn(dummy_page)), 0x77, PAGE_SIZE);
+
 	/* clear all GM space, instead of only aperture */
 	for (i = 0; i < gm_pages(pdev); i++)
 		vgt_write_gtt(pdev, i, dma_addr);
+
+	dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x0));
+	dprintk("content at 0x64000: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x64000));
+	dprintk("content at 0x8064000: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x8064000));
 
 	check_gtt(pdev);
 	printk("vGT: allocate vGT aperture\n");
@@ -2137,7 +2210,7 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 	printk("vGT: total aperture (%x), total GM space (%llx)\n",
 		aperture_sz(pdev), gm_sz(pdev));
 
-#ifdef SINGLE_VM_DEBUG
+#ifndef DOM0_NON_IDENTICAL
 	pdev->max_vms = 1;		/* dom0 only */
 #else
 	pdev->max_vms = VGT_MAX_VMS;
