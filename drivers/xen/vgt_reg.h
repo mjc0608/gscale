@@ -529,6 +529,7 @@ static inline void reg_set_owner(struct pgt_device *pdev,
 #define hidden_gm_base(pdev)		(aperture_sz(pdev))
 
 #define aperture_2_gm(pdev, addr)	(addr - aperture_base(pdev))
+#define v_aperture(pdev, addr)		(aperture_vbase(pdev) + addr)
 
 #define rsvd_aperture_sz(pdev)		(pdev->rsvd_aperture_sz)
 #define rsvd_aperture_base(pdev)	(pdev->rsvd_aperture_base)
@@ -709,7 +710,7 @@ static inline uint64_t g2h_gm(struct vgt_device *vgt, uint64_t g_addr)
 {
 	uint64_t h_addr;
 
-	ASSERT(g_gm_is_visible(vgt, g_addr) | g_gm_is_hidden(vgt, g_addr));
+	ASSERT(g_gm_is_visible(vgt, g_addr) || g_gm_is_hidden(vgt, g_addr));
 
 	if (g_gm_is_visible(vgt, g_addr))	/* aperture */
 		h_addr = vgt_visible_gm_base(vgt) +
@@ -726,7 +727,7 @@ static inline uint64_t h2g_gm(struct vgt_device *vgt, uint64_t h_addr)
 {
 	uint64_t g_addr;
 
-	ASSERT(h_gm_is_visible(vgt, h_addr) | h_gm_is_hidden(vgt, h_addr));
+	ASSERT(h_gm_is_visible(vgt, h_addr) || h_gm_is_hidden(vgt, h_addr));
 
 	if (h_gm_is_visible(vgt, h_addr))
 		g_addr = vgt_guest_visible_gm_base(vgt) +

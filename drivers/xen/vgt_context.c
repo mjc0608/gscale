@@ -375,7 +375,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	if (!reg_addr_fix(pdev, reg))
 		return g_value;
 
-	printk("vGT: address fix g->h for reg (%lx)\n", reg);
+	printk("vGT: address fix g->h for reg (%lx)(%x)\n", reg, g_value);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
 	/* FIXME: there may have some complex mask pattern */
 	h_value = g2h_gm(vgt, g_value & mask);
@@ -397,27 +397,19 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	if (!reg_addr_fix(pdev, reg))
 		return h_value;
 
-	printk("vGT: address fix h->g for reg (%lx)\n", reg);
+	printk("vGT: address fix h->g for reg (%lx)(%x)\n", reg, h_value);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
+
+	/* FIXME: it's possible the initial state may not contain valid address */
+	if (!h_gm_is_visible(vgt, h_value & mask) && !h_gm_is_hidden(vgt, h_value & mask)) {
+		printk("!!!vGT: reg (%lx) doesn't contain a valid host address (%x)\n", reg, h_value);
+		return h_value;
+	}
+
 	/* FIXME: there may have some complex mask pattern */
-	g_value = g2h_gm(vgt, h_value & mask);
+	g_value = h2g_gm(vgt, h_value & mask);
 	printk("....(h)%x->(g)%x\n", h_value, (g_value & mask) | (h_value & ~mask));
 	return (g_value & mask) | (h_value & ~mask);
-}
-
-/*
- * ABANDON IN THE FUTURE!!!! we should use explict VGT_MMIO interfaces
- * to avoid unnecessary GP faults
- *
- * Get the VA of vgt guest aperture base.
- * (NOTES: Aperture base is equal to GMADR base)
- */
-static inline char *__aperture(struct vgt_device *vgt)
-{
-	char *p_contents;
-
-	p_contents = vgt_aperture_vbase(vgt);
-	return p_contents;
 }
 
 /*
@@ -437,7 +429,7 @@ static void show_ringbuffer(struct vgt_device *vgt, int ring_id, int bytes)
 		rb->sring.head, rb->sring.tail);
 
 	p_head &= RB_HEAD_OFF_MASK;
-	p_contents = __aperture(vgt) + rb->sring.start + p_head;
+	p_contents = aperture_vbase(pdev) + rb->sring.start + p_head;
 	/* FIXME: consider wrap */
 	for (i = -(bytes/4); i < bytes/4; i++) {
 		if (!(i % 8))
@@ -453,8 +445,9 @@ static unsigned long vgt_get_reg(struct vgt_device *vgt, unsigned int reg)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	/* check whether to update vreg from HW */
+//	if (reg_hw_update(pdev, reg) &&
 	if (vgt_ops->boot_time ||
-			(reg_pt(pdev, reg) && reg_is_owner(vgt, reg))) {
+	    (reg_pt(pdev, reg) && reg_is_owner(vgt, reg))) {
 		__sreg(vgt, reg) = VGT_MMIO_READ(pdev, reg);
 		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
 	}
@@ -473,8 +466,9 @@ static unsigned long vgt_get_reg_64(struct vgt_device *vgt, unsigned int reg)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	/* check whether to update vreg from HW */
+//	if (reg_hw_update(pdev, reg) &&
 	if (vgt_ops->boot_time ||
-			(reg_pt(pdev, reg) && reg_is_owner(vgt, reg))) {
+	    (reg_pt(pdev, reg) && reg_is_owner(vgt, reg))) {
 		__sreg64(vgt, reg) = VGT_MMIO_READ_BYTES(pdev, reg, 8);
 		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
 		__vreg(vgt, reg + 4) = mmio_h2g_gmadr(vgt, reg + 4, __sreg(vgt, reg + 4));
@@ -994,11 +988,10 @@ static void vring_2_sring(struct vgt_device *vgt, vgt_state_ring_t *rb)
  * a VM won't fill all the ring buffer. This is the only place where
  * vr->head is updated.
  */
-static void sring_2_vring(struct vgt_device *vgt,
+static void sring_2_vring(struct vgt_device *vgt, int ring_id,
 	vgt_ringbuffer_t *sr, vgt_ringbuffer_t *vr)
 {
-	/* FIXME: need a reg offset instead of 0 */
-	vr->head = mmio_h2g_gmadr(vgt, 0, sr->head);
+	vr->head = sr->head;
 }
 
 /*
@@ -1113,7 +1106,7 @@ static inline void save_ring_buffer(struct vgt_device *vgt, int ring_id)
 {
 	dprintk("<vgt-%d>save ring buffer\n", vgt->vgt_id);
 	ring_save_commands (&vgt->rb[ring_id],
-			__aperture(vgt),
+			aperture_vbase(vgt->pdev),
 			(char*)vgt->rb[ring_id].save_buffer,
 			sizeof(vgt->rb[ring_id].save_buffer));
 }
@@ -1122,7 +1115,7 @@ static void restore_ring_buffer(struct vgt_device *vgt, int ring_id)
 {
 	dprintk("<vgt-%d>restore ring buffer\n", vgt->vgt_id);
 	ring_load_commands (&vgt->rb[ring_id],
-			__aperture(vgt),
+			aperture_vbase(vgt->pdev),
 			(char *)vgt->rb[ring_id].save_buffer,
 			sizeof(vgt->rb[ring_id].save_buffer));
 }
@@ -1240,7 +1233,7 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 		VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
 		VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 
-	ring_load_commands (rb, __aperture(vgt), (char*)cmds, bytes);
+	ring_load_commands (rb, aperture_vbase(pdev), (char*)cmds, bytes);
 	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
 	//mdelay(1);
 
@@ -1451,7 +1444,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 		rb = &vgt->rb[i];
 		ring_phys_2_shadow (pdev, i, &rb->sring);
 
-		sring_2_vring(vgt, &rb->sring, &rb->vring);
+		sring_2_vring(vgt, i, &rb->sring, &rb->vring);
 
 		/* save 32 dwords of the ring */
 		save_ring_buffer (vgt, i);
@@ -1589,15 +1582,22 @@ err:
 	return false;
 }
 
+/* TODO: figure out any security holes by giving the whole initial state */
 static void state_reg_v2s(struct vgt_device *vgt)
 {
-	int i;
 	vgt_reg_t *vreg, *sreg;
 
 	vreg = vgt->state.vReg;
 	sreg = vgt->state.sReg;
 	memcpy (sreg, vreg, VGT_MMIO_SPACE_SZ);
 
+	/*
+	 * Do we really need address fix for initial state? Any address information
+	 * there is meaningless to a VM, unless that address is related to allocated
+	 * GM space to the VM. Translate a host address '0' to a guest GM address
+	 * is just a joke.
+	 */
+#if 0
 	/* FIXME: add off in addr table to avoid checking all regs */
 	for (i = 0; i < VGT_MMIO_REG_NUM; i++) {
 		if (reg_addr_fix(vgt->pdev, i * REG_SIZE)) {
@@ -1606,6 +1606,7 @@ static void state_reg_v2s(struct vgt_device *vgt)
 				i, __vreg(vgt, i), __sreg(vgt, i));
 		}
 	}
+#endif
 }
 
 /*
@@ -2155,7 +2156,7 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 
 	possible = (possible_ap < possible_gm) ? possible_ap : possible_gm;
 	possible++;	/* count on dom0 */
-	if (possible < VGT_MAX_VMS) {
+	if (possible < pdev->max_vms) {
 		printk("vGT: request to support %d VMs, but only %d VMs can be allowed\n",
 			VGT_MAX_VMS, possible);
 		pdev->max_vms = possible;
