@@ -506,7 +506,9 @@ struct pgt_device {
 #define vgt_get_owner(d, t)             (d->owner[t])
 #define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_GT))
 #define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
-#define current_display_owner(d)	((vgt_get_owner(d, VGT_OT_DISPLAY))->id)
+#define current_display_owner(d)	(vgt_get_owner(d, VGT_OT_DISPLAY))
+#define current_pm_owner(d)		(vgt_get_owner(d, VGT_OT_PM))
+#define current_mgmt_owner(d)		(vgt_get_owner(d, VGT_OT_MGMT))
 #define vgt_switch_inprogress(d)        (d->switch_inprogress)
 #define vgt_switch_owner_type(d)        (d->switch_owner)
 

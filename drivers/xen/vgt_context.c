@@ -74,7 +74,7 @@
 #include "vgt_wr.c"
 
 /* uncomment this macro so that dom0's aperture/GM starts from non-zero */
-//#define DOM0_NON_IDENTICAL
+#define DOM0_NON_IDENTICAL
 
 /*
  * a temporary trick:
@@ -84,7 +84,8 @@
  * to duplicate whole [0, 64M] GTT entries into [128M, 192M] range. All MMIO
  * addresses are fixed into [128M, 192M], except fence registers.
  */
-//#define DOM0_NONIDEN_DISPLAY_ONLY
+#define DOM0_NONIDEN_DISPLAY_ONLY
+
 /*
  * NOTE list:
  * 	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
@@ -257,8 +258,7 @@ static void enforce_mode_setting(struct pgt_device *pdev)
 }
 
 #ifndef SINGLE_VM_DEBUG
-#define	INVLID_MONITOR_SW_REQ	(-1)	/* -1: means no request */
-int next_monitor_owner;
+int next_display_owner;
 #endif
 static struct vgt_device *vgt_dom0;
 struct mmio_hash_table	*mtable[MHASH_SIZE];
@@ -719,16 +719,16 @@ bool is_rendering_engines_empty(struct pgt_device *pdev, int timeout)
 /*
  * Request from user level daemon/IOCTL
  */
-void vgt_request_monitor_owner_switch(int vgt_id)
+void vgt_request_display_owner_switch(struct vgt_device *vgt)
 {
-	if (next_monitor_owner != curr_monitor_owner(pdev))
-		next_monitor_owner = vgt_id;
+	if (next_display_owner != current_display_owner(pdev))
+		next_display_owner = vgt;
 }
 
 /*
  * Do monitor owner switch.
  */
-void vgt_switch_monitor_owner(int prev_id, int next_id)
+void vgt_switch_display_owner(int prev_id, int next_id)
 {
 }
 #endif
@@ -867,14 +867,15 @@ int vgt_thread(void *priv)
 		if (!(cnt % threshold))
 			printk("vGT: %lldth checks, %lld switches\n", cnt, switched);
 		cnt++;
+
 #ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
-		if (next_monitor_owner != INVLID_MONITOR_SW_REQ) {
+		if (!next_display_owner) {
 			/* has pending request */
-			vgt_switch_monitor_owner(curr_monitor_owner(pdev),
-					next_monitor_owner);
-			curr_monitor_owner(pdev) = next_monitor_owner;
-			next_monitor_owner = INVLID_MONITOR_SW_REQ;
+			vgt_switch_display_owner(current_display_owner(pdev),
+					next_display_owner);
+			current_display_owner(pdev) = next_display_owner;
+			next_display_owner = NULL;
 		}
 #endif
 
@@ -1392,8 +1393,97 @@ static void vgt_setup_render_regs(struct pgt_device *pdev)
 
 /* TODO: lots of to fill */
 vgt_reg_t vgt_display_regs[] = {
-	I915_REG_CURABASE_OFFSET,
-	I915_REG_CURBBASE_OFFSET,
+	_REG_FENCE_0_LOW,
+	_REG_FENCE_0_HIGH,
+	_REG_FENCE_1_LOW,
+	_REG_FENCE_1_HIGH,
+	_REG_FENCE_2_LOW,
+	_REG_FENCE_2_HIGH,
+	_REG_FENCE_3_LOW,
+	_REG_FENCE_3_HIGH,
+	_REG_FENCE_4_LOW,
+	_REG_FENCE_4_HIGH,
+	_REG_FENCE_5_LOW,
+	_REG_FENCE_5_HIGH,
+	_REG_FENCE_6_LOW,
+	_REG_FENCE_6_HIGH,
+	_REG_FENCE_7_LOW,
+	_REG_FENCE_7_HIGH,
+	_REG_FENCE_8_LOW,
+	_REG_FENCE_8_HIGH,
+	_REG_FENCE_9_LOW,
+	_REG_FENCE_9_HIGH,
+	_REG_FENCE_10_LOW,
+	_REG_FENCE_10_HIGH,
+	_REG_FENCE_11_LOW,
+	_REG_FENCE_11_HIGH,
+	_REG_FENCE_12_LOW,
+	_REG_FENCE_12_HIGH,
+	_REG_FENCE_13_LOW,
+	_REG_FENCE_13_HIGH,
+	_REG_FENCE_14_LOW,
+	_REG_FENCE_14_HIGH,
+	_REG_FENCE_15_LOW,
+	_REG_FENCE_15_HIGH,
+
+	_REG_CURACNTR	,
+	_REG_CURABASE	,
+	_REG_CURAPOS	,
+	_REG_CURAVGAPOPUPBASE,
+	_REG_CURAPALET_0,
+	_REG_CURAPALET_1,
+	_REG_CURAPALET_2,
+	_REG_CURAPALET_3,
+	_REG_CURASURFLIVE,
+
+	_REG_CURBCNTR	,
+	_REG_CURBBASE	,
+	_REG_CURBPOS	,
+	_REG_CURBPALET_0,
+	_REG_CURBPALET_1,
+	_REG_CURBPALET_2,
+	_REG_CURBPALET_3,
+	_REG_CURBSURFLIVE,
+
+	_REG_DSPACNTR	,
+	_REG_DSPALINOFF	,
+	_REG_DSPASTRIDE	,
+	_REG_DSPASURF	,
+	_REG_DSPATILEOFF,
+	_REG_DSPASURFLIVE,
+
+	_REG_DSPBCNTR	,
+	_REG_DSPBLINOFF	,
+	_REG_DSPBSTRIDE	,
+	_REG_DSPBSURF	,
+	_REG_DSPBTILEOFF,
+	_REG_DSPBSURFLIVE,
+
+	_REG_DVSACNTR	,
+	_REG_DVSALINOFF	,
+	_REG_DVSASTRIDE	,
+	_REG_DVSAPOS	,
+	_REG_DVSASIZE	,
+	_REG_DVSAKEYVAL	,
+	_REG_DVSAKEYMSK	,
+	_REG_DVSASURF	,
+	_REG_DVSAKEYMAXVAL,
+	_REG_DVSATILEOFF,
+	_REG_DVSASURFLIVE,
+	_REG_DVSASCALE	,
+
+	_REG_DVSBCNTR	,
+	_REG_DVSBLINOFF	,
+	_REG_DVSBSTRIDE	,
+	_REG_DVSBPOS	,
+	_REG_DVSBSIZE	,
+	_REG_DVSBKEYVAL	,
+	_REG_DVSBKEYMSK	,
+	_REG_DVSBSURF	,
+	_REG_DVSBKEYMAXVAL,
+	_REG_DVSBTILEOFF,
+	_REG_DVSBSURFLIVE,
+	_REG_DVSBSCALE	,
 };
 
 static void vgt_setup_display_regs(struct pgt_device *pdev)
@@ -2321,6 +2411,10 @@ int vgt_initialize(struct pci_dev *dev)
 	}
 
 	current_render_owner(pdev) = vgt_dom0;
+	current_display_owner(pdev) = vgt_dom0;
+	current_pm_owner(pdev) = vgt_dom0;
+	current_mgmt_owner(pdev) = vgt_dom0;
+
 	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
 	if (!p_thread) {
 		xen_deregister_vgt_device(vgt_dom0);
