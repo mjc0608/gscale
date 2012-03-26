@@ -73,7 +73,7 @@
 #include "vgt_reg.h"
 
 /* uncomment this macro so that dom0's aperture/GM starts from non-zero */
-#define DOM0_NON_IDENTICAL
+//#define DOM0_NON_IDENTICAL
 
 /*
  * a temporary trick:
@@ -83,7 +83,7 @@
  * to duplicate whole [0, 64M] GTT entries into [128M, 192M] range. All MMIO
  * addresses are fixed into [128M, 192M], except fence registers.
  */
-#define DOM0_NONIDEN_DISPLAY_ONLY
+//#define DOM0_NONIDEN_DISPLAY_ONLY
 
 /*
  * NOTE list:
