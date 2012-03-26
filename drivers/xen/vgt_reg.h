@@ -276,6 +276,14 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_BCS_HWS_PGA	0x24080
 #define _REG_IVB_BCS_HWS_PGA	0x4280
 
+#define _REG_RCS_INSTPM		0x20C0
+#define _REG_VCS_INSTPM		0x120C0
+#define _REG_BCS_INSTPM		0x220C0
+
+#define _REG_RCS_EXCC		0x2028
+#define _REG_VCS_EXCC		0x12028
+#define _REG_BCS_EXCC		0x22028
+
 #define _REG_RCS_UHPTR		0x2134
 #define _REG_VCS_UHPTR		0x12134
 #define _REG_BCS_UHPTR		0x22134
@@ -284,7 +292,12 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_VCS_ACTHD		0x12074
 #define _REG_BCS_ACTHD		0x22074
 
+#define _REG_RCS_HWSTAM		0x2098
+#define _REG_VCS_HWSTAM		0x12098
+#define _REG_BCS_HWSTAM		0x22098
+
 #define _REG_RCS_BB_PREEMPT_ADDR	0x2148
+
 #define _REG_RCS_BB_ADDR_DIFF		0x2154
 #define _REG_RCS_BB_OFFSET		0x2158
 #define _REG_RCS_FBC_RT_BASE_ADDR	0x2128
@@ -390,6 +403,19 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_DVSBSCALE		0x73204
 /* DVSBGAMC: 0x73300 - 0x7334B */
 
+#define _REG_FORCEWAKE		0xA18C
+
+#define MI_NOOP				0
+#define MI_FLUSH			(0x4 << 23)
+#define MI_SUSPEND_FLUSH		(0xb << 23)
+#define 	MI_SUSPEND_FLUSH_EN		(1<<0)
+#define MI_SET_CONTEXT			(0x18 << 23)
+#define 	MI_MM_SPACE_GTT			(1<<8)
+#define 	MI_MM_SPACE_PHYSICAL		(0<<8)
+#define 	MI_SAVE_EXT_STATE_EN		(1<<3)
+#define 	MI_RESTORE_EXT_STATE_EN		(1<<2)
+#define  	MI_FORCE_RESTORE		(1<<1)
+#define 	MI_RESTORE_INHIBIT		(1<<0)
 
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
@@ -1483,9 +1509,5 @@ void vgt_reg_ier_handler(struct vgt_device *state,
 	uint32_t reg, uint32_t val, bool write, ...);
 void vgt_reg_watchdog_handler(struct vgt_device *state,
 	uint32_t reg, uint32_t val, bool write, ...);
-
-#include "vgt_wr.h"
-#define emulated_regs_t	i915emuRegs_t
-extern emulated_regs_t	gpuregs[];
 
 #endif	/* _VGT_REG_H_ */

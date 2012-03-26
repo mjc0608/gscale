@@ -71,7 +71,6 @@
 #include <asm/cacheflush.h>
 #include <xen/vgt.h>
 #include "vgt_reg.h"
-#include "vgt_wr.c"
 
 /* uncomment this macro so that dom0's aperture/GM starts from non-zero */
 #define DOM0_NON_IDENTICAL
@@ -688,7 +687,7 @@ static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, int timeou
 {
 	bool r = true;
 
-	/* wait to be completed: TO CHECK: WR uses CCID register */
+	/* wait to be completed */
 	while (--timeout > 0 ) {
 		if (is_rendering_engine_empty(pdev, ring_id))
 			break;
@@ -1186,19 +1185,17 @@ static void restore_ring_buffer(struct vgt_device *vgt, int ring_id)
 
 static void disable_power_management(struct vgt_device *vgt)
 {
-	vgt_reg_t val;
 	/* Save the power state and froce wakeup. */
-	vgt->saved_wakeup = VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);
-	VGT_MMIO_WRITE(vgt->pdev, I915_REG_FORCEWAKE_OFFSET, 1);
-	val = VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
+	vgt->saved_wakeup = VGT_MMIO_READ(vgt->pdev, _REG_FORCEWAKE);
+	VGT_MMIO_WRITE(vgt->pdev, _REG_FORCEWAKE, 1);
+	VGT_POST_READ(vgt->pdev, _REG_FORCEWAKE);	/* why this ? */
 }
 
 static void restore_power_management(struct vgt_device *vgt)
 {
-	vgt_reg_t val;
 	/* Restore the saved power state. */
-	VGT_MMIO_WRITE(vgt->pdev, I915_REG_FORCEWAKE_OFFSET, vgt->saved_wakeup);
-	val = VGT_MMIO_READ(vgt->pdev, I915_REG_FORCEWAKE_OFFSET);	/* why this ? */
+	VGT_MMIO_WRITE(vgt->pdev, _REG_FORCEWAKE, vgt->saved_wakeup);
+	VGT_POST_READ(vgt->pdev, _REG_FORCEWAKE);	/* why this ? */
 }
 
 /*
@@ -1283,15 +1280,6 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 	 * context to the VM's area, and then update new ID pointing
 	 * to vGT's area. Otherwise, it will be purely an ID change.
 	 */
-#if 0
-	/* WR ignore extended state, and MBO bits, why ? */
-	ccid =  ccid_addr | CCID_MBO_BITS |
-		CCID_VALID | CCID_EXTENDED_STATE_SAVE_ENABLE;
-	VGT_MMIO_WRITE(vgt->pdev, _REG_CCID, ccid);
-
-	if ( !wait_ccid_to_renew (vgt->pdev, ccid) )
-		return false;
-#endif
 
 	dprintk("before load [%x, %x]\n",
 		VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
@@ -1323,64 +1311,60 @@ bool default_submit_context_command (struct vgt_device *vgt,
 	return false;
 }
 
-/* TODO: borrow from WR. need fix later */
+/* FIXME: need audit all render resources carefully */
 vgt_reg_t vgt_render_regs[] = {
-	I915_REG_FENCE_0_OFFSET,
-	I915_REG_FENCE_1_OFFSET,
-	I915_REG_FENCE_2_OFFSET,
-	I915_REG_FENCE_3_OFFSET,
-	I915_REG_FENCE_4_OFFSET,
-	I915_REG_FENCE_5_OFFSET,
-	I915_REG_FENCE_6_OFFSET,
-	I915_REG_FENCE_7_OFFSET,
-	I915_REG_FENCE_8_OFFSET,
-	I915_REG_FENCE_9_OFFSET,
-	I915_REG_FENCE_10_OFFSET,
-	I915_REG_FENCE_11_OFFSET,
-	I915_REG_FENCE_12_OFFSET,
-	I915_REG_FENCE_13_OFFSET,
-	I915_REG_FENCE_14_OFFSET,
-	I915_REG_FENCE_15_OFFSET,
-	I915_REG_FENCE_16_OFFSET,
-	I915_REG_FENCE_17_OFFSET,
-	I915_REG_FENCE_18_OFFSET,
-	I915_REG_FENCE_19_OFFSET,
-	I915_REG_FENCE_20_OFFSET,
-	I915_REG_FENCE_21_OFFSET,
-	I915_REG_FENCE_22_OFFSET,
-	I915_REG_FENCE_23_OFFSET,
-	I915_REG_FENCE_24_OFFSET,
-	I915_REG_FENCE_25_OFFSET,
-	I915_REG_FENCE_26_OFFSET,
-	I915_REG_FENCE_27_OFFSET,
-	I915_REG_FENCE_28_OFFSET,
-	I915_REG_FENCE_29_OFFSET,
-	I915_REG_FENCE_30_OFFSET,
-	I915_REG_FENCE_31_OFFSET,
+	_REG_FENCE_0_LOW,
+	_REG_FENCE_0_HIGH,
+	_REG_FENCE_1_LOW,
+	_REG_FENCE_1_HIGH,
+	_REG_FENCE_2_LOW,
+	_REG_FENCE_2_HIGH,
+	_REG_FENCE_3_LOW,
+	_REG_FENCE_3_HIGH,
+	_REG_FENCE_4_LOW,
+	_REG_FENCE_4_HIGH,
+	_REG_FENCE_5_LOW,
+	_REG_FENCE_5_HIGH,
+	_REG_FENCE_6_LOW,
+	_REG_FENCE_6_HIGH,
+	_REG_FENCE_7_LOW,
+	_REG_FENCE_7_HIGH,
+	_REG_FENCE_8_LOW,
+	_REG_FENCE_8_HIGH,
+	_REG_FENCE_9_LOW,
+	_REG_FENCE_9_HIGH,
+	_REG_FENCE_10_LOW,
+	_REG_FENCE_10_HIGH,
+	_REG_FENCE_11_LOW,
+	_REG_FENCE_11_HIGH,
+	_REG_FENCE_12_LOW,
+	_REG_FENCE_12_HIGH,
+	_REG_FENCE_13_LOW,
+	_REG_FENCE_13_HIGH,
+	_REG_FENCE_14_LOW,
+	_REG_FENCE_14_HIGH,
+	_REG_FENCE_15_LOW,
+	_REG_FENCE_15_HIGH,
 
-	I915_REG_HWSTAM_OFFSET,
-	I915_REG_HSW_PGA_OFFSET,
-	I915_REG_INSTPM_OFFSET,
-	I915_REG_MEM_MODE_OFFSET,
-	I915_REG_MI_ARB_STATE_OFFSET,
-	I915_REG_EXCC_OFFSET,
+	_REG_RCS_HWSTAM,
+	_REG_BCS_HWSTAM,
+	_REG_VCS_HWSTAM,
 
-	I915_REG_IER_OFFSET,
-	I915_REG_FW_BLC_OFFSET,
-	I915_REG_UHPTR_OFFSET,
-	I915_REG_HWS_PGA_OFFSET,
-	I915_REG_VCS_HWS_PGA_OFFSET,
-	I915_REG_BCS_UHPTR_OFFSET,
-	I915_REG_BCS_HWS_PGA_OFFSET,
-	I915_REG_MMIO_TCNT_OFFSET,
+	_REG_RCS_HWS_PGA,
+	_REG_BCS_HWS_PGA,
+	_REG_VCS_HWS_PGA,
 
-	I915_REG_VGA0_OFFSET,
-	I915_REG_VGA1_OFFSET,
-	I915_REG_VGA_PD_OFFSET,
-	I915_REG_DPLL_A_OFFSET,
-	I915_REG_FPA0_OFFSET,
-	I915_REG_FPA1_OFFSET,
-	I915_REG_D_STATE_OFFSET,
+	_REG_RCS_INSTPM,
+	_REG_BCS_INSTPM,
+	_REG_VCS_INSTPM,
+
+	_REG_RCS_EXCC,
+	_REG_BCS_EXCC,
+	_REG_VCS_EXCC,
+
+	_REG_RCS_UHPTR,
+	_REG_BCS_UHPTR,
+	_REG_VCS_UHPTR,
 };
 
 static void vgt_setup_render_regs(struct pgt_device *pdev)
@@ -1496,7 +1480,6 @@ static void vgt_setup_display_regs(struct pgt_device *pdev)
 
 /* TODO: lots of to fill */
 vgt_reg_t vgt_pm_regs[] = {
-	I915_REG_CURABASE_OFFSET, /* placeholder */
 };
 
 static void vgt_setup_pm_regs(struct pgt_device *pdev)
@@ -1509,7 +1492,6 @@ static void vgt_setup_pm_regs(struct pgt_device *pdev)
 
 /* TODO: lots of to fill */
 vgt_reg_t vgt_mgmt_regs[] = {
-	I915_REG_CURABASE_OFFSET, /* placeholder */
 };
 
 static void vgt_setup_mgmt_regs(struct pgt_device *pdev)
@@ -1578,10 +1560,9 @@ bool vgt_save_context (struct vgt_device *vgt)
 
 	if (vgt == NULL)
 		return false;
-	/* disable Power */
+
 	disable_power_management(vgt);
 
-	/* save MMIO: IntelGpuRegSave in WR */
 	vgt_rendering_save_mmio(vgt);
 
 	/*
@@ -1711,7 +1692,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 				goto err;
 		}
 	}
-	/* MMIO restore: intelGpuRegRestore in WR */
+
 	vgt_rendering_restore_mmio(vgt);
 
 	/* Restore ring registers */
@@ -2132,7 +2113,7 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
  */
 static void vgt_setup_pt_regs(struct pgt_device *pdev)
 {
-	reg_set_pt(pdev, I915_REG_FENCE_0_OFFSET);
+	reg_set_pt(pdev, _REG_FENCE_0_LOW);
 }
 
 /*
