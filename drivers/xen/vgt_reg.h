@@ -460,10 +460,10 @@ struct vgt_device {
 
 enum vgt_owner_type {
 	VGT_OT_INVALID = 0,
-	VGT_OT_RENDER,                  // the owner directly operating render command buffers
-	VGT_OT_BLITTER,                 // the owner directly operating blitter command buffers
-	VGT_OT_VIDEO,                   // the owner directly operating video command buffers
-	VGT_OT_GT,                      // the owner directly operating all render buffers (render/blit/video)
+	VGT_OT_RCS,                  // the owner directly operating render command buffers
+	VGT_OT_BCS,                 // the owner directly operating blitter command buffers
+	VGT_OT_VCS,                   // the owner directly operating video command buffers
+	VGT_OT_RENDER,                      // the owner directly operating all render buffers (render/blit/video)
 	VGT_OT_DISPLAY,                 // the owner having its content directly shown on one or several displays
 	VGT_OT_PM,                      // the owner handling GEN power management activities
 	VGT_OT_MGMT,                    // the owner managing display/monitor resources
@@ -530,7 +530,7 @@ struct pgt_device {
 };
 
 #define vgt_get_owner(d, t)             (d->owner[t])
-#define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_GT))
+#define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_RENDER))
 #define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
 #define current_display_owner(d)	(vgt_get_owner(d, VGT_OT_DISPLAY))
 #define current_pm_owner(d)		(vgt_get_owner(d, VGT_OT_PM))
@@ -1037,29 +1037,26 @@ static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 		VGT_MMIO_WRITE(pdev, reg, val);		\
 	} while (0)
 
-#define _REG_RDR_HWSTAM		0x2098
-#define _REG_VIDEO_HWSTAM	0x12098
-#define _REG_BLIT_HWSTAM	0x22098
-#define _REG_RDR_IMR		0x20A8
-#define _REG_VIDEO_IMR		0x120A8
-#define _REG_BLIT_IMR		0x220A8
+#define _REG_RCS_IMR		0x20A8
+#define _REG_VCS_IMR		0x120A8
+#define _REG_BCS_IMR		0x220A8
 
-#define _REG_RDR_WATCHDOG_CTL	0x2178
-#define _REG_RDR_WATCHDOG_THRSH	0x217C
-#define _REG_RDR_WATCHDOG_CTR	0x2190
-#define _REG_VIDEO_WATCHDOG_CTR	0x12178
-#define _REG_VIDEO_WATCHDOG_THRSH	0x1217C
+#define _REG_RCS_WATCHDOG_CTL	0x2178
+#define _REG_RCS_WATCHDOG_THRSH	0x217C
+#define _REG_RCS_WATCHDOG_CTR	0x2190
+#define _REG_VCS_WATCHDOG_CTR	0x12178
+#define _REG_VCS_WATCHDOG_THRSH	0x1217C
 
-#define _REG_RDR_EIR	0x20B0
-#define _REG_RDR_EMR	0x20B4
-#define _REG_RDR_ESR	0x20B8
-#define _REG_BLIT_EIR	0x220B0
-#define _REG_BLIT_EMR	0x220B4
-#define _REG_BLIT_ESR	0x220B8
+#define _REG_RCS_EIR	0x20B0
+#define _REG_RCS_EMR	0x20B4
+#define _REG_RCS_ESR	0x20B8
+#define _REG_BCS_EIR	0x220B0
+#define _REG_BCS_EMR	0x220B4
+#define _REG_BCS_ESR	0x220B8
 /* interesting no definitiont about video error information. */
-//#define _REG_VIDEO_EIR	0x20B0
-//#define _REG_VIDEO_EMR	0x20B4
-//#define _REG_VIDEO_ESR	0x20B8
+//#define _REG_VCS_EIR	0x20B0
+//#define _REG_VCS_EMR	0x20B4
+//#define _REG_VCS_ESR	0x20B8
 
 /* blacklight PWM control */
 #define _REG_BLC_PWM_CTL2	0x48250
@@ -1072,29 +1069,29 @@ static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 enum vgt_event_type {
 
 	// GT
-	IRQ_RDR_MI_USER_INTERRUPT = 0,
-	IRQ_RDR_DEBUG,
-	IRQ_RDR_MMIO_SYNC_FLUSH,
-	IRQ_RDR_CMD_STREAMER_ERR,
-	IRQ_RDR_PIPE_CONTROL,
-	IRQ_RDR_WATCHDOG_EXCEEDED,
-	IRQ_RDR_PAGE_DIRECTORY_FAULT,
-	IRQ_RDR_AS_CONTEXT_SWITCH,
+	IRQ_RCS_MI_USER_INTERRUPT = 0,
+	IRQ_RCS_DEBUG,
+	IRQ_RCS_MMIO_SYNC_FLUSH,
+	IRQ_RCS_CMD_STREAMER_ERR,
+	IRQ_RCS_PIPE_CONTROL,
+	IRQ_RCS_WATCHDOG_EXCEEDED,
+	IRQ_RCS_PAGE_DIRECTORY_FAULT,
+	IRQ_RCS_AS_CONTEXT_SWITCH,
 
-	IRQ_VIDEO_MI_USER_INTERRUPT,
-	IRQ_VIDEO_MMIO_SYNC_FLUSH,
-	IRQ_VIDEO_CMD_STREAMER_ERR,
-	IRQ_VIDEO_MI_FLUSH_DW,
-	IRQ_VIDEO_WATCHDOG_EXCEEDED,
-	IRQ_VIDEO_PAGE_DIRECTORY_FAULT,
-	IRQ_VIDEO_AS_CONTEXT_SWITCH,
+	IRQ_VCS_MI_USER_INTERRUPT,
+	IRQ_VCS_MMIO_SYNC_FLUSH,
+	IRQ_VCS_CMD_STREAMER_ERR,
+	IRQ_VCS_MI_FLUSH_DW,
+	IRQ_VCS_WATCHDOG_EXCEEDED,
+	IRQ_VCS_PAGE_DIRECTORY_FAULT,
+	IRQ_VCS_AS_CONTEXT_SWITCH,
 
-	IRQ_BLIT_MI_USER_INTERRUPT,
-	IRQ_BLIT_MMIO_SYNC_FLUSH,
-	IRQ_BLIT_CMD_STREAMER_ERR,
-	IRQ_BLIT_MI_FLUSH_DW,
-	IRQ_BLIT_PAGE_DIRECTORY_FAULT,
-	IRQ_BLIT_AS_CONTEXT_SWITCH,
+	IRQ_BCS_MI_USER_INTERRUPT,
+	IRQ_BCS_MMIO_SYNC_FLUSH,
+	IRQ_BCS_CMD_STREAMER_ERR,
+	IRQ_BCS_MI_FLUSH_DW,
+	IRQ_BCS_PAGE_DIRECTORY_FAULT,
+	IRQ_BCS_AS_CONTEXT_SWITCH,
 
 	// DISPLAY
 	IRQ_PIPE_A_FIFO_UNDERRUN,
@@ -1164,21 +1161,21 @@ enum vgt_event_type {
 	IRQ_MAX,
 };
 
-#define VGT_FIRST_RDR_EVENT	IRQ_RDR_MI_USER_INTERRUPT
-#define VGT_LAST_RDR_EVENT	IRQ_RDR_AS_CONTEXT_SWITCH
-#define VGT_RDR_EVENT(e)	(e >= VGT_FIRST_RDR_EVENT && e <= VGT_LAST_RDR_EVENT)
+#define VGT_FIRST_RCS_EVENT	IRQ_RCS_MI_USER_INTERRUPT
+#define VGT_LAST_RCS_EVENT	IRQ_RCS_AS_CONTEXT_SWITCH
+#define VGT_RCS_EVENT(e)	(e >= VGT_FIRST_RCS_EVENT && e <= VGT_LAST_RCS_EVENT)
 
-#define VGT_FIRST_VIDEO_EVENT	IRQ_VIDEO_MI_USER_INTERRUPT
-#define VGT_LAST_VIDEO_EVENT	IRQ_VIDEO_AS_CONTEXT_SWITCH
-#define VGT_VIDEO_EVENT(e)	(e >= IRQ_VIDEO_MI_USER_INTERRUPT && e <= IRQ_VIDEO_AS_CONTEXT_SWITCH)
+#define VGT_FIRST_VCS_EVENT	IRQ_VCS_MI_USER_INTERRUPT
+#define VGT_LAST_VCS_EVENT	IRQ_VCS_AS_CONTEXT_SWITCH
+#define VGT_VCS_EVENT(e)	(e >= IRQ_VCS_MI_USER_INTERRUPT && e <= IRQ_VCS_AS_CONTEXT_SWITCH)
 
-#define VGT_FIRST_BLIT_EVENT	IRQ_BLIT_MI_USER_INTERRUPT
-#define VGT_LAST_BLIT_EVENT	IRQ_BLIT_AS_CONTEXT_SWITCH
-#define VGT_BLIT_EVENT(e)	(e >= IRQ_BLIT_MI_USER_INTERRUPT && e <= IRQ_BLIT_AS_CONTEXT_SWITCH)
+#define VGT_FIRST_BCS_EVENT	IRQ_BCS_MI_USER_INTERRUPT
+#define VGT_LAST_BCS_EVENT	IRQ_BCS_AS_CONTEXT_SWITCH
+#define VGT_BCS_EVENT(e)	(e >= IRQ_BCS_MI_USER_INTERRUPT && e <= IRQ_BCS_AS_CONTEXT_SWITCH)
 
-#define VGT_FIRST_GT_EVENT	VGT_FIRST_RDR_EVENT
-#define VGT_LAST_GT_EVENT	VGT_LAST_BLIT_EVENT
-#define VGT_GT_EVENT(e)		(e >= VGT_FIRST_GT_EVENT && e <= IRQ_BLIT_AS_CONTEXT_SWITCH)
+#define VGT_FIRST_RENDER_EVENT	VGT_FIRST_RCS_EVENT
+#define VGT_LAST_RENDER_EVENT	VGT_LAST_BCS_EVENT
+#define VGT_RENDER_EVENT(e)		(e >= VGT_FIRST_RENDER_EVENT && e <= IRQ_BCS_AS_CONTEXT_SWITCH)
 
 #define VGT_FIRST_DPY_EVENT	IRQ_PIPE_A_FIFO_UNDERRUN
 #define VGT_LAST_DPY_EVENT	IRQ_SPRITE_B_FLIP_DONE

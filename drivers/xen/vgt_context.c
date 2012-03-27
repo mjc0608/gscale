@@ -140,10 +140,10 @@ static void show_debug(struct pgt_device *pdev)
 {
 	vgt_reg_t reg;
 	printk("debug registers:\n");
-	printk("....EIR: %x\n", VGT_MMIO_READ(pdev, _REG_RDR_EIR));
-	printk("....ESR: %x\n", VGT_MMIO_READ(pdev, _REG_RDR_ESR));
-	printk("....blit EIR: %x\n", VGT_MMIO_READ(pdev, _REG_BLIT_EIR));
-	printk("....blit ESR: %x\n", VGT_MMIO_READ(pdev, _REG_BLIT_ESR));
+	printk("....EIR: %x\n", VGT_MMIO_READ(pdev, _REG_RCS_EIR));
+	printk("....ESR: %x\n", VGT_MMIO_READ(pdev, _REG_RCS_ESR));
+	printk("....blit EIR: %x\n", VGT_MMIO_READ(pdev, _REG_BCS_EIR));
+	printk("....blit ESR: %x\n", VGT_MMIO_READ(pdev, _REG_BCS_ESR));
 	printk("....IPEHR(last executed inst): %x\n", VGT_MMIO_READ(pdev, 0x2068));
 	reg = VGT_MMIO_READ(pdev, 0x2070);
 	printk("....INSTPS (parser state): %x :\n", reg);
@@ -1372,7 +1372,7 @@ static void vgt_setup_render_regs(struct pgt_device *pdev)
 	int i;
 
 	for (i = 0; i < ARRAY_NUM(vgt_render_regs); i++)
-		reg_set_owner(pdev, vgt_render_regs[i], VGT_OT_GT);
+		reg_set_owner(pdev, vgt_render_regs[i], VGT_OT_RENDER);
 }
 
 /* TODO: lots of to fill */

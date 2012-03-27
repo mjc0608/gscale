@@ -70,60 +70,60 @@
  * special, which we want to let vGT fully control it and then emulate
  * for each instance.
  */
-static struct vgt_irq_info snb_gt_irq_info = {
+static struct vgt_irq_info snb_render_irq_info = {
 	.name = "SNB GT IRQ",
 	.reg_base = _REG_GTISR,
 	.table_size = VGT_IRQ_BITWIDTH,
 	.table = {
-		{IRQ_RDR_MI_USER_INTERRUPT,	vgt_default_event_handler, 	NULL},	// bit 0
-		{IRQ_RDR_DEBUG,			vgt_default_event_handler, 	NULL},	// bit 1
+		{IRQ_RCS_MI_USER_INTERRUPT,	vgt_default_event_handler, 	NULL},	// bit 0
+		{IRQ_RCS_DEBUG,			vgt_default_event_handler, 	NULL},	// bit 1
 		/* not expect to generate interrupt for sync flush */
-		{IRQ_RDR_MMIO_SYNC_FLUSH,	vgt_handle_unexpected_event,	NULL},	// bit 2
-		{IRQ_RDR_CMD_STREAMER_ERR,	vgt_handle_cmd_stream_error,	NULL},	// bit 3
+		{IRQ_RCS_MMIO_SYNC_FLUSH,	vgt_handle_unexpected_event,	NULL},	// bit 2
+		{IRQ_RCS_CMD_STREAMER_ERR,	vgt_handle_cmd_stream_error,	NULL},	// bit 3
 		/* PIPE_CONTROL may need some special handling for ID */
-		{IRQ_RDR_PIPE_CONTROL, 		vgt_handle_weak_event,		NULL},	// bit 4
+		{IRQ_RCS_PIPE_CONTROL, 		vgt_handle_weak_event,		NULL},	// bit 4
 
 		{IRQ_RESERVED, 			NULL, 				NULL},
 
-		{IRQ_RDR_WATCHDOG_EXCEEDED,	vgt_handle_host_only_event,	vgt_emulate_watchdog},	// bit 6
+		{IRQ_RCS_WATCHDOG_EXCEEDED,	vgt_handle_host_only_event,	vgt_emulate_watchdog},	// bit 6
 		/* unclear with page fault context yet */
-		{IRQ_RDR_PAGE_DIRECTORY_FAULT,	vgt_handle_weak_event, 		NULL},	// bit 7
+		{IRQ_RCS_PAGE_DIRECTORY_FAULT,	vgt_handle_weak_event, 		NULL},	// bit 7
 		/* not expect to use context switch interrupt on snb, though listed in PRM */
-		{IRQ_RDR_AS_CONTEXT_SWITCH,	vgt_handle_unexpected_event, 	NULL},	// bit 8
+		{IRQ_RCS_AS_CONTEXT_SWITCH,	vgt_handle_unexpected_event, 	NULL},	// bit 8
 
 		{IRQ_RESERVED, 			NULL,				NULL},
 		{IRQ_RESERVED, 			NULL, 				NULL},
 		{IRQ_RESERVED, 			NULL, 				NULL},
 
-		{IRQ_VIDEO_MI_USER_INTERRUPT, 	vgt_default_event_handler,	NULL},	// bit 12
+		{IRQ_VCS_MI_USER_INTERRUPT, 	vgt_default_event_handler,	NULL},	// bit 12
 
 		{IRQ_RESERVED, 			NULL,				NULL},
 
-		{IRQ_VIDEO_MMIO_SYNC_FLUSH, 	vgt_handle_unexpected_event,	NULL},	// bit 14
-		{IRQ_VIDEO_CMD_STREAMER_ERR, 	vgt_handle_cmd_stream_error,	NULL},	// bit 15
-		{IRQ_VIDEO_MI_FLUSH_DW, 	vgt_handle_weak_event,		NULL},	// bit 16
+		{IRQ_VCS_MMIO_SYNC_FLUSH, 	vgt_handle_unexpected_event,	NULL},	// bit 14
+		{IRQ_VCS_CMD_STREAMER_ERR, 	vgt_handle_cmd_stream_error,	NULL},	// bit 15
+		{IRQ_VCS_MI_FLUSH_DW, 	vgt_handle_weak_event,		NULL},	// bit 16
 
 		{IRQ_RESERVED, 			NULL,				NULL},
 
-		{IRQ_VIDEO_WATCHDOG_EXCEEDED, 	vgt_handle_host_only_event,	vgt_emulate_watchdog},	// bit 18
-		{IRQ_VIDEO_PAGE_DIRECTORY_FAULT, vgt_handle_weak_event,		NULL},	// bit 19
-		{IRQ_VIDEO_AS_CONTEXT_SWITCH, 	vgt_handle_unexpected_event,	NULL},	// bit 20
+		{IRQ_VCS_WATCHDOG_EXCEEDED, 	vgt_handle_host_only_event,	vgt_emulate_watchdog},	// bit 18
+		{IRQ_VCS_PAGE_DIRECTORY_FAULT, vgt_handle_weak_event,		NULL},	// bit 19
+		{IRQ_VCS_AS_CONTEXT_SWITCH, 	vgt_handle_unexpected_event,	NULL},	// bit 20
 
 		{IRQ_RESERVED, 			NULL,				NULL},
 
-		{IRQ_BLIT_MI_USER_INTERRUPT, 	vgt_default_event_handler,	NULL},	// bit 22
+		{IRQ_BCS_MI_USER_INTERRUPT, 	vgt_default_event_handler,	NULL},	// bit 22
 
 		{IRQ_RESERVED,			NULL,				NULL},
 
-		{IRQ_BLIT_MMIO_SYNC_FLUSH, 	vgt_handle_unexpected_event,	NULL}, 	// bit 24
-		{IRQ_BLIT_CMD_STREAMER_ERR, 	vgt_handle_cmd_stream_error,	NULL}, 	// bit 25
-		{IRQ_BLIT_MI_FLUSH_DW, 		vgt_handle_weak_event,		NULL},	// bit 26
+		{IRQ_BCS_MMIO_SYNC_FLUSH, 	vgt_handle_unexpected_event,	NULL}, 	// bit 24
+		{IRQ_BCS_CMD_STREAMER_ERR, 	vgt_handle_cmd_stream_error,	NULL}, 	// bit 25
+		{IRQ_BCS_MI_FLUSH_DW, 		vgt_handle_weak_event,		NULL},	// bit 26
 
 		{IRQ_RESERVED, 			NULL,				NULL},
 		{IRQ_RESERVED, 			NULL,				NULL},
 
-		{IRQ_BLIT_PAGE_DIRECTORY_FAULT, vgt_handle_weak_event,		NULL},	// bit 29
-		{IRQ_BLIT_AS_CONTEXT_SWITCH, 	vgt_handle_unexpected_event,	NULL},	// bit 30
+		{IRQ_BCS_PAGE_DIRECTORY_FAULT, vgt_handle_weak_event,		NULL},	// bit 29
+		{IRQ_BCS_AS_CONTEXT_SWITCH, 	vgt_handle_unexpected_event,	NULL},	// bit 30
 
 		{IRQ_RESERVED, 			NULL,				NULL},	// bit 31
 	},
@@ -284,8 +284,8 @@ static struct vgt_irq_info snb_pch_irq_info = {
 
 static struct vgt_irq_info* vgt_snb_get_irq_info_from_event(struct pgt_device *dev, enum vgt_event_type event)
 {
-	if (VGT_GT_EVENT(event))
-		return &snb_gt_irq_info;
+	if (VGT_RENDER_EVENT(event))
+		return &snb_render_irq_info;
 	else if (VGT_DPY_EVENT(event))
 		return &snb_dpy_irq_info;
 	else if (VGT_PCH_EVENT(event))
@@ -299,7 +299,7 @@ static struct vgt_irq_info* vgt_snb_get_irq_info_from_event(struct pgt_device *d
 static inline struct vgt_irq_info* vgt_snb_get_irq_info_from_reg(int reg)
 {
 	if (reg >= _REG_GTISR && reg < _REG_GTIER + 4)
-		return &snb_gt_irq_info;
+		return &snb_render_irq_info;
 	else if (reg >= _REG_DEISR && reg < _REG_DEIER + 4)
 		return &snb_dpy_irq_info;
 	else if (reg >= _REG_SDEISR && reg < _REG_SDEIER + 4)
@@ -372,7 +372,7 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 	if (!gt_iir && !de_iir && !pm_iir)
 		return IRQ_NONE;
 
-	vgt_irq_handle_event(dev, &gt_iir, &snb_gt_irq_info);
+	vgt_irq_handle_event(dev, &gt_iir, &snb_render_irq_info);
 	vgt_irq_handle_event(dev, &de_iir, &snb_dpy_irq_info);
 	vgt_irq_handle_event(dev, &pm_iir, &snb_pm_irq_info);
 
@@ -401,9 +401,9 @@ static void vgt_snb_irq_init(struct pgt_device *dev)
 
 	VGT_MMIO_WRITE(dev, _REG_GTIER, 0U);
 	VGT_MMIO_WRITE(dev, _REG_GTIMR, 0U);
-	VGT_MMIO_WRITE(dev, _REG_RDR_IMR, 0U);
-	VGT_MMIO_WRITE(dev, _REG_VIDEO_IMR, 0U);
-	VGT_MMIO_WRITE(dev, _REG_BLIT_IMR, 0U);
+	VGT_MMIO_WRITE(dev, _REG_RCS_IMR, 0U);
+	VGT_MMIO_WRITE(dev, _REG_VCS_IMR, 0U);
+	VGT_MMIO_WRITE(dev, _REG_BCS_IMR, 0U);
 	VGT_MMIO_WRITE(dev, _REG_GTIIR, VGT_MMIO_READ(dev, _REG_GTIIR));
 
 	VGT_MMIO_WRITE(dev, _REG_PMIER, 0U);
@@ -424,11 +424,11 @@ static void vgt_snb_irq_init(struct pgt_device *dev)
 	vgt_register_vreg_handler(_REG_SDEIMR, vgt_reg_imr_handler);
 	vgt_register_vreg_handler(_REG_SDEIER, vgt_reg_ier_handler);
 
-	vgt_register_vreg_handler(_REG_RDR_WATCHDOG_CTL, vgt_reg_watchdog_handler);
-	vgt_register_vreg_handler(_REG_RDR_WATCHDOG_THRSH, vgt_reg_watchdog_handler);
-	vgt_register_vreg_handler(_REG_RDR_WATCHDOG_CTR, vgt_reg_watchdog_handler);
-	vgt_register_vreg_handler(_REG_VIDEO_WATCHDOG_CTR, vgt_reg_watchdog_handler);
-	vgt_register_vreg_handler(_REG_VIDEO_WATCHDOG_THRSH, vgt_reg_watchdog_handler);
+	vgt_register_vreg_handler(_REG_RCS_WATCHDOG_CTL, vgt_reg_watchdog_handler);
+	vgt_register_vreg_handler(_REG_RCS_WATCHDOG_THRSH, vgt_reg_watchdog_handler);
+	vgt_register_vreg_handler(_REG_RCS_WATCHDOG_CTR, vgt_reg_watchdog_handler);
+	vgt_register_vreg_handler(_REG_VCS_WATCHDOG_CTR, vgt_reg_watchdog_handler);
+	vgt_register_vreg_handler(_REG_VCS_WATCHDOG_THRSH, vgt_reg_watchdog_handler);
 #endif
 	/* Set a list of pass-through regs */
 	//vgt_set_vreg_policy(..., ...);
@@ -454,10 +454,10 @@ static void vgt_snb_irq_restore(struct vgt_device *vstate,
 		enum vgt_owner_type owner)
 {
 	switch (owner) {
-		case VGT_OT_GT:
-			vgt_restore_vreg(vstate, _REG_RDR_HWSTAM);
-			vgt_restore_vreg(vstate, _REG_VIDEO_HWSTAM);
-			vgt_restore_vreg(vstate, _REG_BLIT_HWSTAM);
+		case VGT_OT_RENDER:
+			vgt_restore_vreg(vstate, _REG_RCS_HWSTAM);
+			vgt_restore_vreg(vstate, _REG_VCS_HWSTAM);
+			vgt_restore_vreg(vstate, _REG_BCS_HWSTAM);
 
 			/*
 			 * GT is always owned by a single VM at a time, so it's

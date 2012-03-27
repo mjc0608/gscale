@@ -102,29 +102,29 @@
 uint8_t vgt_irq_warn_once[IRQ_MAX] = {0};
 char *vgt_irq_name[IRQ_MAX] = {
 	// GT
-	[IRQ_RDR_MI_USER_INTERRUPT] = "Render Command Streamer MI USER INTERRUPT",
-	[IRQ_RDR_DEBUG] = "Render EU debug from SVG",
-	[IRQ_RDR_MMIO_SYNC_FLUSH] = "Render MMIO sync flush status",
-	[IRQ_RDR_CMD_STREAMER_ERR] = "Render Command Streamer error interrupt",
-	[IRQ_RDR_PIPE_CONTROL] = "ender PIPE CONTROL notify",
-	[IRQ_RDR_WATCHDOG_EXCEEDED] = "Render Command Streamer Watchdog counter exceeded",
-	[IRQ_RDR_PAGE_DIRECTORY_FAULT] = "Render page directory faults",
-	[IRQ_RDR_AS_CONTEXT_SWITCH] = "Render AS Context Switch Interrupt",
+	[IRQ_RCS_MI_USER_INTERRUPT] = "Render Command Streamer MI USER INTERRUPT",
+	[IRQ_RCS_DEBUG] = "Render EU debug from SVG",
+	[IRQ_RCS_MMIO_SYNC_FLUSH] = "Render MMIO sync flush status",
+	[IRQ_RCS_CMD_STREAMER_ERR] = "Render Command Streamer error interrupt",
+	[IRQ_RCS_PIPE_CONTROL] = "ender PIPE CONTROL notify",
+	[IRQ_RCS_WATCHDOG_EXCEEDED] = "Render Command Streamer Watchdog counter exceeded",
+	[IRQ_RCS_PAGE_DIRECTORY_FAULT] = "Render page directory faults",
+	[IRQ_RCS_AS_CONTEXT_SWITCH] = "Render AS Context Switch Interrupt",
 
-	[IRQ_VIDEO_MI_USER_INTERRUPT] = "Video Command Streamer MI USER INTERRUPT",
-	[IRQ_VIDEO_MMIO_SYNC_FLUSH] = "Video MMIO sync flush status",
-	[IRQ_VIDEO_CMD_STREAMER_ERR] = "Video Command Streamer error interrupt",
-	[IRQ_VIDEO_MI_FLUSH_DW] = "Video MI FLUSH DW notify",
-	[IRQ_VIDEO_WATCHDOG_EXCEEDED] = "Video Command Streamer Watchdog counter exceeded",
-	[IRQ_VIDEO_PAGE_DIRECTORY_FAULT] = "Video page directory faults",
-	[IRQ_VIDEO_AS_CONTEXT_SWITCH] = "Video AS Context Switch Interrupt",
+	[IRQ_VCS_MI_USER_INTERRUPT] = "Video Command Streamer MI USER INTERRUPT",
+	[IRQ_VCS_MMIO_SYNC_FLUSH] = "Video MMIO sync flush status",
+	[IRQ_VCS_CMD_STREAMER_ERR] = "Video Command Streamer error interrupt",
+	[IRQ_VCS_MI_FLUSH_DW] = "Video MI FLUSH DW notify",
+	[IRQ_VCS_WATCHDOG_EXCEEDED] = "Video Command Streamer Watchdog counter exceeded",
+	[IRQ_VCS_PAGE_DIRECTORY_FAULT] = "Video page directory faults",
+	[IRQ_VCS_AS_CONTEXT_SWITCH] = "Video AS Context Switch Interrupt",
 
-	[IRQ_BLIT_MI_USER_INTERRUPT] = "Blitter Command Streamer MI USER INTERRUPT",
-	[IRQ_BLIT_MMIO_SYNC_FLUSH] = "Billter MMIO sync flush status",
-	[IRQ_BLIT_CMD_STREAMER_ERR] = "Blitter Command Streamer error interrupt",
-	[IRQ_BLIT_MI_FLUSH_DW] = "Blitter MI FLUSH DW notify",
-	[IRQ_BLIT_PAGE_DIRECTORY_FAULT] = "Blitter page directory faults",
-	[IRQ_BLIT_AS_CONTEXT_SWITCH] = "Blitter AS Context Switch Interrupt",
+	[IRQ_BCS_MI_USER_INTERRUPT] = "Blitter Command Streamer MI USER INTERRUPT",
+	[IRQ_BCS_MMIO_SYNC_FLUSH] = "Billter MMIO sync flush status",
+	[IRQ_BCS_CMD_STREAMER_ERR] = "Blitter Command Streamer error interrupt",
+	[IRQ_BCS_MI_FLUSH_DW] = "Blitter MI FLUSH DW notify",
+	[IRQ_BCS_PAGE_DIRECTORY_FAULT] = "Blitter page directory faults",
+	[IRQ_BCS_AS_CONTEXT_SWITCH] = "Blitter AS Context Switch Interrupt",
 
 	// DISPLAY
 	[IRQ_PIPE_A_FIFO_UNDERRUN] = "Pipe A FIFO underrun",
@@ -196,29 +196,29 @@ char *vgt_irq_name[IRQ_MAX] = {
 /* default event owner mapping table. may be changed dynamically */
 enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
 	// GT
-	[IRQ_RDR_MI_USER_INTERRUPT] = VGT_OT_GT,
-	[IRQ_RDR_DEBUG] = VGT_OT_GT,
-	[IRQ_RDR_MMIO_SYNC_FLUSH] = VGT_OT_GT,
-	[IRQ_RDR_CMD_STREAMER_ERR] = VGT_OT_GT,
-	[IRQ_RDR_PIPE_CONTROL] = VGT_OT_GT,
-	[IRQ_RDR_WATCHDOG_EXCEEDED] = VGT_OT_GT,
-	[IRQ_RDR_PAGE_DIRECTORY_FAULT] = VGT_OT_GT,
-	[IRQ_RDR_AS_CONTEXT_SWITCH] = VGT_OT_GT,
+	[IRQ_RCS_MI_USER_INTERRUPT] = VGT_OT_RENDER,
+	[IRQ_RCS_DEBUG] = VGT_OT_RENDER,
+	[IRQ_RCS_MMIO_SYNC_FLUSH] = VGT_OT_RENDER,
+	[IRQ_RCS_CMD_STREAMER_ERR] = VGT_OT_RENDER,
+	[IRQ_RCS_PIPE_CONTROL] = VGT_OT_RENDER,
+	[IRQ_RCS_WATCHDOG_EXCEEDED] = VGT_OT_RENDER,
+	[IRQ_RCS_PAGE_DIRECTORY_FAULT] = VGT_OT_RENDER,
+	[IRQ_RCS_AS_CONTEXT_SWITCH] = VGT_OT_RENDER,
 
-	[IRQ_VIDEO_MI_USER_INTERRUPT] = VGT_OT_GT,
-	[IRQ_VIDEO_MMIO_SYNC_FLUSH] = VGT_OT_GT,
-	[IRQ_VIDEO_CMD_STREAMER_ERR] = VGT_OT_GT,
-	[IRQ_VIDEO_MI_FLUSH_DW] = VGT_OT_GT,
-	[IRQ_VIDEO_WATCHDOG_EXCEEDED] = VGT_OT_GT,
-	[IRQ_VIDEO_PAGE_DIRECTORY_FAULT] = VGT_OT_GT,
-	[IRQ_VIDEO_AS_CONTEXT_SWITCH] = VGT_OT_GT,
+	[IRQ_VCS_MI_USER_INTERRUPT] = VGT_OT_RENDER,
+	[IRQ_VCS_MMIO_SYNC_FLUSH] = VGT_OT_RENDER,
+	[IRQ_VCS_CMD_STREAMER_ERR] = VGT_OT_RENDER,
+	[IRQ_VCS_MI_FLUSH_DW] = VGT_OT_RENDER,
+	[IRQ_VCS_WATCHDOG_EXCEEDED] = VGT_OT_RENDER,
+	[IRQ_VCS_PAGE_DIRECTORY_FAULT] = VGT_OT_RENDER,
+	[IRQ_VCS_AS_CONTEXT_SWITCH] = VGT_OT_RENDER,
 
-	[IRQ_BLIT_MI_USER_INTERRUPT] = VGT_OT_GT,
-	[IRQ_BLIT_MMIO_SYNC_FLUSH] = VGT_OT_GT,
-	[IRQ_BLIT_CMD_STREAMER_ERR] = VGT_OT_GT,
-	[IRQ_BLIT_MI_FLUSH_DW] = VGT_OT_GT,
-	[IRQ_BLIT_PAGE_DIRECTORY_FAULT] = VGT_OT_GT,
-	[IRQ_BLIT_AS_CONTEXT_SWITCH] = VGT_OT_GT,
+	[IRQ_BCS_MI_USER_INTERRUPT] = VGT_OT_RENDER,
+	[IRQ_BCS_MMIO_SYNC_FLUSH] = VGT_OT_RENDER,
+	[IRQ_BCS_CMD_STREAMER_ERR] = VGT_OT_RENDER,
+	[IRQ_BCS_MI_FLUSH_DW] = VGT_OT_RENDER,
+	[IRQ_BCS_PAGE_DIRECTORY_FAULT] = VGT_OT_RENDER,
+	[IRQ_BCS_AS_CONTEXT_SWITCH] = VGT_OT_RENDER,
 
 	// DISPLAY
 	[IRQ_PIPE_A_FIFO_UNDERRUN] = VGT_OT_DISPLAY,
@@ -391,7 +391,7 @@ void vgt_irq_save_context(struct vgt_device *vstate, enum vgt_owner_type owner)
 	struct pgt_device *dev = vstate->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 
-	if (owner != VGT_OT_GT || owner != VGT_OT_DISPLAY) {
+	if (owner != VGT_OT_RENDER || owner != VGT_OT_DISPLAY) {
 		dprintk("Dynamic ownership update for type (%d) is prohibited\n", owner);
 		return;
 	}
@@ -422,7 +422,7 @@ void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owne
 	struct pgt_device *dev = vstate->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 
-	if (owner != VGT_OT_GT || owner != VGT_OT_DISPLAY) {
+	if (owner != VGT_OT_RENDER || owner != VGT_OT_DISPLAY) {
 		dprintk("Dynamic ownership update for type (%d) is prohibited\n", owner);
 		return;
 	}
@@ -818,10 +818,10 @@ void vgt_handle_cmd_stream_error(struct pgt_device *dev,
 
 	/* check error status */
 	switch (entry->event) {
-		case IRQ_RDR_CMD_STREAMER_ERR:
-			reg = _REG_RDR_EIR;
-		case IRQ_BLIT_CMD_STREAMER_ERR:
-			reg = _REG_BLIT_EIR;
+		case IRQ_RCS_CMD_STREAMER_ERR:
+			reg = _REG_RCS_EIR;
+		case IRQ_BCS_CMD_STREAMER_ERR:
+			reg = _REG_BCS_EIR;
 		default:
 			printk("no reg info to propogate\n");
 			reg = _REG_INVALID;
@@ -1033,18 +1033,18 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 static void vgt_initialize_enabled_events(struct pgt_device *dev)
 {
 	/* TODO: a rough test, need think more on the initial set */
-	vgt_enable_hw_event(dev, IRQ_RDR_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
-	vgt_enable_hw_event(dev, IRQ_VIDEO_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
-	vgt_enable_hw_event(dev, IRQ_BLIT_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
+	vgt_enable_hw_event(dev, IRQ_RCS_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
+	vgt_enable_hw_event(dev, IRQ_VCS_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
+	vgt_enable_hw_event(dev, IRQ_BCS_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
 }
 
 static void vgt_initialize_always_emulated_events(struct pgt_device *dev)
 {
 	/* timers are always emulated */
-	set_bit(IRQ_RDR_WATCHDOG_EXCEEDED, vgt_always_emulated_events(dev));
-	set_bit(IRQ_VIDEO_WATCHDOG_EXCEEDED, vgt_always_emulated_events(dev));
-	vgt_get_event_owner_type(dev, IRQ_RDR_WATCHDOG_EXCEEDED) = VGT_OT_INVALID;
-	vgt_get_event_owner_type(dev, IRQ_VIDEO_WATCHDOG_EXCEEDED) = VGT_OT_INVALID;
+	set_bit(IRQ_RCS_WATCHDOG_EXCEEDED, vgt_always_emulated_events(dev));
+	set_bit(IRQ_VCS_WATCHDOG_EXCEEDED, vgt_always_emulated_events(dev));
+	vgt_get_event_owner_type(dev, IRQ_RCS_WATCHDOG_EXCEEDED) = VGT_OT_INVALID;
+	vgt_get_event_owner_type(dev, IRQ_VCS_WATCHDOG_EXCEEDED) = VGT_OT_INVALID;
 }
 
 /*
