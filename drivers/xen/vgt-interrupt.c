@@ -61,6 +61,9 @@
 #include <linux/types.h>
 #include <linux/bitops.h>
 #include <linux/slab.h>
+#include <linux/list.h>
+#include <linux/pci.h>
+#include <xen/events.h>
 #include <xen/vgt.h>
 #include "vgt_reg.h"
 
@@ -97,6 +100,9 @@
  *	PR_CTR_CTL, BCS_CTR_THRSH, VCS_ECOSKPD, VCS_CNTR
  *	interresting that blitter has no such interrupt
  */
+
+/* simply forward interrupt to dom0 i915, for testing the hook mechanism */
+#define VGT_IRQ_FORWARD_MODE
 
 /* for debug purpose */
 uint8_t vgt_irq_warn_once[IRQ_MAX] = {0};
@@ -457,14 +463,29 @@ int vgt_irq_update_event_ownership(struct vgt_device *dev,
 
 /* ========================virq injection===================== */
 
+extern int resend_irq_on_evtchn(unsigned int i915_irq);
+
+void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
+{
+	printk("vGT: resend irq for dom0\n");
+	resend_irq_on_evtchn(vgt_i915_irq(vgt->pdev));
+}
+
+void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
+{
+	printk("vGT: hvm injection not supported yet!\n");
+}
+
 static int vgt_inject_virtual_interrupt(struct vgt_device *vstate)
 {
 	if (vstate->vgt_id)
-		hvm_inject_virtual_interrupt(vstate);
+		inject_hvm_virtual_interrupt(vstate);
 	else
-		initdom_inject_virtual_interrupt(vstate);
+		inject_dom0_virtual_interrupt(vstate);
 
+#ifndef VGT_IRQ_FORWARD_MODE
 	vgt_clear_irq_pending(vstate);
+#endif
 
 	return 0;
 }
@@ -1005,6 +1026,9 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	u32 de_ier;
 	int i;
 
+	printk("vGT: receive interrupt (%x)\n", VGT_MMIO_READ(dev, _REG_DEIIR));
+
+#ifndef VGT_IRQ_FORWARD_MODE
 	/* avoid nested handling by disabling master interrupt */
 	de_ier = VGT_MMIO_READ(dev, _REG_DEIER);
 	VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier & ~_REGBIT_MASTER_INTERRUPT);
@@ -1024,19 +1048,14 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 
 	/* re-enable master interrupt */
 	VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);
+#else
+	vgt_inject_virtual_interrupt(dev->device[0]);
+#endif
 
 	return IRQ_HANDLED;
 }
 
 /* =====================Initializations======================= */
-
-static void vgt_initialize_enabled_events(struct pgt_device *dev)
-{
-	/* TODO: a rough test, need think more on the initial set */
-	vgt_enable_hw_event(dev, IRQ_RCS_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
-	vgt_enable_hw_event(dev, IRQ_VCS_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
-	vgt_enable_hw_event(dev, IRQ_BCS_MI_USER_INTERRUPT, VGT_IRQ_BITWIDTH);
-}
 
 static void vgt_initialize_always_emulated_events(struct pgt_device *dev)
 {
@@ -1056,6 +1075,11 @@ int vgt_irq_init(struct pgt_device *dev)
 	struct vgt_irq_ops *ops;
 	struct vgt_irq_host_state *irq_hstate;
 
+	irq_hstate = kzalloc(sizeof(struct vgt_irq_host_state), GFP_KERNEL);
+	ASSERT(irq_hstate);
+
+	dev->irq_hstate = irq_hstate;
+
 	spin_lock_init(&(dev->irq_hstate->lock));
 
 	if (snb_device(dev))
@@ -1064,11 +1088,6 @@ int vgt_irq_init(struct pgt_device *dev)
 		dprintk("vGT: no irq ops found!\n");
 		return -EINVAL;
 	}
-
-	irq_hstate = kzalloc(sizeof(struct vgt_irq_host_state), GFP_KERNEL);
-	ASSERT(irq_hstate);
-
-	dev->irq_hstate = irq_hstate;
 
 	/* Initialize ownership table, based on a default policy table */
 	o_table = kmalloc(IRQ_MAX * sizeof(enum vgt_owner_type), GFP_KERNEL);
@@ -1081,12 +1100,13 @@ int vgt_irq_init(struct pgt_device *dev)
 	vgt_event_owner_table(dev) = o_table;
 
 	ops = vgt_get_irq_ops(dev);
+#ifndef VGT_IRQ_FORWARD_MODE
 	ops->init(dev);
-
-	vgt_initialize_enabled_events(dev);
+#endif
 
 	vgt_initialize_always_emulated_events(dev);
 
+	printk("vGT: interrupt initialization completes\n");
 	return 0;
 }
 
@@ -1094,6 +1114,9 @@ void vgt_irq_exit(struct pgt_device *dev)
 {
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 
+	free_irq(vgt_pirq(dev), dev);
+	/* TODO: recover i915 handler? */
+	//unbind_from_irq(vgt_i915_irq(dev));
 	ops->exit(dev);
 	kfree(vgt_event_owner_table(dev));
 }
@@ -1115,10 +1138,58 @@ int vgt_vstate_irq_init(struct vgt_device *vstate)
 	irq_vstate->vgt = vstate;
 	vstate->irq_vstate = irq_vstate;
 	/* Assume basic domain information has been retrieved already */
+	printk("vGT: interrupt initialization for domain (%d) completes\n", vstate->vm_id);
 	return 0;
 }
 
-void vgt_vstate_irq_exit(struct pgt_device *vstate)
+void vgt_vstate_irq_exit(struct vgt_device *vstate)
 {
 	// leave it empty for now
 }
+
+void vgt_install_irq(struct pci_dev *pdev)
+{
+	struct pgt_device *node, *pgt = NULL;
+	int irq, ret;
+
+	if (list_empty(&pgt_devices)) {
+		printk("vGT: no valid pgt_device registered when installing irq\n");
+		return;
+	}
+
+	list_for_each_entry(node, &pgt_devices, list) {
+		if (node->pdev == pdev) {
+			pgt = node;
+			break;
+		}
+	}
+
+	if (!pgt) {
+		printk("vGT: no matching pgt_device when registering irq\n");
+		return;
+	}
+
+	printk("vGT: found matching pgt_device when registering irq for dev (0x%x)\n", pdev->devfn);
+
+	return;
+	irq = bind_virq_to_irq(VIRQ_VGT_GFX, 0);
+	if (irq < 0) {
+		printk("vGT: fail to bind virq\n");
+		return;
+	}
+
+	ret = request_irq(pdev->irq, vgt_interrupt, IRQF_SHARED, "vgt", pgt);
+	if (ret < 0) {
+		printk("vGT: error on request_irq (%d)\n", ret);
+		//unbind_from_irq(irq);
+		return;
+	}
+
+	vgt_pirq(pgt) = pdev->irq;
+	vgt_i915_irq(pgt) = irq;
+	pdev->irq = irq;
+
+	printk("vGT: allocate virq (%d) for i915, while keep original irq (%d) for vgt\n",
+		vgt_i915_irq(pgt), vgt_pirq(pgt));
+}
+EXPORT_SYMBOL(vgt_install_irq);

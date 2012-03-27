@@ -196,6 +196,8 @@ bool default_submit_context_command (struct vgt_device *vgt,
  * Definition of MMIO registers.
  */
 
+#define _REG_INVALID	0xFFFFFFFF
+
 /* PRB0, RCS */
 #define _REG_RCS_TAIL		0x02030
 #define _REG_RCS_HEAD		0x02034
@@ -491,6 +493,8 @@ typedef vgt_reg_t vgt_addr_mask_t;
 struct vgt_irq_host_state;
 /* per-device structure */
 struct pgt_device {
+	struct list_head	list;
+
 	struct pci_bus *pbus;	/* parent bus of the device */
 	struct pci_dev *pdev;	/* the gfx device bound to */
 	int bus;		/* parent bus number */
@@ -519,8 +523,8 @@ struct pgt_device {
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
-	struct list_head rendering_runq_head;	/* ??? */
-	struct list_head rendering_idleq_head;	/* ??? */
+	struct list_head rendering_runq_head;
+	struct list_head rendering_idleq_head;
 	spinlock_t lock;
 	bool switch_inprogress;	/* an ownership switch in progress */
 	enum vgt_owner_type switch_owner;	/* the type of the owner in switch */
@@ -528,6 +532,8 @@ struct pgt_device {
 	reg_info_t *reg_info;	/* virtualization policy for a given reg */
 	struct vgt_irq_host_state *irq_hstate;
 };
+
+extern struct list_head pgt_devices;
 
 #define vgt_get_owner(d, t)             (d->owner[t])
 #define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_RENDER))
@@ -972,8 +978,6 @@ static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 #define MSAC_APERTURE_SIZE_512M			(3 << 1)
 
 /* interrupt related definitions */
-#define _REG_INVALID	0xFFFFFFFF
-// register definitions in a format as _REG_REGNAME
 #define _REG_DEISR	0x44000
 #define _REG_DEIMR	0x44004
 #define _REG_DEIIR	0x44008
@@ -1021,22 +1025,6 @@ static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 #define vgt_iir(base)	(base + 0x8)
 #define vgt_ier(base)	(base + 0xC)
 
-#define vgt_clear_reg_bit(pdev, reg, bit)		\
-	do {						\
-		uint32_t val;				\
-		val = VGT_MMIO_READ(pdev, reg);		\
-		val &= ~(1 << bit);			\
-		VGT_MMIO_WRITE(pdev, reg, val);		\
-	} while (0)
-
-#define vgt_set_reg_bit(pdev, reg, bit)			\
-	do {						\
-		uint32_t val;				\
-		val = VGT_MMIO_READ(pdev, reg);		\
-		val |= 1 << bit;			\
-		VGT_MMIO_WRITE(pdev, reg, val);		\
-	} while (0)
-
 #define _REG_RCS_IMR		0x20A8
 #define _REG_VCS_IMR		0x120A8
 #define _REG_BCS_IMR		0x220A8
@@ -1065,6 +1053,24 @@ static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 #define _REG_HISTOGRAM_THRSH	0x48268
 #define		_REGBIT_HISTOGRAM_IRQ_ENABLE	(1 << 31)
 #define		_REGBIT_HISTOGRAM_IRQ_STATUS	(1 << 30)
+
+#define vgt_clear_reg_bit(pdev, reg, bit)		\
+	do {						\
+		uint32_t val;				\
+		val = VGT_MMIO_READ(pdev, reg);		\
+		val &= ~(1 << bit);			\
+		VGT_MMIO_WRITE(pdev, reg, val);		\
+		VGT_POST_READ(pdev, reg);		\
+	} while (0)
+
+#define vgt_set_reg_bit(pdev, reg, bit)			\
+	do {						\
+		uint32_t val;				\
+		val = VGT_MMIO_READ(pdev, reg);		\
+		val |= 1 << bit;			\
+		VGT_MMIO_WRITE(pdev, reg, val);		\
+		VGT_POST_READ(pdev, reg);		\
+	} while (0)
 
 enum vgt_event_type {
 
@@ -1326,14 +1332,14 @@ struct vgt_irq_virt_state {
 #define vgt_core_event_handler(d, e)	\
 	((vgt_core_event_handlers(d))[e])
 
-#ifdef VGT_DEBUG
+//#ifdef VGT_DEBUG
 #define vgt_trace_irq_event(i, t)	\
 	printk("vGT (%s): catch event (%s) in reg (%x).",	\
 		(i)->name, vgt_irq_name[(t)],			\
 		vgt_iir((i)->reg_base))
-#else
-#define vgt_trace_irq_event(i, t)
-#endif
+//#else
+//#define vgt_trace_irq_event(i, t)
+//#endif
 
 extern uint8_t vgt_irq_warn_once[IRQ_MAX];
 #define VGT_IRQ_WARN(i, t, msg)					\
@@ -1458,9 +1464,12 @@ static inline void vgt_propogate_emulated_event(struct vgt_device *vstate,
 	} while (0)
 
 extern struct vgt_irq_ops snb_irq_ops;
-int hvm_inject_virtual_interrupt(struct vgt_device *vstate);
-int initdom_inject_virtual_interrupt(struct vgt_device *vstate);
-void vgt_setup_irq(int pirq);
+void inject_hvm_virtual_interrupt(struct vgt_device *vgt);
+void inject_dom0_virtual_interrupt(struct vgt_device *vgt);
+int vgt_vstate_irq_init(struct vgt_device *vgt);
+void vgt_vstate_irq_exit(struct vgt_device *vgt);
+int vgt_irq_init(struct pgt_device *pgt);
+void vgt_irq_exit(struct pgt_device *pgt);
 
 void vgt_irq_handle_event(struct pgt_device *dev,
 	void *iir, struct vgt_irq_info *info);

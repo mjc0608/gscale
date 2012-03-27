@@ -1692,3 +1692,21 @@ void __init xen_init_IRQ(void)
 	}
 #endif
 }
+
+int resend_irq_on_evtchn(unsigned int irq)
+{
+	unsigned int evtchn = evtchn_from_irq(irq);
+	int masked;
+
+	if (!VALID_EVTCHN(evtchn))
+		return 0;
+
+	masked = test_and_set_mask(evtchn);
+	set_evtchn(evtchn);
+	if (!masked)
+		unmask_evtchn(evtchn);
+
+	return 1;
+}
+
+EXPORT_SYMBOL(resend_irq_on_evtchn);

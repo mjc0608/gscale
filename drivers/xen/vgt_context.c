@@ -120,6 +120,8 @@ submit_context_command_t submit_context_command[MAX_ENGINES] = {
 #endif
 };
 
+LIST_HEAD(pgt_devices);
+
 static struct pgt_device default_device = {
 	.bus = 0,
 	.devfn = 0x10,		/* BDF: 0:2:0 */
@@ -1871,6 +1873,9 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 	vgt->pdev = pdev;
 	state_reg_v2s (vgt);
 
+	if (vgt_vstate_irq_init(vgt) != 0)
+		return NULL;
+
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
 	/* TODO: per register special handling. */
 	return vgt;
@@ -1889,6 +1894,8 @@ void vgt_release_instance(struct vgt_device *vgt)
 	while ( is_current_render_owner(vgt) )
 		schedule();
 
+
+	vgt_vstate_irq_exit(vgt);
 	/* already idle */
 	list_del(&vgt->list);
 
@@ -2370,6 +2377,10 @@ int vgt_initialize(struct pci_dev *dev)
 			(vgt_ringbuffer_t *) _vgt_mmio_va(pdev, ring_mmio_base[i]);
 		printk("ring_base_vaddr[%d]: %llx\n", i, (uint64_t)pdev->ring_base_vaddr[i]);
 	}
+
+	if ( vgt_irq_init(pdev) != 0)
+		goto err;
+
 	/* create domain 0 instance */
 	vgt_dom0 = create_vgt_instance(pdev);   /* TODO: */
 	if (vgt_dom0 == NULL)
@@ -2404,6 +2415,7 @@ int vgt_initialize(struct pci_dev *dev)
 	pdev->p_thread = p_thread;
 	show_debug(pdev);
 
+	list_add(&pdev->list, &pgt_devices);
 	printk("vgt_initialize succeeds.\n");
 	return 0;
 err:
@@ -2419,8 +2431,12 @@ void vgt_destroy()
 	struct pgt_device *pdev = &default_device;
 	int i;
 
+	list_del(&pdev->list);
+
 	/* do we need the thread actually stopped? */
 	kthread_stop(pdev->p_thread);
+
+	vgt_irq_exit(pdev);
 
 	/* Deactive all VGTs */
 	while ( !list_empty(&pdev->rendering_runq_head) ) {

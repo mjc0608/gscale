@@ -108,6 +108,7 @@
 #define VIRQ_MEM_EVENT  10 /* G. (DOM0) A memory event has occured           */
 #define VIRQ_XC_RESERVED 11 /* G. Reserved for XenClient                     */
 #define VIRQ_ENOMEM     12 /* G. (DOM0) Low on heap memory       */
+#define VIRQ_VGT_GFX	15 /* (DOM0) Used for graphics interrupt          */
 
 /* Architecture-specific VIRQ definitions. */
 #define VIRQ_ARCH_0    16

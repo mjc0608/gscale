@@ -386,12 +386,33 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 
 static void vgt_snb_irq_init(struct pgt_device *dev)
 {
+	printk("vGT: snb irq init\n");
 	/*
 	 * Initially disable all the events. IER/IMR actually plays a
 	 * similar role, thus here we want to always unmask all IMR
 	 * bits, so that IER is the only register to be populated later
 	 * at run-time.
 	 */
+	printk("vGT: DEIIR is %x, DEIMR is %x, DEIER is %x\n",
+		VGT_MMIO_READ(dev, _REG_DEIIR),
+		VGT_MMIO_READ(dev, _REG_DEIMR),
+		VGT_MMIO_READ(dev, _REG_DEIER));
+	printk("vGT: SDEIIR is %x, SDEIMR is %x, SDEIER is %x\n",
+		VGT_MMIO_READ(dev, _REG_SDEIIR),
+		VGT_MMIO_READ(dev, _REG_SDEIMR),
+		VGT_MMIO_READ(dev, _REG_SDEIER));
+	printk("vGT: GTIIR is %x, GTIMR is %x, GTIER is %x\n",
+		VGT_MMIO_READ(dev, _REG_GTIIR),
+		VGT_MMIO_READ(dev, _REG_GTIMR),
+		VGT_MMIO_READ(dev, _REG_GTIER));
+	printk("vGT: PMIIR is %x, PMIMR is %x, PMIER is %x\n",
+		VGT_MMIO_READ(dev, _REG_PMIIR),
+		VGT_MMIO_READ(dev, _REG_PMIMR),
+		VGT_MMIO_READ(dev, _REG_PMIER));
+	printk("vGT: RCS_IMR is %x, VCS_IMR is %x, BCS_IMR is %x\n",
+		VGT_MMIO_READ(dev, _REG_RCS_IMR),
+		VGT_MMIO_READ(dev, _REG_VCS_IMR),
+		VGT_MMIO_READ(dev, _REG_BCS_IMR));
 	VGT_MMIO_WRITE(dev, _REG_DEIER, 0U);	/* disable all events */
 	VGT_MMIO_WRITE(dev, _REG_DEIMR, 0U);	/* but unmask all events */
 	VGT_MMIO_WRITE(dev, _REG_SDEIER, 0U);
@@ -406,6 +427,7 @@ static void vgt_snb_irq_init(struct pgt_device *dev)
 	VGT_MMIO_WRITE(dev, _REG_BCS_IMR, 0U);
 	VGT_MMIO_WRITE(dev, _REG_GTIIR, VGT_MMIO_READ(dev, _REG_GTIIR));
 
+	/* TODO: This may be delayed until dom0 i915 manipulates them */
 	VGT_MMIO_WRITE(dev, _REG_PMIER, 0U);
 	VGT_MMIO_WRITE(dev, _REG_PMIMR, 0U);
 	VGT_MMIO_WRITE(dev, _REG_PMIIR, VGT_MMIO_READ(dev, _REG_PMIIR));
