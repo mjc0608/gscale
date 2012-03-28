@@ -467,7 +467,7 @@ extern int resend_irq_on_evtchn(unsigned int i915_irq);
 
 void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
 {
-	printk("vGT: resend irq for dom0\n");
+	dprintk("vGT: resend irq for dom0\n");
 	resend_irq_on_evtchn(vgt_i915_irq(vgt->pdev));
 }
 
@@ -1026,7 +1026,11 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	u32 de_ier;
 	int i;
 
-	printk("vGT: receive interrupt (%x)\n", VGT_MMIO_READ(dev, _REG_DEIIR));
+	dprintk("vGT: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
+		VGT_MMIO_READ(dev, _REG_DEIIR),
+		VGT_MMIO_READ(dev, _REG_GTIIR),
+		VGT_MMIO_READ(dev, _REG_SDEIIR),
+		VGT_MMIO_READ(dev, _REG_PMIIR));
 
 #ifndef VGT_IRQ_FORWARD_MODE
 	/* avoid nested handling by disabling master interrupt */
@@ -1049,7 +1053,10 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	/* re-enable master interrupt */
 	VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);
 #else
-	vgt_inject_virtual_interrupt(dev->device[0]);
+	if (dev->device[0])
+		vgt_inject_virtual_interrupt(dev->device[0]);
+	else
+		printk("vGT: no owner for this interrupt \n");
 #endif
 
 	return IRQ_HANDLED;
@@ -1171,7 +1178,6 @@ void vgt_install_irq(struct pci_dev *pdev)
 
 	printk("vGT: found matching pgt_device when registering irq for dev (0x%x)\n", pdev->devfn);
 
-	return;
 	irq = bind_virq_to_irq(VIRQ_VGT_GFX, 0);
 	if (irq < 0) {
 		printk("vGT: fail to bind virq\n");

@@ -1876,6 +1876,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 	if (vgt_vstate_irq_init(vgt) != 0)
 		return NULL;
 
+	pdev->device[vgt->vgt_id] = vgt;
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
 	/* TODO: per register special handling. */
 	return vgt;
@@ -1894,6 +1895,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	while ( is_current_render_owner(vgt) )
 		schedule();
 
+	vgt->pdev->device[vgt->vgt_id] = NULL;
 
 	vgt_vstate_irq_exit(vgt);
 	/* already idle */
