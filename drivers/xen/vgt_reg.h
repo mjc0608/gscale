@@ -479,8 +479,8 @@ enum vgt_owner_type {
 
 /* owner type of the reg, up to 16 owner type */
 #define VGT_REG_OWNER		(0xF)
-/* reg access is reflected pReg, if vgt is the current owner */
-#define VGT_REG_PT		(1 << 4)
+/* reg access is only reflected in vReg */
+#define VGT_REG_VIRT		(1 << 4)
 /* reg contains address, requiring fix */
 #define VGT_REG_ADDR_FIX	(1 << 5)
 /* HW updated regs */
@@ -552,15 +552,16 @@ extern struct list_head pgt_devices;
 #define vgt_switch_inprogress(d)        (d->switch_inprogress)
 #define vgt_switch_owner_type(d)        (d->switch_owner)
 
-#define reg_pt(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_PT)
+#define reg_virt(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_VIRT)
+#define reg_pt(pdev, reg)		(!(reg_virt(pdev, reg)))
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
 #define reg_hw_update(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_UPDATE)
 #define reg_rdonly(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_RDONLY)
 #define reg_addr_index(pdev, reg)	\
 	((pdev->reg_info[REG_INDEX(reg)] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
-static inline void reg_set_pt(struct pgt_device *pdev, vgt_reg_t reg)
+static inline void reg_set_virt(struct pgt_device *pdev, vgt_reg_t reg)
 {
-	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_PT;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_VIRT;
 }
 
 static inline void reg_set_hw_update(struct pgt_device *pdev, vgt_reg_t reg)

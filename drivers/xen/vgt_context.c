@@ -519,8 +519,8 @@ static unsigned long vgt_get_reg(struct vgt_device *vgt, unsigned int reg)
 	struct pgt_device *pdev = vgt->pdev;
 	/* check whether to update vreg from HW */
 //	if (reg_hw_update(pdev, reg) &&
-	if (vgt_ops->boot_time ||
-	    (reg_pt(pdev, reg) && reg_is_owner(vgt, reg))) {
+	if (reg_pt(pdev, reg) &&
+	    (vgt_ops->boot_time || reg_is_owner(vgt, reg))) {
 		__sreg(vgt, reg) = VGT_MMIO_READ(pdev, reg);
 		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
 	}
@@ -540,8 +540,8 @@ static unsigned long vgt_get_reg_64(struct vgt_device *vgt, unsigned int reg)
 	struct pgt_device *pdev = vgt->pdev;
 	/* check whether to update vreg from HW */
 //	if (reg_hw_update(pdev, reg) &&
-	if (vgt_ops->boot_time ||
-	    (reg_pt(pdev, reg) && reg_is_owner(vgt, reg))) {
+	if (reg_pt(pdev, reg) &&
+	    (vgt_ops->boot_time || reg_is_owner(vgt, reg))) {
 		__sreg64(vgt, reg) = VGT_MMIO_READ_BYTES(pdev, reg, 8);
 		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
 		__vreg(vgt, reg + 4) = mmio_h2g_gmadr(vgt, reg + 4, __sreg(vgt, reg + 4));
@@ -557,7 +557,7 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 	 * update sreg if pass through;
 	 * update preg if boot_time or vgt is reg's cur owner
 	 */
-	if (vgt_ops->boot_time || reg_pt(pdev, reg)) {
+	if (reg_pt(pdev, reg)) {
 		__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
 
 		if (vgt_ops->boot_time || reg_is_owner(vgt, reg))
@@ -572,7 +572,7 @@ static void vgt_update_reg_64(struct vgt_device *vgt, unsigned int reg)
 	 * update sreg if pass through;
 	 * update preg if boot_time or vgt is reg's cur owner
 	 */
-	if (vgt_ops->boot_time || reg_pt(pdev, reg)) {
+	if (reg_pt(pdev, reg)) {
 		__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
 		__sreg(vgt, reg + 4) = mmio_g2h_gmadr(vgt, reg + 4, __vreg(vgt, reg + 4));
 
@@ -2145,17 +2145,8 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 	vgt_set_addr_mask(pdev, _REG_BCS_ACTHD, 0xFFFFF000);
 }
 
-/*
- * TODO:
- * Ideally the majority of MMIO should be updated to pReg. Should
- * we instead introduce vgt_setup_emulate_regs, by taking pt as
- * the default?
- *
- * for 64bit reg, need sets for both low and high parts
- */
-static void vgt_setup_pt_regs(struct pgt_device *pdev)
+static void vgt_setup_virt_regs(struct pgt_device *pdev)
 {
-	reg_set_pt(pdev, _REG_FENCE_0_LOW);
 }
 
 /*
@@ -2200,8 +2191,8 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	vgt_setup_pm_regs(pdev);
 	vgt_setup_mgmt_regs(pdev);
 
-	/* then enable pass-through flag */
-	vgt_setup_pt_regs(pdev);
+	/* then enable virt-only flag */
+	vgt_setup_virt_regs(pdev);
 
 	/* then setup read-only reg */
 	vgt_setup_rdonly(pdev);
