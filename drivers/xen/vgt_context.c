@@ -2354,6 +2354,7 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
  *  return 0: success
  *	-1: error
  */
+int vgt_add_state_sysfs(struct vgt_device *vgt);
 int vgt_initialize(struct pci_dev *dev)
 {
 	int i;
@@ -2418,6 +2419,13 @@ int vgt_initialize(struct pci_dev *dev)
 	show_debug(pdev);
 
 	list_add(&pdev->list, &pgt_devices);
+
+    /* FIXME: only support ONE vgt device now,
+     * you cannot call this function more than
+     * once
+     */
+    vgt_add_state_sysfs(vgt_dom0);
+
 	printk("vgt_initialize succeeds.\n");
 	return 0;
 err:
