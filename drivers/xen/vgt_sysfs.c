@@ -82,26 +82,83 @@
  * "foo", "baz", and "bar".  If an integer is written to these files, it can be
  * later read out of it.
  */
-static struct vgt_device *current_vgt;
+static struct kobject *vgt_kobj;
+static int vgt_create_topdir_kobject(void)
+{
+    /* Place vgt directory under /sys/kernel */
+    vgt_kobj = kobject_create_and_add("vgt", kernel_kobj);
+    if (!vgt_kobj)
+        return -ENOMEM;
 
+    return 0;
+}
+
+/* copied code from here */
+static ssize_t kobj_attr_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
+{
+	struct kobj_attribute *kattr;
+	ssize_t ret = -EIO;
+
+	kattr = container_of(attr, struct kobj_attribute, attr);
+	if (kattr->show)
+		ret = kattr->show(kobj, kattr, buf);
+	return ret;
+}
+
+static ssize_t kobj_attr_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buf, size_t count)
+{
+	struct kobj_attribute *kattr;
+	ssize_t ret = -EIO;
+
+	kattr = container_of(attr, struct kobj_attribute, attr);
+	if (kattr->store)
+		ret = kattr->store(kobj, kattr, buf, count);
+	return ret;
+}
+
+const struct sysfs_ops vgt_kobj_sysfs_ops = {
+	.show	= kobj_attr_show,
+	.store	= kobj_attr_store,
+};
+
+static void vgt_kobj_release(struct kobject *kobj)
+{
+	pr_debug("kobject: (%p): %s\n", kobj, __func__);
+    /* FIXME: we do not deallocate our kobject */
+	//kfree(kobj);
+}
+
+static struct kobj_type vgt_kobj_ktype = {
+	.release	= vgt_kobj_release,
+	.sysfs_ops	= &vgt_kobj_sysfs_ops,
+};
+/* copied code end */
+
+#define kobj_to_vgt(kobj) container_of((kobj), struct vgt_device, kobj)
 static ssize_t gm_sz_show(struct kobject *kobj, struct kobj_attribute *attr,char *buf)
 {
-	return sprintf(buf, "%016llx\n", current_vgt->gm_sz);
+    struct vgt_device *vgt = kobj_to_vgt(kobj);
+	return sprintf(buf, "%016llx\n", vgt->gm_sz);
 }
 
 static ssize_t aperture_sz_show(struct kobject *kobj, struct kobj_attribute *attr,char *buf)
 {
-	return sprintf(buf, "%016llx\n", current_vgt->aperture_sz);
+    struct vgt_device *vgt = kobj_to_vgt(kobj);
+	return sprintf(buf, "%016llx\n", vgt->aperture_sz);
 }
 
 static ssize_t aperture_base_show(struct kobject *kobj, struct kobj_attribute *attr,char *buf)
 {
-	return sprintf(buf, "%016llx\n", current_vgt->aperture_base);
+    struct vgt_device *vgt = kobj_to_vgt(kobj);
+	return sprintf(buf, "%016llx\n", vgt->aperture_base);
 }
 
 static ssize_t aperture_base_va_show(struct kobject *kobj, struct kobj_attribute *attr,char *buf)
 {
-	return sprintf(buf, "%p\n", current_vgt->aperture_base_va);
+    struct vgt_device *vgt = kobj_to_vgt(kobj);
+	return sprintf(buf, "%p\n", vgt->aperture_base_va);
 }
 
 static struct kobj_attribute gm_sz_attribute =
@@ -141,9 +198,6 @@ static struct attribute_group attr_group = {
 int vgt_add_state_sysfs(struct vgt_device *vgt)
 {
 	int retval;
-#define MAX_VGT_NAME_LENGTH 7
-    /* FIXME: current legal name vgt_0 ~ vgt_99 */
-    char vgt_name[MAX_VGT_NAME_LENGTH];
 	/*
 	 * Create a simple kobject located under /sys/kernel/
 	 * As this is a simple directory, no uevent will be sent to
@@ -151,26 +205,33 @@ int vgt_add_state_sysfs(struct vgt_device *vgt)
 	 * any type of dynamic kobjects, where the name and number are
 	 * not known ahead of time.
 	 */
-    retval = snprintf(vgt_name, MAX_VGT_NAME_LENGTH, "vgt_%d", vgt->vgt_id);
-    /* The vgt_name is truncated */
-    if (retval >= MAX_VGT_NAME_LENGTH)
-        return -EINVAL;
 
-	vgt->kobj = kobject_create_and_add(vgt_name, kernel_kobj);
-	if (!vgt->kobj)
-		return -ENOMEM;
+    if (!vgt_kobj) {
+        retval = vgt_create_topdir_kobject();
+        if (retval < 0)
+            return retval;
+    }
+
+    /* init kobject */
+	kobject_init(&vgt->kobj, &vgt_kobj_ktype);
+
+    /* add kobject */
+    retval = kobject_add(&vgt->kobj, vgt_kobj, "vgt%d", vgt->vgt_id);
+    if (retval) {
+        printk(KERN_WARNING "%s: vgt kobject add error: %d\n",
+                __func__, retval);
+        kobject_put(&vgt->kobj);
+    }
 
 	/* Create the files associated with this kobject */
-	retval = sysfs_create_group(vgt->kobj, &attr_group);
+	retval = sysfs_create_group(&vgt->kobj, &attr_group);
 	if (retval)
-		kobject_put(vgt->kobj);
-
-    current_vgt = vgt;
+		kobject_put(&vgt->kobj);
 
 	return retval;
 }
 
 void vgt_del_state_sysfs(struct vgt_device *vgt)
 {
-    kobject_put(vgt->kobj);
+    kobject_put(&vgt->kobj);
 }

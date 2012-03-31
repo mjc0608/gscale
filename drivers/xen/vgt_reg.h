@@ -458,7 +458,7 @@ struct vgt_device {
 
 	struct vgt_irq_virt_state *irq_vstate;
 	struct vgt_hvm_info  *hvm_info;
-    struct kobject *kobj;
+    struct kobject kobj;
 };
 
 enum vgt_owner_type {
