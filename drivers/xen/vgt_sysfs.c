@@ -83,12 +83,88 @@
  * later read out of it.
  */
 static struct kobject *vgt_kobj;
+static int vgt_instance_cnt = 1;
+
 static int vgt_create_topdir_kobject(void)
 {
     /* Place vgt directory under /sys/kernel */
     vgt_kobj = kobject_create_and_add("vgt", kernel_kobj);
     if (!vgt_kobj)
         return -ENOMEM;
+
+    return 0;
+}
+
+int vgt_add_state_sysfs(struct vgt_device *vgt);
+static struct vgt_device *dummy_create_vgt_instance(int vgt_id)
+{
+    /* FIXME: dummy_vgt will be lost tracking, so there are memory leak
+     * here
+     */
+    struct vgt_device *dummy_vgt = kmalloc(sizeof(*dummy_vgt), GFP_KERNEL);
+    if (dummy_vgt == NULL) {
+        printk("Insufficient memory for vgt_device dummy_vgt\n");
+        return NULL;
+    } else {
+        dummy_vgt->vgt_id = vgt_id;
+        dummy_vgt->gm_sz = 0xdeadbeef;
+        dummy_vgt->aperture_sz = 0xdeadbeef;
+        dummy_vgt->aperture_base = 0xbeefdead;
+        dummy_vgt->aperture_base_va = (void*)0xbeefdead;
+        vgt_add_state_sysfs(dummy_vgt);
+    }
+
+    return dummy_vgt;
+}
+
+static ssize_t vgt_create_instance_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+    /* TODO: show some global statistics ? */
+	return sprintf(buf, "%d\n", vgt_instance_cnt);
+}
+
+static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attribute *attr,
+			 const char *buf, size_t count)
+{
+    int val;
+    /* TODO: scanned value not checked */
+	sscanf(buf, "%du", &val);
+    if (val > 0) {
+        dummy_create_vgt_instance(vgt_instance_cnt);
+        vgt_instance_cnt++;
+    } else {
+        printk(KERN_WARNING"vGT sysfs node create error: value should be an posivive integer\n" );
+    }
+	return count;
+}
+
+static struct kobj_attribute create_vgt_instance_attrs =
+	__ATTR(create_vgt_instance, 0666, vgt_create_instance_show, vgt_create_instance_store);
+
+static struct attribute *ctl_attrs[] = {
+	&create_vgt_instance_attrs.attr,
+	NULL,	/* need to NULL terminate the list of attributes */
+};
+
+static struct attribute_group ctl_attr_group = {
+	.attrs = ctl_attrs,
+};
+
+int vgt_init_sysfs(void)
+{
+    int retval;
+
+    vgt_kobj = kobject_create_and_add("vgt", kernel_kobj);
+    if (!vgt_kobj)
+        return -ENOMEM;
+
+	/* Create the files associated with this kobject */
+	retval = sysfs_create_group(vgt_kobj, &ctl_attr_group);
+	if (retval) {
+		kobject_put(vgt_kobj);
+        return retval;
+    }
 
     return 0;
 }
