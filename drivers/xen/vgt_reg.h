@@ -142,8 +142,8 @@ typedef struct {
 #define __sreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.sReg + off))
 #define __vreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.vReg + off))
 #define __sreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.sReg + off))
-#define vgt_vreg(vgt, off)	((vgt_reg_t *)vgt->state.vReg + off)
-#define vgt_sreg(vgt, off)	((vgt_reg_t *)vgt_>state.vReg + off)
+#define vgt_vreg(vgt, off)	((vgt_reg_t *)((char *)vgt->state.vReg + off))
+#define vgt_sreg(vgt, off)	((vgt_reg_t *)((char *)vgt_>state.vReg + off))
 
 #define RB_DWORDS_TO_SAVE	32
 typedef	uint32_t	rb_dword;
@@ -424,6 +424,26 @@ extern void vgt_destroy(void);
 extern int vgt_initialize(struct pci_dev *dev);
 extern bool vgt_register_mmio_handler(int start, int end,
 	vgt_mmio_read read, vgt_mmio_write write);
+
+static inline bool vgt_register_mmio_single(int reg,
+	vgt_mmio_read read, vgt_mmio_write write)
+{
+	return vgt_register_mmio_handler(reg, reg + REG_SIZE - 1,
+			read, write);
+}
+
+static inline bool vgt_register_mmio_write(int reg,
+	vgt_mmio_write write)
+{
+	return vgt_register_mmio_single(reg, NULL, write);
+}
+
+static inline bool vgt_register_mmio_read(int reg,
+	vgt_mmio_read read)
+{
+	return vgt_register_mmio_single(reg, read, NULL);
+}
+
 extern bool vgt_initialize_mmio_hooks(void);
 extern int vgt_hvm_info_init(struct vgt_device *vgt);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
@@ -545,10 +565,13 @@ extern struct list_head pgt_devices;
 
 #define vgt_get_owner(d, t)             (d->owner[t])
 #define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_RENDER))
-#define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
 #define current_display_owner(d)	(vgt_get_owner(d, VGT_OT_DISPLAY))
 #define current_pm_owner(d)		(vgt_get_owner(d, VGT_OT_PM))
 #define current_mgmt_owner(d)		(vgt_get_owner(d, VGT_OT_MGMT))
+#define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
+#define is_current_display_owner(vgt)	(vgt && vgt == current_display_owner(vgt->pdev))
+#define is_current_pm_owner(vgt)	(vgt && vgt == current_pm_owner(vgt->pdev))
+#define is_current_mgmt_owner(vgt)	(vgt && vgt == current_mgmt_owner(vgt->pdev))
 #define vgt_switch_inprogress(d)        (d->switch_inprogress)
 #define vgt_switch_owner_type(d)        (d->switch_owner)
 
@@ -1043,6 +1066,23 @@ static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 	//writel(val, GTT_VADDR(pdev, index));
 }
 
+static inline bool vgt_register_mmio_write_virt(struct pgt_device *pdev,
+	int reg, vgt_mmio_write write)
+{
+	/* add virt policy to let common read handler to emulate read */
+	reg_set_virt(pdev, reg);
+	return vgt_register_mmio_write(reg, write);
+}
+
+static inline bool vgt_register_mmio_read_virt(struct pgt_device *pdev,
+	int reg, vgt_mmio_read read)
+{
+	/* add virt policy to let common write handler to emulate write */
+	reg_set_virt(pdev, reg);
+	return vgt_register_mmio_read(reg, read);
+}
+
+
 /*
  * Next MACROs for GT configuration space.
  */
@@ -1062,6 +1102,7 @@ static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 #define _REG_DEIIR	0x44008
 #define _REG_DEIER	0x4400C
 #define		_REGBIT_MASTER_INTERRUPT	(1 << 31)
+#define		_REGBIT_PCH			(1 << 21)
 #define _REG_GTISR	0x44010
 #define _REG_GTIMR	0x44014
 #define _REG_GTIIR	0x44018
@@ -1103,6 +1144,12 @@ static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 #define vgt_imr(base)	(base + 0x4)
 #define vgt_iir(base)	(base + 0x8)
 #define vgt_ier(base)	(base + 0xC)
+#define vgt_imr_to_isr(vgt, reg)	(__vreg(vgt, reg - 0x4))
+#define vgt_imr_to_iir(vgt, reg)	(__vreg(vgt, reg + 0x4))
+#define vgt_imr_to_ier(vgt, reg)	(__vreg(vgt, reg + 0x8))
+#define vgt_ier_to_isr(vgt, reg)	(__vreg(vgt, reg - 0xC))
+#define vgt_ier_to_iir(vgt, reg)	(__vreg(vgt, reg - 0x4))
+#define vgt_ier_to_imr(vgt, reg)	(__vreg(vgt, reg - 0x8))
 
 #define _REG_RCS_IMR		0x20A8
 #define _REG_VCS_IMR		0x120A8
@@ -1336,6 +1383,8 @@ struct vgt_irq_ops {
 
 	struct vgt_irq_info *(*get_irq_info_from_event) (
 			struct pgt_device *dev, enum vgt_event_type event);
+
+	char *(*get_reg_name)(struct pgt_device *dev, uint32_t reg);
 };
 
 /* structure containing device specific IRQ state */
@@ -1360,6 +1409,12 @@ struct vgt_irq_host_state {
 
 	int i915_irq;
 	int pirq;
+
+	/* master bit enable status from all VMs */
+	u64 master_enable;
+	/* pch enable status from all VMs */
+	u64 pch_enable;
+	u64 pch_unmask;
 };
 
 struct vgt_emul_timer {
@@ -1393,6 +1448,9 @@ struct vgt_irq_virt_state {
 #define vgt_get_irq_ops(d)		(d->irq_hstate->ops)
 #define vgt_i915_irq(d)			(d->irq_hstate->i915_irq)
 #define vgt_pirq(d)			(d->irq_hstate->pirq)
+#define vgt_master_enable(d)		(d->irq_hstate->master_enable)
+#define vgt_pch_enable(d)		(d->irq_hstate->pch_enable)
+#define vgt_pch_unmask(d)			(d->irq_hstate->pch_unmask)
 
 #define vgt_get_id(s)			(s->vgt_id)
 #define vgt_state_emulated_events(s)		(s->irq_vstate->emulated_events)
@@ -1413,7 +1471,7 @@ struct vgt_irq_virt_state {
 
 //#ifdef VGT_DEBUG
 #define vgt_trace_irq_event(i, t)	\
-	printk("vGT (%s): catch event (%s) in reg (%x).",	\
+	printk("vGT (%s): catch event (%s) in reg (%x).\n",	\
 		(i)->name, vgt_irq_name[(t)],			\
 		vgt_iir((i)->reg_base))
 //#else
@@ -1469,19 +1527,33 @@ static inline bool vgt_has_pch_irq_pending(struct vgt_device *vstate)
  * assumptions:
  *   - rising edge to trigger an event to next level
  *   - only cache one instance for IIR now
- *
- * FIXME: any race condition to consider here? e.g. guest write to IER/IMR right
- * at the propogation?
  */
 static inline void vgt_propogate_virtual_event(struct vgt_device *vstate,
 	int bit, struct vgt_irq_info *info)
 {
+	dprintk("vGT: bit (%d) for base(%x) for isr (%x) with orig value (%x)\n",
+		bit, info->reg_base, vgt_isr(info->reg_base),
+		*vgt_vreg(vstate, vgt_isr(info->reg_base)));
 	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
 	    !test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
 	    !test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
 	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))) &&
-	    test_bit(_REGBIT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER)))
+	    test_bit(_REGBIT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
+		dprintk("vGT: set bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
 		vgt_set_irq_pending(vstate);
+	} else {
+		printk("vGT: propogate bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
+		printk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
+			__vreg(vstate, vgt_isr(info->reg_base)),
+			__vreg(vstate, vgt_imr(info->reg_base)),
+			__vreg(vstate, vgt_iir(info->reg_base)),
+			__vreg(vstate, vgt_ier(info->reg_base)),
+			__vreg(vstate, _REG_DEIER));
+	}
+
+	/* TODO: given that ISR bits are volatile, we may skip touching ISR instead */
+	if (test_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))))
+		clear_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base)));
 }
 
 /*
@@ -1588,12 +1660,16 @@ void vgt_handle_gmbus(struct pgt_device *dev,
 
 void vgt_emulate_watchdog(struct vgt_device *vstate, enum vgt_event_type event, bool enable);
 void vgt_emulate_dpy_status(struct vgt_device *vstate, enum vgt_event_type event, bool enable);
-void vgt_reg_imr_handler(struct vgt_device *state,
-	uint32_t reg, uint32_t val, bool write, ...);
-void vgt_reg_ier_handler(struct vgt_device *state,
-	uint32_t reg, uint32_t val, bool write, ...);
+bool vgt_reg_imr_handler(struct vgt_device *vgt,
+	unsigned int reg, void *p_data, unsigned int bytes);
+bool vgt_reg_ier_handler(struct vgt_device *vgt,
+	unsigned int reg, void *p_data, unsigned int bytes);
+bool vgt_reg_irr_handler(struct vgt_device *vgt, unsigned int reg,
+	void *p_data, unsigned int bytes);
 void vgt_reg_watchdog_handler(struct vgt_device *state,
 	uint32_t reg, uint32_t val, bool write, ...);
+extern char *vgt_irq_name[IRQ_MAX];
+
 struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id);
 void vgt_release_instance(struct vgt_device *vgt);
 int vgt_init_sysfs(struct pgt_device *pdev);

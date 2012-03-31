@@ -329,12 +329,14 @@ static int vgt_snb_get_bit_from_event(struct pgt_device *dev,
 	return i;
 }
 
-/* Enable a hardware event by operating IER/IMR. */
+/* Enable a hardware event by operating IER. */
 static inline void vgt_snb_toggle_hw_event(struct pgt_device *dev,
 	enum vgt_event_type event, int bit, bool enable)
 {
 	struct vgt_irq_info *info;
 
+	printk("vGT-IRQ-SNB: %s event (%s) on bit (%d)\n",
+		enable ? "enable" : "disable", vgt_irq_name[event], bit);
 	info = vgt_snb_get_irq_info_from_event(dev, event);
 	ASSERT(info != NULL);
 
@@ -342,15 +344,25 @@ static inline void vgt_snb_toggle_hw_event(struct pgt_device *dev,
 		bit = vgt_snb_get_bit_from_event(dev, event, info);
 
 	if (enable) {
+		vgt_clear_reg_bit(dev, vgt_imr(info->reg_base), bit);
+
+		/*
+		 * for a vGT enabled PCH event, we need propogate to DEIER.
+		 * but for VM enabled PCH event, the VM itself will enable
+		 * DEIER. For safety, since vGT's own requirement is unclear
+		 * yet, let's disable this logic for now
+		 */
+#if 0
 		if (VGT_PCH_EVENT(event))
 			vgt_snb_toggle_hw_event(dev, IRQ_PCH_IRQ, bit, true);
-
-		vgt_set_reg_bit(dev, vgt_ier(info->reg_base), bit);
+#endif
 	} else {
-		vgt_clear_reg_bit(dev, vgt_ier(info->reg_base), bit);
-
+#if 0
 		if (VGT_PCH_EVENT(event))
 			vgt_snb_toggle_hw_event(dev, IRQ_PCH_IRQ, bit, false);
+#endif
+
+		vgt_set_reg_bit(dev, vgt_imr(info->reg_base), bit);
 	}
 }
 
@@ -372,14 +384,17 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 	if (!gt_iir && !de_iir && !pm_iir)
 		return IRQ_NONE;
 
+	dprintk("vGT-IRQ-SNB: handle gt_iir(%x)\n", gt_iir);
 	vgt_irq_handle_event(dev, &gt_iir, &snb_render_irq_info);
+	dprintk("vGT-IRQ-SNB: handle de_iir(%x)\n", de_iir);
 	vgt_irq_handle_event(dev, &de_iir, &snb_dpy_irq_info);
+	dprintk("vGT-IRQ-SNB: handle pm_iir(%x)\n", pm_iir);
 	vgt_irq_handle_event(dev, &pm_iir, &snb_pm_irq_info);
 
 	/* clear physical IIRs in the end, after lower level causes are cleared */
-	VGT_MMIO_WRITE(dev, _REG_GTIIR, 0);
-	VGT_MMIO_WRITE(dev, _REG_PMIIR, 0);
-	VGT_MMIO_WRITE(dev, _REG_DEIIR, 0);
+	VGT_MMIO_WRITE(dev, _REG_GTIIR, gt_iir);
+	VGT_MMIO_WRITE(dev, _REG_PMIIR, pm_iir);
+	VGT_MMIO_WRITE(dev, _REG_DEIIR, de_iir);
 
 	return IRQ_HANDLED;
 }
@@ -387,25 +402,24 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 static void vgt_snb_irq_init(struct pgt_device *dev)
 {
 	printk("vGT: snb irq init\n");
-	/*
-	 * Initially disable all the events. IER/IMR actually plays a
-	 * similar role, thus here we want to always unmask all IMR
-	 * bits, so that IER is the only register to be populated later
-	 * at run-time.
-	 */
-	printk("vGT: DEIIR is %x, DEIMR is %x, DEIER is %x\n",
+
+	printk("vGT: DEISR is %x, DEIIR is %x, DEIMR is %x, DEIER is %x\n",
+		VGT_MMIO_READ(dev, _REG_DEISR),
 		VGT_MMIO_READ(dev, _REG_DEIIR),
 		VGT_MMIO_READ(dev, _REG_DEIMR),
 		VGT_MMIO_READ(dev, _REG_DEIER));
-	printk("vGT: SDEIIR is %x, SDEIMR is %x, SDEIER is %x\n",
+	printk("vGT: SDEISR is %x, SDEIIR is %x, SDEIMR is %x, SDEIER is %x\n",
+		VGT_MMIO_READ(dev, _REG_SDEISR),
 		VGT_MMIO_READ(dev, _REG_SDEIIR),
 		VGT_MMIO_READ(dev, _REG_SDEIMR),
 		VGT_MMIO_READ(dev, _REG_SDEIER));
-	printk("vGT: GTIIR is %x, GTIMR is %x, GTIER is %x\n",
+	printk("vGT: GTISR is %x, GTIIR is %x, GTIMR is %x, GTIER is %x\n",
+		VGT_MMIO_READ(dev, _REG_GTISR),
 		VGT_MMIO_READ(dev, _REG_GTIIR),
 		VGT_MMIO_READ(dev, _REG_GTIMR),
 		VGT_MMIO_READ(dev, _REG_GTIER));
-	printk("vGT: PMIIR is %x, PMIMR is %x, PMIER is %x\n",
+	printk("vGT: PMISR is %x, PMIIR is %x, PMIMR is %x, PMIER is %x\n",
+		VGT_MMIO_READ(dev, _REG_PMISR),
 		VGT_MMIO_READ(dev, _REG_PMIIR),
 		VGT_MMIO_READ(dev, _REG_PMIMR),
 		VGT_MMIO_READ(dev, _REG_PMIER));
@@ -413,44 +427,53 @@ static void vgt_snb_irq_init(struct pgt_device *dev)
 		VGT_MMIO_READ(dev, _REG_RCS_IMR),
 		VGT_MMIO_READ(dev, _REG_VCS_IMR),
 		VGT_MMIO_READ(dev, _REG_BCS_IMR));
-	VGT_MMIO_WRITE(dev, _REG_DEIER, 0U);	/* disable all events */
-	VGT_MMIO_WRITE(dev, _REG_DEIMR, 0U);	/* but unmask all events */
-	VGT_MMIO_WRITE(dev, _REG_SDEIER, 0U);
-	VGT_MMIO_WRITE(dev, _REG_SDEIMR, 0U);
-	VGT_MMIO_WRITE(dev, _REG_SDEIIR, VGT_MMIO_READ(dev, _REG_SDEIIR));
-	VGT_MMIO_WRITE(dev, _REG_DEIIR, VGT_MMIO_READ(dev, _REG_DEIIR));
 
-	VGT_MMIO_WRITE(dev, _REG_GTIER, 0U);
-	VGT_MMIO_WRITE(dev, _REG_GTIMR, 0U);
-	VGT_MMIO_WRITE(dev, _REG_RCS_IMR, 0U);
-	VGT_MMIO_WRITE(dev, _REG_VCS_IMR, 0U);
-	VGT_MMIO_WRITE(dev, _REG_BCS_IMR, 0U);
+	/* follow i915's setting at the boot time */
+#if 0
+	VGT_MMIO_WRITE(dev, _REG_SDEIER, 0);
+	VGT_MMIO_WRITE(dev, _REG_SDEIMR, 0xffffffffU);
+	VGT_MMIO_WRITE(dev, _REG_SDEIIR, VGT_MMIO_READ(dev, _REG_SDEIIR));
+
+	VGT_MMIO_WRITE(dev, _REG_GTIER, 0);
+	VGT_MMIO_WRITE(dev, _REG_GTIMR, 0xffffffffU);
+	VGT_MMIO_WRITE(dev, _REG_RCS_IMR, 0xffffffffU);
+	VGT_MMIO_WRITE(dev, _REG_VCS_IMR, 0xffffffffU);
+	VGT_MMIO_WRITE(dev, _REG_BCS_IMR, 0xffffffffU);
 	VGT_MMIO_WRITE(dev, _REG_GTIIR, VGT_MMIO_READ(dev, _REG_GTIIR));
 
 	/* TODO: This may be delayed until dom0 i915 manipulates them */
-	VGT_MMIO_WRITE(dev, _REG_PMIER, 0U);
-	VGT_MMIO_WRITE(dev, _REG_PMIMR, 0U);
+	VGT_MMIO_WRITE(dev, _REG_PMIER, 0);
+	VGT_MMIO_WRITE(dev, _REG_PMIMR, 0xffffffffU);
 	VGT_MMIO_WRITE(dev, _REG_PMIIR, VGT_MMIO_READ(dev, _REG_PMIIR));
 
-	/* enable master interrupt bit */
-	VGT_MMIO_WRITE(dev, _REG_DEIER, _REGBIT_MASTER_INTERRUPT);
+	VGT_MMIO_WRITE(dev, _REG_DEIER, 0);
+	VGT_MMIO_WRITE(dev, _REG_DEIMR, 0x7fffffffU); /* keep master interrupt unmasked */
+	VGT_MMIO_WRITE(dev, _REG_DEIIR, VGT_MMIO_READ(dev, _REG_DEIIR));
+#endif
 
 	/* Install vreg handlers */
-#if 0
-	vgt_register_vreg_handler(_REG_DEIMR, vgt_reg_imr_handler);
-	vgt_register_vreg_handler(_REG_DEIER, vgt_reg_ier_handler);
-	vgt_register_vreg_handler(_REG_PMIMR, vgt_reg_imr_handler);
-	vgt_register_vreg_handler(_REG_PMIER, vgt_reg_ier_handler);
-	vgt_register_vreg_handler(_REG_GTIMR, vgt_reg_imr_handler);
-	vgt_register_vreg_handler(_REG_GTIER, vgt_reg_ier_handler);
-	vgt_register_vreg_handler(_REG_SDEIMR, vgt_reg_imr_handler);
-	vgt_register_vreg_handler(_REG_SDEIER, vgt_reg_ier_handler);
+	printk("vGT: Installing handlers for interrupt control registers...\n");
+	vgt_register_mmio_write_virt(dev, _REG_DEIMR, vgt_reg_imr_handler);
+	vgt_register_mmio_write_virt(dev, _REG_DEIER, vgt_reg_ier_handler);
+	vgt_register_mmio_write_virt(dev, _REG_DEIIR, vgt_reg_irr_handler);
 
-	vgt_register_vreg_handler(_REG_RCS_WATCHDOG_CTL, vgt_reg_watchdog_handler);
-	vgt_register_vreg_handler(_REG_RCS_WATCHDOG_THRSH, vgt_reg_watchdog_handler);
-	vgt_register_vreg_handler(_REG_RCS_WATCHDOG_CTR, vgt_reg_watchdog_handler);
-	vgt_register_vreg_handler(_REG_VCS_WATCHDOG_CTR, vgt_reg_watchdog_handler);
-	vgt_register_vreg_handler(_REG_VCS_WATCHDOG_THRSH, vgt_reg_watchdog_handler);
+	vgt_register_mmio_write_virt(dev, _REG_PMIMR, vgt_reg_imr_handler);
+	vgt_register_mmio_write_virt(dev, _REG_PMIER, vgt_reg_ier_handler);
+	vgt_register_mmio_write_virt(dev, _REG_PMIIR, vgt_reg_irr_handler);
+
+	vgt_register_mmio_write_virt(dev, _REG_GTIMR, vgt_reg_imr_handler);
+	vgt_register_mmio_write_virt(dev, _REG_GTIER, vgt_reg_ier_handler);
+	vgt_register_mmio_write_virt(dev, _REG_GTIIR, vgt_reg_irr_handler);
+
+#if 0
+	vgt_register_mmio_simple(_REG_SDEIMR, vgt_reg_imr_handler);
+	vgt_register_mmio_simple(_REG_SDEIER, vgt_reg_ier_handler);
+	vgt_register_mmio_simple(_REG_SDEIIR, vgt_reg_irr_handler);
+	vgt_register_mmio_simple(_REG_RCS_WATCHDOG_CTL, vgt_reg_watchdog_handler);
+	vgt_register_mmio_simple(_REG_RCS_WATCHDOG_THRSH, vgt_reg_watchdog_handler);
+	vgt_register_mmio_simple(_REG_RCS_WATCHDOG_CTR, vgt_reg_watchdog_handler);
+	vgt_register_mmio_simple(_REG_VCS_WATCHDOG_CTR, vgt_reg_watchdog_handler);
+	vgt_register_mmio_simple(_REG_VCS_WATCHDOG_THRSH, vgt_reg_watchdog_handler);
 #endif
 	/* Set a list of pass-through regs */
 	//vgt_set_vreg_policy(..., ...);
@@ -511,7 +534,32 @@ enum vgt_event_type vgt_snb_get_event_type_from_bit(struct pgt_device *dev, uint
 	struct vgt_irq_info *info = vgt_snb_get_irq_info_from_reg(reg);
 
 	ASSERT(info != NULL);
+	dprintk("vGT-IRQ-SNB: search table (%s) for bit(%d) with type(%d, %s)\n",
+		info->name, bit, info->table[bit].event, vgt_irq_name[info->table[bit].event]);
 	return info->table[bit].event;
+}
+
+static char *vgt_snb_get_reg_name(struct pgt_device *dev, uint32_t reg)
+{
+	switch (reg) {
+		case _REG_GTIIR: return "GTIIR";
+		case _REG_GTIMR: return "GTIMR";
+		case _REG_GTIER: return "GTIER";
+		case _REG_GTISR: return "GTISR";
+		case _REG_DEIIR: return "DEIIR";
+		case _REG_DEIMR: return "DEIMR";
+		case _REG_DEIER: return "DEIER";
+		case _REG_DEISR: return "DEISR";
+		case _REG_SDEIIR: return "SDEIIR";
+		case _REG_SDEIMR: return "SDEIMR";
+		case _REG_SDEIER: return "SDEIER";
+		case _REG_SDEISR: return "SDEISR";
+		case _REG_PMIIR: return "PMIIR";
+		case _REG_PMIMR: return "PMIMR";
+		case _REG_PMIER: return "PMIER";
+		case _REG_PMISR: return "PMISR";
+	}
+	return "UNKNOWN";
 }
 
 struct vgt_irq_ops snb_irq_ops = {
@@ -524,4 +572,5 @@ struct vgt_irq_ops snb_irq_ops = {
 	.get_event_type_from_bit = vgt_snb_get_event_type_from_bit,
 	.get_bit_from_event = vgt_snb_get_bit_from_event,
 	.get_irq_info_from_event = vgt_snb_get_irq_info_from_event,
+	.get_reg_name = vgt_snb_get_reg_name,
 };
