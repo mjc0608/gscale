@@ -315,9 +315,133 @@ static shared_iopage_t *map_hvm_iopage(struct vgt_device *vgt)
 	return xen_remap_domain_mfn_range_in_kernel(ioreq_pfn, 1, vgt->vm_id);
 }
 
+void vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
+     unsigned int port, unsigned int bytes, unsigned long val)
+{
+    dprintk("vgt_hvm_write_cf8_cfc %x %d %lx\n", port, bytes, val);
+    if ( (port & ~3) == 0xcf8 ) {
+        ASSERT (bytes == 4);
+        ASSERT ((port & 3) == 0);
+        vgt->last_cf8 = (uint32_t) val;
+    }
+    else {
+        ASSERT ( (vgt->last_cf8 & 3) == 0);
+        ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
+             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
+        vgt_emulate_cfg_write (vgt,
+             (vgt->last_cf8 & 0xfc) + (port & 3),
+             &val, bytes);
+    }
+}
+
+void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
+       unsigned int port, unsigned int bytes, unsigned long *val)
+{
+    unsigned long data;
+
+    if ((port & ~3)== 0xcf8) {
+        memcpy(val, (uint8_t*)&vgt->last_cf8 + (port & 3), bytes);
+    }
+    else {
+        ASSERT ( (vgt->last_cf8 & 3) == 0);
+        ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
+            ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
+        vgt_emulate_cfg_read(vgt, (vgt->last_cf8 & 0xfc) + (port & 3),
+                     &data, bytes);
+        memcpy(val, &data, bytes);
+    }
+    dprintk("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
+               port, bytes, *val);
+}
+
+void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
+{
+    int i, sign;
+    char *pdata;
+
+    sign = ioreq->df ? -1 : 1;
+
+    if (ioreq->dir == IOREQ_READ) {
+        /* PIO READ */
+        if (!ioreq->data_is_ptr) {
+            vgt_hvm_read_cf8_cfc(vgt,
+                  ioreq->addr,
+                  ioreq->size,
+                  (unsigned long*) &ioreq->data);
+        }
+        else {
+            dprintk("VGT: _hvm_pio_emulation read data_ptr %lx\n",
+			(long)ioreq->data);
+            /*
+             * The data pointer of emulation is guest physical address
+             * so far, which is godo to Qemu emulation, but hard for
+             * vGT driver which doesn't know gpn_2_mfn translation.
+             * We may ask hypervisor to use mfn for vGT driver.
+             * We keep assert here to see if guest really use it.
+             */
+            ASSERT(0);
+#if 0
+            pdata = (char *)ioreq->data;
+            for (i=0; i < ioreq->count; i++) {
+                vgt_hvm_read_cf8_cfc(vgt,
+                     ioreq->addr,
+                     ioreq->size,
+                     (unsigned long *)pdata);
+                pdata += ioreq->size * sign;
+            }
+#endif
+        }
+    }
+    else {
+        /* PIO WRITE */
+        if (!ioreq->data_is_ptr) {
+            vgt_hvm_write_cf8_cfc(vgt,
+                  ioreq->addr,
+                  ioreq->size,
+                  (unsigned long) ioreq->data);
+        }
+        else {
+            dprintk("VGT: _hvm_pio_emulation write data_ptr %lx\n",
+			(long)ioreq->data);
+            /*
+             * The data pointer of emulation is guest physical address
+             * so far, which is godo to Qemu emulation, but hard for
+             * vGT driver which doesn't know gpn_2_mfn translation.
+             * We may ask hypervisor to use mfn for vGT driver.
+             * We keep assert here to see if guest really use it.
+             */
+            ASSERT(0);
+#if 0
+            pdata = (char *)ioreq->data;
+
+            for (i=0; i < ioreq->count; i++) {
+                vgt_hvm_write_cf8_cfc(vgt,
+                     ioreq->addr,
+                     ioreq->size, *(unsigned long *)pdata);
+                pdata += ioreq->size * sign;
+            }
+#endif
+        }
+    }
+}
+
 static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
 {
 	/*TODO: handle the HVM IO (mmio/pio) request */
+        switch (ioreq->type) {
+            case IOREQ_TYPE_PIO:	/* PIO */
+                if ((ioreq->addr & ~7) != 0xcf8)
+                    printk(KERN_ERR "vGT: Unexpected PIO %lx emulation\n",
+                           (long) ioreq->addr);
+                else
+                    _hvm_pio_emulation(vgt, ioreq);
+                break;
+            case IOREQ_TYPE_COPY:	/* MMIO */
+                break;
+            default:
+                printk(KERN_ERR "vGT: Unknown ioreq type %x\n", ioreq->type);
+                break;
+        }
 	return 0;
 }
 

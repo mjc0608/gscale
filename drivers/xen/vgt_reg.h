@@ -458,6 +458,7 @@ struct vgt_device {
 
 	struct vgt_irq_virt_state *irq_vstate;
 	struct vgt_hvm_info  *hvm_info;
+        uint32_t        last_cf8;
     struct kobject kobj;
 };
 
