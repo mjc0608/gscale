@@ -1775,7 +1775,7 @@ dprintk("create_state_instance\n");
 /*
  * priv: VCPU ?
  */
-struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
+struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 {
 	int i;
 	struct vgt_device *vgt;
@@ -1799,7 +1799,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 		return NULL;
 	}
 	vgt->vgt_id = vgt_id;
-	vgt->vm_id = ...;
+	vgt->vm_id = vm_id;
 #endif
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
@@ -1822,6 +1822,9 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 		vgt->gm_sz = dom0_aperture_sz(pdev);
 		vgt->hidden_gm_offset = gm_sz(pdev);	/* dom0 has no hidden part */
 	} else {
+		/*
+		 * TODO: Use sysfs for dynamic configuration.
+		 */
 		vgt->aperture_base = get_vm_aperture_base(pdev, vgt->vgt_id);
 		vgt->aperture_sz = vm_aperture_sz(pdev);
 		vgt->gm_sz = vm_gm_sz(pdev);
@@ -1878,6 +1881,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev)
 
 	pdev->device[vgt->vgt_id] = vgt;
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
+	vgt_hvm_info_init(vgt);
 	/* TODO: per register special handling. */
 	return vgt;
 }
@@ -1895,6 +1899,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	while ( is_current_render_owner(vgt) )
 		schedule();
 
+	vgt_hvm_info_deinit(vgt);
 	vgt->pdev->device[vgt->vgt_id] = NULL;
 
 	vgt_vstate_irq_exit(vgt);
@@ -2355,7 +2360,6 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
  *	-1: error
  */
 //int vgt_add_state_sysfs(struct vgt_device *vgt);
-int vgt_init_sysfs(void);
 int vgt_initialize(struct pci_dev *dev)
 {
 	int i;
@@ -2386,7 +2390,7 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 
 	/* create domain 0 instance */
-	vgt_dom0 = create_vgt_instance(pdev);   /* TODO: */
+	vgt_dom0 = create_vgt_instance(pdev, 0);   /* TODO: */
 	if (vgt_dom0 == NULL)
 		goto err;
 #ifndef SINGLE_VM_DEBUG
@@ -2426,7 +2430,7 @@ int vgt_initialize(struct pci_dev *dev)
      * once
      */
     //vgt_add_state_sysfs(vgt_dom0);
-    vgt_init_sysfs();
+    vgt_init_sysfs(pdev);
 
 	printk("vgt_initialize succeeds.\n");
 	return 0;

@@ -1516,5 +1516,8 @@ void vgt_reg_ier_handler(struct vgt_device *state,
 	uint32_t reg, uint32_t val, bool write, ...);
 void vgt_reg_watchdog_handler(struct vgt_device *state,
 	uint32_t reg, uint32_t val, bool write, ...);
+struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id);
+void vgt_release_instance(struct vgt_device *vgt);
+int vgt_init_sysfs(struct pgt_device *pdev);
 
 #endif	/* _VGT_REG_H_ */

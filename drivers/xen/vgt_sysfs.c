@@ -83,6 +83,7 @@
  * later read out of it.
  */
 static struct kobject *vgt_kobj;
+static struct pgt_device *vgt_kobj_priv;
 static int vgt_instance_cnt = 1;
 
 static int vgt_create_topdir_kobject(void)
@@ -95,28 +96,7 @@ static int vgt_create_topdir_kobject(void)
     return 0;
 }
 
-int vgt_add_state_sysfs(struct vgt_device *vgt);
-static struct vgt_device *dummy_create_vgt_instance(int vgt_id)
-{
-    /* FIXME: dummy_vgt will be lost tracking, so there are memory leak
-     * here
-     */
-    struct vgt_device *dummy_vgt = kmalloc(sizeof(*dummy_vgt), GFP_KERNEL);
-    if (dummy_vgt == NULL) {
-        printk("Insufficient memory for vgt_device dummy_vgt\n");
-        return NULL;
-    } else {
-        dummy_vgt->vgt_id = vgt_id;
-        dummy_vgt->gm_sz = 0xdeadbeef;
-        dummy_vgt->aperture_sz = 0xdeadbeef;
-        dummy_vgt->aperture_base = 0xbeefdead;
-        dummy_vgt->aperture_base_va = (void*)0xbeefdead;
-        vgt_add_state_sysfs(dummy_vgt);
-    }
-
-    return dummy_vgt;
-}
-
+int vgt_add_state_sysfs(int vm_id);
 static ssize_t vgt_create_instance_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
 {
@@ -131,7 +111,9 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
     /* TODO: scanned value not checked */
 	sscanf(buf, "%du", &val);
     if (val > 0) {
-        dummy_create_vgt_instance(vgt_instance_cnt);
+	/* TOFIX: The vmid should come from the file node */
+        vgt_add_state_sysfs(vgt_instance_cnt);
+	/* TODO: Error Check/report */
         vgt_instance_cnt++;
     } else {
         printk(KERN_WARNING"vGT sysfs node create error: value should be an posivive integer\n" );
@@ -151,7 +133,7 @@ static struct attribute_group ctl_attr_group = {
 	.attrs = ctl_attrs,
 };
 
-int vgt_init_sysfs(void)
+int vgt_init_sysfs(struct pgt_device *pdev)
 {
     int retval;
 
@@ -166,6 +148,7 @@ int vgt_init_sysfs(void)
         return retval;
     }
 
+    vgt_kobj_priv = pdev;
     return 0;
 }
 
@@ -271,9 +254,10 @@ static struct attribute_group attr_group = {
 	.attrs = attrs,
 };
 
-int vgt_add_state_sysfs(struct vgt_device *vgt)
+int vgt_add_state_sysfs(int vm_id)
 {
 	int retval;
+	struct vgt_device *vgt;
 	/*
 	 * Create a simple kobject located under /sys/kernel/
 	 * As this is a simple directory, no uevent will be sent to
@@ -287,12 +271,15 @@ int vgt_add_state_sysfs(struct vgt_device *vgt)
         if (retval < 0)
             return retval;
     }
+    vgt = create_vgt_instance(vgt_kobj_priv, vm_id);
+    if (vgt == NULL)
+	return -1;
 
     /* init kobject */
 	kobject_init(&vgt->kobj, &vgt_kobj_ktype);
 
     /* add kobject */
-    retval = kobject_add(&vgt->kobj, vgt_kobj, "vgt%d", vgt->vgt_id);
+    retval = kobject_add(&vgt->kobj, vgt_kobj, "vm%u", vgt->vm_id);
     if (retval) {
         printk(KERN_WARNING "%s: vgt kobject add error: %d\n",
                 __func__, retval);
@@ -310,4 +297,5 @@ int vgt_add_state_sysfs(struct vgt_device *vgt)
 void vgt_del_state_sysfs(struct vgt_device *vgt)
 {
     kobject_put(&vgt->kobj);
+    vgt_release_instance(vgt);
 }
