@@ -78,7 +78,7 @@
 #include <xen/vgt.h>
 #include "vgt_reg.h"
 
-static inline int tail_ro_ring_id(unsigned int tail_off)
+static inline int tail_to_ring_id(unsigned int tail_off)
 {
 	int i;
 
@@ -110,7 +110,7 @@ bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
 	//printk("vGT:ring_mmio_read (%x)\n", off);
 
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
-	ring_id = tail_ro_ring_id ( _tail_reg_(off) );
+	ring_id = tail_to_ring_id ( _tail_reg_(off) );
 	vring = &vgt->rb[ring_id].vring;
 
 	memcpy(p_data, (char *)vring + rel_off, bytes);
@@ -131,7 +131,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 	ASSERT(!(rel_off & (bytes - 1)));
 
-	ring_id = tail_ro_ring_id ( _tail_reg_(off) );
+	ring_id = tail_to_ring_id ( _tail_reg_(off) );
 	vring = &vgt->rb[ring_id].vring;
 	sring = &vgt->rb[ring_id].sring;
 
