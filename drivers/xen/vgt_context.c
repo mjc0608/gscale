@@ -259,7 +259,7 @@ static void enforce_mode_setting(struct pgt_device *pdev)
 }
 
 #ifndef SINGLE_VM_DEBUG
-int next_display_owner;
+struct vgt_device *next_display_owner;
 #endif
 static struct vgt_device *vgt_dom0;
 struct mmio_hash_table	*mtable[MHASH_SIZE];
@@ -722,14 +722,15 @@ bool is_rendering_engines_empty(struct pgt_device *pdev, int timeout)
  */
 void vgt_request_display_owner_switch(struct vgt_device *vgt)
 {
-	if (next_display_owner != current_display_owner(pdev))
+	if (next_display_owner != current_display_owner(vgt->pdev))
 		next_display_owner = vgt;
 }
 
 /*
  * Do monitor owner switch.
  */
-void vgt_switch_display_owner(int prev_id, int next_id)
+void vgt_switch_display_owner(struct vgt_device *prev,
+    struct vgt_device *next)
 {
 }
 #endif
@@ -1777,7 +1778,7 @@ dprintk("create_state_instance\n");
  */
 struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 {
-	int i;
+	int i, vgt_id;
 	struct vgt_device *vgt;
 	vgt_state_ring_t	*rb;
 	char *cfg_space;
