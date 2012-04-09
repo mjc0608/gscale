@@ -278,6 +278,8 @@ extern bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
 int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val);
+
+extern unsigned long g2m_pfn(int vm_id, unsigned long g_pfn);
+
 #define INVALID_MFN  (~0UL)
 
-#define gtt_pte_p
