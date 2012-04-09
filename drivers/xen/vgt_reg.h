@@ -453,6 +453,9 @@ struct vgt_device {
 	uint64_t	aperture_offset;	/* address fix for visible GM */
 	uint64_t	hidden_gm_offset;	/* address fix for invisible GM */
 
+	uint64_t   vgtt_sz; /* virtual GTT size in byte */
+	uint32_t   *vgtt; /* virtual GTT table for guest to read */
+
 	uint64_t  	rsvd_aperture_base;	/* aperture used for VGT driver */
 	vgt_reg_t		saved_wakeup;	/* disable PM before switching */
 
@@ -533,6 +536,9 @@ struct pgt_device {
 
 	reg_info_t *reg_info;	/* virtualization policy for a given reg */
 	struct vgt_irq_host_state *irq_hstate;
+
+	uint64_t vgtt_sz; /* in bytes */
+	uint32_t *vgtt; /* virtual GTT table for guest to read*/
 };
 
 extern struct list_head pgt_devices;
@@ -603,7 +609,6 @@ static inline void reg_set_owner(struct pgt_device *pdev,
 	pdev->reg_info[reg] |= type & VGT_REG_OWNER;
 }
 
-/* definitions for physical aperture/GM space */
 #define aperture_sz(pdev)		(pdev->bar_size[1])
 #define aperture_pages(pdev)		(aperture_sz(pdev) >> GTT_PAGE_SHIFT)
 #define aperture_base(pdev)		(pdev->gmadr_base)
@@ -615,7 +620,7 @@ static inline void reg_set_owner(struct pgt_device *pdev,
 #define hidden_gm_base(pdev)		(aperture_sz(pdev))
 
 #define aperture_2_gm(pdev, addr)	(addr - aperture_base(pdev))
-#define v_aperture(pdev, addr)		(aperture_vbase(pdev) + addr)
+#define v_aperture(pdev, addr)		(aperture_vbase(pdev) + (addr))
 
 #define rsvd_aperture_sz(pdev)		(pdev->rsvd_aperture_sz)
 #define rsvd_aperture_base(pdev)	(pdev->rsvd_aperture_base)
@@ -680,6 +685,12 @@ static inline uint64_t get_vm_hidden_gm_base(struct pgt_device *pdev, int i)
 static inline uint64_t get_vm_hidden_gm_end(struct pgt_device *pdev, int i)
 {
 	return get_vm_hidden_gm_base(pdev, i) + vm_gm_hidden_sz(pdev) - 1;
+}
+
+static inline bool gm_in_vm_range(struct pgt_device *pdev, int i, uint64_t addr)
+{
+	return ( addr >= get_vm_visible_gm_base(pdev, i) && addr <= get_vm_visible_gm_end(pdev, i) )
+		|| ( addr >= get_vm_hidden_gm_base(pdev, i) && addr <= get_vm_hidden_gm_end(pdev, i) );
 }
 
 /* definitions for vgt's aperture/gm space */
@@ -840,22 +851,85 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 		g_gm_is_hidden(vgt, g_start + size - 1);
 }
 
-#define GTT_BASE(pdev)			(pdev->gttmmio_base + VGT_MMIO_SPACE_SZ)
-#define GTT_VBASE(pdev)			(pdev->gttmmio_base_va + VGT_MMIO_SPACE_SZ)
+#define GTT_MMIO_OFFSET			VGT_MMIO_SPACE_SZ
+#define GTT_BASE(pdev)			(pdev->gttmmio_base + GTT_MMIO_OFFSET)
+#define GTT_VBASE(pdev)			(pdev->gttmmio_base_va + GTT_MMIO_OFFSET)
+#define GTT_SIZE				(2* SIZE_1MB)
 
 #define GTT_PAGE_SHIFT		12
 #define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
 #define GTT_PAGE_MASK		(~(GTT_PAGE_SIZE-1))
+#define GTT_PAE_MASK        ((1UL <<12) - (1UL << 4)) /* bit 11:4 */
 #define GTT_ENTRY_SIZE		4
 
 #define GTT_INDEX(pdev, addr)		\
 	((u32)((addr - gm_base(pdev)) >> GTT_PAGE_SHIFT))
+
+#define GTT_OFFSET_TO_INDEX(offset)		((offset) >> 2)
 
 #define GTT_ADDR(pdev, index)		\
 	(GTT_BASE(pdev) + index * GTT_ENTRY_SIZE)
 
 #define GTT_VADDR(pdev, index)		\
 	((u32*)GTT_VBASE(pdev) + index)
+
+static inline uint32_t g2h_gtt_index(struct vgt_device *vgt, uint32_t g_index)
+{
+	uint64_t g_addr = g_index << GTT_PAGE_SHIFT;
+
+	return (uint32_t)(g2h_gm(vgt, g_addr) >> GTT_PAGE_SHIFT);
+}
+
+static inline uint32_t h2g_gtt_index(struct vgt_device *vgt, uint32_t h_index)
+{
+	uint64_t h_addr = h_index << GTT_PAGE_SHIFT;
+
+	return (uint32_t)(h2g_gm(vgt, h_addr) >> GTT_PAGE_SHIFT);
+}
+
+#define GTT_MAX_PFN (1UL << 28)
+#define GTT_PFN_HIGH_SHIFT 20
+#define GTT_PFN_LOW_MASK ((1U << GTT_PFN_HIGH_SHIFT) - 1)
+
+typedef union{
+	uint32_t val;
+	struct{
+		uint32_t valid:1;		/* Valid PTE */
+		uint32_t l3cc:1;		/* L3 Cacheability Control */
+		uint32_t llccc:1;		/* LLC Cacheability Control */
+		uint32_t gfdt:1;		/* Graphics Data Type */
+		uint32_t pfn_high:8;	/* Physical Start Address Extension */
+		uint32_t pfn_low:20;
+	}u;
+} gtt_pte_t;
+
+static inline void gtt_pte_make(gtt_pte_t *p_pte, uint32_t val)
+{
+	p_pte->val = val;
+}
+
+static inline unsigned long gtt_pte_get_pfn(gtt_pte_t *p_pte)
+{
+	return p_pte->u.pfn_low + (p_pte->u.pfn_high << GTT_PFN_HIGH_SHIFT);
+}
+
+static inline uint32_t gtt_pte_get_val(gtt_pte_t *p_pte)
+{
+	return p_pte->val;
+}
+
+static inline void gtt_pte_set_pfn(gtt_pte_t *p_pte, uint32_t pfn)
+{
+	ASSERT(pfn < GTT_MAX_PFN);
+
+	p_pte->u.pfn_low = pfn & GTT_PFN_LOW_MASK;
+	p_pte->u.pfn_high = pfn >> GTT_PFN_HIGH_SHIFT;
+}
+
+static inline int gtt_pte_valid(gtt_pte_t *p_pte)
+{
+	return p_pte->u.valid;
+}
 
 static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
 {
@@ -956,14 +1030,16 @@ static inline bool is_ring_enabled (struct pgt_device *pgt, int ring_id)
 /* FIXME: use readl/writel as Xen doesn't trap GTT access now */
 static inline u32 vgt_read_gtt(struct pgt_device *pdev, u32 index)
 {
-	//return VGT_MMIO_READ(pdev, GTT_ADDR(pdev, index));
-	return readl(GTT_VADDR(pdev, index));
+//	printk("vgt_read_gtt: index=0x%x, gtt_addr=%lx\n", index, GTT_ADDR(pdev, index));
+	return VGT_MMIO_READ(pdev, GTT_MMIO_OFFSET + index*GTT_ENTRY_SIZE);
+	//return readl(GTT_VADDR(pdev, index));
 }
 
 static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 {
-	//VGT_MMIO_WRITE(pdev, GTT_ADDR(pdev, index), val);
-	writel(val, GTT_VADDR(pdev, index));
+//	printk("vgt_write_gtt: index=0x%x, gtt_addr=%lx\n", index, GTT_ADDR(pdev, index));
+	VGT_MMIO_WRITE(pdev, GTT_MMIO_OFFSET + index*GTT_ENTRY_SIZE , val);
+	//writel(val, GTT_VADDR(pdev, index));
 }
 
 /*

@@ -76,6 +76,7 @@
 #include <xen/interface/hvm/ioreq.h>
 
 #include <xen/vgt.h>
+#include <xen/vgt-parser.h>
 #include "vgt_reg.h"
 
 static inline int tail_to_ring_id(unsigned int tail_off)
@@ -127,7 +128,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	vgt_reg_t	oval;
 
 	ASSERT(bytes <= 4);
-	//printk("vGT:ring_mmio_write (%x) with val (%x)\n", off, *((u32 *)p_data));
+//	printk("vGT:ring_mmio_write (%x) with val (%x)\n", off, *((u32 *)p_data));
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 	ASSERT(!(rel_off & (bytes - 1)));
 
@@ -141,6 +142,8 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	switch (rel_off) {
 	case RB_OFFSET_TAIL:
 		sring->tail = vring->tail;
+//		FIXME: temporarily not enable command parser for debuging purpose
+//		vgt_scan_ring_buffer(vgt, ring_id);
 		break;
 	case RB_OFFSET_HEAD:
 		//debug
@@ -176,6 +179,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 			 *   that efficient (GPU have to wait for the completion).
 			 *	Start from 2, TO-REVISIT LATER!!!
 			 */
+//			vgt_scan_ring_buffer(vgt, ring_id);
 		}
 		break;
 	default:

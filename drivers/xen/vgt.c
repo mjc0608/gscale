@@ -62,6 +62,7 @@
 #include <linux/pci.h>
 #include <xen/vgt.h>
 #include "vgt_reg.h"
+#include <xen/vgt-parser.h>
 
 MODULE_AUTHOR("Intel Corporation");
 MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");
@@ -131,7 +132,12 @@ static int __init vgt_init_module(void)
 {
 	int rc;
 
+	rc  = vgt_cmd_parser_init();
+	if(rc < 0)
+		return 0;
+
 	rc = xen_setup_vgt(&vgt_xops);
+
 
 	// fill other initialization works here
 	return rc == 0;

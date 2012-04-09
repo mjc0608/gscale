@@ -64,8 +64,16 @@
 #define GEN_GFX_CMD_TYPE_VIDEO_CODEC_MI 0
 #define GEN_GFX_CMD_TYPE_VIDEO_CODEC_VC 3
 
-struct gen_gfx_cmd_decode_data{
+struct vgt_cmd_data{
+	struct vgt_device *vgt;
+	enum {
+		RING_BUFFER_INSTRUCTION,
+		BATCH_BUFFER_INSTRUCTION
+	}buffer_type;
+	int ring_id;
 	unsigned int *instruction;
+	/* next instruction when return from  batch buffer to ring buffer */
+	unsigned int *ret_instruction;
 	unsigned int type;
 	unsigned int sub_type;
 	unsigned int opcode;
@@ -123,9 +131,6 @@ union gen_gfx_video_codec_cmd {
     struct gen_gfx_cmd_mi mi;
 };
 
-#define  VGT_RENDER_3D_MEDIA_INDEX(sub_type, opcode, sub_opcode) \
-		((sub_type)<<11 | (opcode)<<9 | (sub_opcode))
-
 /* Bits 28:23 */
 #define VGT_RENDER_MI_OPCODE_MAX 0x3F
 /* Bits 28:22 */
@@ -135,7 +140,7 @@ union gen_gfx_video_codec_cmd {
 
 struct vgt_cmd_handler{
 	char* name;
-	int (*handler)(struct gen_gfx_cmd_decode_data *data);
+	int (*handler)(struct vgt_cmd_data *data);
 };
 
 struct vgt_cmd_handlers{
@@ -259,5 +264,20 @@ struct vgt_cmd_handlers{
 #define OP_PIPE_CONTROL					INDEX_3D_MEDIA( 0x3 ,0x2, 0x00 )
 #define OP_3DPRIMITIVE					INDEX_3D_MEDIA( 0x3 ,0x3, 0x00 )
 
+extern int vgt_cmd_parser_init(void);
+
 extern int vgt_cmd_handler_register(unsigned int type, unsigned int opcode,
-		char* name, int (*handler)(struct gen_gfx_cmd_decode_data *data));
+		char* name, int (*handler)(struct vgt_cmd_data *data));
+
+extern int vgt_scan_ring_buffer(struct vgt_device *vgt, int ring_id);
+
+extern bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes);
+
+extern bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes);
+
+int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val);
+#define INVALID_MFN  (~0UL)
+
+#define gtt_pte_p

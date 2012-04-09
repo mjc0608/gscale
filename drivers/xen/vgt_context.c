@@ -70,6 +70,7 @@
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
 #include <xen/vgt.h>
+#include <xen/vgt-parser.h>
 #include "vgt_reg.h"
 
 /* uncomment this macro so that dom0's aperture/GM starts from non-zero */
@@ -263,6 +264,11 @@ struct vgt_device *next_display_owner;
 #endif
 static struct vgt_device *vgt_dom0;
 struct mmio_hash_table	*mtable[MHASH_SIZE];
+struct mmio_hash_table gtt_mmio_handler={
+	.read = gtt_mmio_read,
+	.write = gtt_mmio_write,
+	.mmio_base = 0x200000,
+};
 
 static void _add_mtable(int index, struct mmio_hash_table *mht)
 {
@@ -280,6 +286,9 @@ static struct mmio_hash_table *lookup_mtable(int mmio_base)
 {
 	int index;
 	struct mmio_hash_table *mht;
+
+	if(mmio_base >= gtt_mmio_handler.mmio_base)
+		return &gtt_mmio_handler;
 
 	mmio_base &= ~3;
 	index = mhash(mmio_base);
@@ -395,11 +404,11 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	}
 #endif
 
-	printk("vGT: address fix g->h for reg (%lx)(%x)\n", reg, g_value);
+	dprintk("vGT: address fix g->h for reg (%lx)(%x)\n", reg, g_value);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
 	/* FIXME: there may have some complex mask pattern */
 	h_value = g2h_gm(vgt, g_value & mask);
-	printk("....(g)%x->(h)%x\n", g_value, (h_value & mask) | (g_value & ~mask));
+	dprintk("....(g)%x->(h)%x\n", g_value, (h_value & mask) | (g_value & ~mask));
 
 #ifdef DOM0_NONIDEN_DISPLAY_ONLY
 	/* a workaround to test display part, before command parser is ready */
@@ -408,7 +417,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 		int h_index = GTT_INDEX(pdev, h_value);
 		int i;
 
-		printk("index (%x)(%x), value (%x)(%x)\n", g_index, h_index,
+		dprintk("index (%x)(%x), value (%x)(%x)\n", g_index, h_index,
 			vgt_read_gtt(pdev, g_index),
 			vgt_read_gtt(pdev, h_index));
 		dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x0));
@@ -429,7 +438,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 		for (i = 0; i < 4096 * 4; i++)
 			vgt_write_gtt(pdev, h_index - g_index + i, vgt_read_gtt(pdev, i));
 
-		printk("index (%x)(%x), value (%x)(%x)\n", g_index, h_index,
+		dprintk("index (%x)(%x), value (%x)(%x)\n", g_index, h_index,
 			vgt_read_gtt(pdev, g_index),
 			vgt_read_gtt(pdev, h_index));
 		dprintk("DSPATILEOFF: %x, DSPLINOFF: %x, SIZE: %x\n",
@@ -461,7 +470,7 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	if (!reg_addr_fix(pdev, reg))
 		return h_value;
 
-	printk("vGT: address fix h->g for reg (%lx)(%x)\n", reg, h_value);
+	dprintk("vGT: address fix h->g for reg (%lx)(%x)\n", reg, h_value);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
 
 	/* FIXME: it's possible the initial state may not contain valid address */
@@ -472,7 +481,7 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 
 	/* FIXME: there may have some complex mask pattern */
 	g_value = h2g_gm(vgt, h_value & mask);
-	printk("....(h)%x->(g)%x\n", h_value, (g_value & mask) | (h_value & ~mask));
+//	printk("....(h)%x->(g)%x\n", h_value, (g_value & mask) | (h_value & ~mask));
 	return (g_value & mask) | (h_value & ~mask);
 }
 
@@ -590,8 +599,8 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
 	ASSERT(!spin_is_locked(&pdev->lock));
 #endif
 
-	ASSERT (offset + bytes <= vgt->state.regNum *
-				sizeof(vgt->state.vReg[0]));
+//	ASSERT (offset + bytes <= vgt->state.regNum *
+//				sizeof(vgt->state.vReg[0]));
 	ASSERT (bytes <= 8);
 	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 
@@ -633,19 +642,20 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
 #ifdef SINGLE_VM_DEBUG
 	ASSERT(!spin_is_locked(&pdev->lock));
 #endif
-	ASSERT (offset + bytes <= vgt->state.regNum *
-				sizeof(vgt->state.vReg[0]));
+//	ASSERT (offset + bytes <= vgt->state.regNum *
+//				sizeof(vgt->state.vReg[0]));
 	/* at least FENCE registers are accessed in 8 bytes */
 	ASSERT (bytes <= 8);
 	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 
 	if (bytes > 4)
 		dprintk("vGT: capture >4 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
-
+/*
 	if (reg_rdonly(pdev, offset & (~(bytes - 1)))) {
 		printk("vGT: captured write to read-only reg (%x)\n", offset);
 		return true;
 	}
+*/
 
 	spin_lock(&pdev->lock);
 	mht = lookup_mtable(offset);
@@ -1836,6 +1846,20 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	vgt->aperture_base_va = aperture_vbase(pdev) +
 		vgt->aperture_offset;
 
+	vgt->vgtt_sz = (vgt->gm_sz >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
+	printk("Virtual GTT size: 0x%x\n", vgt->vgtt_sz);
+	vgt->vgtt = kzalloc(vgt->vgtt_sz, GFP_KERNEL);
+	if (!vgt->vgtt) {
+		printk("vGT: failed to allocate virtual GTT table\n");
+		kfree(vgt->state.vReg);
+		kfree(vgt->state.sReg);
+#ifndef SINGLE_VM_DEBUG
+		free_vgt_id(vgt_id);
+#endif
+		kfree (vgt);
+		return NULL;
+	}
+
 	printk("Aperture: [%llx, %llx] guest [%llx, %llx] va(%llx)\n",
 		vgt_aperture_base(vgt),
 		vgt_aperture_end(vgt),
@@ -1907,6 +1931,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	/* already idle */
 	list_del(&vgt->list);
 
+	kfree(vgt->vgtt);
 	kfree(vgt->state.vReg);
 	kfree(vgt->state.sReg);
 #ifndef SINGLE_VM_DEBUG
@@ -2015,7 +2040,6 @@ dprintk("VGT: Initial_phys_states\n");
 		pdev->initial_mmio_state[i] = *((vgt_reg_t *)pdev->gttmmio_base_va + i);
 	}
 #endif
-
 
 	return true;
 }
@@ -2280,6 +2304,18 @@ void vgt_update_gtt_info(uint64_t gm_size)
 	printk("GTT: tell vGT about total gm_size: %llx\n", gm_size);
 	tot_gm_size = gm_size;
 }
+
+unsigned long int vgt_dom0_aper_offset(void)
+{
+	/*FIXME: remove the hard code 128M */
+#ifdef DOM0_NON_IDENTICAL
+	return SIZE_1MB * 128;
+#else
+	return 0;
+#endif
+}
+
+EXPORT_SYMBOL(vgt_dom0_aper_offset);
 
 void vgt_calculate_max_vms(struct pgt_device *pdev)
 {

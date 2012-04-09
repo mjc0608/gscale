@@ -58,7 +58,11 @@
 
 #include <linux/linkage.h>
 #include <linux/module.h>
+#include <xen/interface/memory.h>
+#include <asm/xen/hypercall.h>
+#include <xen/vgt.h>
 #include <xen/vgt-parser.h>
+#include "vgt_reg.h"
 
 /*
  * parse and handle the gfx command
@@ -70,11 +74,15 @@
  *         -1 if error, e.g. command not recognized
  */
 
-static unsigned int vgt_address_get_vmbase(void)
-{
-	/* FIXME: get the aperture VM BASE */
-	return 0;
-}
+#define VGT_CMD_PRINTK(fmt, arg...) {			\
+	    if (vgt_cmd_debug) {				\
+		printk(fmt, ##arg);		\
+	    }					\
+	}
+
+static bool vgt_cmd_debug=0;
+
+static void show_instruction_info(struct vgt_cmd_data *d);
 
 static unsigned int constant_buffer_address_offset_disable(void)
 {
@@ -89,504 +97,583 @@ static unsigned int constant_buffer_address_offset_disable(void)
 	return 0;
 }
 
-static unsigned int vgt_address_get_vmlength(void)
+static int address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
 {
-	/* FIXME: get the aperture VM LENGTH*/
-	return (256<<20); /* 256M */
-}
 
-static int address_fixup(unsigned int *addr)
-{
-	if (*addr >= vgt_address_get_vmlength())
+	uint32_t val = *addr;
+
+	/* address zero is usually used as NULL pointer, so do not translate */
+	if(val == 0)
 	{
-		/* FIXME: raise out of bound violation */
-		return -1;
+		VGT_CMD_PRINTK(KERN_WARNING "vgt: NULL pointer in %p, no translation", addr);
+		return 0;
 	}
 
-	if(*addr == 0)
+	if (gm_in_vm_range(d->vgt->pdev, d->vgt->vm_id, val)){
+		/* address already translated before, do nothing but return */
+		VGT_CMD_PRINTK(KERN_WARNING "vgt: address 0x%x in %p already translated\n",
+				val, addr);
 		return 0;
+	}
 
-	*addr = *addr + vgt_address_get_vmbase();
-	return 0;
+	if (val < vm_gm_sz(d->vgt->pdev)){
+		*addr = g2h_gm(d->vgt, val);
+		return 0;
+	}
+
+	/* TODO: the address is out of range, raise fault? */
+	printk(KERN_WARNING "vgt: address 0x%x in %p out of bound\n", val, addr);
+
+	return -VGT_UNHANDLEABLE;
 }
 
-static inline void length_fixup(struct gen_gfx_cmd_decode_data *data, int nr_bits)
+static inline void length_fixup(struct vgt_cmd_data *data, int nr_bits)
 {
 	/*  DWord Length is bits (nr_bits-1):0 */
-	int dword_length = data->data & ( (1U << nr_bits) - 1);
+	int dword_length = data->instruction[0] & ( (1U << nr_bits) - 1);
 	data->instruction += dword_length + 1;
 }
 
-static int vgt_cmd_handler_noop(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_noop(struct vgt_cmd_data *data)
 {
 	data->instruction += 1;
 	return 0;
 }
 
-static int vgt_cmd_handler_length_fixup_8(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_length_fixup_8(struct vgt_cmd_data *data)
 {
 	length_fixup(data, 8);
 	return 0;
 }
 
-static int vgt_cmd_handler_length_fixup_16(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_length_fixup_16(struct vgt_cmd_data *data)
 {
 	length_fixup(data, 16);
 	return 0;
 }
 
-static void batch_buffer_addr_push(unsigned int *addr)
+static int vgt_cmd_handler_mi_batch_buffer_end(struct vgt_cmd_data *data)
 {
-	/* TODO: push the addr to stack */
-	/* the stack should be per-VM, also need add lock */
-}
-
-static unsigned int* batch_buffer_addr_pop(void)
-{
-	/* TODO: pop the addr from stack */
-	/* the stack should be per-VM, also need add lock */
-	return NULL;
-}
-
-static int vgt_cmd_handler_mi_batch_buffer_end(struct gen_gfx_cmd_decode_data *data)
-{
-	/* FIXME: pop up the stack for ring buffer */
-	data->instruction = batch_buffer_addr_pop();
+	data->instruction = data->ret_instruction;
+	data->buffer_type = RING_BUFFER_INSTRUCTION;
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_conditional_batch_buffer_end(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_conditional_batch_buffer_end(struct vgt_cmd_data *data)
 {
 	/* FIXME: currently ignore the "Use Global GTT" bit, and assume always using GGTT.
 	   need add PPGTT support later */
 
 	/* TODO: handle the DWord Length */
-	address_fixup(data->instruction + 2);
+	address_fixup(data,data->instruction + 2);
 	length_fixup(data,8);
 
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_display_flip(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_display_flip(struct vgt_cmd_data *data)
 {
 	/* TODO: handle the DWord Length */
-	address_fixup(data->instruction + 2);
+	address_fixup(data,data->instruction + 2);
 	length_fixup(data,8);
 
 	return 0;
 }
-static int vgt_cmd_handler_mi_semaphore_mbox(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_semaphore_mbox(struct vgt_cmd_data *data)
 {
 	/* TODO: handle the DWord Length */
 
 	if (!(data->data & (1U<<18))){
 		/* memory address, not MMIO register */
-		address_fixup(data->instruction + 2);
+		address_fixup(data,data->instruction + 2);
 	}
 
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_set_context(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_set_context(struct vgt_cmd_data *data)
 {
-	/* TODO: handle the DWord Length */
-	address_fixup(data->instruction + 1);
+	address_fixup(data,data->instruction + 1);
 	length_fixup(data,8);
 
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_math(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_math(struct vgt_cmd_data *data)
 {
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_store_data_imm(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_store_data_imm(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 2);
+	address_fixup(data,data->instruction + 2);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_store_data_index(struct gen_gfx_cmd_decode_data *data)
-{
-	length_fixup(data,8);
-	return 0;
-}
-
-static int vgt_cmd_handler_mi_load_register_imm(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_store_data_index(struct vgt_cmd_data *data)
 {
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_update_gtt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_load_register_imm(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 1);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_store_register_mem(struct gen_gfx_cmd_decode_data *data)
+#define USE_GLOBAL_GTT_MASK (1U << 22)
+unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
 {
-	address_fixup(data->instruction + 2);
+	struct xen_get_mfn_from_pfn pfn_arg;
+	int rc;
+	unsigned long pfn_list[1];
+
+	pfn_list[0] = g_pfn;
+
+	set_xen_guest_handle(pfn_arg.pfn_list, pfn_list);
+	pfn_arg.nr_pfns = 1;
+	pfn_arg.domid = vm_id;
+
+	rc = HYPERVISOR_memory_op(XENMEM_get_mfn_from_pfn, &pfn_arg);
+	if(rc < 0){
+		printk(KERN_ERR "failed to get mfn for gpfn(0x%lx)\n, errno=%d\n", g_pfn,rc);
+		return INVALID_MFN;
+	}
+
+	return pfn_list[0];
+}
+/*
+ * IN:  p_gtt_val - guest GTT entry
+ * OUT: m_gtt_val - translated machine GTT entry from guest GTT entry
+ *					on success, it will be written with correct value
+ *					otherwise, it will not be written
+ */
+int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val)
+{
+	gtt_pte_t pte, *p_pte;
+	unsigned long g_pfn, mfn;
+
+	p_pte = &pte;
+	gtt_pte_make(p_pte, p_gtt_val);
+
+	if (!gtt_pte_valid(p_pte)){
+		*m_gtt_val = p_gtt_val;
+		return 0;
+	}
+
+	g_pfn = gtt_pte_get_pfn(p_pte);
+	mfn = g2m_pfn(vgt->vm_id, g_pfn);
+	if (mfn == INVALID_MFN){
+		printk(KERN_ERR "Invalid gtt entry 0x%x\n", p_gtt_val);
+		return -EINVAL;
+	}
+	gtt_pte_set_pfn(p_pte, mfn);
+
+	*m_gtt_val = gtt_pte_get_val(p_pte);
+
+	return 0;
+}
+
+static int vgt_cmd_handler_mi_update_gtt(struct vgt_cmd_data *data)
+{
+	uint32_t entry_num, *entry;
+	int rc, i;
+	gtt_pte_t pte, *p_pte;
+
+	/*TODO: remove this assert when PPGTT support is added */
+	ASSERT(data->instruction[0] & USE_GLOBAL_GTT_MASK);
+	printk("mi_update_gtt\n");
+
+	rc = address_fixup(data,data->instruction + 1);
+	if (rc < 0){
+		/* invalid GTT table address */
+		printk(KERN_ERR "vgt: invalid GTT table address\n");
+		return rc;
+	}
+
+	entry_num = data->instruction[0] & ((1U<<8) - 1); /* bit 7:0 */
+	entry = v_aperture(data->vgt->pdev, data->instruction[1]);
+	p_pte = &pte;
+	for (i=0; i<entry_num; i++){
+		printk("vgt: update GTT entry %d\n", i);
+		/*TODO: optimize by batch g2m translation*/
+		rc = gtt_p2m(data->vgt, entry[i], &entry[i] );
+		if (rc < 0){
+			/* TODO: how to handle the invalide guest value */
+		}
+	}
+
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_flush_dw(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_store_register_mem(struct vgt_cmd_data *data)
+{
+	address_fixup(data,data->instruction + 2);
+	length_fixup(data,8);
+	return 0;
+}
+
+static int vgt_cmd_handler_mi_flush_dw(struct vgt_cmd_data *data)
 {
 	/* Check post-sync bit */
 	if ( (data->data >> 14) & 0x3){
-		address_fixup(data->instruction + 1);
+		address_fixup(data,data->instruction + 1);
 	}
 
 	length_fixup(data,6);
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_clflush(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_clflush(struct vgt_cmd_data *data)
 {
 	/* TODO: may need to check if field "DW Representing 1/2 Cache Line" is out of bound */
-	address_fixup(data->instruction + 1);
+	address_fixup(data,data->instruction + 1);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_report_perf_count(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_mi_report_perf_count(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 1);
+	address_fixup(data,data->instruction + 1);
 	length_fixup(data,6);
 	return 0;
 }
 
-static unsigned int* gtt_address_map(unsigned int addr)
+/* bit 31:2 */
+#define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))
+static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 {
-	/* todo: return the mapping of gtt address: addr */
+	if (data->buffer_type == RING_BUFFER_INSTRUCTION){
+		data->ret_instruction = data->instruction + 2;
+	}
+
+	VGT_CMD_PRINTK("MI_BATCH_BUFFER_START: buffer GraphicsAddress=%x Clear Command Buffer Enable=%d\n",
+			data->instruction[1], (data->instruction[0]>>11) & 1);
+
+	/* FIXME: assume batch buffer also can be accessed by aperture */
+	data->instruction = (uint32_t*)v_aperture(data->vgt->pdev,
+				data->instruction[1] & BATCH_BUFFER_ADDR_MASK);
+	data->buffer_type = BATCH_BUFFER_INSTRUCTION;
 	return 0;
 }
 
-static int vgt_cmd_handler_mi_batch_buffer_start(struct gen_gfx_cmd_decode_data *data)
-{
-	batch_buffer_addr_push(data->instruction + (data->data & 0xff) +2);
-	data->instruction = gtt_address_map(*(data->instruction + 1)) - 1;
-	return 0;
-}
-
-static int vgt_cmd_handler_xy_setup_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_setup_blt(struct vgt_cmd_data *data)
 {
 	/* Destination Base Address */
-	address_fixup(data->instruction + 4);
+	address_fixup(data,data->instruction + 4);
 	/* Pattern Base Address for Color Pattern */
-	address_fixup(data->instruction + 7);
+	address_fixup(data,data->instruction + 7);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_setup_clip_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_setup_clip_blt(struct vgt_cmd_data *data)
 {
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_setup_mono_pattern_sl_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_setup_mono_pattern_sl_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
+	address_fixup(data,data->instruction + 4);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_pixel_blt(struct gen_gfx_cmd_decode_data *data)
-{
-	length_fixup(data,8);
-	return 0;
-}
-
-static int vgt_cmd_handler_xy_scanlines_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_pixel_blt(struct vgt_cmd_data *data)
 {
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_text_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_scanlines_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 3);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_color_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_text_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 3);
+	address_fixup(data,data->instruction + 3);
+	length_fixup(data,8);
+	return 0;
+}
+
+static int vgt_cmd_handler_color_blt(struct vgt_cmd_data *data)
+{
+	address_fixup(data,data->instruction + 3);
 	length_fixup(data,5);
 	return 0;
 }
 
-static int vgt_cmd_handler_src_copy_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_src_copy_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 3);
+	address_fixup(data,data->instruction + 3);
 	length_fixup(data,5);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_color_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_color_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
+	address_fixup(data,data->instruction + 4);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_pat_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_pat_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 5);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 5);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_mono_pat_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_mono_pat_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 5);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 5);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_src_copy_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_src_copy_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 7);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 7);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_mono_src_copy_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_mono_src_copy_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 5);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 5);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_full_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_full_blt(struct vgt_cmd_data *data)
 {
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_full_mono_src_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_full_mono_src_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 5);
-	address_fixup(data->instruction + 8);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 5);
+	address_fixup(data,data->instruction + 8);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_full_mono_pattern_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_full_mono_pattern_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 7);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 7);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_full_mono_pattern_mono_src_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_full_mono_pattern_mono_src_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 5);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 5);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_mono_pat_fixed_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_mono_pat_fixed_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
+	address_fixup(data,data->instruction + 4);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_mono_src_copy_immediate_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_mono_src_copy_immediate_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
+	address_fixup(data,data->instruction + 4);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_pat_blt_immediate(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_pat_blt_immediate(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
+	address_fixup(data,data->instruction + 4);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_src_copy_chroma_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_src_copy_chroma_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 7);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 7);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_full_immediate_pattern_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_full_immediate_pattern_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 7);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 7);
 	length_fixup(data,8);
 	return 0;
 }
 
 
-static int vgt_cmd_handler_xy_full_mono_src_immediate_pattern_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_full_mono_src_immediate_pattern_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 5);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 5);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_pat_chroma_blt(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_pat_chroma_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 5);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 5);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_xy_pat_chroma_blt_immediate(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_xy_pat_chroma_blt_immediate(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 4);
+	address_fixup(data,data->instruction + 4);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_3dstate_vertex_buffers(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_3dstate_vertex_buffers(struct vgt_cmd_data *data)
 {
 	int dword_length, i;
 
 	dword_length = data->data & ( (1U << 8) - 1);
 
 	for (i=1; i <= dword_length - 2 ; i = i+4){
-		address_fixup(data->instruction + i + 1);
-		address_fixup(data->instruction + i + 2);
+		address_fixup(data,data->instruction + i + 1);
+		address_fixup(data,data->instruction + i + 2);
 	}
 
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_3dstate_index_buffer(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_3dstate_index_buffer(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 1);
+	address_fixup(data,data->instruction + 1);
 
 	if (*(data->instruction + 2) != 0)
-		address_fixup(data->instruction + 2);
+		address_fixup(data,data->instruction + 2);
 
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_3dstate_constant_gs(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_3dstate_constant_gs(struct vgt_cmd_data *data)
 {
 	if (constant_buffer_address_offset_disable() == 1){
-		address_fixup(data->instruction + 1);
+		address_fixup(data,data->instruction + 1);
 	}
-	address_fixup(data->instruction + 2);
-	address_fixup(data->instruction + 3);
-	address_fixup(data->instruction + 4);
+	address_fixup(data,data->instruction + 2);
+	address_fixup(data,data->instruction + 3);
+	address_fixup(data,data->instruction + 4);
 
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_3dstate_constant_ps(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_3dstate_constant_ps(struct vgt_cmd_data *data)
 {
 	if (constant_buffer_address_offset_disable() == 1){
-		address_fixup(data->instruction + 1);
+		address_fixup(data,data->instruction + 1);
 	}
-	address_fixup(data->instruction + 2);
-	address_fixup(data->instruction + 3);
-	address_fixup(data->instruction + 4);
+	address_fixup(data,data->instruction + 2);
+	address_fixup(data,data->instruction + 3);
+	address_fixup(data,data->instruction + 4);
 
 	length_fixup(data,8);
 	return 0;
 }
 
 
-static int vgt_cmd_handler_3dstate_depth_buffer(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_3dstate_depth_buffer(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 2);
+	address_fixup(data,data->instruction + 2);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_3dstate_stencil_buffer(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_3dstate_stencil_buffer(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 2);
+	address_fixup(data,data->instruction + 2);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_3dstate_hier_depth_buffer(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_3dstate_hier_depth_buffer(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 2);
+	address_fixup(data,data->instruction + 2);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_3dstate_so_buffer(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_3dstate_so_buffer(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 2);
-	address_fixup(data->instruction + 3);
+	address_fixup(data,data->instruction + 2);
+	address_fixup(data,data->instruction + 3);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_3dstate_so_decl_list(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_3dstate_so_decl_list(struct vgt_cmd_data *data)
 {
 	length_fixup(data,9);
 	return 0;
 }
 
-static int vgt_cmd_handler_pipe_control(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_pipe_control(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 2);
+	address_fixup(data,data->instruction + 2);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_state_prefetch(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_state_prefetch(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 1);
+	address_fixup(data,data->instruction + 1);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_state_base_address(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_state_base_address(struct vgt_cmd_data *data)
 {
-	address_fixup(data->instruction + 1);
-	address_fixup(data->instruction + 2);
-	address_fixup(data->instruction + 3);
-	address_fixup(data->instruction + 4);
-	address_fixup(data->instruction + 5);
-	address_fixup(data->instruction + 6);
-	address_fixup(data->instruction + 7);
-	address_fixup(data->instruction + 8);
-	address_fixup(data->instruction + 9);
+	address_fixup(data,data->instruction + 1);
+	address_fixup(data,data->instruction + 2);
+	address_fixup(data,data->instruction + 3);
+	address_fixup(data,data->instruction + 4);
+	address_fixup(data,data->instruction + 5);
+	address_fixup(data,data->instruction + 6);
+	address_fixup(data,data->instruction + 7);
+	address_fixup(data,data->instruction + 8);
+	address_fixup(data,data->instruction + 9);
 	length_fixup(data,8);
 	return 0;
 }
 
-static int vgt_cmd_handler_3dstate_constant_vs(struct gen_gfx_cmd_decode_data *data)
+static int vgt_cmd_handler_3dstate_constant_vs(struct vgt_cmd_data *data)
 {
 	if (constant_buffer_address_offset_disable() == 1){
-		address_fixup(data->instruction + 1);
+		address_fixup(data,data->instruction + 1);
 	}
-	address_fixup(data->instruction + 2);
-	address_fixup(data->instruction + 3);
-	address_fixup(data->instruction + 4);
+	address_fixup(data,data->instruction + 2);
+	address_fixup(data,data->instruction + 3);
+	address_fixup(data,data->instruction + 4);
 
 	length_fixup(data,8);
 	return 0;
@@ -898,7 +985,7 @@ static int vgt_cmd_register_default(void)
 	return 0;
 }
 
-int cmd_handlers_init(void)
+int vgt_cmd_parser_init(void)
 {
 	int type, size;
 
@@ -924,8 +1011,8 @@ int cmd_handlers_init(void)
 	return 0;
 }
 
-int vgt_cmd_handler_register(unsigned int type, unsigned int opcode,
-		char* name, int (*handler)(struct gen_gfx_cmd_decode_data *data))
+int vgt_cmd_handler_register(unsigned int type, unsigned int index,
+		char* name, int (*handler)(struct vgt_cmd_data *data))
 {
 	if (type > GEN_GFX_CMD_TYPE_MAX || cmd_handlers[type].handlers == NULL)
 	{
@@ -933,19 +1020,19 @@ int vgt_cmd_handler_register(unsigned int type, unsigned int opcode,
 		return -ERANGE;
 	}
 
-	if (opcode >= cmd_handlers[type].len)
+	if (index >= cmd_handlers[type].len)
 	{
-		printk(KERN_ERR "unsupported command handler opcode 0x%x", opcode);
+		printk(KERN_ERR "unsupported command handler opcode 0x%x", index);
 		return -ERANGE;
 	}
 
-	cmd_handlers[type].handlers[opcode].name = name;
-	cmd_handlers[type].handlers[opcode].handler = handler;
+	cmd_handlers[type].handlers[index].name = name;
+	cmd_handlers[type].handlers[index].handler = handler;
 
 	return 0;
 }
 
-static int vgt_cmd_handler_exec(struct gen_gfx_cmd_decode_data *decode_data)
+static int vgt_cmd_handler_exec(struct vgt_cmd_data *decode_data)
 {
 	unsigned int type, opcode;
 
@@ -955,71 +1042,190 @@ static int vgt_cmd_handler_exec(struct gen_gfx_cmd_decode_data *decode_data)
 	if ( cmd_handlers[type].handlers == NULL ||
 			opcode >= cmd_handlers[type].len ||
 			cmd_handlers[type].handlers[opcode].handler == NULL){
-		printk(KERN_ERR "vgt: unsupported cmd type %d opcode %xh\n", type, opcode);
+		printk(KERN_ERR "vgt_cmd_handler_exec: unsupported command\n");
+		show_instruction_info(decode_data);
 		return  -VGT_UNHANDLEABLE;
 	}
+
+	VGT_CMD_PRINTK("cmd_name: %s\n",cmd_handlers[type].handlers[opcode].name);
 
 	return cmd_handlers[type].handlers[opcode].handler(decode_data);
 }
 
-int vgt_cmd_parser_render(unsigned int* instruction)
+int vgt_cmd_parser_render(struct vgt_cmd_data* decode_data)
 {
 	union gen_gfx_render_cmd  command;
-	struct gen_gfx_cmd_decode_data decode_data;
 	unsigned int index;
-	int ret = VGT_UNHANDLEABLE;
+	int ret = -VGT_UNHANDLEABLE;
 
-	command.raw = *instruction;
-	decode_data.instruction = instruction;
-	decode_data.type = command.common.type;
+	command.raw = *decode_data->instruction;
+	decode_data->type = command.common.type;
 
-	switch (decode_data.type){
+	switch (decode_data->type){
 		case GEN_GFX_CMD_TYPE_RENDER_MI:
-			decode_data.opcode = command.mi.opcode;
-			decode_data.data = command.mi.data;
+			decode_data->opcode = command.mi.opcode;
+			decode_data->data = command.mi.data;
 
-			ret = vgt_cmd_handler_exec(&decode_data);
+			ret = vgt_cmd_handler_exec(decode_data);
 			break;
 
 		case GEN_GFX_CMD_TYPE_RENDER_MISC:
+			printk(KERN_ERR "vgt: unsupported command GEN_GFX_CMD_TYPE_RENDER_MISC\n");
+			show_instruction_info(decode_data);
+			ret = -VGT_UNHANDLEABLE;
 			break;
 
 		case GEN_GFX_CMD_TYPE_RENDER_2D:
-			decode_data.opcode = command.cmd_2d.opcode;
-			decode_data.data = command.cmd_2d.data;
+			decode_data->opcode = command.cmd_2d.opcode;
+			decode_data->data = command.cmd_2d.data;
 
-			ret = vgt_cmd_handler_exec(&decode_data);
+			ret = vgt_cmd_handler_exec(decode_data);
 			break;
 
 		case GEN_GFX_CMD_TYPE_GFXPIPE:
 
-			decode_data.sub_type= command.cmd_3d_media.sub_type;
-			decode_data.opcode = command.cmd_3d_media.opcode;
-			decode_data.sub_opcode = command.cmd_3d_media.sub_opcode;
-			decode_data.data = command.cmd_3d_media.data;
-			decode_data.count = command.cmd_3d_media.count;
-			index = VGT_RENDER_3D_MEDIA_INDEX(decode_data.sub_type, \
-					decode_data.opcode, decode_data.sub_opcode);
+			decode_data->sub_type= command.cmd_3d_media.sub_type;
+			decode_data->opcode = command.cmd_3d_media.opcode;
+			decode_data->sub_opcode = command.cmd_3d_media.sub_opcode;
+			decode_data->data = command.cmd_3d_media.data;
+			decode_data->count = command.cmd_3d_media.count;
+			index = INDEX_3D_MEDIA(decode_data->sub_type, \
+					decode_data->opcode, decode_data->sub_opcode);
 
 			if (index > VGT_RENDER_3D_MEDIA_OPCODE_MAX ||
 				cmd_handlers[GEN_GFX_CMD_TYPE_GFXPIPE].handlers[index].handler == NULL){
-				printk(KERN_ERR "vgt: unsupported 3D_MEDIA instruction"
+				printk(KERN_ERR "vgt: unsupported 3D_MEDIA instruction "
 						"sub_type=%xh opcode=%xh sub_opcode=%xh\n",
-						decode_data.sub_type, decode_data.opcode,
-						decode_data.sub_opcode);
+						decode_data->sub_type, decode_data->opcode,
+						decode_data->sub_opcode);
+				show_instruction_info(decode_data);
 				ret = -VGT_UNHANDLEABLE;
 				goto out;
 			}
 
-			ret = cmd_handlers[GEN_GFX_CMD_TYPE_GFXPIPE].handlers[index].handler(&decode_data);
+			VGT_CMD_PRINTK("cmd name: %s\n",
+					cmd_handlers[GEN_GFX_CMD_TYPE_GFXPIPE].handlers[index].name);
+
+			ret = cmd_handlers[GEN_GFX_CMD_TYPE_GFXPIPE].handlers[index].handler(decode_data);
 
 			break;
 
 		default:
-			printk(KERN_ERR "vgt: unsupported command type %xh\n",decode_data.type);
-			ret = VGT_UNHANDLEABLE;
+			printk(KERN_ERR "vgt: unsupported command type %xh\n",decode_data->type);
+			show_instruction_info(decode_data);
+			ret = -VGT_UNHANDLEABLE;
 			break;
 	}
 out:
+	return ret;
+}
+
+static void show_instruction_info(struct vgt_cmd_data *d)
+{
+	/* FIXME: for unknown command, the following info may be incorrect*/
+	printk(KERN_ERR "ring_id=%d buffer_type=%d instruction=%08x type=0x%x sub_type=0x%x opcode=0x%x sub_opcode=0x%x\n",
+			d->ring_id, d->buffer_type, d->instruction[0], d->type, d->sub_type, d->opcode, d->sub_opcode);
+}
+
+bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes)
+{
+	uint32_t g_gtt_index;
+
+	ASSERT(bytes == 4);
+
+	if (off - VGT_MMIO_SPACE_SZ >= vgt->vgtt_sz)
+		return false;
+
+	g_gtt_index = GTT_OFFSET_TO_INDEX( off - VGT_MMIO_SPACE_SZ );
+	*(uint32_t*)p_data = vgt->vgtt[g_gtt_index];
+	return true;
+}
+
+bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes)
+{
+	uint32_t g_gtt_val, h_gtt_val, g_gtt_index, h_gtt_index;
+	int rc;
+
+	ASSERT(bytes == 4);
+
+	if (off - VGT_MMIO_SPACE_SZ >= vgt->vgtt_sz)
+		return false;
+
+	g_gtt_val = *(uint32_t*)p_data;
+	rc = gtt_p2m(vgt, g_gtt_val, &h_gtt_val);
+	if (rc < 0){
+		return false;
+	}
+
+	g_gtt_index = GTT_OFFSET_TO_INDEX( off - VGT_MMIO_SPACE_SZ );
+	h_gtt_index = g2h_gtt_index(vgt, g_gtt_index);
+	vgt_write_gtt( vgt->pdev, h_gtt_index, h_gtt_val );
+	vgt->vgtt[g_gtt_index] = g_gtt_val;
+
+	return true;
+}
+
+static int error_count=0;
+
+int vgt_scan_ring_buffer(struct vgt_device *vgt, int ring_id)
+{
+	vgt_ringbuffer_t	*sring;
+	vgt_reg_t	rb_start, rb_head, rb_tail, ring_size;
+	char* instr, *instr_end, *ring_buttom ;
+	struct vgt_cmd_data decode_data;
+	struct pgt_device  *pdev;
+	int ret=0;
+
+	if (error_count > 10)
+		return 0;
+
+	sring = &vgt->rb[ring_id].sring;
+	pdev = vgt->pdev;
+
+	rb_start = sring->start;
+	rb_head = VGT_MMIO_READ(pdev, RB_HEAD(ring_id)) & RB_HEAD_OFF_MASK;
+	rb_tail = sring->tail & RB_TAIL_OFF_MASK;
+	ring_size = _RING_CTL_BUF_SIZE(sring->ctl);
+
+	VGT_CMD_PRINTK("vgt_scan_ring_buffer: rb_start=%x rb_head=%x rb_tail=%x ring_size=%x\n",
+			rb_start, rb_head, rb_tail, ring_size);
+
+	instr = v_aperture(pdev, rb_start + rb_head);
+	instr_end = v_aperture(pdev, rb_start + rb_tail);
+	ring_buttom = v_aperture(pdev, rb_start + ring_size);
+
+	decode_data.buffer_type = RING_BUFFER_INSTRUCTION;
+	decode_data.vgt = vgt;
+	decode_data.ring_id = ring_id;
+	while(instr != instr_end){
+		decode_data.instruction = (uint32_t*)instr;
+		VGT_CMD_PRINTK("ring_id=%d %s instruction=%0x\n",
+				decode_data.ring_id,
+				decode_data.buffer_type == RING_BUFFER_INSTRUCTION ? "RING_BUFFER": "BATCH_BUFFER",
+				decode_data.instruction[0]);
+
+		ret = vgt_cmd_parser_render(&decode_data);
+		if (ret < 0){
+			error_count++;
+			printk("error_count=%d\n", error_count);
+			break;
+		}
+
+		/* next instruction*/
+		instr = (char*)decode_data.instruction;
+
+		if (decode_data.buffer_type == RING_BUFFER_INSTRUCTION){
+			/* handle the ring buffer wrap case */
+			ASSERT(instr <= ring_buttom);
+
+			if (instr == ring_buttom){
+				instr = v_aperture(pdev, rb_start);
+				VGT_CMD_PRINTK("ring buffer wrap\n");
+			}
+		}
+	}
+
 	return ret;
 }
