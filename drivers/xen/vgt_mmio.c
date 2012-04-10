@@ -201,6 +201,63 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
+/*
+ * Map the apperture space (BAR1) of vGT device for direct access.
+ */
+static int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
+{
+	char *cfg_space = &vgt->state.cfg_space[0], *pcfg_space;
+        uint64_t bar_s, bar_e;
+        struct xen_hvm_vgt_map_mmio memmap;
+        int r;
+
+        cfg_space += VGT_REG_CFG_SPACE_BAR1;	/* APERTUR */
+        ASSERT ((*cfg_space & 7) == 6);           /* 64 bits MMIO bar */
+        bar_s = * (uint64_t *) cfg_space;
+        bar_e = bar_s + vgt->state.bar_size[0] - 1;
+
+        memmap.first_gfn = bar_s;
+        pcfg_space = &vgt->pdev->initial_cfg_space[0];
+        pcfg_space += VGT_REG_CFG_SPACE_BAR1;
+
+        memmap.first_mfn = vgt_aperture_base(vgt);
+        memmap.nr_mfns = vgt->state.bar_size[0] >> PAGE_SHIFT ;
+
+	r = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
+
+	if (r < 0)
+	    printk(KERN_ERR "vgt_hvm_map_apperture %d!\n", r);
+        return r;
+}
+
+/*
+ * Zap the GTTMMIO bar area for vGT trap and emulation.
+ */
+static int vgt_hvm_set_trap_area(struct vgt_device *vgt)
+{
+	char *cfg_space = &vgt->state.cfg_space[0];
+        struct xen_hvm_vgt_set_trap_io trap;
+        uint64_t bar_s, bar_e;
+        int r;
+
+        trap.nr_pio_frags = 0;
+        trap.nr_mmio_frags = 1;
+        cfg_space += VGT_REG_CFG_SPACE_BAR0;
+        ASSERT ((*cfg_space & 7) == 6);           /* 64 bits MMIO bar */
+        bar_s = * (uint64_t *) cfg_space;
+        bar_e = bar_s + vgt->state.bar_size[0] - 1;
+        trap.mmio_frags[0].s = bar_s;
+        trap.mmio_frags[0].e = bar_e;
+
+	r = HYPERVISOR_hvm_op(HVMOP_vgt_set_trap_io, &trap);
+	if (r < 0) {
+		printk(KERN_ERR "HVMOP_vgt_set_trap_io %d!\n",
+			r);
+		return r;
+	}
+	return r;
+}
+
 bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int offset, void *p_data, int bytes)
 {
 
@@ -237,7 +294,7 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 		new = *(uint32_t *)p_data;
 		printk("Programming bar %x with %x\n", off, new);
 		size = vgt->state.bar_size[(off - VGT_REG_CFG_SPACE_BAR0)/8];
-		if ( new == 0xFFFFFFFF )
+		if ( new == 0xFFFFFFFF ) {
 			/*
 			 * Power-up software can determine how much address
 			 * space the device requires by writing a value of
@@ -246,7 +303,13 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 			 * address bits.
 			 */
 			new = new & ~(size-1);
-		*cfg_reg = (new & ~0xf) | old;
+		        *cfg_reg = (new & ~0xf) | old;
+                } else {
+                    vgt_hvm_map_apperture(vgt, 0);
+		    *cfg_reg = (new & ~0xf) | old;
+                    vgt_hvm_map_apperture(vgt, 1);
+                    vgt_hvm_set_trap_area(vgt);
+                }
 		break;
 
 		case VGT_REG_CFG_SPACE_MSAC:
@@ -358,6 +421,82 @@ void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
                port, bytes, *val);
 }
 
+void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
+{
+    int i, sign;
+    char *cfg_space = &vgt->state.cfg_space[0];
+    uint64_t  base = * (uint64_t *) (cfg_space + VGT_REG_CFG_SPACE_BAR0);
+    uint64_t  tmp;
+
+    sign = req->df ? -1 : 1;
+
+    if (req->dir == IOREQ_READ) {
+        /* MMIO READ */
+        if (!req->data_is_ptr) {
+            ASSERT (req->count == 1);
+
+            dprintk("HVM_MMIO_read: target register (%lx).\n", req->addr);
+            vgt_emulate_read(vgt,
+                        req->addr - base,
+                        &req->data,
+                        req->size);
+        }
+        else {
+	    ASSERT (req->addr + sign * req->count * req->size >= base);
+	    ASSERT (req->addr + sign * req->count * req->size <
+                            base + vgt->state.bar_size[0]);
+            dprintk("HVM_MMIO_read: rep %d target memory %lx, slow!\n",
+                         req->count, req->addr);
+            for (i=0; i<req->count; i++) {
+                tmp = 0;
+                vgt_emulate_read(vgt,
+                        req->addr + sign * i * req->size - base,
+                        &tmp,
+                        req->size);
+                /*
+                 *  TODO: Hypercall to write data (tmp) to
+                 *      req->data + sign * i * req->size
+                 *  We can use a hypercall or entire/cache foreign map.
+                 *  Refer to IOCTL_PRIVCMD_MMAPBATCH_V2.
+                 */
+            }
+        }
+    }
+    else {   /* MMIO Write */
+        if (!req->data_is_ptr) {
+            ASSERT (req->count == 1);
+
+            dprintk("HVM_MMIO_write: target register (%lx).\n", req->addr);
+            vgt_emulate_write(vgt,
+                        req->addr - base,
+                        &req->data,
+                        req->size);
+        }
+        else {
+	    ASSERT (req->addr + sign * req->count * req->size >= base);
+	    ASSERT (req->addr + sign * req->count * req->size <
+                            base + vgt->state.bar_size[0]);
+            dprintk("HVM_MMIO_write: rep %d target memory %lx, slow!\n",
+                         req->count, req->addr);
+
+            for (i=0; i<req->count; i++) {
+                tmp = 0;
+                /*
+                 *  TODO: Hypercall to read data (tmp) from
+                 *      req->data + sign * i * req->size
+                 *  We can use a hypercall or entire/cache foreign map.
+                 *  Refer to IOCTL_PRIVCMD_MMAPBATCH_V2.
+                 */
+                vgt_emulate_write(vgt,
+                        req->addr + sign * i * req->size - base,
+                        &tmp,
+                        req->size);
+            }
+
+        }
+    }
+}
+
 void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 {
     int i, sign;
@@ -431,7 +570,6 @@ void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 
 static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
 {
-	/*TODO: handle the HVM IO (mmio/pio) request */
         switch (ioreq->type) {
             case IOREQ_TYPE_PIO:	/* PIO */
                 if ((ioreq->addr & ~7) != 0xcf8)
@@ -441,6 +579,7 @@ static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
                     _hvm_pio_emulation(vgt, ioreq);
                 break;
             case IOREQ_TYPE_COPY:	/* MMIO */
+                _hvm_mmio_emulation(vgt, ioreq);
                 break;
             default:
                 printk(KERN_ERR "vGT: Unknown ioreq type %x\n", ioreq->type);

@@ -1847,7 +1847,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		vgt->aperture_offset;
 
 	vgt->vgtt_sz = (vgt->gm_sz >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
-	printk("Virtual GTT size: 0x%x\n", vgt->vgtt_sz);
+	printk("Virtual GTT size: 0x%lx\n", (long)vgt->vgtt_sz);
 	vgt->vgtt = kzalloc(vgt->vgtt_sz, GFP_KERNEL);
 	if (!vgt->vgtt) {
 		printk("vGT: failed to allocate virtual GTT table\n");

@@ -42,6 +42,25 @@ struct xen_hvm_pagetable_dying {
 };
 typedef struct xen_hvm_pagetable_dying xen_hvm_pagetable_dying_t;
 DEFINE_GUEST_HANDLE_STRUCT(xen_hvm_pagetable_dying_t);
+
+#include <xen/interface/vcpu.h>
+#define HVMOP_vgt_set_trap_io       17
+struct xen_hvm_vgt_set_trap_io {
+    uint16_t nr_pio_frags;
+    struct trap_frags	pio_frags[MAX_TRAP_FRAGS];
+    uint16_t nr_mmio_frags;
+    struct trap_frags	mmio_frags[MAX_TRAP_FRAGS];
+};
+typedef struct xen_hvm_vgt_set_trap_io xen_hvm_vgt_set_trap_io_t;
+
+#define HVMOP_vgt_map_mmio           18
+struct xen_hvm_vgt_map_mmio {
+    uint32_t  map;		/* 1: Map, 0: Unmap */
+    uint32_t  nr_mfns;
+    uint64_t  first_gfn;
+    uint64_t  first_mfn;
+};
+typedef struct xen_hvm_vgt_map_mmio xen_hvm_vgt_map_mmio_t;
  
 enum hvmmem_type_t {
     HVMMEM_ram_rw,             /* Normal read/write guest RAM */
