@@ -40,6 +40,13 @@ vgt_ops_t *vgt_ops = NULL;
 
 #define MAX_VGT_DEVICES     16
 unsigned long   vgt_device_bitmap = 0;
+
+/*
+ * TODO: It seems we only needs to know dom0_vgt here,
+ * and we can remove vgt_devices[] data structure.
+ * Simplify it later on.
+ */
+
 struct {
     int dom_id;
     struct vgt_device *vgt;
@@ -97,7 +104,7 @@ printk("Eddie: xen_deregister_vgt_device %p\n", vgt);
     for (i=0; i < MAX_VGT_DEVICES; i++)
          if (vgt_devices[i].vgt == vgt) {
             vgt_devices[i].vgt = NULL;
-            vgt_devices[i].dom_id = 0;
+            vgt_devices[i].dom_id = -1;
             free_device_id(i);
             return;
         };
@@ -316,11 +323,7 @@ int vgt_cfg_write_emul(
         struct x86_emulate_ctxt *ctxt)
 {
     int rc = X86EMUL_OKAY;
-#ifdef SINGLE_VM_DEBUG
-	int dom_id = 0;
-#else
-	int dom_id = ...;
-#endif
+    int dom_id = 0;
 
     dprintk("VGT: vgt_cfg_write_emul %x %x %lx at %llx\n",
 	    port, bytes, val, ctxt->regs->rip);
@@ -367,11 +370,7 @@ int vgt_cfg_read_emul(
 {
     unsigned long data;
     int rc = X86EMUL_OKAY;
-#ifdef SINGLE_VM_DEBUG
-	int dom_id = 0;
-#else
-	int dom_id = ...;
-#endif
+    int dom_id = 0;
 
     if ((port & ~3)== 0xcf8) {
         memcpy(val, (uint8_t*)&vgt_cf8 + (port & 3), bytes);
@@ -672,7 +671,7 @@ int hcall_mmio_write(
     req.type = PV_IOREQ_TYPE_COPY;
     if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
 			smp_processor_id(), &req) < 0) {
-	printk("vGT: failed to do hypercall for read address (%x)\n", port);
+	printk("vGT: failed to do hypercall for read address (%lx)\n", port);
 	return X86EMUL_UNHANDLEABLE;
     }
     return X86EMUL_OKAY;
@@ -692,7 +691,7 @@ int hcall_mmio_read(
     req.type = PV_IOREQ_TYPE_COPY;
     if (HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
 			smp_processor_id(), &req) < 0) {
-	printk("vGT: failed to do hypercall for read address (%x)\n", port);
+	printk("vGT: failed to do hypercall for read address (%lx)\n", port);
 	return X86EMUL_UNHANDLEABLE;
     }
     *val = req.data;
@@ -707,11 +706,7 @@ int emulate_read(
         struct x86_emulate_ctxt *ctxt)
 {
 	unsigned long r_pa;
-#ifdef SINGLE_VM_DEBUG
 	int dom_id = 0;
-#else
-	int dom_id = ...;
-#endif
 
 	dprintk("VGT: read seg %x off %lx data %p bytes %d gip = %llx\n",
 		seg, offset, p_data, bytes, ctxt->regs->rip);
@@ -767,11 +762,7 @@ int emulate_write(
         struct x86_emulate_ctxt *ctxt)
 {
 	unsigned long w_pa, data;
-#ifdef SINGLE_VM_DEBUG
 	int dom_id = 0;
-#else
-	int dom_id = ...;
-#endif
 
 	ASSERT (seg == x86_seg_ds ); 	// TO FIX
 	dprintk("VGT: write seg %x off %lx data %p bytes %d gip = %llx\n",
@@ -798,6 +789,11 @@ int emulate_write(
 	return X86EMUL_OKAY;
 }
 
+/*
+ * This is only for dom0 decode/emulation purpose.
+ * HVM relies on Xen to decode, and has its own path of emulation.
+ *
+ */
 static const struct x86_emulate_ops vgt_emu_ops = {
 	.read = emulate_read,
 	.write = emulate_write,
