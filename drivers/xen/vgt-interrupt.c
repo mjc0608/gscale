@@ -593,28 +593,6 @@ static uint32_t vgt_keep_owner_bits(struct vgt_device *vgt,
 	return val;
 }
 
-/* temporarily disable master interrupt when it's already enabled */
-static inline void vgt_disable_master_interrupt(struct pgt_device *pdev)
-{
-	if (vgt_master_enable(pdev)) {
-		dprintk("vGT: disable master interrupt\n");
-		VGT_MMIO_WRITE(pdev, _REG_DEIER,
-			VGT_MMIO_READ(pdev, _REG_DEIER) & ~_REGBIT_MASTER_INTERRUPT);
-		VGT_POST_READ(pdev, _REG_DEIER);
-	}
-}
-
-/* recover master interrupt if it's already enabled */
-static inline void vgt_enable_master_interrupt(struct pgt_device *pdev)
-{
-	if (vgt_master_enable(pdev)) {
-		dprintk("vGT: enable master interrupt\n");
-		VGT_MMIO_WRITE(pdev, _REG_DEIER,
-			VGT_MMIO_READ(pdev, _REG_DEIER) | _REGBIT_MASTER_INTERRUPT);
-		VGT_POST_READ(pdev, _REG_DEIER);
-	}
-}
-
 /* write handler for imr */
 bool vgt_reg_imr_handler(struct vgt_device *state,
 	unsigned int reg, void *p_data, unsigned int bytes)
@@ -703,11 +681,8 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 		if (unmasked)
 			val &= ~unmasked;
 
-		vgt_disable_master_interrupt(pdev);
 		VGT_MMIO_WRITE(pdev, reg, val);
-		/* need check whether this post read fulfills same workaround */
 		VGT_POST_READ(pdev, reg);
-		vgt_enable_master_interrupt(pdev);
 	}
 
 	/* Then handle emulated events */
@@ -798,12 +773,6 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 	ier_enabled = vgt_keep_owner_bits(state, reg, ier_enabled);
 	ier_disabled = vgt_keep_owner_bits(state, reg, ier_disabled);
 	if (ier_enabled || ier_disabled) {
-		vgt_disable_master_interrupt(pdev);
-
-		/*
-		 * postpone master interrupt bit check, since it may change
-		 * vgt_master_enable() status
-		 */
 		if (reg == _REG_DEIER) {
 			if (ier_enabled & _REGBIT_MASTER_INTERRUPT) {
 				dprintk("vGT-IRQ(%d): newly enable MASTER\n", state->vgt_id);
@@ -825,10 +794,12 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 			val |= ier_enabled;
 		if (ier_disabled)
 			val &= ~ier_disabled;
+		if (vgt_master_enable(pdev))
+			val |= _REGBIT_MASTER_INTERRUPT;
+		else
+			val &= ~_REGBIT_MASTER_INTERRUPT;
 		VGT_MMIO_WRITE(pdev, reg, val);
 		VGT_POST_READ(pdev, reg);
-
-		vgt_enable_master_interrupt(pdev);
 	}
 
 	/* Then handle emulated events */
