@@ -92,4 +92,11 @@ extern int hcall_mmio_write(
         unsigned int bytes,
         unsigned long val);
 
+/*
+ * if this macro is defined, vgt will map GMA [0,64M] to the same page as [128M,192M] in GTT
+ * this macro should be used together with DOM0_NON_IDENTICAL macro
+ * it is only for debuging purpose
+ * */
+//#define DOM0_DUAL_MAP
+
 // MMIO definitions

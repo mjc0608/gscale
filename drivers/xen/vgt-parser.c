@@ -1146,6 +1146,8 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
+#define GTT_INDEX_MB(x) ((SIZE_1MB*(x)) >> GTT_PAGE_SHIFT)
+
 bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
@@ -1166,6 +1168,11 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	g_gtt_index = GTT_OFFSET_TO_INDEX( off - VGT_MMIO_SPACE_SZ );
 	h_gtt_index = g2h_gtt_index(vgt, g_gtt_index);
 	vgt_write_gtt( vgt->pdev, h_gtt_index, h_gtt_val );
+#ifdef DOM0_DUAL_MAP
+	if ( (h_gtt_index >= GTT_INDEX_MB(128)) && (h_gtt_index < GTT_INDEX_MB(192)) ){
+		vgt_write_gtt( vgt->pdev, h_gtt_index - GTT_INDEX_MB(128), h_gtt_val );
+	}
+#endif
 	vgt->vgtt[g_gtt_index] = g_gtt_val;
 
 	return true;
