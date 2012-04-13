@@ -157,7 +157,7 @@ static struct vgt_irq_info snb_dpy_irq_info = {
 		{IRQ_PIPE_B_VBLANK, 		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 15
 		{IRQ_DPST_PHASE_IN, 		vgt_handle_phase_in,	NULL},		// bit 16
 		{IRQ_DPST_HISTOGRAM, 		vgt_handle_histogram,	NULL},		// bit 17
-		{IRQ_GSE, 			NULL,	NULL},				// bit 18
+		{IRQ_GSE, 			vgt_default_event_handler,	NULL},	// bit 18
 		{IRQ_DP_A_HOTPLUG, 		vgt_handle_hotplug,	NULL},		// bit 19
 		{IRQ_AUX_CHANNEL_A, 		vgt_handle_aux_channel,	NULL},	// bit 20
 		{IRQ_PCH_IRQ,			NULL,	NULL},		// bit 21
@@ -181,7 +181,10 @@ static struct vgt_irq_info snb_dpy_irq_info = {
  * leave PM handlers all NULL for now
  *
  * there's no need for emulation for PM events, assuming that dom 0 is the
- * exclusive owner of this category
+ * exclusive owner of this category.
+ *
+ * also due to the same reason, the default event handler is enough even
+ * when there're related registers other than pm_iir.
  */
 static struct vgt_irq_info snb_pm_irq_info = {
 	.name = "SNB PM IRQ",
@@ -189,16 +192,16 @@ static struct vgt_irq_info snb_pm_irq_info = {
 	.table_size = VGT_IRQ_BITWIDTH,
 	.propogate_virtual_event = vgt_propogate_virtual_event,
 	.table = {
-		{IRQ_RESERVED,			NULL,	NULL},			// bit 0
+		{IRQ_RESERVED,			NULL,	NULL},				// bit 0
 
-		{IRQ_GV_DOWN_INTERVAL, 		NULL,	NULL},		// bit 1
-		{IRQ_GV_UP_INTERVAL, 		NULL,	NULL},		// bit 2
+		{IRQ_GV_DOWN_INTERVAL, 		vgt_default_event_handler,	NULL},	// bit 1
+		{IRQ_GV_UP_INTERVAL, 		vgt_default_event_handler,	NULL},	// bit 2
 
 		{IRQ_RESERVED, 			NULL,	NULL},
 
-		{IRQ_RP_DOWN_THRESHOLD, 	NULL,	NULL},		// bit 4
-		{IRQ_RP_UP_THRESHOLD, 		NULL,	NULL},		// bit 5
-		{IRQ_FREQ_DOWNWARD_TIMEOUT_RC6, NULL,	NULL},	// bit 6
+		{IRQ_RP_DOWN_THRESHOLD, 	vgt_default_event_handler,	NULL},	// bit 4
+		{IRQ_RP_UP_THRESHOLD, 		vgt_default_event_handler,	NULL},	// bit 5
+		{IRQ_FREQ_DOWNWARD_TIMEOUT_RC6, vgt_default_event_handler,	NULL},	// bit 6
 
 		{IRQ_RESERVED, NULL,	NULL},
 		{IRQ_RESERVED, NULL,	NULL},
@@ -218,8 +221,8 @@ static struct vgt_irq_info snb_pm_irq_info = {
 		{IRQ_RESERVED, NULL,	NULL},
 		{IRQ_RESERVED, NULL,	NULL},
 
-		{IRQ_PCU_THERMAL, 		NULL,	NULL},		// bit 24
-		{IRQ_PCU_PCODE2DRIVER_MAILBOX,	NULL,	NULL},	// bit 25
+		{IRQ_PCU_THERMAL, 		vgt_default_event_handler,	NULL},	// bit 24
+		{IRQ_PCU_PCODE2DRIVER_MAILBOX,	vgt_default_event_handler,	NULL},	// bit 25
 
 		{IRQ_RESERVED, NULL,	NULL},
 		{IRQ_RESERVED, NULL,	NULL},

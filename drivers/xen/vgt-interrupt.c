@@ -105,7 +105,7 @@
 //#define VGT_IRQ_FORWARD_MODE
 
 /* only handle IIR/IMR/IER, with all events handled by default handler */
-#define VGT_IRQ_DEFAULT_HANDLER
+//#define VGT_IRQ_DEFAULT_HANDLER
 
 /* for debug purpose */
 uint8_t vgt_irq_warn_once[IRQ_MAX] = {0};
@@ -1054,6 +1054,7 @@ void vgt_handle_cmd_stream_error(struct pgt_device *dev,
 	bool physical, struct vgt_device *vgt)
 {
 	uint32_t reg, val;
+	union vgt_event_state state = vgt_event_state(dev, entry->event);
 
 	/* always warn for errors */
 	VGT_IRQ_WARN(info, entry->event, "ERROR ERROR!!!\n");
@@ -1070,11 +1071,24 @@ void vgt_handle_cmd_stream_error(struct pgt_device *dev,
 	};
 	ASSERT(reg != _REG_INVALID);
 
-	val = VGT_MMIO_READ(dev, reg);
-	VGT_MMIO_WRITE(dev, reg, val);
+	if (physical) {
+		/* clear EIR bits */
+		val = VGT_MMIO_READ(dev, reg);
+		VGT_MMIO_WRITE(dev, reg, val);
 
-	/* FIXME */
-	*vgt_vreg(vgt, reg) = val;
+		/* save error states */
+		state.cmd_err.eir_reg = reg;
+		state.cmd_err.eir_val = val;
+		return;
+	}
+
+	/*
+	 * This update should be safe, even when there's another instance of
+	 * the same event comes. The current pending bit of the event has been
+	 * cleared before invoking this handler. So either this update gets
+	 * the old version, or even get the new version, it doesn't matter.
+	 */
+	__vreg(vgt, state.cmd_err.eir_reg) = state.cmd_err.eir_val;
 
 	/*
 	 * FIXME:
@@ -1096,13 +1110,14 @@ void vgt_handle_phase_in(struct pgt_device *dev,
 
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured Phase-In event!!!\n");
 
-	val = VGT_MMIO_READ(dev, _REG_BLC_PWM_CTL2);
-	val &= ~_REGBIT_PHASE_IN_IRQ_STATUS;
-	VGT_MMIO_WRITE(dev, _REG_BLC_PWM_CTL2, val);
+	if (physical) {
+		val = VGT_MMIO_READ(dev, _REG_BLC_PWM_CTL2);
+		val &= ~_REGBIT_PHASE_IN_IRQ_STATUS;
+		VGT_MMIO_WRITE(dev, _REG_BLC_PWM_CTL2, val);
+		return;
+	}
 
-	/* FIXME */
-	*vgt_vreg(vgt, _REG_BLC_PWM_CTL2) |= _REGBIT_PHASE_IN_IRQ_STATUS;
-
+	__vreg(vgt, _REG_BLC_PWM_CTL2) |= _REGBIT_PHASE_IN_IRQ_STATUS;
 	info->propogate_virtual_event(vgt, bit, info);
 }
 
@@ -1114,12 +1129,14 @@ void vgt_handle_histogram(struct pgt_device *dev,
 
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured Histogram event!!!\n")
 
-	val = VGT_MMIO_READ(dev, _REG_HISTOGRAM_THRSH);
-	val &= ~_REGBIT_HISTOGRAM_IRQ_STATUS;
-	VGT_MMIO_WRITE(dev, _REG_HISTOGRAM_THRSH, val);
+	if (physical) {
+		val = VGT_MMIO_READ(dev, _REG_HISTOGRAM_THRSH);
+		val &= ~_REGBIT_HISTOGRAM_IRQ_STATUS;
+		VGT_MMIO_WRITE(dev, _REG_HISTOGRAM_THRSH, val);
+		return;
+	}
 
-	*vgt_vreg(vgt, _REG_HISTOGRAM_THRSH) |= _REGBIT_HISTOGRAM_IRQ_STATUS;
-
+	__vreg(vgt, _REG_HISTOGRAM_THRSH) |= _REGBIT_HISTOGRAM_IRQ_STATUS;
 	info->propogate_virtual_event(vgt, bit, info);
 }
 
@@ -1128,6 +1145,7 @@ void vgt_handle_hotplug(struct pgt_device *dev,
 	bool physical, struct vgt_device *vgt)
 {
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured hotplug event (no handler)!!!\n")
+	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
 }
 
 void vgt_handle_aux_channel(struct pgt_device *dev,
@@ -1135,6 +1153,7 @@ void vgt_handle_aux_channel(struct pgt_device *dev,
 	bool physical, struct vgt_device *vgt)
 {
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured aux channel event (no handler)!!!\n")
+	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
 }
 
 void vgt_handle_gmbus(struct pgt_device *dev,
@@ -1142,6 +1161,7 @@ void vgt_handle_gmbus(struct pgt_device *dev,
 	bool physical, struct vgt_device *vgt)
 {
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured gmbus event (no handler)!!!\n")
+	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
 }
 
 /* core event handling loop for a given IIR */
@@ -1179,8 +1199,8 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 		if (!physical &&
 		    vgt_get_event_owner_type(dev, entry->event) == o_type) {
 			printk("vGT: inject event (%s) to previous owner (%d)\n",
-				vgt_irq_name(entry->event),
-				vgt_get_previous_owner(dev, o_type));
+				vgt_irq_name[entry->event],
+				vgt_get_previous_owner(dev, o_type)->vgt_id);
 			entry->event_handler(dev, bit, entry, info, physical,
 				vgt_get_previous_owner(dev, o_type));
 		}

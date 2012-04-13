@@ -1404,6 +1404,19 @@ struct vgt_irq_ops {
 	char *(*get_reg_name)(struct pgt_device *dev, uint32_t reg);
 };
 
+union vgt_event_state {
+	/* common state for bit based status */
+	struct {
+		vgt_reg_t val;
+	} status;
+
+	/* command stream error */
+	struct {
+		int eir_reg;
+		vgt_reg_t eir_val;
+	} cmd_err;
+};
+
 /* structure containing device specific IRQ state */
 struct vgt_irq_host_state {
 	struct pgt_device *pdev;
@@ -1416,16 +1429,14 @@ struct vgt_irq_host_state {
 	vgt_core_handler_t *core_handlers;
 	/* always emulated events */
 	DECLARE_BITMAP(emulated_events, IRQ_MAX);
-	/* a list of delayed events */
-	DECLARE_BITMAP(delayed_events, IRQ_MAX);
-	/* the one which delayed events target at */
-	struct vgt_device *delayed_owner;
 	spinlock_t lock;
 
 	struct vgt_irq_ops *ops;
 
 	int i915_irq;
 	int pirq;
+
+	union vgt_event_state states[IRQ_MAX];
 
 	/* master bit enable status from all VMs */
 	u64 master_enable;
@@ -1439,6 +1450,7 @@ struct vgt_irq_host_state {
 	u32 pm_iir;
 	u32 sde_iir;
 
+	/* display/mgmt mask for DE and PCH registers */
 	u32 de_dpy_mask;
 	u32 de_mgmt_mask;
 	u32 pch_dpy_mask;
@@ -1471,8 +1483,6 @@ struct vgt_irq_virt_state {
 #define vgt_get_event_owner_type(d, e)	(d->irq_hstate->event_owner_table[e])
 #define vgt_core_event_handlers(d)	(d->irq_hstate->core_handlers)
 #define vgt_always_emulated_events(d)	(d->irq_hstate->emulated_events)
-#define vgt_delayed_events(d)		(d->irq_hstate->delayed_events)
-#define vgt_delayed_owner(d)		(d->irq_hstate->delayed_owner)
 #define vgt_get_irq_ops(d)		(d->irq_hstate->ops)
 #define vgt_i915_irq(d)			(d->irq_hstate->i915_irq)
 #define vgt_pirq(d)			(d->irq_hstate->pirq)
@@ -1487,6 +1497,7 @@ struct vgt_irq_virt_state {
 #define vgt_de_mgmt_mask(d)		(d->irq_hstate->de_mgmt_mask)
 #define vgt_pch_dpy_mask(d)		(d->irq_hstate->pch_dpy_mask)
 #define vgt_pch_mgmt_mask(d)		(d->irq_hstate->pch_mgmt_mask)
+#define vgt_event_state(d, e)		(d->irq_hstate->states[e])
 
 #define vgt_get_id(s)			(s->vgt_id)
 #define vgt_state_emulated_events(s)		(s->irq_vstate->emulated_events)
