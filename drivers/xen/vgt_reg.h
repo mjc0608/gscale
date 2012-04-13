@@ -61,6 +61,8 @@
 
 #include <linux/hrtimer.h>
 #include <linux/interrupt.h>
+#include <linux/sched.h>
+#include <linux/wait.h>
 #include <xen/interface/hvm/ioreq.h>
 
 #define SINGLE_VM_DEBUG
@@ -526,6 +528,8 @@ struct pgt_device {
 	int devfn;		/* device function number */
 
 	struct task_struct *p_thread;
+	wait_queue_head_t wq;
+	uint32_t request;
 
 	vgt_ringbuffer_t *ring_base_vaddr[MAX_ENGINES];	/* base vitrual address of ring buffer mmios */
 	vgt_reg_t initial_mmio_state[VGT_MMIO_REG_NUM];	/* copy from physical at start */
@@ -548,11 +552,10 @@ struct pgt_device {
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
+	struct vgt_device *prev_owner[VGT_OT_MAX];	/* previous owner list of different engines */
 	struct list_head rendering_runq_head;
 	struct list_head rendering_idleq_head;
 	spinlock_t lock;
-	bool switch_inprogress;	/* an ownership switch in progress */
-	enum vgt_owner_type switch_owner;	/* the type of the owner in switch */
 
 	reg_info_t *reg_info;	/* virtualization policy for a given reg */
 	struct vgt_irq_host_state *irq_hstate;
@@ -563,7 +566,8 @@ struct pgt_device {
 
 extern struct list_head pgt_devices;
 
-#define vgt_get_owner(d, t)             (d->owner[t])
+#define vgt_get_owner(d, t)		(d->owner[t])
+#define vgt_get_previous_owner(d, t)	(d->prev_owner[t])
 #define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_RENDER))
 #define current_display_owner(d)	(vgt_get_owner(d, VGT_OT_DISPLAY))
 #define current_pm_owner(d)		(vgt_get_owner(d, VGT_OT_PM))
@@ -572,8 +576,10 @@ extern struct list_head pgt_devices;
 #define is_current_display_owner(vgt)	(vgt && vgt == current_display_owner(vgt->pdev))
 #define is_current_pm_owner(vgt)	(vgt && vgt == current_pm_owner(vgt->pdev))
 #define is_current_mgmt_owner(vgt)	(vgt && vgt == current_mgmt_owner(vgt->pdev))
-#define vgt_switch_inprogress(d)        (d->switch_inprogress)
-#define vgt_switch_owner_type(d)        (d->switch_owner)
+#define previous_render_owner(d)	(vgt_get_previous_owner(d, VGT_OT_RENDER))
+#define previous_display_owner(d)	(vgt_get_previous_owner(d, VGT_OT_DISPLAY))
+#define previous_pm_owner(d)		(vgt_get_previous_owner(d, VGT_OT_PM))
+#define previous_mgmt_owner(d)		(vgt_get_previous_owner(d, VGT_OT_MGMT))
 
 #define reg_virt(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_VIRT)
 #define reg_pt(pdev, reg)		(!(reg_virt(pdev, reg)))
@@ -633,6 +639,16 @@ static inline void reg_set_owner(struct pgt_device *pdev,
 	pdev->reg_info[reg] |= type & VGT_REG_OWNER;
 }
 
+/* request types to wake up main thread */
+#define VGT_REQUEST_IRQ		0	/* a new irq pending from device */
+static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
+{
+	set_bit(flag, (void *)&pdev->request);
+	if (waitqueue_active(&pdev->wq))
+		wake_up(&pdev->wq);
+}
+
+/* definitions for physical aperture/GM space */
 #define aperture_sz(pdev)		(pdev->bar_size[1])
 #define aperture_pages(pdev)		(aperture_sz(pdev) >> GTT_PAGE_SHIFT)
 #define aperture_base(pdev)		(pdev->gmadr_base)
@@ -1323,12 +1339,6 @@ enum vgt_event_type {
 
 #define	VGT_IRQ_BITWIDTH	32
 
-enum vgt_irq_action_type {
-	VGT_IRQ_HANDLE_FULL,		/* both clear pReg and update vReg */
-	VGT_IRQ_HANDLE_PHYSICAL,	/* only clear pReg, in case a context switch in progress */
-	VGT_IRQ_HANDLE_VIRTUAL,		/* only update vReg, in a post action */
-};
-
 struct vgt_irq_info_entry;
 struct vgt_irq_info;
 
@@ -1339,7 +1349,8 @@ typedef void (*vgt_event_handler_t)(
 	int bit,
 	struct vgt_irq_info_entry *entry,
 	struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical,
+	struct vgt_device *vgt);
 
 typedef void (*vgt_emulate_handler_t)(struct vgt_device *vstate, enum vgt_event_type event, bool enable);
 
@@ -1365,6 +1376,8 @@ struct vgt_irq_ops {
 	void (*exit) (struct pgt_device *dev);
 
 	irqreturn_t (*interrupt) (struct pgt_device *dev);
+
+	void (*handle_virtual_interrupt) (struct pgt_device *dev, enum vgt_owner_type type);
 
 	void (*toggle_hw_event) (struct pgt_device *dev,
 			enum vgt_event_type event, int bit, bool enable);
@@ -1415,6 +1428,17 @@ struct vgt_irq_host_state {
 	/* pch enable status from all VMs */
 	u64 pch_enable;
 	u64 pch_unmask;
+
+	/* cached pending events */
+	u32 gt_iir;
+	u32 de_iir;
+	u32 pm_iir;
+	u32 sde_iir;
+
+	u32 de_dpy_mask;
+	u32 de_mgmt_mask;
+	u32 pch_dpy_mask;
+	u32 pch_mgmt_mask;
 };
 
 struct vgt_emul_timer {
@@ -1450,7 +1474,15 @@ struct vgt_irq_virt_state {
 #define vgt_pirq(d)			(d->irq_hstate->pirq)
 #define vgt_master_enable(d)		(d->irq_hstate->master_enable)
 #define vgt_pch_enable(d)		(d->irq_hstate->pch_enable)
-#define vgt_pch_unmask(d)			(d->irq_hstate->pch_unmask)
+#define vgt_pch_unmask(d)		(d->irq_hstate->pch_unmask)
+#define vgt_pm_iir(d)			(d->irq_hstate->pm_iir)
+#define vgt_de_iir(d)			(d->irq_hstate->de_iir)
+#define vgt_gt_iir(d)			(d->irq_hstate->gt_iir)
+#define vgt_sde_iir(d)			(d->irq_hstate->sde_iir)
+#define vgt_de_dpy_mask(d)		(d->irq_hstate->de_dpy_mask)
+#define vgt_de_mgmt_mask(d)		(d->irq_hstate->de_mgmt_mask)
+#define vgt_pch_dpy_mask(d)		(d->irq_hstate->pch_dpy_mask)
+#define vgt_pch_mgmt_mask(d)		(d->irq_hstate->pch_mgmt_mask)
 
 #define vgt_get_id(s)			(s->vgt_id)
 #define vgt_state_emulated_events(s)		(s->irq_vstate->emulated_events)
@@ -1463,8 +1495,6 @@ struct vgt_irq_virt_state {
 	(vgt_get_owner(d, vgt_get_event_owner_type(d, e)))
 #define vgt_event_owner_is_null(d, e)	\
 	!vgt_event_owner_is_core(d, e) && !vgt_get_event_owner(d, e)
-#define vgt_get_inject_event_owner(d, e, a)	\
-	((a) == VGT_IRQ_HANDLE_VIRTUAL ? vgt_delayed_owner(d) : vgt_get_event_owner(d, e))
 
 #define vgt_core_event_handler(d, e)	\
 	((vgt_core_event_handlers(d))[e])
@@ -1621,42 +1651,47 @@ int vgt_vstate_irq_init(struct vgt_device *vgt);
 void vgt_vstate_irq_exit(struct vgt_device *vgt);
 int vgt_irq_init(struct pgt_device *pgt);
 void vgt_irq_exit(struct pgt_device *pgt);
+void vgt_irq_save_context(struct vgt_device *vstate, enum vgt_owner_type owner);
+void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owner);
 
-void vgt_irq_handle_event(struct pgt_device *dev,
-	void *iir, struct vgt_irq_info *info);
+void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
+	struct vgt_irq_info *info, bool physical,
+	enum vgt_owner_type o_type);
+void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type type);
 void vgt_default_event_handler(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
 void vgt_handle_chained_pch_events(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
 void vgt_handle_unexpected_event(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
 void vgt_handle_host_only_event(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
 void vgt_handle_weak_event(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
 void vgt_handle_cmd_stream_error(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
 void vgt_handle_phase_in(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
 void vgt_handle_histogram(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
 void vgt_handle_hotplug(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
+
 void vgt_handle_aux_channel(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
 void vgt_handle_gmbus(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action);
+	bool physical, struct vgt_device *vgt);
 
 void vgt_emulate_watchdog(struct vgt_device *vstate, enum vgt_event_type event, bool enable);
 void vgt_emulate_dpy_status(struct vgt_device *vstate, enum vgt_event_type event, bool enable);

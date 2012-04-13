@@ -366,6 +366,18 @@ static inline void vgt_snb_toggle_hw_event(struct pgt_device *dev,
 	}
 }
 
+static void vgt_snb_handle_virtual_interrupt(struct pgt_device *dev, enum vgt_owner_type type)
+{
+	dprintk("vGT-IRQ-SNB: handle virtual gt_iir(%x)\n", vgt_gt_iir(dev));
+	vgt_irq_handle_event(dev, &vgt_gt_iir(dev), &snb_render_irq_info, false, type);
+
+	dprintk("vGT-IRQ-SNB: handle virtual de_iir(%x)\n", vgt_de_iir(dev));
+	vgt_irq_handle_event(dev, &vgt_de_iir(dev), &snb_dpy_irq_info, false, type);
+
+	dprintk("vGT-IRQ-SNB: handle virtual pm_iir(%x)\n", vgt_pm_iir(dev));
+	vgt_irq_handle_event(dev, &vgt_pm_iir(dev), &snb_pm_irq_info, false, type);
+}
+
 /*
  * Physical interrupt handler for Intel HD serious graphics
  *   - handle various interrupt reasons
@@ -374,7 +386,7 @@ static inline void vgt_snb_toggle_hw_event(struct pgt_device *dev,
  */
 static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 {
-	uint32_t gt_iir, de_iir, pm_iir;
+	u32 gt_iir, pm_iir, de_iir;
 
 	/* read physical IIRs */
 	gt_iir = VGT_MMIO_READ(dev, _REG_GTIIR);
@@ -385,22 +397,29 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 		return IRQ_NONE;
 
 	dprintk("vGT-IRQ-SNB: handle gt_iir(%x)\n", gt_iir);
-	vgt_irq_handle_event(dev, &gt_iir, &snb_render_irq_info);
+	vgt_irq_handle_event(dev, &gt_iir, &snb_render_irq_info, true, VGT_OT_INVALID);
+
 	dprintk("vGT-IRQ-SNB: handle de_iir(%x)\n", de_iir);
-	vgt_irq_handle_event(dev, &de_iir, &snb_dpy_irq_info);
+	vgt_irq_handle_event(dev, &de_iir, &snb_dpy_irq_info, true, VGT_OT_INVALID);
+
 	dprintk("vGT-IRQ-SNB: handle pm_iir(%x)\n", pm_iir);
-	vgt_irq_handle_event(dev, &pm_iir, &snb_pm_irq_info);
+	vgt_irq_handle_event(dev, &pm_iir, &snb_pm_irq_info, true, VGT_OT_INVALID);
 
 	/* clear physical IIRs in the end, after lower level causes are cleared */
 	VGT_MMIO_WRITE(dev, _REG_GTIIR, gt_iir);
 	VGT_MMIO_WRITE(dev, _REG_PMIIR, pm_iir);
 	VGT_MMIO_WRITE(dev, _REG_DEIIR, de_iir);
 
+	vgt_gt_iir(dev) |= gt_iir;
+	vgt_pm_iir(dev) |= pm_iir;
+	vgt_de_iir(dev) |= de_iir;
 	return IRQ_HANDLED;
 }
 
 static void vgt_snb_irq_init(struct pgt_device *dev)
 {
+	int i;
+	struct vgt_irq_info *info;
 	printk("vGT: snb irq init\n");
 
 	printk("vGT: DEISR is %x, DEIIR is %x, DEIMR is %x, DEIER is %x\n",
@@ -477,56 +496,123 @@ static void vgt_snb_irq_init(struct pgt_device *dev)
 #endif
 	/* Set a list of pass-through regs */
 	//vgt_set_vreg_policy(..., ...);
+
+	vgt_de_dpy_mask(dev) = 0;
+	vgt_de_mgmt_mask(dev) = 0;
+	info = &snb_dpy_irq_info;
+	for (i = 0; i < info->table_size; i++) {
+		if (info->table[i].event == IRQ_RESERVED)
+			continue;
+		switch (vgt_get_event_owner_type(dev, info->table[i].event)) {
+		case VGT_OT_DISPLAY:
+			set_bit(i, (void *)&vgt_de_dpy_mask(dev));
+			break;
+		case VGT_OT_MGMT:
+			set_bit(i, (void *)&vgt_de_mgmt_mask(dev));
+			break;
+		default:
+			break;
+		}
+	}
+
+	printk("vGT-IRQ-SNB: DE display mask (%x), DE mgmt mask (%x)\n",
+		vgt_de_dpy_mask(dev), vgt_de_mgmt_mask(dev));
+
+	vgt_pch_dpy_mask(dev) = 0;
+	vgt_pch_mgmt_mask(dev) = 0;
+	info = &snb_pch_irq_info;
+	for (i = 0; i < info->table_size; i++) {
+		if (info->table[i].event == IRQ_RESERVED)
+			continue;
+		switch (vgt_get_event_owner_type(dev, info->table[i].event)) {
+		case VGT_OT_DISPLAY:
+			set_bit(i, (void *)&vgt_pch_dpy_mask(dev));
+			break;
+		case VGT_OT_MGMT:
+			set_bit(i, (void *)&vgt_pch_mgmt_mask(dev));
+			break;
+		default:
+			break;
+		}
+	}
+
+	printk("vGT-IRQ-SNB: PCH display mask (%x), PCH mgmt mask (%x)\n",
+		vgt_pch_dpy_mask(dev), vgt_pch_mgmt_mask(dev));
 }
 
 static void vgt_snb_irq_exit(struct pgt_device *dev){
 	// leave empty for now
 }
 
-static void vgt_snb_irq_save(struct vgt_device *vstate,
+static void vgt_snb_irq_save(struct vgt_device *vgt,
 		enum vgt_owner_type owner)
 {
-	switch (owner) {
-		case VGT_OT_DISPLAY:
-			/* mask display IER in the switch? */
-			break;
-		default:
-			break;
-	}
-}
+	vgt_reg_t val;
+	unsigned long flags;
 
-static void vgt_snb_irq_restore(struct vgt_device *vstate,
-		enum vgt_owner_type owner)
-{
+	local_irq_save(flags);
 	switch (owner) {
 		case VGT_OT_RENDER:
-			vgt_restore_vreg(vstate, _REG_RCS_HWSTAM);
-			vgt_restore_vreg(vstate, _REG_VCS_HWSTAM);
-			vgt_restore_vreg(vstate, _REG_BCS_HWSTAM);
-
-			/*
-			 * GT is always owned by a single VM at a time, so it's
-			 * safe to simply restore whole IER from new owner
-			 */
-			vgt_restore_vreg(vstate, _REG_GTIER);
-
-			/* no emulation/pass-through switch for GT events */
+			/* disable all GT events */
+			VGT_MMIO_WRITE(vgt->pdev, _REG_GTIER, 0U);
 			break;
 		case VGT_OT_DISPLAY:
-			{
-				//uint32_t deier;
+			/* disable all display events from DE and PCH. */
+			val = VGT_MMIO_READ(vgt->pdev, _REG_DEIER);
+			val &= ~vgt_de_dpy_mask(vgt->pdev);
+			VGT_MMIO_WRITE(vgt->pdev, _REG_DEIER, val);
 
-				/* invoked after display context switch */
-				dprintk("Dynamic ownership change for display requested (->%d)\n",
-					vgt_get_id(vstate));
-
-				/* display IER may be shared by multiple VMs */
-
-				break;
-			}
+			val = VGT_MMIO_READ(vgt->pdev, _REG_SDEIER);
+			val &= ~vgt_pch_dpy_mask(vgt->pdev);
+			VGT_MMIO_WRITE(vgt->pdev, _REG_SDEIER, val);
+			break;
 		default:
 			break;
 	}
+	local_irq_restore(flags);
+}
+
+static void vgt_snb_irq_restore(struct vgt_device *vgt,
+		enum vgt_owner_type owner)
+{
+	vgt_reg_t val;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	switch (owner) {
+		case VGT_OT_RENDER:
+			VGT_MMIO_WRITE(vgt->pdev, _REG_GTIMR,
+				__vreg(vgt, _REG_GTIMR));
+
+			VGT_MMIO_WRITE(vgt->pdev, _REG_GTIER,
+				__vreg(vgt, _REG_GTIER));
+			break;
+		case VGT_OT_DISPLAY:
+			/* merge new owner's display bits with other bits */
+			val = VGT_MMIO_READ(vgt->pdev, _REG_DEIMR);
+			val = (val & ~vgt_de_dpy_mask(vgt->pdev)) |
+			      (__vreg(vgt, _REG_DEIMR) & vgt_de_dpy_mask(vgt->pdev));
+			VGT_MMIO_WRITE(vgt->pdev, _REG_DEIMR, val);
+
+			val = VGT_MMIO_READ(vgt->pdev, _REG_SDEIMR);
+			val = (val & ~vgt_pch_dpy_mask(vgt->pdev)) |
+			      (__vreg(vgt, _REG_SDEIMR) & vgt_pch_dpy_mask(vgt->pdev));
+			VGT_MMIO_WRITE(vgt->pdev, _REG_SDEIMR, val);
+
+			val = VGT_MMIO_READ(vgt->pdev, _REG_SDEIER);
+			val = (val & ~vgt_pch_dpy_mask(vgt->pdev)) |
+			      (__vreg(vgt, _REG_SDEIER) & vgt_pch_dpy_mask(vgt->pdev));
+			VGT_MMIO_WRITE(vgt->pdev, _REG_SDEIER, val);
+
+			val = VGT_MMIO_READ(vgt->pdev, _REG_DEIER);
+			val = (val & ~vgt_de_dpy_mask(vgt->pdev)) |
+			      (__vreg(vgt, _REG_DEIER) & vgt_de_dpy_mask(vgt->pdev));
+			VGT_MMIO_WRITE(vgt->pdev, _REG_DEIER, val);
+			break;
+		default:
+			break;
+	}
+	local_irq_restore(flags);
 }
 
 enum vgt_event_type vgt_snb_get_event_type_from_bit(struct pgt_device *dev, uint32_t reg, uint32_t bit)
@@ -566,6 +652,7 @@ struct vgt_irq_ops snb_irq_ops = {
 	.init = vgt_snb_irq_init,
 	.exit = vgt_snb_irq_exit,
 	.interrupt = vgt_snb_interrupt,
+	.handle_virtual_interrupt = vgt_snb_handle_virtual_interrupt,
 	.toggle_hw_event = vgt_snb_toggle_hw_event,
 	.save = vgt_snb_irq_save,
 	.restore = vgt_snb_irq_restore,

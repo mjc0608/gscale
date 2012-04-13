@@ -391,27 +391,20 @@ void vgt_irq_toggle_emulations(struct vgt_device *vstate,
  */
 void vgt_irq_save_context(struct vgt_device *vstate, enum vgt_owner_type owner)
 {
-	struct pgt_device *dev = vstate->pdev;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+	struct pgt_device *pdev = vstate->pdev;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
 	if (owner != VGT_OT_RENDER || owner != VGT_OT_DISPLAY) {
 		dprintk("Dynamic ownership update for type (%d) is prohibited\n", owner);
 		return;
 	}
 
-	ASSERT(bitmap_empty(vgt_delayed_events(dev), IRQ_MAX));
-
-	dev->switch_owner = owner;
-	wmb();
-	/* FIXME: this flag is not enough to handle SMP case */
-	dev->switch_inprogress = true;
+	if (ops->save)
+		ops->save(vstate, owner);
 
 	/* start emulation for prev owner */
 	if (owner == VGT_OT_DISPLAY)
 		vgt_irq_toggle_emulations(vstate, owner, true);
-
-	if (ops->save)
-		ops->save(vstate, owner);
 }
 
 /*
@@ -430,15 +423,12 @@ void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owne
 		return;
 	}
 
-	if (ops->restore)
-		ops->restore(vstate, owner);
-
 	/* disable emulation for the new owner */
 	if (owner == VGT_OT_DISPLAY)
 		vgt_irq_toggle_emulations(vstate, owner, false);
 
-	/* write instruction isn't reordered with I/O instructions */
-	dev->switch_inprogress = false;
+	if (ops->restore)
+		ops->restore(vstate, owner);
 }
 
 #if 0
@@ -464,8 +454,12 @@ extern int resend_irq_on_evtchn(unsigned int i915_irq);
 
 void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
 {
+	unsigned long flags;
 	dprintk("vGT: resend irq for dom0\n");
+	/* resend irq may unmask events which requires irq disabled */
+	local_irq_save(flags);
 	resend_irq_on_evtchn(vgt_i915_irq(vgt->pdev));
+	local_irq_restore(flags);
 }
 
 void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
@@ -924,72 +918,32 @@ void vgt_emulate_watchdog(struct vgt_device *vstate, enum vgt_event_type event, 
 /* =======================pEvent Handlers===================== */
 
 /*
- * Check whether vGT core itself wants to handle this event.
- *
- * This should be always invoked after physical housekeeping is done,
- * but before virtual interrupt injection.
- *
- * return 1 to indicate virtual interrupt injection is required.
- */
-static int vgt_irq_prehandle_event(struct pgt_device *dev,
-	struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
-{
-	int handled = 0;
-
-	if (vgt_event_owner_is_core(dev, entry->event) &&
-	    (action != VGT_IRQ_HANDLE_VIRTUAL)) {
-		vgt_core_handler_t handler;
-		handler = vgt_core_event_handler(dev, entry->event);
-		handler(dev, entry->event);
-		handled = 1;
-	}
-
-	if (!vgt_get_event_owner(dev, entry->event)) {
-		if (!handled) {
-			printk("!!!vGT (%s): event (%s) in reg (%x) has no owner\n",
-				info->name, vgt_irq_name[entry->event],
-				vgt_iir(info->reg_base));
-		}
-		return 0;
-	} else if (action == VGT_IRQ_HANDLE_PHYSICAL) {
-		/* kick a delayed event injection request */
-#if 0
-		if (bitmap_empty(vgt_delayed_events(dev), IRQ_MAX))
-			vgt_kick_event(...);
-
-		set_bit(entry->event, vgt_delayed_events(dev));
-#endif
-		return 0;
-	} else {
-		/* require virtual interrupt handling */
-		return 1;
-	}
-}
-
-/*
  * the default handler for most events, w/o extra physical housekeeping
  * required except IIR clearing
  */
 void vgt_default_event_handler(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
-	if (!vgt_irq_prehandle_event(dev, entry, info, action))
+	/* no action for physical handler */
+	if (physical)
 		return;
 
-	vgt_propogate_virtual_event(vgt_get_inject_event_owner(dev, entry->event, action), bit, info);
+	/* propagate to the owner */
+	vgt_propogate_virtual_event(vgt, bit, info);
 }
 
 /* in the case that PCH events are queued in another set of control registers */
 void vgt_handle_chained_pch_events(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
 	//uint32_t sde_iir;
-	struct vgt_device *vstate;
 
 	/* FIXME: need consider how delayed event is done for PCH */
+	VGT_IRQ_WARN_ONCE(info, entry->event, "PCH!!!\n");
+
+#if 0
 	if (action != VGT_IRQ_HANDLE_FULL)
 		VGT_IRQ_WARN_ONCE(info, entry->event, "!!!!!!\n");
 
@@ -1006,24 +960,24 @@ void vgt_handle_chained_pch_events(struct pgt_device *dev,
 		vgt_propogate_virtual_event(vgt_get_event_owner(dev, entry->event), bit, info);
 		vgt_clear_pch_irq_pending(vstate);
 	}
+#endif
 }
 
 /* not assumed to be invoked! */
 void vgt_handle_unexpected_event(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
 	VGT_IRQ_WARN_ONCE(info, entry->event, "not assumed to happen!!!\n");
-	vgt_default_event_handler(dev, bit, entry, info, action);
+	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
 }
 
 /* events we don't expect programmed by VM, such as watchdog timer */
 void vgt_handle_host_only_event(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
 	VGT_IRQ_WARN_ONCE(info, entry->event, "host-only event!!!\n");
-	vgt_irq_prehandle_event(dev, entry, info, action);
 }
 
 /*
@@ -1033,10 +987,10 @@ void vgt_handle_host_only_event(struct pgt_device *dev,
  */
 void vgt_handle_weak_event(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
 	VGT_IRQ_WARN_ONCE(info, entry->event, "more consideration required on this handler~~\n");
-	vgt_default_event_handler(dev, bit, entry, info, action);
+	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
 }
 
 /*
@@ -1048,9 +1002,8 @@ void vgt_handle_weak_event(struct pgt_device *dev,
  */
 void vgt_handle_cmd_stream_error(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
-	struct vgt_device *vstate;
 	uint32_t reg, val;
 
 	/* always warn for errors */
@@ -1069,14 +1022,10 @@ void vgt_handle_cmd_stream_error(struct pgt_device *dev,
 	ASSERT(reg != _REG_INVALID);
 
 	val = VGT_MMIO_READ(dev, reg);
-	if (action != VGT_IRQ_HANDLE_VIRTUAL)
-		VGT_MMIO_WRITE(dev, reg, val);
+	VGT_MMIO_WRITE(dev, reg, val);
 
-	if (!vgt_irq_prehandle_event(dev, entry, info, action))
-		return;
-
-	vstate = vgt_get_inject_event_owner(dev, entry->event, action);
-	*vgt_vreg(vstate, reg) = val;
+	/* FIXME */
+	*vgt_vreg(vgt, reg) = val;
 
 	/*
 	 * FIXME:
@@ -1087,86 +1036,78 @@ void vgt_handle_cmd_stream_error(struct pgt_device *dev,
 	 * thus leave them unhandled for now.
 	 */
 
-	vgt_propogate_virtual_event(vstate, bit, info);
+	vgt_propogate_virtual_event(vgt, bit, info);
 }
 
 void vgt_handle_phase_in(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
-	struct vgt_device *vstate;
 	uint32_t val;
 
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured Phase-In event!!!\n");
 
-	if (action != VGT_IRQ_HANDLE_VIRTUAL) {
-		val = VGT_MMIO_READ(dev, _REG_BLC_PWM_CTL2);
-		val &= ~_REGBIT_PHASE_IN_IRQ_STATUS;
-		VGT_MMIO_WRITE(dev, _REG_BLC_PWM_CTL2, val);
-	}
+	val = VGT_MMIO_READ(dev, _REG_BLC_PWM_CTL2);
+	val &= ~_REGBIT_PHASE_IN_IRQ_STATUS;
+	VGT_MMIO_WRITE(dev, _REG_BLC_PWM_CTL2, val);
 
-	if (!vgt_irq_prehandle_event(dev, entry,info, action))
-		return;
+	/* FIXME */
+	*vgt_vreg(vgt, _REG_BLC_PWM_CTL2) |= _REGBIT_PHASE_IN_IRQ_STATUS;
 
-	vstate = vgt_get_inject_event_owner(dev, entry->event, action);
-	*vgt_vreg(vstate, _REG_BLC_PWM_CTL2) |= _REGBIT_PHASE_IN_IRQ_STATUS;
-
-	vgt_propogate_virtual_event(vstate, bit, info);
+	vgt_propogate_virtual_event(vgt, bit, info);
 }
 
 void vgt_handle_histogram(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
-	struct vgt_device *vstate;
 	uint32_t val;
 
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured Histogram event!!!\n")
 
-	if (action != VGT_IRQ_HANDLE_VIRTUAL) {
-		val = VGT_MMIO_READ(dev, _REG_HISTOGRAM_THRSH);
-		val &= ~_REGBIT_HISTOGRAM_IRQ_STATUS;
-		VGT_MMIO_WRITE(dev, _REG_HISTOGRAM_THRSH, val);
-	}
+	val = VGT_MMIO_READ(dev, _REG_HISTOGRAM_THRSH);
+	val &= ~_REGBIT_HISTOGRAM_IRQ_STATUS;
+	VGT_MMIO_WRITE(dev, _REG_HISTOGRAM_THRSH, val);
 
-	if (!vgt_irq_prehandle_event(dev, entry, info, action))
-		return;
+	*vgt_vreg(vgt, _REG_HISTOGRAM_THRSH) |= _REGBIT_HISTOGRAM_IRQ_STATUS;
 
-	vstate = vgt_get_inject_event_owner(dev, entry->event, action);
-	*vgt_vreg(vstate, _REG_HISTOGRAM_THRSH) |= _REGBIT_HISTOGRAM_IRQ_STATUS;
-
-	vgt_propogate_virtual_event(vstate, bit, info);
+	vgt_propogate_virtual_event(vgt, bit, info);
 }
 
 void vgt_handle_hotplug(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured hotplug event (no handler)!!!\n")
 }
 
 void vgt_handle_aux_channel(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured aux channel event (no handler)!!!\n")
 }
 
 void vgt_handle_gmbus(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	enum vgt_irq_action_type action)
+	bool physical, struct vgt_device *vgt)
 {
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured gmbus event (no handler)!!!\n")
 }
 
 /* core event handling loop for a given IIR */
-void vgt_irq_handle_event(struct pgt_device *dev,
-	void *iir, struct vgt_irq_info *info)
+void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
+	struct vgt_irq_info *info, bool physical,
+	enum vgt_owner_type o_type)
 {
 	int bit;
 	struct vgt_irq_info_entry *entry;
 
 	for_each_set_bit(bit, iir, info->table_size) {
+		/* clear cached pending bits */
+		if (!physical)
+			clear_bit(bit, iir);
+
 		entry = info->table + bit;
 		//vgt_trace_irq_event(info, entry->event);
 
@@ -1182,60 +1123,46 @@ void vgt_irq_handle_event(struct pgt_device *dev,
 			return;
 		}
 
-		/* in case a context switch in progress */
-		if (vgt_switch_inprogress(dev) &&
-		    (vgt_get_event_owner_type(dev, entry->event) ==
-		     vgt_switch_owner_type(dev)))
-			entry->event_handler(dev, bit, entry, info, VGT_IRQ_HANDLE_PHYSICAL);
-		else
-			entry->event_handler(dev, bit, entry, info, VGT_IRQ_HANDLE_FULL);
+		/*
+		 * the event comes when the owner is in switch.
+		 * need to inject into both the prev and curr owner
+		 */
+		if (vgt_get_event_owner_type(dev, entry->event) == o_type) {
+			printk("vGT: inject event (%s) to previous owner (%d)\n",
+				vgt_irq_name(entry->event),
+				vgt_get_previous_owner(dev, o_type));
+			entry->event_handler(dev, bit, entry, info, physical,
+				vgt_get_previous_owner(dev, o_type));
+		}
+
+		/* inject to the current owner */
+		entry->event_handler(dev, bit, entry, info, physical,
+			vgt_get_event_owner(dev, entry->event));
 #else
 		if (entry->event == IRQ_PCH_IRQ)
 			printk("!!!vGT-IRQ: PCH interrupt is caught\n");
-		vgt_default_event_handler(dev, bit, entry, info, VGT_IRQ_HANDLE_FULL);
+		vgt_default_event_handler(dev, bit, entry, info, physical,
+			vgt_get_event_owner(dev, entry->event));
 #endif
 	}
 }
 
 /*
- * For an event coming in the middle of an ownership switch, we don't
- * know whether prev or current owner should handle it. Also since the
- * context is in switch, it's better to defer the event injection in
- * a safe point.
- *
- * This should be a rare case in render ownership switch. There may
- * have some hits in display ownership switch, which lasts in seconds.
- * So for simplicity this delayed handling may be a bit slow, and also
- * for safety we simply deliver to all active VMs.
+ * VGT_OT_INVALID indicates normal injection, and other valid types indicate injections
+ * to both prev/next owners
  */
-void vgt_irq_handle_delayed_events(struct pgt_device *dev)
+void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type type)
 {
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 	int i;
 
-	if (bitmap_empty(vgt_delayed_events(dev), IRQ_MAX))
-		return;
+	ops->handle_virtual_interrupt(pdev, type);
 
+	/* check pending virtual interrupt for active VMs. may instead put on a delayed work? */
 	for (i = 0; i < VGT_MAX_VMS; i++) {
-		int event, bit;
-		struct vgt_irq_info_entry *entry;
-		struct vgt_irq_info *info;
-		struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
-
-		if (!dev->device[i])
-			continue;
-
-		vgt_delayed_owner(dev) = dev->device[i];
-		for_each_set_bit(event, vgt_delayed_events(dev), IRQ_MAX) {
-			info = ops->get_irq_info_from_event(dev, event);
-			bit = ops->get_bit_from_event(dev, event, info);
-			entry = info->table + bit;
-			ASSERT((entry->event == event) && entry->event_handler);
-			VGT_IRQ_WARN(info, entry->event, "inject a delayed event!!!\n");
-			entry->event_handler(dev, bit, entry, info, VGT_IRQ_HANDLE_VIRTUAL);
-		}
+		if (pdev->device[i] && vgt_has_irq_pending(pdev->device[i]))
+			vgt_inject_virtual_interrupt(pdev->device[i]);
 	}
-
-	vgt_delayed_owner(dev) = NULL;
 }
 
 /*
@@ -1249,7 +1176,6 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 	irqreturn_t ret;
 	u32 de_ier;
-	int i;
 
 	dprintk("vGT: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
 		VGT_MMIO_READ(dev, _REG_DEIIR),
@@ -1266,14 +1192,10 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	if (ret == IRQ_NONE) {
 		printk("Spurious interrupt received (or shared vector)\n");
 		VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);
-		return ret;
+		return IRQ_HANDLED;
 	}
 
-	/* check pending virtual interrupt for active VMs. may instead put on a delayed work? */
-	for (i = 0; i < VGT_MAX_VMS; i++) {
-		if (dev->device[i] && vgt_has_irq_pending(dev->device[i]))
-			vgt_inject_virtual_interrupt(dev->device[i]);
-	}
+	vgt_raise_request(dev, VGT_REQUEST_IRQ);
 
 	/* re-enable master interrupt */
 	VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);

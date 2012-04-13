@@ -742,6 +742,9 @@ void vgt_request_display_owner_switch(struct vgt_device *vgt)
 void vgt_switch_display_owner(struct vgt_device *prev,
     struct vgt_device *next)
 {
+
+	/* save irq context in the end */
+	vgt_irq_save_context(prev, VGT_OT_DISPLAY);
 }
 #endif
 
@@ -827,12 +830,17 @@ static int period = 5*HZ;	/* default slow mode */
  *   c) the event handler to emulate MMIO for other VMs
  *   d) the interrupt handler to do interrupt virtualization
  *
- * It's possible for all 4 paths to touch vreg/sreg/hwreg:
+ * Now d) is removed from the race path, because we adopt a delayed
+ * injection mechanism. Physical interrupt handler only saves pending
+ * IIR bits, and then wake up the vgt thread. Later the vgt thread
+ * checks the pending bits to do the actual virq injection. This approach
+ * allows vgt thread to handle ownership switch cleanly.
+ *
+ * So it's possible for other 3 paths to touch vreg/sreg/hwreg:
  *   a) the vgt thread may need to update HW updated regs into
  *      vreg/sreg of the prev owner
  *   b) the GP handler and event handler always updates vreg/sreg,
  *      and may touch hwreg if vgt is the current owner
- *   c) the interrupt handler touches hwreg to clear physical events,
  *      and then update vreg for interrupt virtualization
  *
  * To simplify the lock design, we make below assumptions:
@@ -840,21 +848,23 @@ static int period = 5*HZ;	/* default slow mode */
  *      issues hypercall to do hwreg access
  *   b) the event handler simply notifies another kernel thread, leaving
  *      to that thread for actual MMIO emulation
- *   c) the interrupt handler is registered as the interrupt thread
  *
  * Given above assumption, no nest would happen among 4 paths, and a
  * simple global spinlock now should be enough to protect the whole
  * vreg/sreg/ hwreg. In the future we can futher tune this part on
  * a necessary base.
+ *
+ * TODO: display switch time is long in seconds, which should be split
+ * from the main thread, and also minimize its lock granularity.
  */
 int vgt_thread(void *priv)
 {
 	struct vgt_device *next, *vgt = priv, *prev;
 	struct pgt_device *pdev = vgt->pdev;
 	static u64 cnt = 0, switched = 0;
-	static int first = 0;
 	int timeout = 100; /* microsecond */
 	int threshold = 2; /* print every 10s */
+	long wait = 0;
 
 	ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
@@ -864,18 +874,28 @@ int vgt_thread(void *priv)
 		threshold = 200;
 	}
 
+	wait = HZ*start_period;
 	while (!kthread_should_stop()) {
 		/*
 		 * TODO: Use high priority task and timeout based event
 		 * 	mechanism for QoS. schedule in 50ms now.
 		 */
-		set_current_state(TASK_INTERRUPTIBLE);
-		if (!first) {
-			schedule_timeout(HZ*start_period);
-			first = 1;
-		} else
-			schedule_timeout(period);
+		wait = wait_event_timeout(pdev->wq, pdev->request, wait);
 
+		if (!pdev->request && wait) {
+			printk("vGT: main thread waken up by unknown reasons!\n");
+			continue;
+		}
+
+		/* Handle virtual interrupt injection to current owner */
+		if (test_and_clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request))
+			vgt_handle_virtual_interrupt(pdev, VGT_OT_INVALID);
+
+		/* context switch timeout hasn't expired */
+		if (wait)
+			continue;
+
+		wait = period;
 		if (!(cnt % threshold))
 			printk("vGT: %lldth checks, %lld switches\n", cnt, switched);
 		cnt++;
@@ -883,11 +903,23 @@ int vgt_thread(void *priv)
 #ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
 		if (!next_display_owner) {
-			/* has pending request */
+			spin_lock_irq(&pdev->lock);
 			vgt_switch_display_owner(current_display_owner(pdev),
 					next_display_owner);
+			previous_display_owner(pdev) = current_display_owner(pdev);
 			current_display_owner(pdev) = next_display_owner;
 			next_display_owner = NULL;
+
+			vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
+			/*
+			 * Virtual interrupts pending right after display switch
+			 * Need send to both prev and next owner.
+			 */
+			if (pdev->request & VGT_REQUEST_IRQ) {
+				clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
+				vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
+			}
+			spin_unlock_irq(&pdev->lock);
 		}
 #endif
 
@@ -934,6 +966,8 @@ int vgt_thread(void *priv)
 					break;
 				}
 
+				vgt_irq_save_context(prev, VGT_OT_RENDER);
+
 				if (!vgt_restore_context(next)) {
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
@@ -948,7 +982,16 @@ int vgt_thread(void *priv)
 					break;
 				}
 
+				previous_render_owner(pdev) = current_render_owner(pdev);
 				current_render_owner(pdev) = next;
+				vgt_irq_restore_context(next, VGT_OT_RENDER);
+#ifndef SINGLE_VM_DEBUG
+				/* Virtual interrupts pending right after render switch */
+				if (pdev->request & VGT_REQUEST_IRQ) {
+					clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
+					vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
+				}
+#endif
 				spin_unlock_irq(&pdev->lock);
 			}
 #ifndef SINGLE_VM_DEBUG
@@ -1378,6 +1421,10 @@ vgt_reg_t vgt_render_regs[] = {
 	_REG_RCS_UHPTR,
 	_REG_BCS_UHPTR,
 	_REG_VCS_UHPTR,
+
+	_REG_RCS_IMR,
+	_REG_BCS_IMR,
+	_REG_VCS_IMR,
 };
 
 static void vgt_setup_render_regs(struct pgt_device *pdev)
@@ -2446,6 +2493,7 @@ int vgt_initialize(struct pci_dev *dev)
 	current_pm_owner(pdev) = vgt_dom0;
 	current_mgmt_owner(pdev) = vgt_dom0;
 
+	init_waitqueue_head(&pdev->wq);
 	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
 	if (!p_thread) {
 		xen_deregister_vgt_device(vgt_dom0);
