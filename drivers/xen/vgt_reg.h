@@ -1118,6 +1118,8 @@ static inline bool vgt_register_mmio_read_virt(struct pgt_device *pdev,
 #define _REG_DEIIR	0x44008
 #define _REG_DEIER	0x4400C
 #define		_REGBIT_MASTER_INTERRUPT	(1 << 31)
+/* FIXME: make better name for shift and bit */
+#define		_REGSHIFT_PCH			21
 #define		_REGBIT_PCH			(1 << 21)
 #define _REG_GTISR	0x44010
 #define _REG_GTIMR	0x44014
@@ -1365,6 +1367,8 @@ struct vgt_irq_info {
 	char *name;
 	int reg_base;
 	int table_size;
+	void (*propogate_virtual_event)(struct vgt_device *vstate,
+		int bit, struct vgt_irq_info *info);
 	struct vgt_irq_info_entry table[VGT_IRQ_BITWIDTH];
 };
 
@@ -1554,74 +1558,6 @@ static inline bool vgt_has_pch_irq_pending(struct vgt_device *vstate)
 }
 
 /*
- * assumptions:
- *   - rising edge to trigger an event to next level
- *   - only cache one instance for IIR now
- */
-static inline void vgt_propogate_virtual_event(struct vgt_device *vstate,
-	int bit, struct vgt_irq_info *info)
-{
-	dprintk("vGT: bit (%d) for base(%x) for isr (%x) with orig value (%x)\n",
-		bit, info->reg_base, vgt_isr(info->reg_base),
-		*vgt_vreg(vstate, vgt_isr(info->reg_base)));
-	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
-	    !test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
-	    !test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
-	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))) &&
-	    test_bit(_REGBIT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
-		dprintk("vGT: set bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
-		vgt_set_irq_pending(vstate);
-	} else {
-		printk("vGT: propogate bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
-		printk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
-			__vreg(vstate, vgt_isr(info->reg_base)),
-			__vreg(vstate, vgt_imr(info->reg_base)),
-			__vreg(vstate, vgt_iir(info->reg_base)),
-			__vreg(vstate, vgt_ier(info->reg_base)),
-			__vreg(vstate, _REG_DEIER));
-	}
-
-	/* TODO: given that ISR bits are volatile, we may skip touching ISR instead */
-	if (test_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))))
-		clear_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base)));
-}
-
-/*
- * propogate PCH specific event, which will be chained to level-1 ISR later
- * similarly need consider IIR which can store two pending instances
- */
-static inline void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
-	int bit, struct vgt_irq_info *info)
-{
-	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
-	    !test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
-	    !test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
-	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))))
-		vgt_set_pch_irq_pending(vstate);
-}
-
-/*
- * FIXME: need to handle PCH propogation. Also it'd be good to share
- * same handler as in physical interrupt path, since this can only
- * handle IIR-only events.
- */
-static inline void vgt_propogate_emulated_event(struct vgt_device *vstate,
-	enum vgt_event_type event)
-{
-	int bit;
-	struct pgt_device *dev = vstate->pdev;
-	struct vgt_irq_info *info;
-	struct vgt_irq_info_entry *entry;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
-
-	info = ops->get_irq_info_from_event(dev, event);
-	bit = ops->get_bit_from_event(dev, event, info);
-	entry = info->table + bit;
-	ASSERT(entry->event == event);
-	vgt_propogate_virtual_event(vstate, bit, info);
-}
-
-/*
  * Note. clear physical pending bit, and then forward to virtual
  * register which includes more bits other than interrupt pending
  * bit
@@ -1654,14 +1590,17 @@ void vgt_irq_exit(struct pgt_device *pgt);
 void vgt_irq_save_context(struct vgt_device *vstate, enum vgt_owner_type owner);
 void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owner);
 
+void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
+	int bit, struct vgt_irq_info *info);
+void vgt_propogate_virtual_event(struct vgt_device *vstate,
+	int bit, struct vgt_irq_info *info);
+void vgt_propogate_emulated_event(struct vgt_device *vstate,
+	enum vgt_event_type event);
 void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 	struct vgt_irq_info *info, bool physical,
 	enum vgt_owner_type o_type);
 void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type type);
 void vgt_default_event_handler(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt);
-void vgt_handle_chained_pch_events(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt);
 void vgt_handle_unexpected_event(struct pgt_device *dev,

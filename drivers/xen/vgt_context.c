@@ -481,7 +481,7 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 
 	/* FIXME: there may have some complex mask pattern */
 	g_value = h2g_gm(vgt, h_value & mask);
-//	printk("....(h)%x->(g)%x\n", h_value, (g_value & mask) | (h_value & ~mask));
+	dprintk("....(h)%x->(g)%x\n", h_value, (g_value & mask) | (h_value & ~mask));
 	return (g_value & mask) | (h_value & ~mask);
 }
 

@@ -74,6 +74,7 @@ static struct vgt_irq_info snb_render_irq_info = {
 	.name = "SNB GT IRQ",
 	.reg_base = _REG_GTISR,
 	.table_size = VGT_IRQ_BITWIDTH,
+	.propogate_virtual_event = vgt_propogate_virtual_event,
 	.table = {
 		{IRQ_RCS_MI_USER_INTERRUPT,	vgt_default_event_handler, 	NULL},	// bit 0
 		{IRQ_RCS_DEBUG,			vgt_default_event_handler, 	NULL},	// bit 1
@@ -136,6 +137,7 @@ static struct vgt_irq_info snb_dpy_irq_info = {
 	.name = "SNB DISPLAY IRQ",
 	.reg_base = _REG_DEISR,
 	.table_size = VGT_IRQ_BITWIDTH,
+	.propogate_virtual_event = vgt_propogate_virtual_event,
 	.table = {
 		{IRQ_PIPE_A_FIFO_UNDERRUN,	vgt_default_event_handler,	NULL},	// bit 0
 		{IRQ_PIPE_A_CRC_ERR, 		vgt_default_event_handler,	NULL},	// bit 1
@@ -158,7 +160,7 @@ static struct vgt_irq_info snb_dpy_irq_info = {
 		{IRQ_GSE, 			NULL,	NULL},				// bit 18
 		{IRQ_DP_A_HOTPLUG, 		vgt_handle_hotplug,	NULL},		// bit 19
 		{IRQ_AUX_CHANNEL_A, 		vgt_handle_aux_channel,	NULL},	// bit 20
-		{IRQ_PCH_IRQ,			vgt_handle_chained_pch_events,	NULL},	// bit 21
+		{IRQ_PCH_IRQ,			NULL,	NULL},		// bit 21
 		{IRQ_PERF_COUNTER, 		NULL,	NULL},		// bit 22
 		{IRQ_POISON, 			NULL,	NULL},		// bit 23
 		{IRQ_GTT_FAULT, 		NULL,	NULL},		// bit 24
@@ -185,6 +187,7 @@ static struct vgt_irq_info snb_pm_irq_info = {
 	.name = "SNB PM IRQ",
 	.reg_base = _REG_PMISR,
 	.table_size = VGT_IRQ_BITWIDTH,
+	.propogate_virtual_event = vgt_propogate_virtual_event,
 	.table = {
 		{IRQ_RESERVED,			NULL,	NULL},			// bit 0
 
@@ -234,6 +237,7 @@ static struct vgt_irq_info snb_pch_irq_info = {
 	.name = "SNB PCH IRQ",
 	.reg_base = _REG_SDEISR,
 	.table_size = VGT_IRQ_BITWIDTH,
+	.propogate_virtual_event = vgt_propogate_pch_virtual_event,
 	.table = {
 		{IRQ_FDI_RX_INTERRUPTS_TRANSCODER_A,	NULL,	NULL},	// bit 0
 		{IRQ_AUDIO_CP_CHANGE_TRANSCODER_A, 	NULL,	NULL},	// bit 1
@@ -368,14 +372,35 @@ static inline void vgt_snb_toggle_hw_event(struct pgt_device *dev,
 
 static void vgt_snb_handle_virtual_interrupt(struct pgt_device *dev, enum vgt_owner_type type)
 {
-	dprintk("vGT-IRQ-SNB: handle virtual gt_iir(%x)\n", vgt_gt_iir(dev));
-	vgt_irq_handle_event(dev, &vgt_gt_iir(dev), &snb_render_irq_info, false, type);
+	int i;
+	if (vgt_gt_iir(dev)) {
+		dprintk("vGT-IRQ-SNB: handle virtual gt_iir(%x)\n", vgt_gt_iir(dev));
+		vgt_irq_handle_event(dev, &vgt_gt_iir(dev), &snb_render_irq_info, false, type);
+	}
 
-	dprintk("vGT-IRQ-SNB: handle virtual de_iir(%x)\n", vgt_de_iir(dev));
-	vgt_irq_handle_event(dev, &vgt_de_iir(dev), &snb_dpy_irq_info, false, type);
+	if (vgt_pm_iir(dev)) {
+		dprintk("vGT-IRQ-SNB: handle virtual pm_iir(%x)\n", vgt_pm_iir(dev));
+		vgt_irq_handle_event(dev, &vgt_pm_iir(dev), &snb_pm_irq_info, false, type);
+	}
 
-	dprintk("vGT-IRQ-SNB: handle virtual pm_iir(%x)\n", vgt_pm_iir(dev));
-	vgt_irq_handle_event(dev, &vgt_pm_iir(dev), &snb_pm_irq_info, false, type);
+	if (vgt_sde_iir(dev)) {
+		dprintk("vGT-IRQ-SNB: handle virtual sde_iir(%x)\n", vgt_sde_iir(dev));
+		vgt_irq_handle_event(dev, &vgt_sde_iir(dev), &snb_pch_irq_info, false, type);
+	}
+
+	if (vgt_de_iir(dev)) {
+		dprintk("vGT-IRQ-SNB: handle virtual de_iir(%x)\n", vgt_de_iir(dev));
+		vgt_irq_handle_event(dev, &vgt_de_iir(dev), &snb_dpy_irq_info, false, type);
+	}
+
+	/* check pending virtual PCH interrupt for active VMs */
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		if (dev->device[i] && vgt_has_pch_irq_pending(dev->device[i])) {
+			vgt_propogate_virtual_event(dev->device[i],
+				_REGSHIFT_PCH, &snb_dpy_irq_info);
+			vgt_clear_pch_irq_pending(dev->device[i]);
+		}
+	}
 }
 
 /*
@@ -386,7 +411,7 @@ static void vgt_snb_handle_virtual_interrupt(struct pgt_device *dev, enum vgt_ow
  */
 static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 {
-	u32 gt_iir, pm_iir, de_iir;
+	u32 gt_iir, pm_iir, de_iir, sde_iir, tmp_de_iir;
 
 	/* read physical IIRs */
 	gt_iir = VGT_MMIO_READ(dev, _REG_GTIIR);
@@ -399,11 +424,19 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 	dprintk("vGT-IRQ-SNB: handle gt_iir(%x)\n", gt_iir);
 	vgt_irq_handle_event(dev, &gt_iir, &snb_render_irq_info, true, VGT_OT_INVALID);
 
-	dprintk("vGT-IRQ-SNB: handle de_iir(%x)\n", de_iir);
-	vgt_irq_handle_event(dev, &de_iir, &snb_dpy_irq_info, true, VGT_OT_INVALID);
+	dprintk("vGT-IRQ-SNB: handle de_iir(%x), tmp_de_iir(%x)\n", de_iir, tmp_de_iir);
+	tmp_de_iir = de_iir & ~_REGBIT_PCH;
+	vgt_irq_handle_event(dev, &tmp_de_iir, &snb_dpy_irq_info, true, VGT_OT_INVALID);
 
 	dprintk("vGT-IRQ-SNB: handle pm_iir(%x)\n", pm_iir);
 	vgt_irq_handle_event(dev, &pm_iir, &snb_pm_irq_info, true, VGT_OT_INVALID);
+
+	if (de_iir & _REGBIT_PCH) {
+		sde_iir = VGT_MMIO_READ(dev, _REG_SDEIIR);
+		dprintk("vGT-IRQ-SNB: handle sde_iir(%x)\n", sde_iir);
+		vgt_irq_handle_event(dev, &sde_iir, &snb_pch_irq_info, true, VGT_OT_INVALID);
+		VGT_MMIO_WRITE(dev, _REG_SDEIIR, sde_iir);
+	}
 
 	/* clear physical IIRs in the end, after lower level causes are cleared */
 	VGT_MMIO_WRITE(dev, _REG_GTIIR, gt_iir);
@@ -412,7 +445,9 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 
 	vgt_gt_iir(dev) |= gt_iir;
 	vgt_pm_iir(dev) |= pm_iir;
-	vgt_de_iir(dev) |= de_iir;
+	if (de_iir & _REGBIT_PCH)
+		vgt_sde_iir(dev) |= sde_iir;
+	vgt_de_iir(dev) |= tmp_de_iir;
 	return IRQ_HANDLED;
 }
 
