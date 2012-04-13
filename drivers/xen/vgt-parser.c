@@ -846,100 +846,100 @@ static int vgt_cmd_register_default(void)
 	"3DSTATE_URB", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_VERTEX_BUFFERS,
-	"_3DSTATE_VERTEX_BUFFERS", vgt_cmd_handler_3dstate_vertex_buffers);
+	"3DSTATE_VERTEX_BUFFERS", vgt_cmd_handler_3dstate_vertex_buffers);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_VERTEX_ELEMENTS,
 	"3DSTATE_VERTEX_ELEMENTS", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_INDEX_BUFFER,
-	"_3DSTATE_INDEX_BUFFER", vgt_cmd_handler_3dstate_index_buffer);
+	"3DSTATE_INDEX_BUFFER", vgt_cmd_handler_3dstate_index_buffer);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_VF_STATISTICS,
-	"_3DSTATE_VF_STATISTICS", vgt_cmd_handler_noop);
+	"3DSTATE_VF_STATISTICS", vgt_cmd_handler_noop);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_VIEWPORT_STATE_POINTERS,
-	"_3DSTATE_VIEWPORT_STATE_POINTERS", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_VIEWPORT_STATE_POINTERS", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_CC_STATE_POINTERS,
-	"_3DSTATE_CC_STATE_POINTERS", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_CC_STATE_POINTERS", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_SCISSOR_STATE_POINTERS,
-	"_3DSTATE_SCISSOR_STATE_POINTERS", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_SCISSOR_STATE_POINTERS", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_GS,
-	"_3DSTATE_GS", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_GS", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_CLIP,
-	"_3DSTATE_CLIP", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_CLIP", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_WM,
-	"_3DSTATE_WM", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_WM", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_CONSTANT_GS,
-	"_3DSTATE_CONSTANT_GS", vgt_cmd_handler_3dstate_constant_gs);
+	"3DSTATE_CONSTANT_GS", vgt_cmd_handler_3dstate_constant_gs);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_CONSTANT_PS,
-	"_3DSTATE_CONSTANT_PS", vgt_cmd_handler_3dstate_constant_ps);
+	"3DSTATE_CONSTANT_PS", vgt_cmd_handler_3dstate_constant_ps);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_SAMPLE_MASK,
-	"_3DSTATE_SAMPLE_MASK", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_SAMPLE_MASK", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_DRAWING_RECTANGLE,
-	"_3DSTATE_DRAWING_RECTANGLE", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_DRAWING_RECTANGLE", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_SAMPLER_PALETTE_LOAD0,
-	"_3DSTATE_SAMPLER_PALETTE_LOAD0", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_SAMPLER_PALETTE_LOAD0", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_CHROMA_KEY,
-	"_3DSTATE_CHROMA_KEY", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_CHROMA_KEY", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_DEPTH_BUFFER,
-	"_3DSTATE_DEPTH_BUFFER", vgt_cmd_handler_3dstate_depth_buffer);
+	"3DSTATE_DEPTH_BUFFER", vgt_cmd_handler_3dstate_depth_buffer);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_POLY_STIPPLE_OFFSET,
-	"_3DSTATE_POLY_STIPPLE_OFFSET", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_POLY_STIPPLE_OFFSET", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_POLY_STIPPLE_PATTERN,
-	"_3DSTATE_POLY_STIPPLE_PATTERN", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_POLY_STIPPLE_PATTERN", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_LINE_STIPPLE,
-	"_3DSTATE_LINE_STIPPLE", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_LINE_STIPPLE", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_AA_LINE_PARAMS,
-	"_3DSTATE_AA_LINE_PARAMS", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_AA_LINE_PARAMS", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_GS_SVB_INDEX,
-	"_3DSTATE_GS_SVB_INDEX", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_GS_SVB_INDEX", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_SAMPLER_PALETTE_LOAD1,
-	"_3DSTATE_SAMPLER_PALETTE_LOAD1", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_SAMPLER_PALETTE_LOAD1", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_MULTISAMPLE,
-	"_3DSTATE_MULTISAMPLE", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_MULTISAMPLE", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_STENCIL_BUFFER,
-	"_3DSTATE_STENCIL_BUFFER", vgt_cmd_handler_3dstate_stencil_buffer);
+	"3DSTATE_STENCIL_BUFFER", vgt_cmd_handler_3dstate_stencil_buffer);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_HIER_DEPTH_BUFFER,
-	"_3DSTATE_HIER_DEPTH_BUFFER", vgt_cmd_handler_3dstate_hier_depth_buffer);
+	"3DSTATE_HIER_DEPTH_BUFFER", vgt_cmd_handler_3dstate_hier_depth_buffer);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_CLEAR_PARAMS,
-	"_3DSTATE_CLEAR_PARAMS", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_CLEAR_PARAMS", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_MONOFILTER_SIZE,
-	"_3DSTATE_MONOFILTER_SIZE", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_MONOFILTER_SIZE", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_SO_DECL_LIST,
-	"_3DSTATE_SO_DECL_LIST", vgt_cmd_handler_3dstate_so_decl_list);
+	"3DSTATE_SO_DECL_LIST", vgt_cmd_handler_3dstate_so_decl_list);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_SO_BUFFER,
-	"_3DSTATE_SO_BUFFER", vgt_cmd_handler_3dstate_so_buffer);
+	"3DSTATE_SO_BUFFER", vgt_cmd_handler_3dstate_so_buffer);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_PIPE_CONTROL,
 	"PIPE_CONTROL", vgt_cmd_handler_pipe_control);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DPRIMITIVE,
-	"_3DPRIMITIVE", vgt_cmd_handler_length_fixup_8);
+	"3DPRIMITIVE", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_PIPELINE_SELECT,
 	"PIPELINE_SELECT", vgt_cmd_handler_noop);
@@ -954,13 +954,13 @@ static int vgt_cmd_register_default(void)
 	"STATE_BASE_ADDRESS", vgt_cmd_handler_state_base_address);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_VS,
-	"_3DSTATE_VS", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_VS", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_SF,
-	"_3DSTATE_SF", vgt_cmd_handler_length_fixup_8);
+	"3DSTATE_SF", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_CONSTANT_VS,
-	"_3DSTATE_CONSTANT_VS", vgt_cmd_handler_3dstate_constant_vs);
+	"3DSTATE_CONSTANT_VS", vgt_cmd_handler_3dstate_constant_vs);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_MEDIA_INTERFACE_DESCRIPTOR_LOAD,
 	"MEDIA_INTERFACE_DESCRIPTOR_LOAD", vgt_cmd_handler_length_fixup_16);
