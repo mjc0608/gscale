@@ -74,6 +74,12 @@
  *         -1 if error, e.g. command not recognized
  */
 
+static inline int cmd_length(struct vgt_cmd_data *data, int nr_bits)
+{
+	/*  DWord Length is bits (nr_bits-1):0 */
+	return (data->instruction[0] & ( (1U << nr_bits) - 1)) + 2;
+}
+
 #define VGT_CMD_PRINTK(fmt, arg...) {			\
 	    if (vgt_cmd_debug) {				\
 		printk(fmt, ##arg);		\
@@ -129,9 +135,7 @@ static int address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
 
 static inline void length_fixup(struct vgt_cmd_data *data, int nr_bits)
 {
-	/*  DWord Length is bits (nr_bits-1):0 */
-	int dword_length = data->instruction[0] & ( (1U << nr_bits) - 1);
-	data->instruction += dword_length + 1;
+	data->instruction += cmd_length(data, nr_bits);
 }
 
 static int vgt_cmd_handler_noop(struct vgt_cmd_data *data)
@@ -551,11 +555,11 @@ static int vgt_cmd_handler_xy_pat_chroma_blt_immediate(struct vgt_cmd_data *data
 
 static int vgt_cmd_handler_3dstate_vertex_buffers(struct vgt_cmd_data *data)
 {
-	int dword_length, i;
+	int length, i;
 
-	dword_length = data->data & ( (1U << 8) - 1);
+	length = cmd_length(data, 8);
 
-	for (i=1; i <= dword_length - 2 ; i = i+4){
+	for (i=1; i < length; i = i+4){
 		address_fixup(data,data->instruction + i + 1);
 		address_fixup(data,data->instruction + i + 2);
 	}
