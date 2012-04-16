@@ -58,6 +58,7 @@
 
 #include <linux/linkage.h>
 #include <linux/module.h>
+#include <linux/slab.h>
 #include <xen/interface/memory.h>
 #include <asm/xen/hypercall.h>
 #include <xen/vgt.h>
@@ -73,6 +74,59 @@
  * Return: the instruction bytes that have been handled
  *         -1 if error, e.g. command not recognized
  */
+
+#ifdef VGT_ENABLE_ADDRESS_FIX_SAVE_RESTORE
+
+static struct vgt_addr_fix_list addr_list;
+
+void vgt_addr_fix_save(uint32_t* addr, uint32_t data)
+{
+	ASSERT(addr_list.pos < addr_list.len);
+
+	spin_lock(&addr_list.lock);
+
+	addr_list.entrys[addr_list.pos].addr = addr;
+	addr_list.entrys[addr_list.pos].data = data;
+
+	addr_list.pos++;
+
+	spin_unlock(&addr_list.lock);
+}
+
+void vgt_addr_fix_restore(void)
+{
+	int i;
+
+	spin_lock(&addr_list.lock);
+
+	for (i=0; i<addr_list.pos; i++){
+		*(addr_list.entrys[i].addr) = addr_list.entrys[i].data;
+	}
+	addr_list.pos = 0;
+
+	spin_unlock(&addr_list.lock);
+}
+
+#define ADDR_FIX_MAX_ENTRY    102400
+
+static int vgt_addr_fix_list_init(void)
+{
+	/*FIXME: implement more dynamic memory allocation */
+	addr_list.len = ADDR_FIX_MAX_ENTRY;
+	addr_list.pos = 0;
+	addr_list.entrys = vmalloc( sizeof(struct vgt_addr_fix_entry) * addr_list.len );
+	ASSERT(addr_list.entrys);
+	return 0;
+}
+#else
+
+void vgt_addr_fix_save(uint32_t* addr, uint32_t data) { }
+
+void vgt_addr_fix_restore(void) { }
+
+static int vgt_addr_fix_list_init(void) {}
+
+#endif /* VGT_ENABLE_ADDRESS_FIX_SAVE_RESTORE */
 
 static inline int cmd_length(struct vgt_cmd_data *data, int nr_bits)
 {
@@ -117,6 +171,7 @@ static int address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
 
 	if (g_gm_is_visible(d->vgt, val) || g_gm_is_hidden(d->vgt, val)){
 		/* valid guest gm address */
+		vgt_addr_fix_save(addr, val);
 		*addr = g2h_gm(d->vgt, val);
 		return 0;
 	}
@@ -1014,6 +1069,8 @@ int vgt_cmd_parser_init(void)
 	}
 
 	vgt_cmd_register_default();
+
+	vgt_addr_fix_list_init();
 
 	return 0;
 }

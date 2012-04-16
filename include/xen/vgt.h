@@ -99,4 +99,9 @@ extern int hcall_mmio_write(
  * */
 //#define DOM0_DUAL_MAP
 
+/* save the fixed/translated guest address
+ * restore the address after the command is executed
+*/
+#define VGT_ENABLE_ADDRESS_FIX_SAVE_RESTORE
+
 // MMIO definitions

@@ -148,6 +148,21 @@ struct vgt_cmd_handlers{
 	struct vgt_cmd_handler* handlers;
 };
 
+struct vgt_addr_fix_entry{
+	uint32_t* addr;
+	uint32_t  data;
+};
+
+struct vgt_addr_fix_list{
+	spinlock_t lock;
+	int len;
+	int pos;
+	struct vgt_addr_fix_entry* entrys;
+};
+
+
+extern void vgt_parser_restore_address(void);
+
 #define VGT_UNHANDLEABLE 1
 
 
@@ -283,3 +298,6 @@ extern unsigned long g2m_pfn(int vm_id, unsigned long g_pfn);
 
 #define INVALID_MFN  (~0UL)
 
+extern void vgt_addr_fix_save(uint32_t* addr, uint32_t data);
+
+extern void vgt_addr_fix_restore(void);

@@ -1692,6 +1692,8 @@ bool vgt_restore_context (struct vgt_device *vgt)
 	if (vgt == NULL)
 		return false;
 
+	vgt_addr_fix_restore();
+
 #if 0
 	for (i=0; i < MAX_ENGINES; i++) {
 #else
@@ -1846,6 +1848,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
 		return NULL;
 	}
+	memset(vgt, 0, sizeof(*vgt));
 	/* TODO: check format of aperture size */
 #ifdef SINGLE_VM_DEBUG
 	vgt->vgt_id = 0;
