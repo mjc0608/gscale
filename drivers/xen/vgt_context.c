@@ -1850,10 +1850,6 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	}
 	memset(vgt, 0, sizeof(*vgt));
 	/* TODO: check format of aperture size */
-#ifdef SINGLE_VM_DEBUG
-	vgt->vgt_id = 0;
-	vgt->vm_id = 0;
-#else
 	vgt_id = allocate_vgt_id();
 	if (vgt_id < 0) {
 		kfree (vgt);
@@ -1861,14 +1857,12 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	}
 	vgt->vgt_id = vgt_id;
 	vgt->vm_id = vm_id;
-#endif
+
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
 
 	if ( !create_state_instance(vgt) ) {
-#ifndef SINGLE_VM_DEBUG
 		free_vgt_id(vgt_id);
-#endif
 		kfree (vgt);
 		return NULL;
 	}
@@ -1903,9 +1897,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		printk("vGT: failed to allocate virtual GTT table\n");
 		kfree(vgt->state.vReg);
 		kfree(vgt->state.sReg);
-#ifndef SINGLE_VM_DEBUG
 		free_vgt_id(vgt_id);
-#endif
 		kfree (vgt);
 		return NULL;
 	}
@@ -1987,9 +1979,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	kfree(vgt->vgtt);
 	kfree(vgt->state.vReg);
 	kfree(vgt->state.sReg);
-#ifndef SINGLE_VM_DEBUG
 	free_vgt_id(vgt->vgt_id);
-#endif
 	kfree(vgt);
 }
 
