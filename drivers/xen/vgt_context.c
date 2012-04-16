@@ -1906,8 +1906,11 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 
 	pdev->device[vgt->vgt_id] = vgt;
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
-	vgt_hvm_info_init(vgt);
-	/* TODO: per register special handling. */
+
+    /* TODO: do clean up if vgt_hvm_init() failed */
+    if (vgt->vm_id != 0)
+        vgt_hvm_info_init(vgt);
+    /* TODO: per register special handling. */
 	return vgt;
 }
 
