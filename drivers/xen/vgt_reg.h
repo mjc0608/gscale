@@ -727,12 +727,6 @@ static inline uint64_t get_vm_hidden_gm_end(struct pgt_device *pdev, int i)
 	return get_vm_hidden_gm_base(pdev, i) + vm_gm_hidden_sz(pdev) - 1;
 }
 
-static inline bool gm_in_vm_range(struct pgt_device *pdev, int i, uint64_t addr)
-{
-	return ( addr >= get_vm_visible_gm_base(pdev, i) && addr <= get_vm_visible_gm_end(pdev, i) )
-		|| ( addr >= get_vm_hidden_gm_base(pdev, i) && addr <= get_vm_hidden_gm_end(pdev, i) );
-}
-
 /* definitions for vgt's aperture/gm space */
 #define vgt_aperture_base(vgt)		(vgt->aperture_base)
 #define vgt_aperture_vbase(vgt)		(vgt->aperture_base_va)

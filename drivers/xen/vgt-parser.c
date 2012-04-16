@@ -108,24 +108,21 @@ static int address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
 
 	uint32_t val = *addr;
 
-	/* address zero is usually used as NULL pointer, so do not translate */
-	if(val == 0)
-	{
-		VGT_CMD_PRINTK(KERN_WARNING "vgt: NULL pointer in %p, no translation", addr);
-		return 0;
-	}
-
-	if (gm_in_vm_range(d->vgt->pdev, d->vgt->vm_id, val)){
+	if (h_gm_is_visible(d->vgt,val) || h_gm_is_hidden(d->vgt, val)){
 		/* address already translated before, do nothing but return */
 		VGT_CMD_PRINTK(KERN_WARNING "vgt: address 0x%x in %p already translated\n",
 				val, addr);
 		return 0;
 	}
 
-	if (val < vm_gm_sz(d->vgt->pdev)){
+	if (g_gm_is_visible(d->vgt, val) || g_gm_is_hidden(d->vgt, val)){
+		/* valid guest gm address */
 		*addr = g2h_gm(d->vgt, val);
 		return 0;
 	}
+
+	/* invalid guest address */
+	ASSERT(0);
 
 	/* TODO: the address is out of range, raise fault? */
 	printk(KERN_WARNING "vgt: address 0x%x in %p out of bound\n", val, addr);
