@@ -359,6 +359,8 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 	VGT_CMD_PRINTK("MI_BATCH_BUFFER_START: buffer GraphicsAddress=%x Clear Command Buffer Enable=%d\n",
 			data->instruction[1], (data->instruction[0]>>11) & 1);
 
+	address_fixup(data, data->instruction + 1);
+
 	/* FIXME: assume batch buffer also can be accessed by aperture */
 	data->instruction = (uint32_t*)v_aperture(data->vgt->pdev,
 				data->instruction[1] & BATCH_BUFFER_ADDR_MASK);
