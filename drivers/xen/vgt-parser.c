@@ -144,7 +144,7 @@ static bool vgt_cmd_debug=0;
 
 static void show_instruction_info(struct vgt_cmd_data *d);
 
-static unsigned int constant_buffer_address_offset_disable(void)
+static unsigned int constant_buffer_address_offset_disable(struct vgt_cmd_data *d)
 {
 	/* return the "CONSTANT_BUFFER Address Offset Disable" bit
 	  in "INSTPM—Instruction Parser Mode Register"
@@ -152,9 +152,7 @@ static unsigned int constant_buffer_address_offset_disable(void)
 	  1 - use as graphics address
 	 */
 
-	/*FIXME: add implementation*/
-
-	return 0;
+	return VGT_MMIO_READ(d->vgt->pdev,_REG_RCS_INSTPM) & INSTPM_CONS_BUF_ADDR_OFFSET_DIS;
 }
 
 static int address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
@@ -635,7 +633,7 @@ static int vgt_cmd_handler_3dstate_index_buffer(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_3dstate_constant_gs(struct vgt_cmd_data *data)
 {
-	if (constant_buffer_address_offset_disable() == 1){
+	if (constant_buffer_address_offset_disable(data) == 1){
 		address_fixup(data,data->instruction + 1);
 	}
 	address_fixup(data,data->instruction + 2);
@@ -648,7 +646,7 @@ static int vgt_cmd_handler_3dstate_constant_gs(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_3dstate_constant_ps(struct vgt_cmd_data *data)
 {
-	if (constant_buffer_address_offset_disable() == 1){
+	if (constant_buffer_address_offset_disable(data) == 1){
 		address_fixup(data,data->instruction + 1);
 	}
 	address_fixup(data,data->instruction + 2);
@@ -730,7 +728,7 @@ static int vgt_cmd_handler_state_base_address(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_3dstate_constant_vs(struct vgt_cmd_data *data)
 {
-	if (constant_buffer_address_offset_disable() == 1){
+	if (constant_buffer_address_offset_disable(data) == 1){
 		address_fixup(data,data->instruction + 1);
 	}
 	address_fixup(data,data->instruction + 2);

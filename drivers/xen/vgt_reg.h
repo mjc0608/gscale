@@ -283,6 +283,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_RCS_INSTPM		0x20C0
 #define _REG_VCS_INSTPM		0x120C0
 #define _REG_BCS_INSTPM		0x220C0
+#define INSTPM_CONS_BUF_ADDR_OFFSET_DIS (1<<6)
 
 #define _REG_RCS_EXCC		0x2028
 #define _REG_VCS_EXCC		0x12028
