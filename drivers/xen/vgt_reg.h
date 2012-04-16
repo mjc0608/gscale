@@ -145,7 +145,7 @@ typedef struct {
 #define __vreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.vReg + off))
 #define __sreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.sReg + off))
 #define vgt_vreg(vgt, off)	((vgt_reg_t *)((char *)vgt->state.vReg + off))
-#define vgt_sreg(vgt, off)	((vgt_reg_t *)((char *)vgt_>state.vReg + off))
+#define vgt_sreg(vgt, off)	((vgt_reg_t *)((char *)vgt_>state.sReg + off))
 
 #define RB_DWORDS_TO_SAVE	32
 typedef	uint32_t	rb_dword;
@@ -1117,6 +1117,7 @@ static inline bool vgt_register_mmio_read_virt(struct pgt_device *pdev,
 #define _REG_DEIMR	0x44004
 #define _REG_DEIIR	0x44008
 #define _REG_DEIER	0x4400C
+#define		_REGSHIFT_MASTER_INTERRUPT	31
 #define		_REGBIT_MASTER_INTERRUPT	(1 << 31)
 /* FIXME: make better name for shift and bit */
 #define		_REGSHIFT_PCH			21

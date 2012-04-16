@@ -83,12 +83,6 @@
  */
 
 /*
- * TODO-must:
- *   - virtual interrupt injection
- *   - display context switch
- *   - lock consideration. there may be events requiring more register
- *     updates other than IIR/ISR. Could they be done in a delayed context?
- *
  * TODO:
  *   - IIR could store two pending interrupts. need emulate the behavior
  *   - pipe control
@@ -460,14 +454,17 @@ extern int resend_irq_on_evtchn(unsigned int i915_irq);
 void vgt_propogate_virtual_event(struct vgt_device *vstate,
 	int bit, struct vgt_irq_info *info)
 {
-	dprintk("vGT: bit (%d) for base(%x) for isr (%x) with orig value (%x)\n",
-		bit, info->reg_base, vgt_isr(info->reg_base),
-		*vgt_vreg(vstate, vgt_isr(info->reg_base)));
+	dprintk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
+		__vreg(vstate, vgt_isr(info->reg_base)),
+		__vreg(vstate, vgt_imr(info->reg_base)),
+		__vreg(vstate, vgt_iir(info->reg_base)),
+		__vreg(vstate, vgt_ier(info->reg_base)),
+		__vreg(vstate, _REG_DEIER));
 	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
 	    !test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
 	    !test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
 	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))) &&
-	    test_bit(_REGBIT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
+	    test_bit(_REGSHIFT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
 		dprintk("vGT: set bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
 		vgt_set_irq_pending(vstate);
 	} else {
