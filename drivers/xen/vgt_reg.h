@@ -468,6 +468,8 @@ struct vgt_device {
 	struct list_head	list;
 	vgt_state_t	state;		/* MMIO state except ring buffers */
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
+	vgt_reg_t		last_scan_head[MAX_ENGINES];
+	bool			last_scan_head_valid[MAX_ENGINES];
 
 	uint64_t	aperture_base;
 	void		*aperture_base_va;

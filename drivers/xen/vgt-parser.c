@@ -1260,7 +1260,12 @@ int vgt_scan_ring_buffer(struct vgt_device *vgt, int ring_id)
 	pdev = vgt->pdev;
 
 	rb_start = sring->start;
-	rb_head = VGT_MMIO_READ(pdev, RB_HEAD(ring_id)) & RB_HEAD_OFF_MASK;
+	if (!vgt->last_scan_head_valid[ring_id]){
+		vgt->last_scan_head[ring_id] = VGT_MMIO_READ(pdev, RB_HEAD(ring_id)) & RB_HEAD_OFF_MASK;
+		vgt->last_scan_head_valid[ring_id] = 1;
+	}
+
+	rb_head = vgt->last_scan_head[ring_id];
 	rb_tail = sring->tail & RB_TAIL_OFF_MASK;
 	ring_size = _RING_CTL_BUF_SIZE(sring->ctl);
 
@@ -1301,6 +1306,8 @@ int vgt_scan_ring_buffer(struct vgt_device *vgt, int ring_id)
 			}
 		}
 	}
+
+	vgt->last_scan_head[ring_id] = rb_tail;
 
 	return ret;
 }
