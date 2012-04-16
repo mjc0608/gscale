@@ -1116,7 +1116,7 @@ static int vgt_cmd_handler_exec(struct vgt_cmd_data *decode_data)
 		return  -VGT_UNHANDLEABLE;
 	}
 
-	VGT_CMD_PRINTK("cmd_name: %s\n",cmd_handlers[type].handlers[opcode].name);
+	decode_data->name = cmd_handlers[type].handlers[opcode].name;
 
 	return cmd_handlers[type].handlers[opcode].handler(decode_data);
 }
@@ -1172,8 +1172,7 @@ int vgt_cmd_parser_render(struct vgt_cmd_data* decode_data)
 				goto out;
 			}
 
-			VGT_CMD_PRINTK("cmd name: %s\n",
-					cmd_handlers[GEN_GFX_CMD_TYPE_GFXPIPE].handlers[index].name);
+			decode_data->name = cmd_handlers[GEN_GFX_CMD_TYPE_GFXPIPE].handlers[index].name;
 
 			ret = cmd_handlers[GEN_GFX_CMD_TYPE_GFXPIPE].handlers[index].handler(decode_data);
 

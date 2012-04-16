@@ -71,6 +71,7 @@ struct vgt_cmd_data{
 		BATCH_BUFFER_INSTRUCTION
 	}buffer_type;
 	int ring_id;
+	char* name;
 	unsigned int *instruction;
 	/* next instruction when return from  batch buffer to ring buffer */
 	unsigned int *ret_instruction;
