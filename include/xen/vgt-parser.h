@@ -240,6 +240,9 @@ extern void vgt_parser_restore_address(void);
 #define OP_MEDIA_OBJECT_WALKER				INDEX_3D_MEDIA( 0x2, 0x1, 0x3)
 #define OP_MEDIA_VFE_STATE					INDEX_3D_MEDIA( 0x2, 0x2, 0x0)
 
+/* FIXME: find the exact meaning in spec */
+#define OP_MEDIA_UNKNOWN1				INDEX_3D_MEDIA(0x1, 0x0, 0xb)
+
 // #define _3DSTATE_PIPELINED_POINTERS		INDEX_3D_MEDIA(0x3, 0x0, 0x00) /*Pre-DevSNB*/
 #define OP_3DSTATE_BINDING_TABLE_POINTERS	INDEX_3D_MEDIA(0x3, 0x0, 0x01)
 #define OP_3DSTATE_SAMPLER_STATE_POINTERS	INDEX_3D_MEDIA(0x3, 0x0, 0x02)
