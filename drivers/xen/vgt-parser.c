@@ -374,9 +374,16 @@ static int vgt_cmd_handler_mi_store_register_mem(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_mi_flush_dw(struct vgt_cmd_data *data)
 {
+	int i, len;
 	/* Check post-sync bit */
 	if ( (data->data >> 14) & 0x3){
 		address_fixup(data,data->instruction + 1);
+	}
+
+	len = cmd_length(data, 6);
+
+	for (i=2; i<len; i++){
+		address_fixup(data, data->instruction+i);
 	}
 
 	length_fixup(data,6);
