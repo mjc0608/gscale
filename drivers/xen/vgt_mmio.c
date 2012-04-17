@@ -611,6 +611,8 @@ static irqreturn_t vgt_hvm_io_req_handler(int irq, void* dev)
 
 	vgt_hvm_do_ioreq(vgt, ioreq);
 
+	ioreq->state = STATE_IORESP_READY;
+
 	notify_remote_via_irq(irq);
 
 	return IRQ_HANDLED;
