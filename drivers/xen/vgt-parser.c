@@ -1049,8 +1049,8 @@ static int vgt_cmd_register_default(void)
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_MEDIA_VFE_STATE,
 	"MEDIA_VFE_STATE", vgt_cmd_handler_length_fixup_16);
 
-	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_MEDIA_UNKNOWN1,
-	"MEDIA_UNKNOWN1", vgt_cmd_handler_noop);
+	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_3DSTATE_VF_STATISTICS_GM45,
+	"3DSTATE_VF_STATISTICS_GM45", vgt_cmd_handler_noop);
 
 	return 0;
 }

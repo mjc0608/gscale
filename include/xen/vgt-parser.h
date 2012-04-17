@@ -230,6 +230,7 @@ extern void vgt_parser_restore_address(void);
 #define OP_STATE_PREFETCH					INDEX_3D_MEDIA(0x0, 0x0, 0x03)
 #define OP_STATE_BASE_ADDRESS				INDEX_3D_MEDIA(0x0, 0x1, 0x01)
 #define OP_STATE_SIP						INDEX_3D_MEDIA(0x0, 0x1, 0x02)
+#define OP_3DSTATE_VF_STATISTICS_GM45		INDEX_3D_MEDIA(0x1, 0x0, 0x0B)
 #define OP_PIPELINE_SELECT					INDEX_3D_MEDIA(0x1, 0x1, 0x04)
 #define OP_MEDIA_INTERFACE_DESCRIPTOR_LOAD	INDEX_3D_MEDIA( 0x2, 0x0, 0x2)
 #define OP_MEDIA_GATEWAY_STATE				INDEX_3D_MEDIA( 0x2, 0x0, 0x3)
@@ -239,9 +240,6 @@ extern void vgt_parser_restore_address(void);
 #define OP_MEDIA_OBJECT_PRT				INDEX_3D_MEDIA( 0x2, 0x1, 0x2)
 #define OP_MEDIA_OBJECT_WALKER				INDEX_3D_MEDIA( 0x2, 0x1, 0x3)
 #define OP_MEDIA_VFE_STATE					INDEX_3D_MEDIA( 0x2, 0x2, 0x0)
-
-/* FIXME: find the exact meaning in spec */
-#define OP_MEDIA_UNKNOWN1				INDEX_3D_MEDIA(0x1, 0x0, 0xb)
 
 // #define _3DSTATE_PIPELINED_POINTERS		INDEX_3D_MEDIA(0x3, 0x0, 0x00) /*Pre-DevSNB*/
 #define OP_3DSTATE_BINDING_TABLE_POINTERS	INDEX_3D_MEDIA(0x3, 0x0, 0x01)
