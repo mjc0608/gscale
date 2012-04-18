@@ -721,8 +721,9 @@ static int vgt_cmd_handler_state_base_address(struct vgt_cmd_data *data)
 	address_fixup(data,data->instruction + 3);
 	address_fixup(data,data->instruction + 4);
 	address_fixup(data,data->instruction + 5);
-	address_fixup(data,data->instruction + 6);
 	/* Zero Bound is ignore */
+	if (data->instruction[6] >> 12)
+		address_fixup(data,data->instruction + 6);
 	if (data->instruction[7] >> 12)
 		address_fixup(data,data->instruction + 7);
 	if (data->instruction[8] >> 12)
