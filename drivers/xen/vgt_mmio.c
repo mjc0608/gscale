@@ -288,41 +288,41 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 		case VGT_REG_CFG_SPACE_BAR0:	/* GTTMMIO */
 		case VGT_REG_CFG_SPACE_BAR1:	/* GMADR */
 		case VGT_REG_CFG_SPACE_BAR2:	/* IO */
-		ASSERT((bytes == 4) && (off & 3) == 0);
+			ASSERT((bytes == 4) && (off & 3) == 0);
 
-		old = *cfg_reg & 0xf;
-		new = *(uint32_t *)p_data;
-		printk("Programming bar %x with %x\n", off, new);
-		size = vgt->state.bar_size[(off - VGT_REG_CFG_SPACE_BAR0)/8];
-		if ( new == 0xFFFFFFFF ) {
-			/*
-			 * Power-up software can determine how much address
-			 * space the device requires by writing a value of
-			 * all 1's to the register and then reading the value
-			 * back. The device will return 0's in all don't-care
-			 * address bits.
-			 */
-			new = new & ~(size-1);
-		        *cfg_reg = (new & ~0xf) | old;
-                } else {
-                    vgt_hvm_map_apperture(vgt, 0);
-		    *cfg_reg = (new & ~0xf) | old;
-                    vgt_hvm_map_apperture(vgt, 1);
-                    vgt_hvm_set_trap_area(vgt);
-                }
-		break;
+			old = *cfg_reg & 0xf;
+			new = *(uint32_t *)p_data;
+			printk("Programming bar 0x%x with 0x%x\n", off, new);
+			size = vgt->state.bar_size[(off - VGT_REG_CFG_SPACE_BAR0)/8];
+			if ( new == 0xFFFFFFFF ) {
+				/*
+				 * Power-up software can determine how much address
+				 * space the device requires by writing a value of
+				 * all 1's to the register and then reading the value
+				 * back. The device will return 0's in all don't-care
+				 * address bits.
+				 */
+				new = new & ~(size-1);
+				*cfg_reg = (new & ~0xf) | old;
+			} else {
+				vgt_hvm_map_apperture(vgt, 0);
+				*cfg_reg = (new & ~0xf) | old;
+				vgt_hvm_map_apperture(vgt, 1);
+				vgt_hvm_set_trap_area(vgt);
+			}
+			break;
 
 		case VGT_REG_CFG_SPACE_MSAC:
-		printk("Guest write MSAC %x, %d: Not supported yet\n",
-				*(char *)p_data, bytes);
-		break;
+			printk("Guest write MSAC %x, %d: Not supported yet\n",
+					*(char *)p_data, bytes);
+			break;
 
 		case VGT_REG_CFG_SPACE_BAR1+4:
 		case VGT_REG_CFG_SPACE_BAR0+4:
 		case VGT_REG_CFG_SPACE_BAR2+4:
 		default:
-		memcpy (&vgt->state.cfg_space[off], p_data, bytes);
-		break;
+			memcpy (&vgt->state.cfg_space[off], p_data, bytes);
+			break;
 	}
 	/*
 	 * FIXME: assume most dmo0's cfg writes should be propogated to
