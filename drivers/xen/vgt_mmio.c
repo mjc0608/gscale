@@ -212,8 +212,14 @@ static int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
         int r;
 
         cfg_space += VGT_REG_CFG_SPACE_BAR1;	/* APERTUR */
-        ASSERT ((*cfg_space & 7) == 6);           /* 64 bits MMIO bar */
-        bar_s = * (uint64_t *) cfg_space;
+		if (VGT_GET_BITS(*cfg_space, 2, 1) == 2){
+			/* 64 bits MMIO bar */
+			bar_s = * (uint64_t *) cfg_space;
+		} else {
+			/* 32 bits MMIO bar */
+			bar_s = * (uint32_t*) cfg_space;
+		}
+
         bar_e = bar_s + vgt->state.bar_size[0] - 1;
 
         memmap.first_gfn = bar_s;
@@ -243,8 +249,13 @@ static int vgt_hvm_set_trap_area(struct vgt_device *vgt)
         trap.nr_pio_frags = 0;
         trap.nr_mmio_frags = 1;
         cfg_space += VGT_REG_CFG_SPACE_BAR0;
-        ASSERT ((*cfg_space & 7) == 6);           /* 64 bits MMIO bar */
-        bar_s = * (uint64_t *) cfg_space;
+		if (VGT_GET_BITS(*cfg_space, 2, 1) == 2){
+			/* 64 bits MMIO bar */
+			bar_s = * (uint64_t *) cfg_space;
+		} else {
+			/* 32 bits MMIO bar */
+			bar_s = * (uint32_t*) cfg_space;
+		}
         bar_e = bar_s + vgt->state.bar_size[0] - 1;
         trap.mmio_frags[0].s = bar_s;
         trap.mmio_frags[0].e = bar_e;

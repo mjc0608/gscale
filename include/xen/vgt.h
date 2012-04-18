@@ -70,6 +70,11 @@ typedef struct {
 extern vgt_ops_t *vgt_ops;
 #define vgt_is_dom0(id)	(id == 0)
 
+/* get the bits high:low of the data, high and low is starting from zero*/
+#define VGT_GET_BITS(data, high, low)	(((data) & ((1 << ((high) + 1)) - 1)) >> (low))
+/* get one bit of the data, bit is starting from zeor */
+#define VGT_GET_BIT(data, bit)		VGT_GET_BITS(data, bit, bit)
+
 bool vgt_emulate_write(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
 bool vgt_emulate_read(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
 bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
