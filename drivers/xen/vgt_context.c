@@ -952,6 +952,7 @@ int vgt_thread(void *priv)
 				prev = current_render_owner(pdev);
 				switched++;
 
+				local_irq_disable();
 				if (!vgt_save_context(prev)) {
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
@@ -963,6 +964,7 @@ int vgt_thread(void *priv)
 						cnt, switched, prev->vgt_id, next->vgt_id);
 
 					/* TODO: any recovery to do here. Now simply exits the thread */
+					local_irq_enable();
 					break;
 				}
 
@@ -979,9 +981,11 @@ int vgt_thread(void *priv)
 						cnt, switched, prev->vgt_id, next->vgt_id);
 
 					/* TODO: any recovery to do here. Now simply exits the thread */
+					local_irq_enable();
 					break;
 				}
 
+				local_irq_enable();
 				previous_render_owner(pdev) = current_render_owner(pdev);
 				current_render_owner(pdev) = next;
 				vgt_irq_restore_context(next, VGT_OT_RENDER);
