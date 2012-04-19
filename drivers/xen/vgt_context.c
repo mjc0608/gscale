@@ -498,7 +498,8 @@ static void show_ringbuffer(struct vgt_device *vgt, int ring_id, int bytes)
 
 	p_tail = VGT_MMIO_READ(pdev, RB_TAIL(ring_id));
 	p_head = VGT_MMIO_READ(pdev, RB_HEAD(ring_id));
-	printk("ring buffer: p[%x, %x], s[%x, %x]\n", p_head, p_tail,
+	printk("ring buffer(%d): p[%x, %x], s[%x, %x]\n", ring_id,
+		p_head, p_tail,
 		rb->sring.head, rb->sring.tail);
 
 	p_head &= RB_HEAD_OFF_MASK;
@@ -698,21 +699,39 @@ bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, int timeout)
 {
 	bool r = true;
+	cycles_t start, end;
+	static cycles_t max = 600000;
+
+	rdtsc_barrier();
+	start = get_cycles();
+	rdtsc_barrier();
 
 	/* wait to be completed */
-	while (--timeout > 0 ) {
+	//while (--timeout > 0 ) {
+	while (true ) {
 		if (is_rendering_engine_empty(pdev, ring_id))
 			break;
 		sleep_us(1);		/* 1us delay */
 	}
 
+	rdtsc_barrier();
+	end = get_cycles();
+	rdtsc_barrier();
+
 	if (timeout <= 0)
 		r = false;
+
+	if (end - start > 1500000 || end - start > max)
+		printk("vGT: ring (%d) has timeout (%d), max(%d)\n",
+			ring_id, end - start, max);
+
+	if (end - start > max)
+		max = end - start;
 
 	return r;
 }
 
-bool is_rendering_engines_empty(struct pgt_device *pdev, int timeout)
+bool is_rendering_engines_empty(struct pgt_device *pdev, int timeout, int *ring_id)
 {
 	int i;
 
@@ -721,8 +740,10 @@ bool is_rendering_engines_empty(struct pgt_device *pdev, int timeout)
 	 * command parser later
 	 */
 	for (i=0; i < MAX_ENGINES; i++)
-		if ( !ring_wait_for_empty(pdev, i, timeout) )
+		if ( !ring_wait_for_empty(pdev, i, timeout) ) {
+			*ring_id = i;
 			return false;
+		}
 	return true;
 }
 
@@ -862,9 +883,10 @@ int vgt_thread(void *priv)
 	struct vgt_device *next, *vgt = priv, *prev;
 	struct pgt_device *pdev = vgt->pdev;
 	static u64 cnt = 0, switched = 0;
-	int timeout = 100; /* microsecond */
+	int timeout = 1000; /* microsecond */
 	int threshold = 2; /* print every 10s */
 	long wait = 0;
+	int ring_id;
 
 	ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
@@ -931,7 +953,7 @@ int vgt_thread(void *priv)
 
 		/* TODO: need stop command parser from further adding content */
 
-		if (is_rendering_engines_empty(pdev, timeout)) {
+		if (is_rendering_engines_empty(pdev, timeout, &ring_id)) {
 			next = next_vgt(&pdev->rendering_runq_head, vgt);
 #ifndef SINGLE_VM_DEBUG
 			if ( next != current_render_owner(pdev) )
@@ -1003,9 +1025,10 @@ int vgt_thread(void *priv)
 				dprintk("....no other instance\n");
 #endif
 		} else {
-			printk("vGT: (%lldth switch<%d>)...ring is busy for %dus\n",
-				switched, current_render_owner(pdev)->vgt_id, timeout);
-			show_ringbuffer(vgt, 0, 16 * sizeof(vgt_reg_t));
+			printk("vGT: (%lldth switch<%d>)...ring(%d) is busy for %dus\n",
+				switched, ring_id,
+				current_render_owner(pdev)->vgt_id, timeout);
+			show_ringbuffer(vgt, ring_id, 16 * sizeof(vgt_reg_t));
 		}
 	}
 	return 0;
