@@ -468,8 +468,8 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 		dprintk("vGT: set bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
 		vgt_set_irq_pending(vstate);
 	} else {
-		printk("vGT: propogate bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
-		printk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
+		dprintk("vGT: propogate bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
+		dprintk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
 			__vreg(vstate, vgt_isr(info->reg_base)),
 			__vreg(vstate, vgt_imr(info->reg_base)),
 			__vreg(vstate, vgt_iir(info->reg_base)),
@@ -495,8 +495,8 @@ void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
 		dprintk("vGT: set pch bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
 		vgt_set_pch_irq_pending(vstate);
 	} else {
-		printk("vGT: propogate pch bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
-		printk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x)i\n",
+		dprintk("vGT: propogate pch bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
+		dprintk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x)i\n",
 			__vreg(vstate, vgt_isr(info->reg_base)),
 			__vreg(vstate, vgt_imr(info->reg_base)),
 			__vreg(vstate, vgt_iir(info->reg_base)),
@@ -706,7 +706,7 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 			iir = vgt_imr_to_iir(state, reg);
 			vgt_imr_to_isr(state, reg) &= ~(isr & ~imr);
 			if (iir & ier) {
-				printk("vGT-IRQ: catch pending iir (%x)\n", iir);
+				dprintk("vGT-IRQ: catch pending iir (%x)\n", iir);
 				vgt_set_irq_pending(state);
 				vgt_inject_virtual_interrupt(state);
 			}
@@ -814,7 +814,7 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 	if (enabled) {
 		iir = vgt_ier_to_iir(state, reg);
 		if (iir & ier) {
-			printk("vGT-IRQ: catch pending iir (%x)\n", iir);
+			dprintk("vGT-IRQ: catch pending iir (%x)\n", iir);
 			vgt_set_irq_pending(state);
 			vgt_inject_virtual_interrupt(state);
 		}
@@ -1257,7 +1257,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 
 	ret = ops->interrupt(dev);
 	if (ret == IRQ_NONE) {
-		printk("Spurious interrupt received (or shared vector)\n");
+		dprintk("Spurious interrupt received (or shared vector)\n");
 		VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);
 		return IRQ_HANDLED;
 	}
