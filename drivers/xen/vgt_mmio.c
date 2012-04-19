@@ -222,11 +222,11 @@ static int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 
         bar_e = bar_s + vgt->state.bar_size[0] - 1;
 
-        memmap.first_gfn = bar_s;
+        memmap.first_gfn = bar_s >> PAGE_SHIFT;
         pcfg_space = &vgt->pdev->initial_cfg_space[0];
         pcfg_space += VGT_REG_CFG_SPACE_BAR1;
 
-        memmap.first_mfn = vgt_aperture_base(vgt);
+        memmap.first_mfn = vgt_aperture_base(vgt) >> PAGE_SHIFT;
         memmap.nr_mfns = vgt->state.bar_size[0] >> PAGE_SHIFT ;
 
 	r = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
