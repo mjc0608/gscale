@@ -37,6 +37,7 @@
 #include <linux/swap.h>
 #include <linux/pci.h>
 #include <linux/dma-buf.h>
+#include <xen/vgt-if.h>
 
 static void i915_gem_object_flush_gtt_write_domain(struct drm_i915_gem_object *obj);
 static void i915_gem_object_flush_cpu_write_domain(struct drm_i915_gem_object *obj,
@@ -157,6 +158,157 @@ static inline bool
 i915_gem_object_is_inactive(struct drm_i915_gem_object *obj)
 {
 	return i915_gem_obj_bound_any(obj) && !obj->active;
+}
+
+struct _balloon_info_ {
+	/*
+	 * There are up to 2 regions per aperture/gmadr that
+	 * might be ballooned, per assigned aperture/gmadr.
+	 * Here, ballooned gmadr doesn't include the
+	 * might-be overlap aperture areas, and index 0/1 is for
+	 * aperture, 2/3 for gmadr.
+	 */
+	struct drm_mm_node *space[4];
+} bl_info;
+
+static struct drm_mm_node *i915_balloon_space (
+			const struct drm_mm *mm,
+			unsigned long start,
+			unsigned long end)
+{
+	struct drm_mm_node *free_space;
+	unsigned long  size = end - start;
+
+	if (start == end)
+		return NULL;
+
+        printk("i915_balloon_space %lx %lx\n", start, end);
+	free_space = drm_mm_search_free_in_range(mm, size, 0, start, end, 0);
+        printk("free_space %p\n", free_space);
+	if (free_space == NULL)
+		return NULL;
+	return drm_mm_get_block_range_generic(free_space,
+				size, 0, start, end, 0);
+}
+
+#define vgt_info_off(x)	(VGT_PVINFO_PAGE + (long)&((struct vgt_if*) NULL)->x)
+#define VGT_IF_VERSION	0x100		/* 1.0 */
+
+static void i915_deballoon(struct drm_i915_private *dev_priv)
+{
+	int	i;
+
+        printk("i915_deballoon...\n");
+	for (i=0; i < 4; i++) {
+		if ( bl_info.space[i] )
+			drm_mm_put_block(bl_info.space[i]);
+	}
+	memset (&bl_info, 0, sizeof(bl_info));
+}
+
+static int i915_balloon(struct drm_i915_private *dev_priv)
+{
+	uint64_t	magic;
+	uint32_t	version;
+        unsigned long 	apert_base, apert_size;
+        unsigned long	gmadr_base, gmadr_size;
+	int	fail = 0;
+
+	printk("i915_balloon...\n");
+	magic = I915_READ64(vgt_info_off(magic));
+	if (magic != VGT_MAGIC)
+		return 0;
+
+	version = (I915_READ16(vgt_info_off(version_major)) << 16) |
+			I915_READ16(vgt_info_off(version_minor));
+
+	if (version != VGT_IF_VERSION)
+		return 0;
+
+	apert_base = I915_READ(vgt_info_off(avail_rs.aperture.my_base));
+	apert_size = I915_READ(vgt_info_off(avail_rs.aperture.my_size));
+	gmadr_base = I915_READ(vgt_info_off(avail_rs.gmadr.my_base));
+	gmadr_size = I915_READ(vgt_info_off(avail_rs.gmadr.my_size));
+
+	printk("Balooning configuration: %lx %lx, %lx %lx\n",
+			apert_base, apert_size, gmadr_base, gmadr_size);
+	if (apert_base < dev_priv->mm.gtt_start ||
+		(apert_base + apert_size) > dev_priv->mm.gtt_mappable_end ||
+		gmadr_base < dev_priv->mm.gtt_start ||
+		(gmadr_base + gmadr_size) > dev_priv->mm.gtt_end) {
+		printk("Invalid ballooning configuration: %lx %lx, %lx %lx\n",
+			apert_base, apert_size, gmadr_base, gmadr_size);
+		return 0;
+	}
+
+	memset (&bl_info, 0, sizeof(bl_info));
+	/* Aperture ballooning */
+	if ( apert_base > dev_priv->mm.gtt_start ) {
+	        bl_info.space[0] = i915_balloon_space(
+			&dev_priv->mm.gtt_space,
+			dev_priv->mm.gtt_start, apert_base);
+		fail |= (bl_info.space[0] == NULL);
+		printk(" bl_info.space[0] = %p\n",  bl_info.space[0]);
+	}
+
+	if ( apert_base + apert_size < dev_priv->mm.gtt_mappable_end ) {
+	        bl_info.space[1] = i915_balloon_space(
+			&dev_priv->mm.gtt_space,
+			apert_base + apert_size,
+			dev_priv->mm.gtt_mappable_end);
+		fail |= (bl_info.space[1] == NULL);
+		printk(" bl_info.space[1] = %p\n",  bl_info.space[1]);
+	}
+
+	/* GMADR ballooning */
+	if ( gmadr_base > dev_priv->mm.gtt_mappable_end ) {
+	        bl_info.space[2] = i915_balloon_space(
+			&dev_priv->mm.gtt_space,
+			dev_priv->mm.gtt_mappable_end, gmadr_base);
+		fail |= (bl_info.space[2] == NULL);
+		printk(" bl_info.space[2] = %p\n",  bl_info.space[2]);
+	}
+
+	if ( gmadr_base + gmadr_size < dev_priv->mm.gtt_end ) {
+	        bl_info.space[3] = i915_balloon_space(
+			&dev_priv->mm.gtt_space,
+			gmadr_base + gmadr_size,
+			dev_priv->mm.gtt_end);
+		fail |= (bl_info.space[3] == NULL);
+		printk(" bl_info.space[3] = %p\n",  bl_info.space[3]);
+	}
+
+	/* Fence register ballooning */
+
+	if ( fail ) {
+		i915_deballoon(dev_priv);
+		return 0;
+	}
+	printk("balloon successfully\n");
+	return 1;
+}
+
+void i915_gem_do_init(struct drm_device *dev,
+		      unsigned long start,
+		      unsigned long mappable_end,
+		      unsigned long end)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+
+	drm_mm_init(&dev_priv->mm.gtt_space, start, end - start);
+
+	dev_priv->mm.gtt_start = start;
+	dev_priv->mm.gtt_mappable_end = mappable_end;
+	dev_priv->mm.gtt_end = end;
+	dev_priv->mm.gtt_total = end - start;
+	dev_priv->mm.mappable_gtt_total = min(end, mappable_end) - start;
+
+	printk("GEM init: take [%lx, %lx] GTT range\n", start, end);
+
+	i915_balloon(dev_priv);
+
+	/* Take over this portion of the GTT */
+	intel_gtt_clear_range(start / PAGE_SIZE, (end-start) / PAGE_SIZE);
 }
 
 int
