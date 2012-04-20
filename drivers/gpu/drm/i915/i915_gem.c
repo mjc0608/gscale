@@ -297,6 +297,12 @@ void i915_gem_do_init(struct drm_device *dev,
 
 	drm_mm_init(&dev_priv->mm.gtt_space, start, end - start);
 
+	printk("Eddie: mappable_end %lx\n", mappable_end);
+	/*
+	 * TO Check: mappable_end report 64MB while end is 64MB - one page.
+	 */
+	if ( mappable_end > end )
+		mappable_end = end;
 	dev_priv->mm.gtt_start = start;
 	dev_priv->mm.gtt_mappable_end = mappable_end;
 	dev_priv->mm.gtt_end = end;
