@@ -421,7 +421,7 @@ void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
         memcpy(val, (uint8_t*)&vgt->last_cf8 + (port & 3), bytes);
     }
     else {
-        ASSERT ( (vgt->last_cf8 & 3) == 0);
+//        ASSERT ( (vgt->last_cf8 & 3) == 0);
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
         vgt_emulate_cfg_read(vgt, (vgt->last_cf8 & 0xfc) + (port & 3),
