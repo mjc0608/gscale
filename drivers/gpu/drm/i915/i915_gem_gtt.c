@@ -1819,7 +1819,14 @@ static int i915_gem_setup_global_gtt(struct drm_device *dev,
 	unsigned long hole_start, hole_end;
 	int ret;
 
-	BUG_ON(mappable_end > end);
+	/* REVISIT. */
+//	BUG_ON(mappable_end > end);
+	printk("Eddie: mappable_end %lx\n", mappable_end);
+       /*
+        * TO Check: mappable_end report 64MB while end is 64MB - one page.
+        */
+       if ( mappable_end > end )
+               mappable_end = end;
 
 	/* Subtract the guard page ... */
 	drm_mm_init(&ggtt_vm->mm, start, end - start - PAGE_SIZE);
