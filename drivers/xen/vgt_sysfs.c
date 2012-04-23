@@ -76,15 +76,10 @@
 #include <asm/cacheflush.h>
 #include <xen/vgt.h>
 #include "vgt_reg.h"
-/*
- * This module shows how to create a simple subdirectory in sysfs called
- * /sys/kernel/kobject-example  In that directory, 3 files are created:
- * "foo", "baz", and "bar".  If an integer is written to these files, it can be
- * later read out of it.
- */
+
 static struct kobject *vgt_kobj;
 static struct pgt_device *vgt_kobj_priv;
-static int vgt_instance_cnt = 1;
+struct vgt_device *vmid_2_vgt_device(int vmid);
 
 static int vgt_create_topdir_kobject(void)
 {
@@ -96,33 +91,36 @@ static int vgt_create_topdir_kobject(void)
     return 0;
 }
 
-int vgt_add_state_sysfs(int vm_id);
+#if 0
 static ssize_t vgt_create_instance_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
 {
     /* TODO: show some global statistics ? */
-	return sprintf(buf, "%d\n", vgt_instance_cnt);
+	return sprintf(buf, "To be done...\n");
 }
+#endif
 
+int vgt_add_state_sysfs(int vm_id);
+void vgt_del_state_sysfs(int vmid);
 static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attribute *attr,
 			 const char *buf, size_t count)
 {
-    int val;
+    int vmid;
+    unsigned long flags;
     /* TODO: scanned value not checked */
-	sscanf(buf, "%du", &val);
-    if (val > 0) {
-	/* TOFIX: The vmid should come from the file node */
-        vgt_add_state_sysfs(vgt_instance_cnt);
-	/* TODO: Error Check/report */
-        vgt_instance_cnt++;
-    } else {
-        printk(KERN_WARNING"vGT sysfs node create error: value should be an posivive integer\n" );
-    }
-	return count;
+    sscanf(buf, "%du", &vmid);
+    if (vmid == 0)
+        return count;
+
+    if (vmid > 0)
+        vgt_add_state_sysfs(vmid);
+    else
+        vgt_del_state_sysfs(-vmid);
+    return count;
 }
 
 static struct kobj_attribute create_vgt_instance_attrs =
-	__ATTR(create_vgt_instance, 0666, vgt_create_instance_show, vgt_create_instance_store);
+	__ATTR(create_vgt_instance, 0222, NULL, vgt_create_instance_store);
 
 static struct attribute *ctl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
@@ -271,9 +269,14 @@ int vgt_add_state_sysfs(int vm_id)
         if (retval < 0)
             return retval;
     }
+
+    /* check if such vmid has been used */
+    if (vmid_2_vgt_device(vm_id))
+        return -EINVAL;
+
     vgt = create_vgt_instance(vgt_kobj_priv, vm_id);
     if (vgt == NULL)
-	return -1;
+        return -1;
 
     /* init kobject */
 	kobject_init(&vgt->kobj, &vgt_kobj_ktype);
@@ -294,8 +297,13 @@ int vgt_add_state_sysfs(int vm_id)
 	return retval;
 }
 
-void vgt_del_state_sysfs(struct vgt_device *vgt)
+void vgt_del_state_sysfs(int vmid)
 {
+    struct vgt_device *vgt;
+    vgt = vmid_2_vgt_device(vmid);
+    if (!vgt)
+        return;
+
     kobject_put(&vgt->kobj);
     vgt_release_instance(vgt);
 }

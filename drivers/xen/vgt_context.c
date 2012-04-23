@@ -360,6 +360,22 @@ bool vgt_register_mmio_handler(int start, int end,
  */
 unsigned long vgt_id_alloc_bitmap;
 
+/*TODO: may need lock to protect default_deivce */
+struct vgt_device *vmid_2_vgt_device(int vmid)
+{
+    unsigned int nvms, vgt_id;
+    struct vgt_device *vgt;
+    /* TODO: check if vgt_id_alloc_bitmap is ~0UL */
+    nvms = ffz(vgt_id_alloc_bitmap);
+    ASSERT(nvms <= VGT_MAX_VMS);
+    for (vgt_id = 0; vgt_id < nvms; vgt_id++) {
+        vgt = default_device.device[vgt_id];
+        if (vgt->vm_id == vmid)
+            return vgt;
+    }
+    return NULL;
+}
+
 int allocate_vgt_id(void)
 {
 	unsigned long bit_index;
