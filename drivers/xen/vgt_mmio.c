@@ -229,6 +229,8 @@ static int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
         memmap.first_mfn = vgt_aperture_base(vgt) >> PAGE_SHIFT;
         memmap.nr_mfns = vgt->state.bar_size[0] >> PAGE_SHIFT ;
 
+		memmap.map = map;
+
 	r = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
 
 	if (r < 0)
@@ -256,6 +258,7 @@ static int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 			/* 32 bits MMIO bar */
 			bar_s = * (uint32_t*) cfg_space;
 		}
+		bar_s &= ~0xF; /* clear the LSB 4 bits */
         bar_e = bar_s + vgt->state.bar_size[0] - 1;
         trap.mmio_frags[0].s = bar_s;
         trap.mmio_frags[0].e = bar_e;
@@ -316,10 +319,13 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 				new = new & ~(size-1);
 				*cfg_reg = (new & ~0xf) | old;
 			} else {
-				vgt_hvm_map_apperture(vgt, 0);
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
+					vgt_hvm_map_apperture(vgt, 0);
 				*cfg_reg = (new & ~0xf) | old;
-				vgt_hvm_map_apperture(vgt, 1);
-				vgt_hvm_set_trap_area(vgt);
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
+					vgt_hvm_map_apperture(vgt, 1);
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR0)
+					vgt_hvm_set_trap_area(vgt);
 			}
 			break;
 
