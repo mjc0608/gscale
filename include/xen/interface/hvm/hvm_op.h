@@ -46,6 +46,7 @@ DEFINE_GUEST_HANDLE_STRUCT(xen_hvm_pagetable_dying_t);
 #include <xen/interface/vcpu.h>
 #define HVMOP_vgt_set_trap_io       17
 struct xen_hvm_vgt_set_trap_io {
+	uint16_t domid;
     uint16_t nr_pio_frags;
     struct trap_frags	pio_frags[MAX_TRAP_FRAGS];
     uint16_t nr_mmio_frags;

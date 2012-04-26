@@ -248,6 +248,7 @@ static int vgt_hvm_set_trap_area(struct vgt_device *vgt)
         uint64_t bar_s, bar_e;
         int r;
 
+		trap.domid = vgt->vm_id;
         trap.nr_pio_frags = 0;
         trap.nr_mmio_frags = 1;
         cfg_space += VGT_REG_CFG_SPACE_BAR0;
