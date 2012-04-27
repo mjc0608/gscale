@@ -65,7 +65,7 @@
 #include <linux/wait.h>
 #include <xen/interface/hvm/ioreq.h>
 
-#define SINGLE_VM_DEBUG
+//#define SINGLE_VM_DEBUG
 #define SANDY_BRIDGE
 #define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); BUG();}} while (0);
 
@@ -138,10 +138,19 @@ typedef struct {
 //    uint64_t	gt_gmadr_base;	/* bar1/GMADR */
 
     uint32_t	bar_size[3];	/* 0: GTTMMIO, 1: GMADR, 2: PIO bar size */
+
+    /* FIXME: take them as part of vReg/sReg ??? */
+    /* save indexed MMIO */
+    uint8_t saveSR[8];  /* sequencer data register */
+    uint8_t saveGR[25]; /* CRT controller register */
+    uint8_t saveAR[21];
+    uint8_t saveCR[37];
 } vgt_state_t;
 
 #define __vreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.vReg + off))
+#define __vreg8(vgt, off) (*(char *)((char *)vgt->state.vReg + off))
 #define __sreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.sReg + off))
+#define __sreg8(vgt, off) (*(char *)((char *)vgt->state.sReg + off))
 #define __vreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.vReg + off))
 #define __sreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.sReg + off))
 #define vgt_vreg(vgt, off)	((vgt_reg_t *)((char *)vgt->state.vReg + off))
@@ -369,6 +378,8 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_DSPACNTR		0x70180
 #define _REG_DSPALINOFF		0x70184
 #define _REG_DSPASTRIDE		0x70188
+#define _REG_DSPAPOS		0x7018C /* reserved */
+#define _REG_DSPASIZE		0x70190
 #define _REG_DSPASURF		0x7019C
 #define _REG_DSPATILEOFF	0x701A4
 #define _REG_DSPASURFLIVE	0x701AC
@@ -376,6 +387,8 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_DSPBCNTR		0x71180
 #define _REG_DSPBLINOFF		0x71184
 #define _REG_DSPBSTRIDE		0x71188
+#define _REG_DSPBPOS		0x7118C
+#define _REG_DSPBSIZE		0x71190
 #define _REG_DSPBSURF		0x7119C
 #define _REG_DSPBTILEOFF	0x701A4
 #define _REG_DSPBSURFLIVE	0x711AC
@@ -421,6 +434,259 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define 	MI_RESTORE_EXT_STATE_EN		(1<<2)
 #define  	MI_FORCE_RESTORE		(1<<1)
 #define 	MI_RESTORE_INHIBIT		(1<<0)
+
+/* PCI config space */
+#define _REG_LBB	0xf4
+
+/* VGA stuff */
+#define _REG_VGA_MSR_WRITE 0x3c2
+#define _REG_VGA_MSR_READ 0x3cc
+#define   VGA_MSR_CGA_MODE (1<<0)
+
+#define _REG_VGA_CR_INDEX_MDA 0x3b4
+#define _REG_VGA_CR_DATA_MDA 0x3b5
+#define _REG_VGA_ST01_MDA 0x3ba
+
+#define _REG_VGA_CR_INDEX_CGA 0x3d4
+#define _REG_VGA_CR_DATA_CGA 0x3d5
+#define _REG_VGA_ST01_CGA 0x3da
+
+#define _REG_VGA_SR_INDEX 0x3c4
+#define _REG_VGA_SR_DATA 0x3c5
+
+#define _REG_VGA_GR_INDEX 0x3ce
+#define _REG_VGA_GR_DATA 0x3cf
+
+#define _REG_VGA_AR_INDEX 0x3c0
+#define _REG_VGA_AR_DATA_WRITE 0x3c0
+#define _REG_VGA_AR_DATA_READ 0x3c1
+
+#define _REG_VGA_DACMASK 0x3c6
+/*
+ * Display engine regs
+ */
+
+/* Pipe A timing regs */
+#define _REG_HTOTAL_A	0x60000
+#define _REG_HBLANK_A	0x60004
+#define _REG_HSYNC_A		0x60008
+#define _REG_VTOTAL_A	0x6000c
+#define _REG_VBLANK_A	0x60010
+#define _REG_VSYNC_A		0x60014
+#define _REG_PIPEASRC	0x6001c
+#define _REG_BCLRPAT_A	0x60020
+
+/* Pipe B timing regs */
+#define _REG_HTOTAL_B	0x61000
+#define _REG_HBLANK_B	0x61004
+#define _REG_HSYNC_B		0x61008
+#define _REG_VTOTAL_B	0x6100c
+#define _REG_VBLANK_B	0x61010
+#define _REG_VSYNC_B		0x61014
+#define _REG_PIPEBSRC	0x6101c
+#define _REG_BCLRPAT_B	0x61020
+
+#define _REG_DISP_ARB_CTL	0x45000
+
+/* PCH */
+#define _REG_PCH_DREF_CONTROL        0xC6200
+
+/*
+ * digital port hotplug
+ */
+#define _REG_PCH_DPLL_A              0xc6014
+#define _REG_PCH_DPLL_B              0xc6018
+
+#define   DPLL_VCO_ENABLE		(1 << 31)
+
+#define _REG_PCH_FPA0                0xc6040
+#define  FP_CB_TUNE		(0x3<<22)
+#define _REG_PCH_FPA1                0xc6044
+#define _REG_PCH_FPB0                0xc6048
+#define _REG_PCH_FPB1                0xc604c
+
+
+/*
+ * Clock control & power management
+ */
+#define _REG_VGA0	0x6000
+#define _REG_VGA1	0x6004
+#define _REG_VGA_PD	0x6010
+/* FIXME: PIO ?? */
+#define _REG_DPLL_A	0x06014
+#define _REG_DPLL_B	0x06018
+
+/* refresh rate hardware control */
+#define _REG_PIPEA_DATA_M1           0x60030
+#define _REG_PIPEA_DATA_N1           0x60034
+#define _REG_PIPEA_LINK_M1           0x60040
+#define _REG_PIPEA_LINK_N1           0x60044
+
+/* PIPEB timing regs are same start from 0x61000 */
+#define _REG_PIPEB_DATA_M1           0x61030
+#define _REG_PIPEB_DATA_N1           0x61034
+#define _REG_PIPEB_LINK_M1           0x61040
+#define _REG_PIPEB_LINK_N1           0x61044
+
+/* VGA port control */
+#define _REG_ADPA			0x61100
+
+/* FDI_RX, FDI_X is hard-wired to Transcoder_X */
+#define _REG_FDI_RXA_CTL             0xf000c
+#define _REG_FDI_RXB_CTL             0xf100c
+
+/* CPU: FDI_TX */
+#define _REG_FDI_TXA_CTL             0x60100
+#define _REG_FDI_TXB_CTL             0x61100
+
+/* CRT */
+#define _REG_PCH_ADPA                0xe1100
+
+/* PCH SDVOB multiplex with HDMIB */
+#define _REG_PCH_LVDS	0xe1180
+#define _REG_BLC_PWM_CPU_CTL2	0x48250
+#define _REG_BLC_PWM_CPU_CTL		0x48254
+#define _REG_BLC_PWM_PCH_CTL1	0xc8250
+#define _REG_BLC_PWM_PCH_CTL2	0xc8254
+#define _REG_PCH_PP_ON_DELAYS	0xc7208
+#define _REG_PCH_PP_OFF_DELAYS	0xc720c
+#define _REG_PCH_PP_DIVISOR		0xc7210
+#define _REG_PCH_PP_CONTROL		0xc7204
+
+/* Clocking configuration register */
+#define _REG_RSTDBYCTL		0x111b8
+
+/* CPU panel fitter */
+/* IVB+ has 3 fitters, 0 is 7x5 capable, the other two only 3x3 */
+#define _REG_PFA_CTL_1               0x68080
+#define _REG_PFB_CTL_1               0x68880
+#define _REG_PFA_WIN_SZ		0x68074
+#define _REG_PFB_WIN_SZ		0x68874
+#define _REG_PFA_WIN_POS		0x68070
+#define _REG_PFB_WIN_POS		0x68870
+
+/* Per-transcoder DIP controls */
+#define _REG_TRANSACONF              0xf0008
+#define _REG_TRANSBCONF              0xf1008
+
+/* transcoder */
+#define _REG_TRANS_HTOTAL_A          0xe0000
+#define _REG_TRANS_HBLANK_A          0xe0004
+#define _REG_TRANS_HSYNC_A           0xe0008
+#define _REG_TRANS_VTOTAL_A          0xe000c
+#define _REG_TRANS_VBLANK_A          0xe0010
+#define _REG_TRANS_VSYNC_A           0xe0014
+#define _REG_TRANS_HTOTAL_B          0xe1000
+#define _REG_TRANS_HBLANK_B          0xe1004
+#define _REG_TRANS_HSYNC_B           0xe1008
+#define _REG_TRANS_VTOTAL_B          0xe100c
+#define _REG_TRANS_VBLANK_B          0xe1010
+#define _REG_TRANS_VSYNC_B           0xe1014
+
+/* Display & cursor control */
+
+/* Pipe A */
+#define _REG_PIPEADSL		0x70000
+#define _REG_PIPEACONF		0x70008
+#define _REG_DSPARB			0x70030
+
+/* Pipe B */
+#define _REG_PIPEBDSL		0x71000
+#define _REG_PIPEBCONF		0x71008
+
+
+/* For Gen 2 */
+#define _REG_CURSIZE			0x700a0
+/*
+ * Palette regs
+ */
+#define _REG_PALETTE_A		0x0a000
+#define _REG_PALETTE_B		0x0a800
+
+/* legacy palette */
+#define _REG_LGC_PALETTE_A           0x4a000
+#define _REG_LGC_PALETTE_B           0x4a800
+
+/*
+ * SDVO/UDI pixel multiplier for VGA, same as DPLL_MD_UDI_MULTIPLIER_MASK.
+ * This best be set to the default value (3) or the CRT won't work. No,
+ * I don't entirely understand what this does...
+ */
+#define _REG_DPLL_A_MD 0x0601c /* 965+ only */
+#define _REG_DPLL_B_MD 0x06020 /* 965+ only */
+/*FIXME: this offset conflict with the definition in SNB Bspec */
+//#define _REG_BLC_PWM_CTL2		0x61250 /* 965+ only */
+#define _REG_FPA0	0x06040
+#define _REG_FPA1	0x06044
+#define _REG_FPB0	0x06048
+#define _REG_FPB1	0x0604c
+
+/* Display Port */
+#define _REG_DP_B				0x64100
+#define _REG_DP_C				0x64200
+#define _REG_DP_D				0x64300
+
+/* Ironlake */
+
+#define _REG_CPU_VGACNTRL	0x41000
+
+/* VBIOS regs */
+#define _REG_VGACNTRL		0x71400
+
+/*
+ * Instruction and interrupt control regs
+ */
+#define _REG_HWS_PGA		0x02080
+#define _REG_FDI_RXA_IMR             0xf0018
+#define _REG_FDI_RXB_IMR             0xf1018
+#define _REG_IER		0x020a0
+#define _REG_IMR      0x6c
+
+#define _REG_CACHE_MODE_0	0x02120 /* 915+ only */
+#define _REG_MI_ARB_STATE	0x020e4 /* 915+ only */
+
+/* VBIOS flags */
+#define _REG_SWF00			0x71410
+#define _REG_SWF10			0x70410
+#define _REG_SWF30			0x72414
+
+/* digital port hotplug */
+#define _REG_PCH_GMBUS0		0xc5100
+
+/*
+ * GPIO regs
+ */
+#define _REG_GMBUS0			0x5100 /* clock/port select */
+enum vgt_pipe {
+	PIPE_A = 0,
+	PIPE_B,
+	PIPE_C,
+	I915_MAX_PIPES
+};
+
+struct vgt_intel_device_info {
+	u8 gen;
+	u8 is_mobile:1;
+	u8 is_i85x:1;
+	u8 is_i915g:1;
+	u8 is_i945gm:1;
+	u8 is_g33:1;
+	u8 need_gfx_hws:1;
+	u8 is_g4x:1;
+	u8 is_pineview:1;
+	u8 is_broadwater:1;
+	u8 is_crestline:1;
+	u8 is_ivybridge:1;
+	u8 has_fbc:1;
+	u8 has_pipe_cxsr:1;
+	u8 has_hotplug:1;
+	u8 cursor_needs_physical:1;
+	u8 has_overlay:1;
+	u8 overlay_needs_physical:1;
+	u8 supports_tv:1;
+	u8 has_bsd_ring:1;
+	u8 has_blt_ring:1;
+};
 
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
@@ -1016,6 +1282,10 @@ static inline unsigned long __REG_READ(unsigned long preg, int bytes)
 	VGT_MMIO_WRITE(vgt->pdev, off, __vreg(vgt, off))
 
 #define ARRAY_NUM(x)		(sizeof(x) / sizeof(x[0]))
+
+/* Save/Restore display context */
+int vgt_save_state(struct vgt_device *vgt);
+int vgt_restore_state(struct vgt_device *vgt);
 
 /*
  * Activate/Deactive an VGT instance.

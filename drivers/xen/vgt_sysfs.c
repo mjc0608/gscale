@@ -119,11 +119,54 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
     return count;
 }
 
+#ifndef SINGLE_VM_DEBUG
+static ssize_t vgt_display_owner_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+    /* TODO: show the current owner ???  */
+	return sprintf(buf, "To be done...\n");
+}
+
+struct vgt_device *vmid_2_vgt_device(int vmid);
+extern struct vgt_device *next_display_owner;
+extern atomic_t display_switched;
+static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
+            char *buf, size_t count)
+{
+    unsigned long flags;
+    int vmid;
+    struct vgt_device *next_vgt;
+    /* TODO: scanned value not checked */
+    sscanf(buf, "%du", &vmid);
+
+    /* FIXME: to avoid nested spin_lock_irq issue, use spin_lock_irqsave instead of spin_lock_irq*/
+    spin_lock_irqsave(&vgt_kobj_priv->lock, flags);
+    next_vgt = vmid_2_vgt_device(vmid);
+    if (next_vgt)
+        next_display_owner = next_vgt;
+    spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
+
+    if (next_vgt)
+        atomic_inc(&display_switched);
+    else
+        printk(KERN_ERR"vGT sysfs switch display owner failed for invalid vmid: %d\n", vmid);
+
+    return count;
+}
+#endif
+
 static struct kobj_attribute create_vgt_instance_attrs =
 	__ATTR(create_vgt_instance, 0222, NULL, vgt_create_instance_store);
+#ifndef SINGLE_VM_DEBUG
+static struct kobj_attribute display_owner_ctrl_attrs =
+	__ATTR(display_owner, 0666, vgt_display_owner_show, vgt_display_owner_store);
+#endif
 
 static struct attribute *ctl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
+#ifndef SINGLE_VM_DEBUG
+    &display_owner_ctrl_attrs.attr,
+#endif
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 

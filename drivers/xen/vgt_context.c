@@ -261,6 +261,7 @@ static void enforce_mode_setting(struct pgt_device *pdev)
 
 #ifndef SINGLE_VM_DEBUG
 struct vgt_device *next_display_owner;
+atomic_t display_switched = ATOMIC_INIT(0);
 #endif
 static struct vgt_device *vgt_dom0;
 struct mmio_hash_table	*mtable[MHASH_SIZE];
@@ -779,9 +780,8 @@ void vgt_request_display_owner_switch(struct vgt_device *vgt)
 void vgt_switch_display_owner(struct vgt_device *prev,
     struct vgt_device *next)
 {
-
-	/* save irq context in the end */
-	vgt_irq_save_context(prev, VGT_OT_DISPLAY);
+    vgt_save_state(prev);
+    vgt_restore_state(next);
 }
 #endif
 
@@ -940,14 +940,21 @@ int vgt_thread(void *priv)
 
 #ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
-		if (!next_display_owner) {
+		if (atomic_read(&display_switched)) {
+
+            printk(KERN_WARNING"xuanhua: vGT: display switched\n");
+            printk(KERN_WARNING"xuanhua: vGT: current display owner: %p; next display owner: %p\n",
+                    current_display_owner(pdev),
+                    next_display_owner);
 			spin_lock_irq(&pdev->lock);
+	        vgt_irq_save_context(current_display_owner(pdev),
+                    VGT_OT_DISPLAY);
 			vgt_switch_display_owner(current_display_owner(pdev),
 					next_display_owner);
 			previous_display_owner(pdev) = current_display_owner(pdev);
 			current_display_owner(pdev) = next_display_owner;
-			next_display_owner = NULL;
-
+			//next_display_owner = NULL;
+            atomic_dec(&display_switched);
 			vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
 			/*
 			 * Virtual interrupts pending right after display switch
