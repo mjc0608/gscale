@@ -455,7 +455,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 
             dprintk("HVM_MMIO_read: target register (%lx).\n", req->addr);
             vgt_emulate_read(vgt,
-                        req->addr - base,
+                        req->addr,
                         &req->data,
                         req->size);
         }
@@ -468,7 +468,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
             for (i=0; i<req->count; i++) {
                 tmp = 0;
                 vgt_emulate_read(vgt,
-                        req->addr + sign * i * req->size - base,
+                        req->addr + sign * i * req->size,
                         &tmp,
                         req->size);
                 /*
@@ -486,7 +486,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 
             dprintk("HVM_MMIO_write: target register (%lx).\n", req->addr);
             vgt_emulate_write(vgt,
-                        req->addr - base,
+                        req->addr,
                         &req->data,
                         req->size);
         }
@@ -506,7 +506,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
                  *  Refer to IOCTL_PRIVCMD_MMAPBATCH_V2.
                  */
                 vgt_emulate_write(vgt,
-                        req->addr + sign * i * req->size - base,
+                        req->addr + sign * i * req->size,
                         &tmp,
                         req->size);
             }

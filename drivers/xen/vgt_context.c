@@ -599,18 +599,29 @@ static void vgt_update_reg_64(struct vgt_device *vgt, unsigned int reg)
 	}
 }
 
+#define PCI_BAR_ADDR_MASK (~0xFUL)  /* 4 LSB bits are not address */
+
+static inline unsigned int vgt_pa_to_mmio_offset(struct vgt_device *vgt, unsigned long pa)
+{
+	return (vgt->vm_id == 0)?
+		pa - vgt->pdev->gttmmio_base :
+		pa - ( (*(uint64_t*)(vgt->state.cfg_space + VGT_REG_CFG_SPACE_BAR0))
+				& PCI_BAR_ADDR_MASK );
+}
+
 /*
  * Emulate the VGT MMIO register read ops.
  * Return : true/false
  * */
-bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,int bytes)
+bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int bytes)
 {
 	struct mmio_hash_table *mht;
 	struct pgt_device *pdev = vgt->pdev;
 	unsigned int off2;
 	unsigned long wvalue;
+	unsigned int offset;
 
-	offset -= pdev->gttmmio_base;
+	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
 #ifdef SINGLE_VM_DEBUG
 	/* for single-VM UP dom0 case, no nest is expected */
@@ -649,13 +660,14 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int offset, void *p_data,
  * Emulate the VGT MMIO register write ops.
  * Return : true/false
  * */
-bool vgt_emulate_write(struct vgt_device *vgt, unsigned int offset,
+bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	void *p_data, int bytes)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	struct mmio_hash_table *mht;
+	unsigned int offset;
 
-	offset -= pdev->gttmmio_base;
+	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
 #ifdef SINGLE_VM_DEBUG
 	ASSERT(!spin_is_locked(&pdev->lock));
