@@ -739,7 +739,7 @@ static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, int timeou
 		r = false;
 
 	if (end - start > 1500000 || end - start > max)
-		printk("vGT: ring (%d) has timeout (%d), max(%d)\n",
+		printk("vGT: ring (%d) has timeout (%llx), max(%llx)\n",
 			ring_id, end - start, max);
 
 	if (end - start > max)

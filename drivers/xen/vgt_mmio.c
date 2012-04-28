@@ -516,8 +516,8 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 
 void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 {
-    int i, sign;
-    char *pdata;
+    int sign;
+    //char *pdata;
 
     sign = ioreq->df ? -1 : 1;
 

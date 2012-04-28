@@ -106,7 +106,7 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
 			 const char *buf, size_t count)
 {
     int vmid;
-    unsigned long flags;
+
     /* TODO: scanned value not checked */
     sscanf(buf, "%du", &vmid);
     if (vmid == 0)
@@ -131,7 +131,7 @@ struct vgt_device *vmid_2_vgt_device(int vmid);
 extern struct vgt_device *next_display_owner;
 extern atomic_t display_switched;
 static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
-            char *buf, size_t count)
+            const char *buf, size_t count)
 {
     unsigned long flags;
     int vmid;

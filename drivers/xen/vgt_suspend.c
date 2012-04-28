@@ -66,8 +66,6 @@ struct vgt_intel_device_info *vgt_devinfo = &snb_devinfo;
 #define VGT_I915_HAS_FBC(pdev) (vgt_devinfo->has_fbc)
 #define VGT_GEN(pdev) (vgt_devinfo->gen)
 
-/* FIXME: not sure if this is such posting read ??? */
-#define vgt_posting_read(offset)  VGT_MMIO_READ(pdev, (offset))
 /* FIXME: does read_mmio need to update v/s regs ??? */
 #define vgt_read_mmio_reg_8(offset) VGT_MMIO_READ_BYTES(pdev, (offset), 1)
 
@@ -239,7 +237,7 @@ static void vgt_restore_modeset_reg(struct vgt_device *vgt)
     if (__vreg(vgt, _REG_PCH_DPLL_A) & DPLL_VCO_ENABLE) //FIXME: or sreg ???
     {
         vgt_write_mmio_reg(_REG_PCH_DPLL_A, __vreg(vgt, (_REG_PCH_DPLL_A & ~DPLL_VCO_ENABLE)));
-        vgt_posting_read(_REG_PCH_DPLL_A);
+        VGT_POST_READ(pdev, _REG_PCH_DPLL_A);
         udelay(150);
     }
     vgt_restore_mmio_reg(_REG_PCH_FPA0);
@@ -247,11 +245,11 @@ static void vgt_restore_modeset_reg(struct vgt_device *vgt)
 
 	/* Actually enable it */
     vgt_restore_mmio_reg(_REG_PCH_DPLL_A);
-    vgt_posting_read(_REG_PCH_DPLL_A);
+    VGT_POST_READ(pdev, _REG_PCH_DPLL_A);
 	udelay(150);
     if (VGT_GEN(vgt) >= 4 && !VGT_HAS_PCH_SPLIT(dev)) {
         vgt_restore_mmio_reg(_REG_DPLL_A_MD);
-        vgt_posting_read(_REG_DPLL_A_MD);
+        VGT_POST_READ(pdev, _REG_DPLL_A_MD);
     }
 	udelay(150);
 
@@ -312,18 +310,18 @@ static void vgt_restore_modeset_reg(struct vgt_device *vgt)
     if (__vreg(vgt, _REG_PCH_DPLL_B) & DPLL_VCO_ENABLE) //FIXME: or sreg ???
     {
         vgt_write_mmio_reg(_REG_PCH_DPLL_B, __vreg(vgt, (_REG_PCH_DPLL_B & ~DPLL_VCO_ENABLE)));
-        vgt_posting_read(_REG_PCH_DPLL_B);
+        VGT_POST_READ(pdev, _REG_PCH_DPLL_B);
         udelay(150);
     }
     vgt_restore_mmio_reg(_REG_PCH_FPB0);
     vgt_restore_mmio_reg(_REG_PCH_FPB1);
 	/* Actually enable it */
     vgt_restore_mmio_reg(_REG_PCH_DPLL_B);
-    vgt_posting_read(_REG_PCH_DPLL_B);
+    VGT_POST_READ(pdev, _REG_PCH_DPLL_B);
     udelay(150);
     if (VGT_GEN(vgt) >= 4 && !VGT_HAS_PCH_SPLIT(dev)) {
         vgt_restore_mmio_reg(_REG_DPLL_B_MD);
-        vgt_posting_read(_REG_DPLL_B_MD);
+        VGT_POST_READ(pdev, _REG_DPLL_B_MD);
     }
     udelay(150);
 
@@ -472,7 +470,7 @@ static void vgt_restore_display(struct vgt_device *vgt)
     vgt_restore_mmio_reg(_REG_VGA0);
     vgt_restore_mmio_reg(_REG_VGA1);
     vgt_restore_mmio_reg(_REG_VGA_PD);
-    vgt_posting_read(_REG_VGA_PD);
+    VGT_POST_READ(pdev, _REG_VGA_PD);
     udelay(150);
 
     vgt_restore_vga(vgt);
@@ -737,8 +735,7 @@ int vgt_save_state(struct vgt_device *vgt)
 int vgt_restore_state(struct vgt_device *vgt)
 {
     struct pgt_device *pdev = vgt->pdev;
-    vgt_reg_t sreg;
-    int i, reg_index;
+    int i;
     char *cfg_space;
 
 	//pci_write_config_byte(dev->pdev, LBB, dev_priv->saveLBB);
