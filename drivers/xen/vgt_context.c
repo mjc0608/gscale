@@ -1360,35 +1360,6 @@ static rb_dword	cmds_restore_context[] = {
 	MI_NOOP,
 };
 
-#if 0
-/*
- * CCID change doesn't implicate the finish of all the commands.
- *
- * don't use this interface
- */
-static bool wait_ccid_to_renew(struct pgt_device *pdev, vgt_reg_t new_ccid)
-{
-	int	timeout;
-	vgt_reg_t ccid;
-
-	/* wait for the register to be updated */
-	timeout = CCID_TIMEOUT_LIMIT;
-	while (--timeout > 0 ) {
-		ccid = VGT_MMIO_READ (pdev, _REG_CCID);
-		if ((ccid & GTT_PAGE_MASK) == (new_ccid & GTT_PAGE_MASK))
-			break;
-		sleep_us(1);		/* 1us delay */
-	}
-	if (timeout <= 0) {
-		printk("XXXX: Update CCID failed at %s %d %x %x\n",
-			__FUNCTION__, __LINE__,	ccid, new_ccid);
-		return false;
-	}
-	dprintk("XXXX: Update CCID successfully to %x\n", ccid);
-	return true;
-}
-#endif
-
 /*
  * Submit a series of context save/restore commands to ring engine,
  * and wait till it is executed.
@@ -1711,20 +1682,16 @@ bool vgt_save_context (struct vgt_device *vgt)
 
 	vgt_rendering_save_mmio(vgt);
 
-	/*
-	 * FIXME: VCS and BCS has different context switch methods, relying on
-	 * MI_ARB_CHECK? Now just limit to the rendering engine only.
-	 */
 	/* save rendering engines */
-#if 0
 	for (i=0; i < MAX_ENGINES; i++) {
-#else
-	for (i=0; i < 1; i++) {
-#endif
 		rb = &vgt->rb[i];
 		ring_phys_2_shadow (pdev, i, &rb->sring);
 
 		sring_2_vring(vgt, i, &rb->sring, &rb->vring);
+
+		/* for stateless engine, no need to save/restore context */
+		if (rb->stateless)
+			continue;
 
 		/* save 32 dwords of the ring */
 		save_ring_buffer (vgt, i);
@@ -1783,13 +1750,10 @@ bool vgt_restore_context (struct vgt_device *vgt)
 
 	vgt_addr_fix_restore();
 
-#if 0
 	for (i=0; i < MAX_ENGINES; i++) {
-#else
-	for (i=0; i < 1; i++) {
-#endif
 		rb = &vgt->rb[i];
 
+		/* stateless engine doesn't have this flag set */
 		if (rb->initialized ) {	/* has saved context */
 			//vring_2_sring(vgt, rb);
 			ring_pre_shadow_2_phys (pdev, i, &rb->sring);
@@ -1853,11 +1817,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 	vgt_rendering_restore_mmio(vgt);
 
 	/* Restore ring registers */
-#if 0
 	for (i=0; i < MAX_ENGINES; i++) {
-#else
-	for (i=0; i < 1; i++) {
-#endif
 		rb = &vgt->rb[i];
 		/* vring->sring */
 		//vring_2_sring(vgt, rb);
@@ -2022,6 +1982,9 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 			i * SZ_CONTEXT_AREA_PER_RING);
 		rb->initialized = false;
 	}
+	vgt->rb[RING_BUFFER_RCS].stateless = 0;
+	vgt->rb[RING_BUFFER_VCS].stateless = 1;
+	vgt->rb[RING_BUFFER_BCS].stateless = 1;
 
 	vgt->state.bar_size[0] = pdev->bar_size[0];	/* MMIOGTT */
 	vgt->state.bar_size[1] = vgt_aperture_sz(vgt);	/* Aperture */

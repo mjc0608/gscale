@@ -77,7 +77,6 @@
 #define dprintk(fmt, a...)
 #endif
 
-
 #define snb_device(dev)	1
 #define ivb_device(dev)	0
 
@@ -167,6 +166,7 @@ typedef struct {
 	/* 64KB alignment requirement for walkaround. */
 	uint64_t	context_save_area;
 	bool	initialized;	/* whether it includes an valid context */
+	bool	stateless;	/* whether the engine requires special context switch */
 } vgt_state_ring_t;
 
 struct vgt_device;
