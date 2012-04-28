@@ -36,7 +36,6 @@
 #include <linux/page-flags.h>
 
 vgt_ops_t *vgt_ops = NULL;
-#define SINGLE_VM_DEBUG
 
 #define MAX_VGT_DEVICES     16
 unsigned long   vgt_device_bitmap = 0;

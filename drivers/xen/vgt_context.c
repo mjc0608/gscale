@@ -619,13 +619,14 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 	unsigned int off2;
 	unsigned long wvalue;
 	unsigned int offset;
+	unsigned long flags;
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
-#ifdef SINGLE_VM_DEBUG
+//#ifdef SINGLE_VM_DEBUG
 	/* for single-VM UP dom0 case, no nest is expected */
 	ASSERT(!spin_is_locked(&pdev->lock));
-#endif
+//#endif
 
 //	ASSERT (offset + bytes <= vgt->state.regNum *
 //				sizeof(vgt->state.vReg[0]));
@@ -635,7 +636,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 	if (bytes > 4)
 		dprintk("vGT: capture >4 bytes read to %x\n", offset);
 
-	spin_lock(&pdev->lock);
+	spin_lock_irqsave(&pdev->lock, flags);
 	mht = lookup_mtable(offset);
 	if ( mht && mht->read )
 		mht->read(vgt, offset, p_data, bytes);
@@ -651,7 +652,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 		memcpy(p_data, &wvalue + (offset & (bytes - 1)), bytes);
 	}
 
-	spin_unlock(&pdev->lock);
+	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
 
@@ -665,12 +666,13 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	struct pgt_device *pdev = vgt->pdev;
 	struct mmio_hash_table *mht;
 	unsigned int offset;
+	unsigned long flags;
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
-#ifdef SINGLE_VM_DEBUG
+//#ifdef SINGLE_VM_DEBUG
 	ASSERT(!spin_is_locked(&pdev->lock));
-#endif
+//#endif
 //	ASSERT (offset + bytes <= vgt->state.regNum *
 //				sizeof(vgt->state.vReg[0]));
 	/* at least FENCE registers are accessed in 8 bytes */
@@ -686,7 +688,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	}
 */
 
-	spin_lock(&pdev->lock);
+	spin_lock_irqsave(&pdev->lock, flags);
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
@@ -707,7 +709,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		show_mode_settings(vgt->pdev);
 	}
 
-	spin_unlock(&pdev->lock);
+	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
 
