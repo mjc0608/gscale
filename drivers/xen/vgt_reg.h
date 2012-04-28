@@ -65,7 +65,7 @@
 #include <linux/wait.h>
 #include <xen/interface/hvm/ioreq.h>
 
-//#define SINGLE_VM_DEBUG
+#define SINGLE_VM_DEBUG
 #define SANDY_BRIDGE
 #define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); BUG();}} while (0);
 
@@ -434,6 +434,13 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define 	MI_RESTORE_EXT_STATE_EN		(1<<2)
 #define  	MI_FORCE_RESTORE		(1<<1)
 #define 	MI_RESTORE_INHIBIT		(1<<0)
+/*
+ * We use _IMM instead of _INDEX, to avoid switching hardware
+ * status page
+ */
+#define MI_STORE_DATA_IMM		((0x20 << 23) | 2)
+#define MI_STORE_DATA_IMM_QWORD		((0x20 << 23) | 3)
+#define		MI_SDI_USE_GTT		(1<< 22)
 
 /* PCI config space */
 #define _REG_LBB	0xf4
@@ -800,6 +807,10 @@ struct pgt_device {
 	wait_queue_head_t wq;
 	uint32_t request;
 
+	uint64_t ctx_check;	/* the number of checked count in vgt thread */
+	uint64_t ctx_switch;	/* the number of context switch count in vgt thread */
+	uint64_t magic;		/* the magic number for checking the completion of context switch */
+
 	vgt_ringbuffer_t *ring_base_vaddr[MAX_ENGINES];	/* base vitrual address of ring buffer mmios */
 	vgt_reg_t initial_mmio_state[VGT_MMIO_REG_NUM];	/* copy from physical at start */
 	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */
@@ -849,6 +860,8 @@ extern struct list_head pgt_devices;
 #define previous_display_owner(d)	(vgt_get_previous_owner(d, VGT_OT_DISPLAY))
 #define previous_pm_owner(d)		(vgt_get_previous_owner(d, VGT_OT_PM))
 #define previous_mgmt_owner(d)		(vgt_get_previous_owner(d, VGT_OT_MGMT))
+#define vgt_ctx_check(d)		(d->ctx_check)
+#define vgt_ctx_switch(d)		(d->ctx_switch)
 
 #define reg_virt(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_VIRT)
 #define reg_pt(pdev, reg)		(!(reg_virt(pdev, reg)))

@@ -910,7 +910,6 @@ int vgt_thread(void *priv)
 {
 	struct vgt_device *next, *vgt = priv, *prev;
 	struct pgt_device *pdev = vgt->pdev;
-	static u64 cnt = 0, switched = 0;
 	int timeout = 1000; /* microsecond */
 	int threshold = 2; /* print every 10s */
 	long wait = 0;
@@ -946,27 +945,26 @@ int vgt_thread(void *priv)
 			continue;
 
 		wait = period;
-		if (!(cnt % threshold))
+		if (!(vgt_ctx_check(pdev) % threshold))
 			printk("vGT: %lldth checks, %lld switches\n", cnt, switched);
-		cnt++;
+		vgt_ctx_check(pdev)++;
 
 #ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
 		if (atomic_read(&display_switched)) {
 
-            printk(KERN_WARNING"xuanhua: vGT: display switched\n");
-            printk(KERN_WARNING"xuanhua: vGT: current display owner: %p; next display owner: %p\n",
-                    current_display_owner(pdev),
-                    next_display_owner);
+			printk(KERN_WARNING"xuanhua: vGT: display switched\n");
+			printk(KERN_WARNING"xuanhua: vGT: current display owner: %p; next display owner: %p\n",
+				current_display_owner(pdev), next_display_owner);
 			spin_lock_irq(&pdev->lock);
-	        vgt_irq_save_context(current_display_owner(pdev),
-                    VGT_OT_DISPLAY);
+			vgt_irq_save_context(current_display_owner(pdev),
+				VGT_OT_DISPLAY);
 			vgt_switch_display_owner(current_display_owner(pdev),
 					next_display_owner);
 			previous_display_owner(pdev) = current_display_owner(pdev);
 			current_display_owner(pdev) = next_display_owner;
 			//next_display_owner = NULL;
-            atomic_dec(&display_switched);
+			atomic_dec(&display_switched);
 			vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
 			/*
 			 * Virtual interrupts pending right after display switch
@@ -986,8 +984,13 @@ int vgt_thread(void *priv)
 			continue;
 		}
 
-		/* TODO: need stop command parser from further adding content */
-
+		/*
+		 * disable interrupt which is sufficient to prevent more
+		 * cmds submitted by the current owner, when dom0 is UP.
+		 * if the mmio handler for HVM is made into a thread,
+		 * simply a spinlock is enough
+		 */
+		spin_lock_irq(&pdev->lock);
 		if (is_rendering_engines_empty(pdev, timeout, &ring_id)) {
 			next = next_vgt(&pdev->rendering_runq_head, vgt);
 #ifndef SINGLE_VM_DEBUG
@@ -1005,11 +1008,9 @@ int vgt_thread(void *priv)
 				 * Later remove the irq disable when integrating
 				 * interrupt part.
 				 */
-				spin_lock_irq(&pdev->lock);
 				prev = current_render_owner(pdev);
-				switched++;
+				vgt_ctx_switch(pdev)++;
 
-				local_irq_disable();
 				if (!vgt_save_context(prev)) {
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
@@ -1018,7 +1019,10 @@ int vgt_thread(void *priv)
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("vGT: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
-						cnt, switched, prev->vgt_id, next->vgt_id);
+						vgt_ctx_check(pdev),
+						vgt_ctx_switch(pdev),
+						prev->vgt_id,
+						next->vgt_id);
 
 					/* TODO: any recovery to do here. Now simply exits the thread */
 					local_irq_enable();
@@ -1035,25 +1039,19 @@ int vgt_thread(void *priv)
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("vGT: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
-						cnt, switched, prev->vgt_id, next->vgt_id);
+						vgt_ctx_check(pdev),
+						vgt_ctx_switch(pdev),
+						prev->vgt_id,
+						next->vgt_id);
 
 					/* TODO: any recovery to do here. Now simply exits the thread */
 					local_irq_enable();
 					break;
 				}
 
-				local_irq_enable();
 				previous_render_owner(pdev) = current_render_owner(pdev);
 				current_render_owner(pdev) = next;
 				vgt_irq_restore_context(next, VGT_OT_RENDER);
-#ifndef SINGLE_VM_DEBUG
-				/* Virtual interrupts pending right after render switch */
-				if (pdev->request & VGT_REQUEST_IRQ) {
-					clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
-					vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
-				}
-#endif
-				spin_unlock_irq(&pdev->lock);
 			}
 #ifndef SINGLE_VM_DEBUG
 			else
@@ -1061,10 +1059,20 @@ int vgt_thread(void *priv)
 #endif
 		} else {
 			printk("vGT: (%lldth switch<%d>)...ring(%d) is busy for %dus\n",
-				switched, ring_id,
+				vgt_ctx_switch(pdev), ring_id,
 				current_render_owner(pdev)->vgt_id, timeout);
 			show_ringbuffer(vgt, ring_id, 16 * sizeof(vgt_reg_t));
 		}
+		spin_unlock_irq(&pdev->lock);
+#ifndef SINGLE_VM_DEBUG
+		/* Virtual interrupts pending right after render switch */
+		if (pdev->request & VGT_REQUEST_IRQ) {
+			spin_lock_irq(&pdev->lock);
+			clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
+			vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
+			spin_unlock_irq(&pdev->lock);
+		}
+#endif
 	}
 	return 0;
 }
@@ -2512,13 +2520,6 @@ int vgt_initialize(struct pci_dev *dev)
 
 	vgt_calculate_max_vms(pdev);
 
-	/* TODO: no need for this mapping since hypercall is used */
-	for (i=0; i < MAX_ENGINES; i++) {
-		pdev->ring_base_vaddr[i] =
-			(vgt_ringbuffer_t *) _vgt_mmio_va(pdev, ring_mmio_base[i]);
-		printk("ring_base_vaddr[%d]: %llx\n", i, (uint64_t)pdev->ring_base_vaddr[i]);
-	}
-
 	if ( vgt_irq_init(pdev) != 0)
 		goto err;
 
@@ -2547,6 +2548,9 @@ int vgt_initialize(struct pci_dev *dev)
 	current_display_owner(pdev) = vgt_dom0;
 	current_pm_owner(pdev) = vgt_dom0;
 	current_mgmt_owner(pdev) = vgt_dom0;
+	pdev->ctx_check = 0;
+	pdev->ctx_switch = 0;
+	pdev->magic = 0;
 
 	init_waitqueue_head(&pdev->wq);
 	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
