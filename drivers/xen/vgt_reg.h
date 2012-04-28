@@ -440,7 +440,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
  */
 #define MI_STORE_DATA_IMM		((0x20 << 23) | 2)
 #define MI_STORE_DATA_IMM_QWORD		((0x20 << 23) | 3)
-#define		MI_SDI_USE_GTT		(1<< 22)
+#define		MI_SDI_USE_GTT		(1<<22)
 
 /* PCI config space */
 #define _REG_LBB	0xf4
@@ -755,7 +755,7 @@ struct vgt_device {
 	uint32_t   *vgtt; /* virtual GTT table for guest to read */
 
 	uint64_t  	rsvd_aperture_base;	/* aperture used for VGT driver */
-	vgt_reg_t		saved_wakeup;	/* disable PM before switching */
+	vgt_reg_t	saved_wakeup;		/* disable PM before switching */
 
 	struct vgt_irq_virt_state *irq_vstate;
 	struct vgt_hvm_info  *hvm_info;
@@ -809,9 +809,8 @@ struct pgt_device {
 
 	uint64_t ctx_check;	/* the number of checked count in vgt thread */
 	uint64_t ctx_switch;	/* the number of context switch count in vgt thread */
-	uint64_t magic;		/* the magic number for checking the completion of context switch */
+	uint32_t magic;		/* the magic number for checking the completion of context switch */
 
-	vgt_ringbuffer_t *ring_base_vaddr[MAX_ENGINES];	/* base vitrual address of ring buffer mmios */
 	vgt_reg_t initial_mmio_state[VGT_MMIO_REG_NUM];	/* copy from physical at start */
 	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */
 	uint32_t bar_size[3];
@@ -829,6 +828,8 @@ struct pgt_device {
 	uint64_t dom0_aperture_base;
 	uint64_t vm_aperture_sz;
 	uint64_t vm_gm_sz;
+	uint64_t	rsvd_aperture_pos;	/* position of the next free reserved page */
+	uint64_t  	scratch_page;		/* page used for data written from GPU */
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
@@ -845,6 +846,16 @@ struct pgt_device {
 };
 
 extern struct list_head pgt_devices;
+/*
+ * MI_STORE_DATA is used widely for synchronization between GPU and driver,
+ * which suppports the destination in either a specific hardware status
+ * page, or any other aperture pages mapped to main memory. We don't want
+ * to switch the hardware status page from the VM, so adopt the latter form
+ * with a scratch page created as the destination with layout defined as
+ * below:
+ */
+#define VGT_DATA_CTX_MAGIC	0x0	/* the magic number used in the context switch */
+#define vgt_data_ctx_magic(d)		(d->scratch_page + VGT_DATA_CTX_MAGIC)
 
 #define vgt_get_owner(d, t)		(d->owner[t])
 #define vgt_get_previous_owner(d, t)	(d->prev_owner[t])

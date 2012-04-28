@@ -720,47 +720,52 @@ bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 	return true;
 }
 
+bool is_context_switch_done(struct pgt_device *pdev, int ring_id)
+{
+	u32 *ptr;
+
+	ptr = (u32 *)(aperture_vbase(pdev) + vgt_data_ctx_magic(pdev));
+	if (*ptr != pdev->magic)
+		return false;
+
+	return true;
+}
+
 /*
  * Wait for the empty of RB.
  * TODO: Empty of RB doesn't mean the commands are retired. May need a STORE_IMM
  * after MI_FLUSH, but that needs our own hardware satus page.
  */
-static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, int timeout)
+static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, bool ctx_switch)
 {
-	bool r = true;
-	cycles_t start, end;
-	static cycles_t max = 600000;
-
-	rdtsc_barrier();
-	start = get_cycles();
-	rdtsc_barrier();
+	static u64 max = 200;
+	u64 count = 0;
 
 	/* wait to be completed */
-	//while (--timeout > 0 ) {
-	while (true ) {
-		if (is_rendering_engine_empty(pdev, ring_id))
+	while (true) {
+		if (ctx_switch && is_context_switch_done(pdev, ring_id))
+			break;
+		if (!ctx_switch && is_rendering_engine_empty(pdev, ring_id))
 			break;
 		sleep_us(1);		/* 1us delay */
+		count++;
+		if (!(count % 1000000))
+			printk("vGT: wait %lld seconds for ring(%d)\n",
+				count / 1000000, ring_id);
 	}
 
-	rdtsc_barrier();
-	end = get_cycles();
-	rdtsc_barrier();
+	if (count > 2000 || count > max)
+		printk("vGT(%s): ring (%d) has timeout (%lldus), max(%lldus)\n",
+			ctx_switch ? "ctx-switch" : "wait-empty",
+			ring_id, count, max);
 
-	if (timeout <= 0)
-		r = false;
+	if (count > max)
+		max = count;
 
-	if (end - start > 1500000 || end - start > max)
-		printk("vGT: ring (%d) has timeout (%llx), max(%llx)\n",
-			ring_id, end - start, max);
-
-	if (end - start > max)
-		max = end - start;
-
-	return r;
+	return true;
 }
 
-bool is_rendering_engines_empty(struct pgt_device *pdev, int timeout, int *ring_id)
+bool is_rendering_engines_empty(struct pgt_device *pdev, int *ring_id)
 {
 	int i;
 
@@ -769,7 +774,7 @@ bool is_rendering_engines_empty(struct pgt_device *pdev, int timeout, int *ring_
 	 * command parser later
 	 */
 	for (i=0; i < MAX_ENGINES; i++)
-		if ( !ring_wait_for_empty(pdev, i, timeout) ) {
+		if ( !ring_wait_for_empty(pdev, i, false) ) {
 			*ring_id = i;
 			return false;
 		}
@@ -910,7 +915,6 @@ int vgt_thread(void *priv)
 {
 	struct vgt_device *next, *vgt = priv, *prev;
 	struct pgt_device *pdev = vgt->pdev;
-	int timeout = 1000; /* microsecond */
 	int threshold = 2; /* print every 10s */
 	long wait = 0;
 	int ring_id;
@@ -946,7 +950,8 @@ int vgt_thread(void *priv)
 
 		wait = period;
 		if (!(vgt_ctx_check(pdev) % threshold))
-			printk("vGT: %lldth checks, %lld switches\n", cnt, switched);
+			printk("vGT: %lldth checks, %lld switches\n",
+				vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
 		vgt_ctx_check(pdev)++;
 
 #ifndef SINGLE_VM_DEBUG
@@ -991,7 +996,7 @@ int vgt_thread(void *priv)
 		 * simply a spinlock is enough
 		 */
 		spin_lock_irq(&pdev->lock);
-		if (is_rendering_engines_empty(pdev, timeout, &ring_id)) {
+		if (is_rendering_engines_empty(pdev, &ring_id)) {
 			next = next_vgt(&pdev->rendering_runq_head, vgt);
 #ifndef SINGLE_VM_DEBUG
 			if ( next != current_render_owner(pdev) )
@@ -1058,9 +1063,9 @@ int vgt_thread(void *priv)
 				dprintk("....no other instance\n");
 #endif
 		} else {
-			printk("vGT: (%lldth switch<%d>)...ring(%d) is busy for %dus\n",
+			printk("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
 				vgt_ctx_switch(pdev), ring_id,
-				current_render_owner(pdev)->vgt_id, timeout);
+				current_render_owner(pdev)->vgt_id);
 			show_ringbuffer(vgt, ring_id, 16 * sizeof(vgt_reg_t));
 		}
 		spin_unlock_irq(&pdev->lock);
@@ -1330,24 +1335,30 @@ static void restore_power_management(struct vgt_device *vgt)
  * IVB furthers requires MI_ARB_ON_OFF to disable preemption
  * (from intel-gfx community)
  */
-static rb_dword	cmds_save_context[8] =
-	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
+static rb_dword	cmds_save_context[] = {
+	MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
 	MI_SET_CONTEXT, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT,
 	MI_NOOP,
 	MI_SUSPEND_FLUSH,
 	MI_NOOP,
 	MI_FLUSH,
-	MI_NOOP};
+	MI_NOOP,
+	MI_STORE_DATA_IMM | MI_SDI_USE_GTT, MI_NOOP, MI_NOOP, MI_NOOP,
+	MI_NOOP,
+};
 
 /* TODO: MI_FORCE_RESTORE is only required for initialization */
-static rb_dword	cmds_restore_context[8] =
-	{MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
+static rb_dword	cmds_restore_context[] = {
+	MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
 	MI_SET_CONTEXT, MI_MM_SPACE_GTT | MI_FORCE_RESTORE,
 	MI_NOOP,
 	MI_SUSPEND_FLUSH,
 	MI_NOOP,
 	MI_FLUSH,
-	MI_NOOP};
+	MI_NOOP,
+	MI_STORE_DATA_IMM | MI_SDI_USE_GTT, MI_NOOP, MI_NOOP, MI_NOOP,
+	MI_NOOP,
+};
 
 #if 0
 /*
@@ -1411,16 +1422,21 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 		VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
 		VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 
+	dprintk("old magic number: %d\n",
+		*(u32 *)(aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
 	ring_load_commands (rb, aperture_vbase(pdev), (char*)cmds, bytes);
 	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
 	//mdelay(1);
 
-	if (!ring_wait_for_empty(pdev, ring_id, 100)) {
+	if (!ring_wait_for_empty(pdev, ring_id, true)) {
 		printk("vGT: context switch commands unfinished\n");
 		show_ringbuffer(vgt, ring_id, 16 * sizeof(vgt_reg_t));
 		return false;
 	}
+	dprintk("new magic number: %d\n",
+		*(u32 *)(aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
 
+	/* still confirm the CCID for safety. May remove in the future */
 	ccid = VGT_MMIO_READ (pdev, _REG_CCID);
 	if ((ccid & GTT_PAGE_MASK) != (cmds[2] & GTT_PAGE_MASK)) {
 		printk("vGT: CCID isn't changed [%x, %x]\n", ccid, cmds[2]);
@@ -1734,6 +1750,9 @@ bool vgt_save_context (struct vgt_device *vgt)
 				MI_SAVE_EXT_STATE_EN |
 				MI_RESTORE_EXT_STATE_EN |
 				rb->context_save_area;
+			cmds_save_context[10] = vgt_data_ctx_magic(pdev);
+			pdev->magic++;
+			cmds_save_context[11] = pdev->magic;
 			break;
 		default:
 			printk("vGT: unsupported engine (%d) switch \n", i);
@@ -1778,6 +1797,28 @@ bool vgt_restore_context (struct vgt_device *vgt)
 			/* save 32 dwords of the ring */
 			save_ring_buffer (vgt, i);
 
+#ifdef SINGLE_VM_DEBUG
+			/*
+			 * for single VM debug, we need a dummy context to make sure
+			 * context save actually conducted
+			 */
+			dprintk("dummy switch\n");
+			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
+				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | 0xE000000;
+			pdev->magic++;
+			cmds_save_context[11] = pdev->magic;
+			rc = (*submit_context_command[i]) (vgt, i, cmds_save_context,
+				sizeof(cmds_save_context));
+
+			/* reset the head/tail */
+			ring_pre_shadow_2_phys (pdev, i, &rb->sring);
+
+			if (!rc)
+				goto err;
+
+			dprintk("real switch\n");
+#endif
+
 			/*
 			 * Save current context to prev's vGT area, and restore
 			 * context from next's vGT area.
@@ -1790,30 +1831,14 @@ bool vgt_restore_context (struct vgt_device *vgt)
 						MI_SAVE_EXT_STATE_EN |
 						MI_RESTORE_EXT_STATE_EN |
 						MI_FORCE_RESTORE;
+					cmds_restore_context[10] = vgt_data_ctx_magic(pdev);
+					pdev->magic++;
+					cmds_restore_context[11] = pdev->magic;
 					break;
 				default:
 					printk("vGT: unsupported engine (%d) switch \n", i);
 					break;
 			}
-#ifdef SINGLE_VM_DEBUG
-			/*
-			 * for single VM debug, we need a dummy context to make sure
-			 * context save actually conducted
-			 */
-			dprintk("dummy switch\n");
-			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
-				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | 0xE000000;
-			rc = (*submit_context_command[i]) (vgt, i, cmds_save_context,
-				sizeof(cmds_save_context));
-
-			/* reset the head/tail */
-			ring_pre_shadow_2_phys (pdev, i, &rb->sring);
-
-			if (!rc)
-				goto err;
-
-			dprintk("real switch\n");
-#endif
 			rc = (*submit_context_command[i]) (vgt, i, cmds_restore_context,
 				sizeof(cmds_restore_context));
 
@@ -1987,8 +2012,8 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		vgt_guest_gm_base(vgt),
 		vgt_guest_gm_base(vgt) + vgt_gm_sz(vgt) - 1);
 
-	vgt->rsvd_aperture_base = rsvd_aperture_base(pdev) +
-		vgt->vgt_id * VGT_APERTURE_PER_INSTANCE_SZ;
+	vgt->rsvd_aperture_base = rsvd_aperture_base(pdev) + pdev->rsvd_aperture_pos;
+	pdev->rsvd_aperture_pos += VGT_APERTURE_PER_INSTANCE_SZ;
 	printk("rsvd_aperture_base: %llx\n", vgt->rsvd_aperture_base);
 
 	for (i=0; i< MAX_ENGINES; i++) {
@@ -2493,6 +2518,10 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 	printk("....reserved aperture: [%llx, %llx]\n",
 			rsvd_aperture_base(pdev),
 			rsvd_aperture_end(pdev) );
+
+	/* serve as a simple linear allocator */
+	pdev->rsvd_aperture_pos = 0;
+
 }
 
 /*
@@ -2503,7 +2532,6 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 //int vgt_add_state_sysfs(struct vgt_device *vgt);
 int vgt_initialize(struct pci_dev *dev)
 {
-	int i;
 	struct pgt_device *pdev = &default_device;
 	struct task_struct *p_thread;
 
@@ -2522,6 +2550,13 @@ int vgt_initialize(struct pci_dev *dev)
 
 	if ( vgt_irq_init(pdev) != 0)
 		goto err;
+
+	/* setup the scratch page for the context switch */
+	pdev->scratch_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
+		pdev->rsvd_aperture_pos);
+	printk("scratch page is allocated at gm(%llx)\n", pdev->scratch_page);
+	/* reserve the 1st trunk for vGT's general usage */
+	pdev->rsvd_aperture_pos += VGT_APERTURE_PER_INSTANCE_SZ;
 
 	/* create domain 0 instance */
 	vgt_dom0 = create_vgt_instance(pdev, 0);   /* TODO: */
