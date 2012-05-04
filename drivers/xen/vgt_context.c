@@ -875,6 +875,14 @@ static int __init mode_setup(char *str)
 }
 __setup("vgt_fastmode", mode_setup);
 
+static int vgt_ctx_switch = 0;
+static int __init ctx_switch_setup(char *str)
+{
+	vgt_ctx_switch = 1;
+	return 1;
+}
+__setup("vgt_ctx_switch", ctx_switch_setup);
+
 static int period = 5*HZ;	/* default slow mode */
 /*
  * The thread to perform the VGT ownership switch.
@@ -2556,14 +2564,14 @@ int vgt_initialize(struct pci_dev *dev)
 	pdev->magic = 0;
 
 	init_waitqueue_head(&pdev->wq);
-#if 0
-	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
-	if (!p_thread) {
-		xen_deregister_vgt_device(vgt_dom0);
-		goto err;
+	if (vgt_ctx_switch) {
+		p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
+		if (!p_thread) {
+			xen_deregister_vgt_device(vgt_dom0);
+			goto err;
+		}
+		pdev->p_thread = p_thread;
 	}
-	pdev->p_thread = p_thread;
-#endif
 	show_debug(pdev);
 
 	list_add(&pdev->list, &pgt_devices);
