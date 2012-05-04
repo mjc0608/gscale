@@ -505,22 +505,21 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 /*
  * Given a ring buffer, print out the current data [-bytes, bytes]
  */
-static void show_ringbuffer(struct vgt_device *vgt, int ring_id, int bytes)
+static void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 {
-	struct pgt_device *pdev = vgt->pdev;
-	vgt_state_ring_t *rb = &vgt->rb[ring_id];
-	vgt_reg_t p_tail, p_head;
+	vgt_reg_t p_tail, p_head, p_start;
 	char *p_contents;
 	int i;
 
 	p_tail = VGT_MMIO_READ(pdev, RB_TAIL(ring_id));
 	p_head = VGT_MMIO_READ(pdev, RB_HEAD(ring_id));
-	printk("ring buffer(%d): p[%x, %x], s[%x, %x]\n", ring_id,
-		p_head, p_tail,
-		rb->sring.head, rb->sring.tail);
+	p_start = VGT_MMIO_READ(pdev, RB_START(ring_id));
+	printk("ring buffer(%d): head (%x) tail(%x), start(%x)\n", ring_id,
+		p_head, p_tail, p_start);
 
 	p_head &= RB_HEAD_OFF_MASK;
-	p_contents = aperture_vbase(pdev) + rb->sring.start + p_head;
+	p_contents = aperture_vbase(pdev) + p_start + p_head;
+	printk("p_contents(%lx)\n", (unsigned long)p_contents);
 	/* FIXME: consider wrap */
 	for (i = -(bytes/4); i < bytes/4; i++) {
 		if (!(i % 8))
@@ -749,9 +748,12 @@ static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, bool ctx_s
 			break;
 		sleep_us(1);		/* 1us delay */
 		count++;
-		if (!(count % 1000000))
-			printk("vGT: wait %lld seconds for ring(%d)\n",
+		if (!(count % 10000000)) {
+			printk("vGT(%s): wait %lld seconds for ring(%d)\n",
+				ctx_switch ? "ctx-switch" : "wait-empty",
 				count / 1000000, ring_id);
+			show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
+		}
 	}
 
 	if (count > 2000 || count > max)
@@ -1066,7 +1068,7 @@ int vgt_thread(void *priv)
 			printk("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
 				vgt_ctx_switch(pdev), ring_id,
 				current_render_owner(pdev)->vgt_id);
-			show_ringbuffer(vgt, ring_id, 16 * sizeof(vgt_reg_t));
+			show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
 		}
 		spin_unlock_irq(&pdev->lock);
 #ifndef SINGLE_VM_DEBUG
@@ -1401,7 +1403,7 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 
 	if (!ring_wait_for_empty(pdev, ring_id, true)) {
 		printk("vGT: context switch commands unfinished\n");
-		show_ringbuffer(vgt, ring_id, 16 * sizeof(vgt_reg_t));
+		show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
 		return false;
 	}
 	dprintk("new magic number: %d\n",
@@ -2007,10 +2009,13 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	pdev->device[vgt->vgt_id] = vgt;
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
 
-    /* TODO: do clean up if vgt_hvm_init() failed */
-    if (vgt->vm_id != 0)
-        vgt_hvm_info_init(vgt);
-    /* TODO: per register special handling. */
+	/* TODO: do clean up if vgt_hvm_init() failed */
+	if (vgt->vm_id != 0)
+		vgt_hvm_info_init(vgt);
+
+	if (vgt->vm_id && vgt_ops->boot_time)
+		vgt_ops->boot_time = 0;
+
 	return vgt;
 }
 
@@ -2551,12 +2556,14 @@ int vgt_initialize(struct pci_dev *dev)
 	pdev->magic = 0;
 
 	init_waitqueue_head(&pdev->wq);
+#if 0
 	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
 	if (!p_thread) {
 		xen_deregister_vgt_device(vgt_dom0);
 		goto err;
 	}
 	pdev->p_thread = p_thread;
+#endif
 	show_debug(pdev);
 
 	list_add(&pdev->list, &pgt_devices);
