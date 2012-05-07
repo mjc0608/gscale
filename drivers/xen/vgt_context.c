@@ -2009,6 +2009,12 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
 	*(uint32_t *)(cfg_space + VGT_REG_CFG_SPACE_BAR1) =
 		vgt_guest_aperture_base(vgt) | 0x4;	/* 64-bit MMIO bar */
+	if (vgt->vm_id != 0){
+		/* Mark vgt device as non primary VGA */
+		cfg_space[VGT_REG_CFG_CLASS_CODE] = VGT_PCI_CLASS_VGA;
+		cfg_space[VGT_REG_CFG_SUB_CLASS_CODE] = VGT_PCI_CLASS_VGA_OTHER;
+		cfg_space[VGT_REG_CFG_CLASS_PROG_IF] = VGT_PCI_CLASS_VGA_OTHER;
+	}
 
 	memcpy (vgt->state.vReg, pdev->initial_mmio_state, VGT_MMIO_SPACE_SZ);
 	vgt->pdev = pdev;

@@ -1394,6 +1394,12 @@ static inline bool vgt_register_mmio_read_virt(struct pgt_device *pdev,
 /*
  * Next MACROs for GT configuration space.
  */
+#define VGT_PCI_CLASS_VGA				0x03
+#define VGT_PCI_CLASS_VGA_OTHER			0x80
+
+#define VGT_REG_CFG_CLASS_PROG_IF		0x09
+#define VGT_REG_CFG_SUB_CLASS_CODE		0x0A
+#define VGT_REG_CFG_CLASS_CODE			0x0B
 #define VGT_REG_CFG_SPACE_BAR0			0x10
 #define VGT_REG_CFG_SPACE_BAR1			0x18
 #define VGT_REG_CFG_SPACE_BAR2			0x20
