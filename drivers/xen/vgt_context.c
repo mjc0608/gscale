@@ -1896,6 +1896,7 @@ dprintk("create_state_instance\n");
 		state->sReg = state->vReg = NULL;
 		return false;
 	}
+	state->bar1_mapped = 0;
 	return true;
 }
 

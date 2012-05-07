@@ -206,36 +206,41 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
  */
 static int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 {
-	char *cfg_space = &vgt->state.cfg_space[0], *pcfg_space;
-        uint64_t bar_s, bar_e;
-        struct xen_hvm_vgt_map_mmio memmap;
-        int r;
+	char *cfg_space = &vgt->state.cfg_space[0];
+	uint64_t bar_s;
+	struct xen_hvm_vgt_map_mmio memmap;
+	int r;
 
-        cfg_space += VGT_REG_CFG_SPACE_BAR1;	/* APERTUR */
-		if (VGT_GET_BITS(*cfg_space, 2, 1) == 2){
-			/* 64 bits MMIO bar */
-			bar_s = * (uint64_t *) cfg_space;
-		} else {
-			/* 32 bits MMIO bar */
-			bar_s = * (uint32_t*) cfg_space;
-		}
+	/* guarantee the sequence of map -> unmap -> map -> unmap */
+	if (map != vgt->state.bar1_mapped)
+		return 0;
 
-        bar_e = bar_s + vgt->state.bar_size[0] - 1;
+	cfg_space += VGT_REG_CFG_SPACE_BAR1;	/* APERTUR */
+	if (VGT_GET_BITS(*cfg_space, 2, 1) == 2){
+		/* 64 bits MMIO bar */
+		bar_s = * (uint64_t *) cfg_space;
+	} else {
+		/* 32 bits MMIO bar */
+		bar_s = * (uint32_t*) cfg_space;
+	}
 
-        memmap.first_gfn = bar_s >> PAGE_SHIFT;
-        pcfg_space = &vgt->pdev->initial_cfg_space[0];
-        pcfg_space += VGT_REG_CFG_SPACE_BAR1;
+	memmap.first_gfn = bar_s >> PAGE_SHIFT;
+	memmap.first_mfn = vgt_aperture_base(vgt) >> PAGE_SHIFT;
+	memmap.nr_mfns = vgt->state.bar_size[1] >> PAGE_SHIFT ;
+	memmap.map = map;
+	memmap.domid = vgt->vm_id;
 
-        memmap.first_mfn = vgt_aperture_base(vgt) >> PAGE_SHIFT;
-        memmap.nr_mfns = vgt->state.bar_size[0] >> PAGE_SHIFT ;
-
-		memmap.map = map;
+	printk("%s: domid=%d gfn_s=0x%lx mfn_s=0x%lx nr_mfns=0x%x\n", map==0? "remove_map":"add_map",
+			vgt->vm_id, memmap.first_gfn, memmap.first_mfn, memmap.nr_mfns);
 
 	r = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
 
-	if (r < 0)
-	    printk(KERN_ERR "vgt_hvm_map_apperture %d!\n", r);
-        return r;
+	if (r != 0)
+		printk(KERN_ERR "vgt_hvm_map_apperture fail with %d!\n", r);
+	else
+		vgt->state.bar1_mapped = map;
+
+	return r;
 }
 
 /*
@@ -318,6 +323,8 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 				 * address bits.
 				 */
 				new = new & ~(size-1);
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
+					vgt_hvm_map_apperture(vgt, 0);
 				*cfg_reg = (new & ~0xf) | old;
 			} else {
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)

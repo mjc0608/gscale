@@ -132,6 +132,7 @@ typedef struct {
     vgt_reg_t	*vReg;		/* guest view of the register state */
     vgt_reg_t	*sReg;		/* Shadow (used by hardware) state of the register */
     uint8_t	cfg_space[VGT_CFG_SPACE_SZ];
+	bool	bar1_mapped;
     uint64_t	gt_mmio_base;	/* bar0/GTTMMIO  */
     uint64_t	aperture_base;	/* bar1: guest aperture base */
 //    uint64_t	gt_gmadr_base;	/* bar1/GMADR */

@@ -56,7 +56,8 @@ typedef struct xen_hvm_vgt_set_trap_io xen_hvm_vgt_set_trap_io_t;
 
 #define HVMOP_vgt_map_mmio           18
 struct xen_hvm_vgt_map_mmio {
-    uint32_t  map;		/* 1: Map, 0: Unmap */
+	uint16_t  domid;
+    uint16_t  map;		/* 1: Map, 0: Unmap */
     uint32_t  nr_mfns;
     uint64_t  first_gfn;
     uint64_t  first_mfn;
