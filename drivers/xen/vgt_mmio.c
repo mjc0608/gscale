@@ -212,7 +212,7 @@ static int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 	int r;
 
 	/* guarantee the sequence of map -> unmap -> map -> unmap */
-	if (map != vgt->state.bar1_mapped)
+	if (map == vgt->state.bar1_mapped)
 		return 0;
 
 	cfg_space += VGT_REG_CFG_SPACE_BAR1;	/* APERTUR */
