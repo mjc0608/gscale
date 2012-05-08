@@ -696,6 +696,25 @@ struct vgt_intel_device_info {
 	u8 has_blt_ring:1;
 };
 
+/*
+ * Next MACROs for GT configuration space.
+ */
+#define VGT_PCI_CLASS_VGA				0x03
+#define VGT_PCI_CLASS_VGA_OTHER			0x80
+
+#define VGT_REG_CFG_CLASS_PROG_IF		0x09
+#define VGT_REG_CFG_SUB_CLASS_CODE		0x0A
+#define VGT_REG_CFG_CLASS_CODE			0x0B
+#define VGT_REG_CFG_SPACE_BAR0			0x10
+#define VGT_REG_CFG_SPACE_BAR1			0x18
+#define VGT_REG_CFG_SPACE_BAR2			0x20
+#define VGT_REG_CFG_SPACE_MSAC			0x62
+
+//#define MSAC_APERTURE_SIZE_MASK		0x3
+#define MSAC_APERTURE_SIZE_128M			(0 << 1)
+#define MSAC_APERTURE_SIZE_256M			(1 << 1)
+#define MSAC_APERTURE_SIZE_512M			(3 << 1)
+
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
 extern int vgt_initialize(struct pci_dev *dev);
@@ -761,7 +780,9 @@ struct vgt_device {
 	struct vgt_irq_virt_state *irq_vstate;
 	struct vgt_hvm_info  *hvm_info;
         uint32_t        last_cf8;
-    struct kobject kobj;
+	struct kobject kobj;
+
+	bool		ballooning;		/* VM supports ballooning */
 };
 
 enum vgt_owner_type {
@@ -1041,16 +1062,29 @@ static inline uint64_t get_vm_hidden_gm_end(struct pgt_device *pdev, int i)
 #define vgt_hidden_gm_end(vgt)		\
 	(vgt_hidden_gm_base(vgt) + vgt_hidden_gm_sz(vgt) - 1)
 
-/* definitions in guest's aperture/gm space */
-#define vgt_guest_gm_base(vgt)		(0LL)
-#define vgt_guest_aperture_base(vgt)	(vgt->state.aperture_base)
+/*
+ * the view of the aperture/gm space from the VM's p.o.v
+ *
+ * when the VM supports ballooning, this view is the same as the
+ * view of vGT driver.
+ *
+ * when the VM does not support ballooning, this view starts from
+ * GM space ZERO
+ */
+#define vgt_guest_aperture_base(vgt)	\
+	(vgt->ballooning ?		\
+		(vgt->state.cfg_space[VGT_REG_CFG_SPACE_BAR1] & ~0xf) + vgt_aperture_offset(vgt) :	\
+		(vgt->state.cfg_space[VGT_REG_CFG_SPACE_BAR1] & ~0xf))
 #define vgt_guest_aperture_end(vgt)	\
 	(vgt_guest_aperture_base(vgt) + vgt_aperture_sz(vgt) - 1)
-#define vgt_guest_visible_gm_base(vgt)	(vgt_guest_gm_base(vgt))
+#define vgt_guest_visible_gm_base(vgt)	\
+	(vgt->ballooning ? vgt_visible_gm_base(vgt) : gm_base(vgt->pdev))
 #define vgt_guest_visible_gm_end(vgt)	\
 	(vgt_guest_visible_gm_base(vgt) + vgt_aperture_sz(vgt) - 1)
 #define vgt_guest_hidden_gm_base(vgt)	\
-	(vgt_guest_gm_base(vgt) + vgt_aperture_sz(vgt))
+	(vgt->ballooning ? 		\
+		vgt_hidden_gm_base(vgt) :	\
+		vgt_guest_visible_gm_end(vgt) + 1)
 #define vgt_guest_hidden_gm_end(vgt)	\
 	(vgt_guest_hidden_gm_base(vgt) + vgt_hidden_gm_sz(vgt) - 1)
 
@@ -1389,26 +1423,6 @@ static inline bool vgt_register_mmio_read_virt(struct pgt_device *pdev,
 	reg_set_virt(pdev, reg);
 	return vgt_register_mmio_read(reg, read);
 }
-
-
-/*
- * Next MACROs for GT configuration space.
- */
-#define VGT_PCI_CLASS_VGA				0x03
-#define VGT_PCI_CLASS_VGA_OTHER			0x80
-
-#define VGT_REG_CFG_CLASS_PROG_IF		0x09
-#define VGT_REG_CFG_SUB_CLASS_CODE		0x0A
-#define VGT_REG_CFG_CLASS_CODE			0x0B
-#define VGT_REG_CFG_SPACE_BAR0			0x10
-#define VGT_REG_CFG_SPACE_BAR1			0x18
-#define VGT_REG_CFG_SPACE_BAR2			0x20
-#define VGT_REG_CFG_SPACE_MSAC			0x62
-
-//#define MSAC_APERTURE_SIZE_MASK		0x3
-#define MSAC_APERTURE_SIZE_128M			(0 << 1)
-#define MSAC_APERTURE_SIZE_256M			(1 << 1)
-#define MSAC_APERTURE_SIZE_512M			(3 << 1)
 
 /* interrupt related definitions */
 #define _REG_DEISR	0x44000

@@ -1974,21 +1974,6 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		return NULL;
 	}
 
-	printk("Aperture: [%llx, %llx] guest [%llx, %llx] va(%llx)\n",
-		vgt_aperture_base(vgt),
-		vgt_aperture_end(vgt),
-		vgt_guest_aperture_base(vgt),
-		vgt_guest_aperture_end(vgt),
-		(uint64_t)vgt->aperture_base_va);
-
-	printk("GM: [%llx, %llx], [%llx, %llx], guest[%llx, %llx]\n",
-		vgt_visible_gm_base(vgt),
-		vgt_visible_gm_end(vgt),
-		vgt_hidden_gm_base(vgt),
-		vgt_hidden_gm_end(vgt),
-		vgt_guest_gm_base(vgt),
-		vgt_guest_gm_base(vgt) + vgt_gm_sz(vgt) - 1);
-
 	vgt->rsvd_aperture_base = rsvd_aperture_base(pdev) + pdev->rsvd_aperture_pos;
 	pdev->rsvd_aperture_pos += VGT_APERTURE_PER_INSTANCE_SZ;
 	printk("rsvd_aperture_base: %llx\n", vgt->rsvd_aperture_base);
@@ -2012,7 +1997,26 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	memcpy (cfg_space, pdev->initial_cfg_space, VGT_CFG_SPACE_SZ);
 	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
 	*(uint32_t *)(cfg_space + VGT_REG_CFG_SPACE_BAR1) =
-		vgt_guest_aperture_base(vgt) | 0x4;	/* 64-bit MMIO bar */
+		aperture_base(pdev) | 0x4;	/* 64-bit MMIO bar */
+
+	printk("Aperture: [%llx, %llx] guest [%llx, %llx] va(%llx)\n",
+		vgt_aperture_base(vgt),
+		vgt_aperture_end(vgt),
+		vgt_guest_aperture_base(vgt),
+		vgt_guest_aperture_end(vgt),
+		(uint64_t)vgt->aperture_base_va);
+
+	printk("GM: [%llx, %llx], [%llx, %llx], guest[%llx, %llx], [%llx, %llx]\n",
+		vgt_visible_gm_base(vgt),
+		vgt_visible_gm_end(vgt),
+		vgt_hidden_gm_base(vgt),
+		vgt_hidden_gm_end(vgt),
+		vgt_guest_visible_gm_base(vgt),
+		vgt_guest_visible_gm_end(vgt),
+		vgt_guest_hidden_gm_base(vgt),
+		vgt_guest_hidden_gm_end(vgt));
+
+
 	if (vgt->vm_id != 0){
 		/* Mark vgt device as non primary VGA */
 		cfg_space[VGT_REG_CFG_CLASS_CODE] = VGT_PCI_CLASS_VGA;
