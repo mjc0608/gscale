@@ -124,7 +124,7 @@ static ssize_t vgt_display_owner_show(struct kobject *kobj, struct kobj_attribut
 			char *buf)
 {
     /* TODO: show the current owner ???  */
-	return sprintf(buf, "To be done...\n");
+	return sprintf(buf,"%d\n", current_display_owner(vgt_kobj_priv)->vm_id);
 }
 
 struct vgt_device *vmid_2_vgt_device(int vmid);
