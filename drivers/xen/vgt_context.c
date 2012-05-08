@@ -961,6 +961,10 @@ int vgt_thread(void *priv)
 			continue;
 
 		wait = period;
+
+		if (!vgt_ctx_switch)
+			continue;
+
 		if (!(vgt_ctx_check(pdev) % threshold))
 			printk("vGT: %lldth checks, %lld switches\n",
 				vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
@@ -2573,14 +2577,12 @@ int vgt_initialize(struct pci_dev *dev)
 	pdev->magic = 0;
 
 	init_waitqueue_head(&pdev->wq);
-	if (vgt_ctx_switch) {
-		p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
-		if (!p_thread) {
-			xen_deregister_vgt_device(vgt_dom0);
-			goto err;
-		}
-		pdev->p_thread = p_thread;
+	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
+	if (!p_thread) {
+		xen_deregister_vgt_device(vgt_dom0);
+		goto err;
 	}
+	pdev->p_thread = p_thread;
 	show_debug(pdev);
 
 	list_add(&pdev->list, &pgt_devices);
