@@ -1206,10 +1206,13 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
-	if (off - VGT_MMIO_SPACE_SZ >= vgt->vgtt_sz)
+	off -= VGT_MMIO_SPACE_SZ;
+	if (off >= vgt->vgtt_sz) {
+		printk("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
 		return false;
+	}
 
-	g_gtt_index = GTT_OFFSET_TO_INDEX( off - VGT_MMIO_SPACE_SZ );
+	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
 	*(uint32_t*)p_data = vgt->vgtt[g_gtt_index];
 	return true;
 }
@@ -1221,19 +1224,40 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 {
 	uint32_t g_gtt_val, h_gtt_val, g_gtt_index, h_gtt_index;
 	int rc;
+	uint64_t g_addr;
 
 	ASSERT(bytes == 4);
 
-	if (off - VGT_MMIO_SPACE_SZ >= vgt->vgtt_sz)
-		return false;
-
-	g_gtt_val = *(uint32_t*)p_data;
-	rc = gtt_p2m(vgt, g_gtt_val, &h_gtt_val);
-	if (rc < 0){
+	off -= VGT_MMIO_SPACE_SZ;
+	if (off >= vgt->vgtt_sz) {
+		printk("vGT(%d): captured out of range GTT write on off %x\n", vgt->vgt_id, off);
 		return false;
 	}
 
-	g_gtt_index = GTT_OFFSET_TO_INDEX( off - VGT_MMIO_SPACE_SZ );
+	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
+	g_gtt_val = *(uint32_t*)p_data;
+	vgt->vgtt[g_gtt_index] = g_gtt_val;
+
+	g_addr = g_gtt_index << GTT_PAGE_SHIFT;
+	if (!g_gm_is_visible(vgt, g_addr) && !g_gm_is_hidden(vgt, g_addr)) {
+		static int count = 0;
+
+		/* print info every 32MB */
+		if (!(count % 8192))
+			printk("vGT(%d): capture ballooned write for %d times (%x)\n",
+				vgt->vgt_id, count, off);
+
+		count++;
+		/* in this case still return true since the impact is on vgtt only */
+		return true;
+	}
+
+	rc = gtt_p2m(vgt, g_gtt_val, &h_gtt_val);
+	if (rc < 0){
+		printk("vGT(%d): failed to translate g_gtt_val(%x)\n", vgt->vgt_id, g_gtt_val);
+		return false;
+	}
+
 	h_gtt_index = g2h_gtt_index(vgt, g_gtt_index);
 	vgt_write_gtt( vgt->pdev, h_gtt_index, h_gtt_val );
 #ifdef DOM0_DUAL_MAP
@@ -1241,7 +1265,6 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 		vgt_write_gtt( vgt->pdev, h_gtt_index - GTT_INDEX_MB(128), h_gtt_val );
 	}
 #endif
-	vgt->vgtt[g_gtt_index] = g_gtt_val;
 
 	return true;
 }

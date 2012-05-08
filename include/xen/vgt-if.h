@@ -58,7 +58,8 @@
 
 
 /* Reserve 32KB for vGT shared infor: 0x78000-0x7FFFF */
-#define  VGT_PVINFO_PAGE	0x78000
+#define VGT_PVINFO_PAGE	0x78000
+#define VGT_PVINFO_SIZE	0x8000
 
 /*
  * The following structure pages are defined in GEN MMIO space for virtualization.
@@ -99,3 +100,5 @@ struct vgt_if {
     } avail_rs;			/* available/assigned resource */
     uint32_t  rsv3[0x400-0x60];	/* pad to one page */
 };
+
+#define vgt_info_off(x)        (VGT_PVINFO_PAGE + (long)&((struct vgt_if*) NULL)->x)

@@ -191,8 +191,7 @@ static struct drm_mm_node *i915_balloon_space (
 				size, 0, start, end, 0);
 }
 
-#define vgt_info_off(x)	(VGT_PVINFO_PAGE + (long)&((struct vgt_if*) NULL)->x)
-#define VGT_IF_VERSION	0x100		/* 1.0 */
+#define VGT_IF_VERSION	0x10000		/* 1.0 */
 
 static void i915_deballoon(struct drm_i915_private *dev_priv)
 {

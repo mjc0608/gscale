@@ -507,6 +507,7 @@ static unsigned int i965_gtt_total_entries(void)
 	return size/4;
 }
 
+static int ballooning = 0;
 extern void vgt_update_gtt_info(uint64_t gm_size);
 static unsigned int intel_gtt_total_entries(void)
 {
@@ -551,7 +552,8 @@ static unsigned int intel_gtt_mappable_entries(void)
 		/* 9xx supports large sizes, just look at the length */
 		aperture_size = pci_resource_len(intel_private.pcidev, 2);
 		/* FIXME: now hardcode 64MB for SNB laptop */
-		aperture_size = MB(64);
+		if (!ballooning)
+			aperture_size = MB(64);
 		printk("vGT(i915): checked %x aperture size\n", aperture_size);
 	}
 

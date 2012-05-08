@@ -1073,8 +1073,8 @@ static inline uint64_t get_vm_hidden_gm_end(struct pgt_device *pdev, int i)
  */
 #define vgt_guest_aperture_base(vgt)	\
 	(vgt->ballooning ?		\
-		(vgt->state.cfg_space[VGT_REG_CFG_SPACE_BAR1] & ~0xf) + vgt_aperture_offset(vgt) :	\
-		(vgt->state.cfg_space[VGT_REG_CFG_SPACE_BAR1] & ~0xf))
+		(*((u32*)&vgt->state.cfg_space[VGT_REG_CFG_SPACE_BAR1]) & ~0xf) + vgt_aperture_offset(vgt) :	\
+		(*((u32*)&vgt->state.cfg_space[VGT_REG_CFG_SPACE_BAR1]) & ~0xf))
 #define vgt_guest_aperture_end(vgt)	\
 	(vgt_guest_aperture_base(vgt) + vgt_aperture_sz(vgt) - 1)
 #define vgt_guest_visible_gm_base(vgt)	\

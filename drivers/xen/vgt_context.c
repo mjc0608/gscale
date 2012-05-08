@@ -72,6 +72,7 @@
 #include <xen/vgt.h>
 #include <xen/vgt-parser.h>
 #include "vgt_reg.h"
+#include <xen/vgt-if.h>
 
 /* uncomment this macro so that dom0's aperture/GM starts from non-zero */
 //#define DOM0_NON_IDENTICAL
@@ -1962,7 +1963,10 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	vgt->aperture_base_va = aperture_vbase(pdev) +
 		vgt->aperture_offset;
 
-	vgt->vgtt_sz = (vgt->gm_sz >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
+	if (vgt->ballooning)
+		vgt->vgtt_sz = (gm_sz(pdev) >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
+	else
+		vgt->vgtt_sz = (vgt->gm_sz >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
 	printk("Virtual GTT size: 0x%lx\n", (long)vgt->vgtt_sz);
 	vgt->vgtt = kzalloc(vgt->vgtt_sz, GFP_KERNEL);
 	if (!vgt->vgtt) {
@@ -1989,7 +1993,8 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	vgt->rb[RING_BUFFER_BCS].stateless = 1;
 
 	vgt->state.bar_size[0] = pdev->bar_size[0];	/* MMIOGTT */
-	vgt->state.bar_size[1] = vgt_aperture_sz(vgt);	/* Aperture */
+	vgt->state.bar_size[1] =			/* Aperture */
+		vgt->ballooning ? pdev->bar_size[1] : vgt_aperture_sz(vgt);
 	vgt->state.bar_size[2] = pdev->bar_size[2];	/* PIO */
 
 	/* Set initial configuration space and MMIO space registers. */
@@ -2030,6 +2035,19 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 
 	if (vgt_vstate_irq_init(vgt) != 0)
 		return NULL;
+
+	/* setup the ballooning information */
+	if (vgt->ballooning) {
+		__vreg64(vgt, vgt_info_off(magic)) = VGT_MAGIC;
+		__vreg(vgt, vgt_info_off(version_major)) = 1;
+		__vreg(vgt, vgt_info_off(version_minor)) = 0;
+		__vreg(vgt, vgt_info_off(display_ready)) = 0;
+		__vreg(vgt, vgt_info_off(vgt_id)) = vgt->vgt_id;
+		__vreg(vgt, vgt_info_off(avail_rs.aperture.my_base)) = vgt_visible_gm_base(vgt);
+		__vreg(vgt, vgt_info_off(avail_rs.aperture.my_size)) = vgt_aperture_sz(vgt);
+		__vreg(vgt, vgt_info_off(avail_rs.gmadr.my_base)) = vgt_hidden_gm_base(vgt);
+		__vreg(vgt, vgt_info_off(avail_rs.gmadr.my_size)) = vgt_hidden_gm_sz(vgt);
+	}
 
 	pdev->device[vgt->vgt_id] = vgt;
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
@@ -2275,6 +2293,10 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 
 static void vgt_setup_virt_regs(struct pgt_device *pdev)
 {
+	int i;
+
+	for (i = VGT_PVINFO_PAGE; i < VGT_PVINFO_PAGE + VGT_PVINFO_SIZE; i += 4)
+		reg_set_virt(pdev, i);
 }
 
 /*
