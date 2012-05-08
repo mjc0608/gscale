@@ -384,8 +384,6 @@ int drm_agp_free_ioctl(struct drm_device *dev, void *data,
 	return drm_agp_free(dev, request);
 }
 
-extern unsigned long int vgt_dom0_aper_offset(void);
-
 /**
  * Initialize the AGP resources.
  *
@@ -423,7 +421,7 @@ struct drm_agp_head *drm_agp_init(struct drm_device *dev)
 	head->cant_use_aperture = head->agp_info.cant_use_aperture;
 	head->page_mask = head->agp_info.page_mask;
 	/* in dom0 non-identical case, dom0 should use aperture with offset 128M */
-	head->base = head->agp_info.aper_base + vgt_dom0_aper_offset();
+	head->base = head->agp_info.aper_base;
 	return head;
 }
 

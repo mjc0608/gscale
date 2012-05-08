@@ -75,7 +75,7 @@
 #include <xen/vgt-if.h>
 
 /* uncomment this macro so that dom0's aperture/GM starts from non-zero */
-//#define DOM0_NON_IDENTICAL
+#define DOM0_NON_IDENTICAL
 
 /*
  * a temporary trick:
@@ -422,8 +422,31 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	}
 #endif
 
+	if (reg >= _REG_FENCE_0_LOW && reg <= _REG_FENCE_15_HIGH) {
+		unsigned long fence;
+
+		fence = reg & ~0x7;
+		if (!(__vreg64(vgt, fence) & _REGBIT_FENCE_VALID)) {
+			dprintk("vGT(%d): clear fence (%lx) w/o addr fix\n",
+				vgt->vgt_id, reg);
+			return g_value;
+		}
+	}
+
 	dprintk("vGT: address fix g->h for reg (%lx)(%x)\n", reg, g_value);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
+	/*
+	 * NOTE: address ZERO is special, and sometimes the driver may hard
+	 * code address ZERO, e.g. in curbase setting (when the cursor becomes
+	 * invisible). So we always translate address ZERO into the valid
+	 * range of the VM. If this doesn't work, we need change the driver!
+	 */
+	if (!(g_value & mask)) {
+		printk("vGT(%d): translate address ZERO for reg (%lx)\n",
+			vgt->vgt_id, reg);
+		g_value = (vgt_guest_visible_gm_base(vgt) & mask) |
+			  (g_value & ~mask);
+	}
 	/* FIXME: there may have some complex mask pattern */
 	h_value = g2h_gm(vgt, g_value & mask);
 	dprintk("....(g)%x->(h)%x\n", g_value, (h_value & mask) | (g_value & ~mask));
@@ -491,10 +514,14 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	dprintk("vGT: address fix h->g for reg (%lx)(%x)\n", reg, h_value);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
 
-	/* FIXME: it's possible the initial state may not contain valid address */
+	/*
+	 * it's possible the initial state may not contain a valid address
+	 * vm's range. In such case fake a valid address since the value there
+	 * doesn't matter.
+	 */
 	if (!h_gm_is_visible(vgt, h_value & mask) && !h_gm_is_hidden(vgt, h_value & mask)) {
 		printk("!!!vGT: reg (%lx) doesn't contain a valid host address (%x)\n", reg, h_value);
-		return h_value;
+		h_value = (vgt_visible_gm_base(vgt) & mask) | (h_value & ~mask);
 	}
 
 	/* FIXME: there may have some complex mask pattern */
@@ -1940,6 +1967,9 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		return NULL;
 	}
 
+	/* TODO: hard code ballooning now. We can support non-ballooning too in the future */
+	vgt->ballooning = true;
+
 	/* present aperture to the guest at the same host address */
 	vgt->state.aperture_base = aperture_base(pdev);
 
@@ -1948,7 +1978,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		vgt->aperture_base = dom0_aperture_base(pdev);
 		vgt->aperture_sz = dom0_aperture_sz(pdev);
 		vgt->gm_sz = dom0_aperture_sz(pdev);
-		vgt->hidden_gm_offset = gm_sz(pdev);	/* dom0 has no hidden part */
+		vgt->hidden_gm_offset = hidden_gm_base(pdev);	/* dom0 has no hidden part */
 	} else {
 		/*
 		 * TODO: Use sysfs for dynamic configuration.
@@ -2358,7 +2388,8 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 /* FIXME: allocate instead of static */
 #define VGT_APERTURE_PAGES	VGT_RSVD_APERTURE_SZ >> GTT_PAGE_SHIFT
 static struct page *pages[VGT_APERTURE_PAGES];
-static struct page *dummy_page;
+struct page *dummy_page;
+dma_addr_t dummy_addr;
 /* TODO: check license. May move to another file */
 static int setup_gtt(struct pgt_device *pdev)
 {
@@ -2381,6 +2412,7 @@ static int setup_gtt(struct pgt_device *pdev)
 	dma_addr |= (dma_addr >> 28) & 0xff0;
 	dma_addr |= 0x1;	/* UC, valid */
 	printk("....dummy page (%llx, %llx)\n", page_to_phys(dummy_page), dma_addr);
+	dummy_addr = dma_addr;
 
 	/* for debug purpose */
 	memset(pfn_to_kaddr(page_to_pfn(dummy_page)), 0x77, PAGE_SIZE);
@@ -2449,6 +2481,18 @@ void vgt_update_gtt_info(uint64_t gm_size)
 	tot_gm_size = gm_size;
 }
 
+/*
+ * This interface is abandoned now, since with ballooning we
+ * can have the guest to map the aperture starting from zero.
+ * For dom0 it implicates that i915 can map the whole aperture
+ * space
+ * for other VM we manipulate the p2m table so that ballooned
+ * spaces are not mapped to the physical.
+ *
+ * that means original DOM0_NON_IDENTICAL doesn't work any more
+ * without the ballooning support. This should be fine since
+ * dom0 should always support it.
+ */
 unsigned long int vgt_dom0_aper_offset(void)
 {
 	/*FIXME: remove the hard code 128M */

@@ -68,6 +68,7 @@
 //#define SINGLE_VM_DEBUG
 #define SANDY_BRIDGE
 #define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); BUG();}} while (0);
+#define ASSERT_NUM(x,y) do { if (!(x)) {printk("Assert at %s line %d para %llx\n", __FILE__, __LINE__, (u64)y); BUG();}} while (0);
 
 //#define VGT_DEBUG
 #ifdef VGT_DEBUG
@@ -356,6 +357,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_FENCE_14_HIGH	0x100074
 #define _REG_FENCE_15_LOW	0x100078
 #define _REG_FENCE_15_HIGH	0x10007C
+#define 	_REGBIT_FENCE_VALID	(1 << 0)
 
 #define _REG_CURACNTR		0x70080
 #define _REG_CURABASE		0x70084
@@ -1093,8 +1095,8 @@ static inline uint64_t g2h_aperture(struct vgt_device *vgt, uint64_t g_addr)
 {
 	uint64_t offset;
 
-	ASSERT((g_addr >= vgt_guest_aperture_base(vgt)) &&
-		(g_addr <= vgt_guest_aperture_end(vgt)));
+	ASSERT_NUM((g_addr >= vgt_guest_aperture_base(vgt)) &&
+		(g_addr <= vgt_guest_aperture_end(vgt)), g_addr);
 
 	offset = g_addr - vgt_guest_aperture_base(vgt);
 	return vgt_aperture_base(vgt) + offset;
@@ -1105,8 +1107,8 @@ static inline uint64_t h2g_aperture(struct vgt_device *vgt, uint64_t h_addr)
 {
 	uint64_t offset;
 
-	ASSERT((h_addr >= vgt_aperture_base(vgt)) &&
-		(h_addr <= vgt_aperture_end(vgt)));
+	ASSERT_NUM((h_addr >= vgt_aperture_base(vgt)) &&
+		(h_addr <= vgt_aperture_end(vgt)), h_addr);
 
 	offset = h_addr - vgt_aperture_base(vgt);
 	return vgt_guest_aperture_base(vgt) + offset;
@@ -1169,7 +1171,7 @@ static inline uint64_t g2h_gm(struct vgt_device *vgt, uint64_t g_addr)
 {
 	uint64_t h_addr;
 
-	ASSERT(g_gm_is_visible(vgt, g_addr) || g_gm_is_hidden(vgt, g_addr));
+	ASSERT_NUM(g_gm_is_visible(vgt, g_addr) || g_gm_is_hidden(vgt, g_addr), g_addr);
 
 	if (g_gm_is_visible(vgt, g_addr))	/* aperture */
 		h_addr = vgt_visible_gm_base(vgt) +
@@ -1186,7 +1188,7 @@ static inline uint64_t h2g_gm(struct vgt_device *vgt, uint64_t h_addr)
 {
 	uint64_t g_addr;
 
-	ASSERT(h_gm_is_visible(vgt, h_addr) || h_gm_is_hidden(vgt, h_addr));
+	ASSERT_NUM(h_gm_is_visible(vgt, h_addr) || h_gm_is_hidden(vgt, h_addr), h_addr);
 
 	if (h_gm_is_visible(vgt, h_addr))
 		g_addr = vgt_guest_visible_gm_base(vgt) +
@@ -1198,6 +1200,7 @@ static inline uint64_t h2g_gm(struct vgt_device *vgt, uint64_t h_addr)
 	return g_addr;
 }
 
+extern dma_addr_t dummy_addr;
 /*
  * check whether a structure pointed by MMIO, or an instruction filled in
  * the command buffer, may cross the visible and invisible boundary. That

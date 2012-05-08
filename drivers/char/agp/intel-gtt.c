@@ -507,7 +507,8 @@ static unsigned int i965_gtt_total_entries(void)
 	return size/4;
 }
 
-static int ballooning = 0;
+/* FIXME: ballooning information is in i915 module. Need a clean way to hook later */
+static int ballooning = 1;
 extern void vgt_update_gtt_info(uint64_t gm_size);
 static unsigned int intel_gtt_total_entries(void)
 {
