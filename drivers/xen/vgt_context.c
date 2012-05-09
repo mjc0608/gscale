@@ -1968,7 +1968,8 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	}
 
 	/* TODO: hard code ballooning now. We can support non-ballooning too in the future */
-	vgt->ballooning = true;
+	if (!vgt->vgt_id)
+		vgt->ballooning = true;
 
 	/* present aperture to the guest at the same host address */
 	vgt->state.aperture_base = aperture_base(pdev);
@@ -1983,10 +1984,10 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		/*
 		 * TODO: Use sysfs for dynamic configuration.
 		 */
-		vgt->aperture_base = get_vm_aperture_base(pdev, vgt->vgt_id);
+		vgt->aperture_base = get_vm_aperture_base(pdev, vgt->vgt_id - 1);
 		vgt->aperture_sz = vm_aperture_sz(pdev);
 		vgt->gm_sz = vm_gm_sz(pdev);
-		vgt->hidden_gm_offset = get_vm_hidden_gm_base(pdev, vgt->vgt_id);
+		vgt->hidden_gm_offset = get_vm_hidden_gm_base(pdev, vgt->vgt_id - 1);
 	}
 
 	vgt->aperture_offset = aperture_2_gm(pdev, vgt->aperture_base);

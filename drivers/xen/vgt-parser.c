@@ -1239,6 +1239,7 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	vgt->vgtt[g_gtt_index] = g_gtt_val;
 
 	g_addr = g_gtt_index << GTT_PAGE_SHIFT;
+	/* the VM may configure the whole GM space when ballooning is used */
 	if (!g_gm_is_visible(vgt, g_addr) && !g_gm_is_hidden(vgt, g_addr)) {
 		static int count = 0;
 
