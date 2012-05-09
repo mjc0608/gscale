@@ -201,6 +201,46 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
+/* FIXME: add EDID virtualization in the future
+ */
+bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	ASSERT(bytes == 4);
+
+	return default_mmio_read(vgt, offset,p_data, bytes);
+
+}
+
+bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	uint32_t data;
+	bool rc;
+
+	ASSERT(bytes == 4);
+
+	reg = offset & ~(bytes - 1);
+
+	rc = default_mmio_write(vgt, offset,p_data, bytes);
+
+	if ( (vgt->vm_id != 0) && !reg_is_owner(vgt, reg)){
+		data = __vreg(vgt, reg);
+		if (data & _REGBIT_DP_AUX_CH_CTL_DONE)
+			data &= ~_REGBIT_DP_AUX_CH_CTL_DONE;
+		if (data & _REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR)
+			data &= ~_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR;
+		if (data & _REGBIT_DP_AUX_CH_CTL_RECV_ERR)
+			data &= ~_REGBIT_DP_AUX_CH_CTL_RECV_ERR;
+		if (data & _REGBIT_DP_AUX_CH_CTL_SEND_BUSY){
+			data |= _REGBIT_DP_AUX_CH_CTL_DONE;
+			data &= ~_REGBIT_DP_AUX_CH_CTL_SEND_BUSY;
+		}
+		__vreg(vgt, reg) = data;
+	}
+}
+
 /*
  * Map the apperture space (BAR1) of vGT device for direct access.
  */
@@ -368,6 +408,16 @@ printk("mmio hooks initialized\n");
 			ring_mmio_base[i] + RB_REGS_SIZE - 1,
 			ring_mmio_read, ring_mmio_write))
 			return false;
+
+	vgt_register_mmio_handler( _REG_PCH_DPB_AUX_CH_CTL, _REG_PCH_DPB_AUX_CH_CTL + 3,
+			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
+
+	vgt_register_mmio_handler( _REG_PCH_DPC_AUX_CH_CTL, _REG_PCH_DPC_AUX_CH_CTL + 3,
+			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
+
+	vgt_register_mmio_handler( _REG_PCH_DPD_AUX_CH_CTL, _REG_PCH_DPD_AUX_CH_CTL + 3,
+			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
+
 	return true;
 }
 

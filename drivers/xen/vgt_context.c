@@ -626,6 +626,38 @@ static void vgt_update_reg_64(struct vgt_device *vgt, unsigned int reg)
 	}
 }
 
+bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	unsigned long wvalue;
+	reg = offset & ~(bytes - 1);
+
+	if (bytes <= 4) {
+		wvalue = vgt_get_reg(vgt, reg);
+	} else {
+		wvalue = vgt_get_reg_64(vgt, reg);
+	}
+
+	memcpy(p_data, &wvalue + (offset & (bytes - 1)), bytes);
+
+	return true;
+}
+
+bool default_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	memcpy((char *)vgt->state.vReg + offset,
+			p_data, bytes);
+
+	offset &= ~(bytes - 1);
+	if (bytes <= 4)
+		vgt_update_reg(vgt, offset);
+	else
+		vgt_update_reg_64(vgt, offset);
+
+}
+
 #define PCI_BAR_ADDR_MASK (~0xFUL)  /* 4 LSB bits are not address */
 
 static inline unsigned int vgt_pa_to_mmio_offset(struct vgt_device *vgt, unsigned long pa)
@@ -644,8 +676,6 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 {
 	struct mmio_hash_table *mht;
 	struct pgt_device *pdev = vgt->pdev;
-	unsigned int off2;
-	unsigned long wvalue;
 	unsigned int offset;
 	unsigned long flags;
 
@@ -669,15 +699,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 	if ( mht && mht->read )
 		mht->read(vgt, offset, p_data, bytes);
 	else {
-		off2 = offset & ~(bytes - 1);
-
-		if (bytes <= 4) {
-			wvalue = vgt_get_reg(vgt, off2);
-		} else {
-			wvalue = vgt_get_reg_64(vgt, off2);
-		}
-
-		memcpy(p_data, &wvalue + (offset & (bytes - 1)), bytes);
+		default_mmio_read(vgt, offset, p_data, bytes);
 	}
 
 	spin_unlock_irqrestore(&pdev->lock, flags);
@@ -721,14 +743,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
 	else {
-		memcpy((char *)vgt->state.vReg + offset,
-				p_data, bytes);
-
-		offset &= ~(bytes - 1);
-		if (bytes <= 4)
-			vgt_update_reg(vgt, offset);
-		else
-			vgt_update_reg_64(vgt, offset);
+		default_mmio_write(vgt, offset, p_data, bytes);
 	}
 
 	if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE) {
@@ -1629,6 +1644,8 @@ vgt_reg_t vgt_display_regs[] = {
 	_REG_DVSBTILEOFF,
 	_REG_DVSBSURFLIVE,
 	_REG_DVSBSCALE	,
+
+	_REG_PCH_DPB_AUX_CH_CTL,
 };
 
 static void vgt_setup_display_regs(struct pgt_device *pdev)

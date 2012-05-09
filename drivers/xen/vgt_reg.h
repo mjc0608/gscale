@@ -424,6 +424,15 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_DVSBSCALE		0x73204
 /* DVSBGAMC: 0x73300 - 0x7334B */
 
+#define _REG_PCH_DPB_AUX_CH_CTL 0xe4110
+#define _REG_PCH_DPC_AUX_CH_CTL 0xe4210
+#define _REG_PCH_DPD_AUX_CH_CTL 0xe4310
+#define _REGBIT_DP_AUX_CH_CTL_SEND_BUSY (1 << 31)
+#define _REGBIT_DP_AUX_CH_CTL_DONE (1 << 30)
+#define _REGBIT_DP_AUX_CH_CTL_INTERRUPT (1 << 29)
+#define _REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR (1 << 28)
+#define _REGBIT_DP_AUX_CH_CTL_RECV_ERR (1 << 25)
+
 #define _REG_FORCEWAKE		0xA18C
 
 #define MI_NOOP				0
@@ -1975,4 +1984,6 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id);
 void vgt_release_instance(struct vgt_device *vgt);
 int vgt_init_sysfs(struct pgt_device *pdev);
 
+bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);
+bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes);
 #endif	/* _VGT_REG_H_ */
