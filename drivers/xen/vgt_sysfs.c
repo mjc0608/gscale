@@ -156,10 +156,10 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 #endif
 
 static struct kobj_attribute create_vgt_instance_attrs =
-	__ATTR(create_vgt_instance, 0222, NULL, vgt_create_instance_store);
+	__ATTR(create_vgt_instance, 0220, NULL, vgt_create_instance_store);
 #ifndef SINGLE_VM_DEBUG
 static struct kobj_attribute display_owner_ctrl_attrs =
-	__ATTR(display_owner, 0666, vgt_display_owner_show, vgt_display_owner_store);
+	__ATTR(display_owner, 0660, vgt_display_owner_show, vgt_display_owner_store);
 #endif
 
 static struct attribute *ctl_attrs[] = {

@@ -1208,7 +1208,7 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 
 	off -= VGT_MMIO_SPACE_SZ;
 	if (off >= vgt->vgtt_sz) {
-		printk("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
+		dprintk("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
 		return false;
 	}
 
@@ -1230,7 +1230,7 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 	off -= VGT_MMIO_SPACE_SZ;
 	if (off >= vgt->vgtt_sz) {
-		printk("vGT(%d): captured out of range GTT write on off %x\n", vgt->vgt_id, off);
+		dprintk("vGT(%d): captured out of range GTT write on off %x\n", vgt->vgt_id, off);
 		return false;
 	}
 

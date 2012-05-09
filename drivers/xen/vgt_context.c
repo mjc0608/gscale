@@ -1968,8 +1968,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	}
 
 	/* TODO: hard code ballooning now. We can support non-ballooning too in the future */
-	if (!vgt->vgt_id)
-		vgt->ballooning = true;
+	vgt->ballooning = true;
 
 	/* present aperture to the guest at the same host address */
 	vgt->state.aperture_base = aperture_base(pdev);

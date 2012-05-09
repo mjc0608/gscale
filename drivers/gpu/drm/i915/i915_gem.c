@@ -168,27 +168,26 @@ struct _balloon_info_ {
 	 * might-be overlap aperture areas, and index 0/1 is for
 	 * aperture, 2/3 for gmadr.
 	 */
-	struct drm_mm_node *space[4];
+	struct drm_mm_node space[4];
 } bl_info;
 
-static struct drm_mm_node *i915_balloon_space (
-			const struct drm_mm *mm,
+static int i915_balloon_space (
+			struct drm_mm *mm,
+			struct drm_mm_node *node,
 			unsigned long start,
 			unsigned long end)
 {
-	struct drm_mm_node *free_space;
 	unsigned long  size = end - start;
 
 	if (start == end)
-		return NULL;
+		return -EEXIST;
 
-        printk("i915_balloon_space %lx %lx\n", start, end);
-	free_space = drm_mm_search_free_in_range(mm, size, 0, start, end, 0);
-        printk("free_space %p\n", free_space);
-	if (free_space == NULL)
-		return NULL;
-	return drm_mm_get_block_range_generic(free_space,
-				size, 0, start, end, 0);
+	printk("i915_balloon_space: range [ 0x%lx - 0x%lx ] %lu KB.\n",
+			start, end, size / 1024);
+
+	return drm_mm_insert_node_in_range_generic(mm, node, size, 0, 0, start, end,
+						  DRM_MM_SEARCH_DEFAULT,
+						  DRM_MM_CREATE_DEFAULT);
 }
 
 #define VGT_IF_VERSION	0x10000		/* 1.0 */
@@ -199,8 +198,8 @@ static void i915_deballoon(struct drm_i915_private *dev_priv)
 
         printk("i915_deballoon...\n");
 	for (i=0; i < 4; i++) {
-		if ( bl_info.space[i] )
-			drm_mm_put_block(bl_info.space[i]);
+		if ( bl_info.space[i].allocated)
+			drm_mm_remove_node(&bl_info.space[i]);
 	}
 	memset (&bl_info, 0, sizeof(bl_info));
 }
@@ -231,10 +230,10 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 
 	printk("Balooning configuration: %lx %lx, %lx %lx\n",
 			apert_base, apert_size, gmadr_base, gmadr_size);
-	if (apert_base < dev_priv->mm.gtt_start ||
-		(apert_base + apert_size) > dev_priv->mm.gtt_mappable_end ||
-		gmadr_base < dev_priv->mm.gtt_start ||
-		(gmadr_base + gmadr_size) > dev_priv->mm.gtt_end) {
+	if (apert_base < dev_priv->gtt.base.start ||
+		(apert_base + apert_size) > dev_priv->gtt.mappable_end ||
+		gmadr_base < dev_priv->gtt.base.start ||
+		(gmadr_base + gmadr_size) > dev_priv->gtt.base.start + dev_priv->gtt.base.total) {
 		printk("Invalid ballooning configuration: %lx %lx, %lx %lx\n",
 			apert_base, apert_size, gmadr_base, gmadr_size);
 		return 0;
@@ -242,39 +241,35 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 
 	memset (&bl_info, 0, sizeof(bl_info));
 	/* Aperture ballooning */
-	if ( apert_base > dev_priv->mm.gtt_start ) {
-	        bl_info.space[0] = i915_balloon_space(
-			&dev_priv->mm.gtt_space,
-			dev_priv->mm.gtt_start, apert_base);
-		fail |= (bl_info.space[0] == NULL);
-		printk(" bl_info.space[0] = %p\n",  bl_info.space[0]);
+	if ( apert_base > dev_priv->gtt.base.start ) {
+	        fail |= i915_balloon_space(
+			&dev_priv->gtt.base.mm,
+			&bl_info.space[0],
+			dev_priv->gtt.base.start, apert_base);
 	}
 
-	if ( apert_base + apert_size < dev_priv->mm.gtt_mappable_end ) {
-	        bl_info.space[1] = i915_balloon_space(
-			&dev_priv->mm.gtt_space,
+	if ( apert_base + apert_size < dev_priv->gtt.mappable_end ) {
+	        fail |= i915_balloon_space(
+			&dev_priv->gtt.base.mm,
+			&bl_info.space[1],
 			apert_base + apert_size,
-			dev_priv->mm.gtt_mappable_end);
-		fail |= (bl_info.space[1] == NULL);
-		printk(" bl_info.space[1] = %p\n",  bl_info.space[1]);
+			dev_priv->gtt.mappable_end);
 	}
 
 	/* GMADR ballooning */
-	if ( gmadr_base > dev_priv->mm.gtt_mappable_end ) {
-	        bl_info.space[2] = i915_balloon_space(
-			&dev_priv->mm.gtt_space,
-			dev_priv->mm.gtt_mappable_end, gmadr_base);
-		fail |= (bl_info.space[2] == NULL);
-		printk(" bl_info.space[2] = %p\n",  bl_info.space[2]);
+	if ( gmadr_base > dev_priv->gtt.mappable_end ) {
+	        fail |= i915_balloon_space(
+			&dev_priv->gtt.base.mm,
+			&bl_info.space[2],
+			dev_priv->gtt.mappable_end, gmadr_base);
 	}
 
-	if ( gmadr_base + gmadr_size < dev_priv->mm.gtt_end ) {
-	        bl_info.space[3] = i915_balloon_space(
-			&dev_priv->mm.gtt_space,
+	if ( gmadr_base + gmadr_size < dev_priv->gtt.base.start + dev_priv->gtt.base.total) {
+	        fail |= i915_balloon_space(
+			&dev_priv->gtt.base.mm,
+			&bl_info.space[3],
 			gmadr_base + gmadr_size,
-			dev_priv->mm.gtt_end);
-		fail |= (bl_info.space[3] == NULL);
-		printk(" bl_info.space[3] = %p\n",  bl_info.space[3]);
+			dev_priv->gtt.base.start + dev_priv->gtt.base.total);
 	}
 
 	/* Fence register ballooning */
@@ -294,7 +289,7 @@ void i915_gem_do_init(struct drm_device *dev,
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
-	drm_mm_init(&dev_priv->mm.gtt_space, start, end - start);
+	drm_mm_init(&dev_priv->gtt.base.mm, start, end - start);
 
 	printk("Eddie: mappable_end %lx\n", mappable_end);
 	/*
@@ -302,11 +297,9 @@ void i915_gem_do_init(struct drm_device *dev,
 	 */
 	if ( mappable_end > end )
 		mappable_end = end;
-	dev_priv->mm.gtt_start = start;
-	dev_priv->mm.gtt_mappable_end = mappable_end;
-	dev_priv->mm.gtt_end = end;
-	dev_priv->mm.gtt_total = end - start;
-	dev_priv->mm.mappable_gtt_total = min(end, mappable_end) - start;
+	dev_priv->gtt.base.start = start;
+	dev_priv->gtt.mappable_end = mappable_end;
+	dev_priv->gtt.base.total = end - start;
 
 	printk("GEM init: take [%lx, %lx] GTT range\n", start, end);
 
