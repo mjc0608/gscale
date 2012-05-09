@@ -1376,6 +1376,9 @@ void vgt_install_irq(struct pci_dev *pdev)
 	struct pgt_device *node, *pgt = NULL;
 	int irq, ret;
 
+	if (!xen_initial_domain())
+		return;
+
 	if (list_empty(&pgt_devices)) {
 		printk("vGT: no valid pgt_device registered when installing irq\n");
 		return;

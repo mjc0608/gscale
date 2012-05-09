@@ -132,6 +132,9 @@ static int __init vgt_init_module(void)
 {
 	int rc;
 
+	if (!xen_initial_domain())
+		return 1;
+
 	rc  = vgt_cmd_parser_init();
 	if(rc < 0)
 		return 0;
@@ -148,6 +151,8 @@ static void __exit vgt_exit_module(void)
 {
 	int rc = 0;
 
+	if (!xen_initial_domain())
+		return;
 	// Need cancel the i/o forwarding
 
 	// fill other exit works here

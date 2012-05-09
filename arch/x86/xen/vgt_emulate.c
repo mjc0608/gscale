@@ -947,19 +947,22 @@ int xen_setup_vgt(vgt_ops_t *ops)
 
 int xen_start_vgt(struct pci_dev *pdev)
 {
-    int ret = 0;
+	int ret = 0;
+
+	if (!xen_initial_domain())
+		return 0;
 
 	if (vgt_ops && vgt_ops->initialized) {
 		printk("vgt_ops has been intialized\n");
 		return 0;
 	}
 
-printk("eddie: xen_start_vgt vgt_ops %p \n", vgt_ops);
-if (vgt_ops)
-printk("Eddie: start_vgt %p\n", vgt_ops->start_vgt);
-    if (vgt_ops && vgt_ops->start_vgt)
-        ret = vgt_ops->start_vgt(pdev);
-    return ret;
+	printk("eddie: xen_start_vgt vgt_ops %p \n", vgt_ops);
+	if (vgt_ops)
+	printk("Eddie: start_vgt %p\n", vgt_ops->start_vgt);
+	if (vgt_ops && vgt_ops->start_vgt)
+		ret = vgt_ops->start_vgt(pdev);
+	return ret;
 }
 
 //core_initcall(xen_setup_vgt);

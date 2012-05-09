@@ -420,7 +420,6 @@ struct drm_agp_head *drm_agp_init(struct drm_device *dev)
 	INIT_LIST_HEAD(&head->memory);
 	head->cant_use_aperture = head->agp_info.cant_use_aperture;
 	head->page_mask = head->agp_info.page_mask;
-	/* in dom0 non-identical case, dom0 should use aperture with offset 128M */
 	head->base = head->agp_info.aper_base;
 	return head;
 }

@@ -2478,6 +2478,8 @@ err_out:
 static uint64_t tot_gm_size;
 void vgt_update_gtt_info(uint64_t gm_size)
 {
+	if (!xen_initial_domain())
+		return;
 	printk("GTT: tell vGT about total gm_size: %llx\n", gm_size);
 	tot_gm_size = gm_size;
 }
