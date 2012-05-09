@@ -388,7 +388,7 @@ void vgt_irq_save_context(struct vgt_device *vstate, enum vgt_owner_type owner)
 	struct pgt_device *pdev = vstate->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
-	if (owner != VGT_OT_RENDER || owner != VGT_OT_DISPLAY) {
+	if (owner != VGT_OT_RENDER && owner != VGT_OT_DISPLAY) {
 		dprintk("Dynamic ownership update for type (%d) is prohibited\n", owner);
 		return;
 	}
@@ -412,7 +412,7 @@ void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owne
 	struct pgt_device *dev = vstate->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 
-	if (owner != VGT_OT_RENDER || owner != VGT_OT_DISPLAY) {
+	if (owner != VGT_OT_RENDER && owner != VGT_OT_DISPLAY) {
 		dprintk("Dynamic ownership update for type (%d) is prohibited\n", owner);
 		return;
 	}
