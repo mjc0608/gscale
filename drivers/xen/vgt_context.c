@@ -897,6 +897,14 @@ static void check_gtt(struct pgt_device *pdev)
 		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x7ffff000)));
 }
 
+static bool hvm_owner = false;
+static int __init hvm_owner_setup(char *str)
+{
+	hvm_owner = true;
+	return 1;
+}
+__setup("hvm_owner", hvm_owner_setup);
+
 static int start_period = 10; /* in unit of second */
 static int __init period_setup(char *str)
 {
@@ -2104,6 +2112,10 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	if (vgt->vm_id && vgt_ops->boot_time) {
 		vgt_ops->boot_time = 0;
 		vgt_super_owner = NULL;
+
+		/* a special debug mode to give full access to hvm guest */
+		if (hvm_owner)
+			vgt_super_owner = vgt;
 	}
 
 	return vgt;

@@ -994,6 +994,15 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 	if (vgt_super_owner == vgt)
 		return true;
 
+	/*
+	 * if super owner is not dom0, it means that we want to
+	 * give exclusive permission to the super owner for the
+	 * test. In such case, always return false for other VMs
+	 * including dom0
+	 */
+	if (vgt_super_owner && vgt_super_owner != vgt_dom0)
+		return false;
+
 	/* normal phase of passthrough registers if vgt is the owner */
 	if (reg_pt(pdev, reg) && reg_is_owner(vgt, reg))
 		return true;
