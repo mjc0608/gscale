@@ -195,7 +195,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	 * now it's possible for dom0 to fill over than a full ring in a scheduled
 	 * quantum
 	 */
-	if (vgt_ops->boot_time || is_current_render_owner(vgt))
+	if (reg_hw_access(vgt, off))
 		VGT_MMIO_WRITE(vgt->pdev, off, *(vgt_reg_t*)((char *)sring + rel_off));
 	//ring_debug(vgt, ring_id);
 	return true;

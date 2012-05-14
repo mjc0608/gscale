@@ -264,7 +264,8 @@ static void enforce_mode_setting(struct pgt_device *pdev)
 struct vgt_device *next_display_owner;
 atomic_t display_switched = ATOMIC_INIT(0);
 #endif
-static struct vgt_device *vgt_dom0;
+struct vgt_device *vgt_dom0;
+struct vgt_device *vgt_super_owner;
 struct mmio_hash_table	*mtable[MHASH_SIZE];
 struct mmio_hash_table gtt_mmio_handler={
 	.read = gtt_mmio_read,
@@ -564,8 +565,7 @@ static unsigned long vgt_get_reg(struct vgt_device *vgt, unsigned int reg)
 	struct pgt_device *pdev = vgt->pdev;
 	/* check whether to update vreg from HW */
 //	if (reg_hw_update(pdev, reg) &&
-	if (reg_pt(pdev, reg) &&
-	    (vgt_ops->boot_time || reg_is_owner(vgt, reg))) {
+	if (reg_hw_access(vgt, reg)) {
 		__sreg(vgt, reg) = VGT_MMIO_READ(pdev, reg);
 		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
 	}
@@ -585,8 +585,7 @@ static unsigned long vgt_get_reg_64(struct vgt_device *vgt, unsigned int reg)
 	struct pgt_device *pdev = vgt->pdev;
 	/* check whether to update vreg from HW */
 //	if (reg_hw_update(pdev, reg) &&
-	if (reg_pt(pdev, reg) &&
-	    (vgt_ops->boot_time || reg_is_owner(vgt, reg))) {
+	if (reg_hw_access(vgt, reg)) {
 		__sreg64(vgt, reg) = VGT_MMIO_READ_BYTES(pdev, reg, 8);
 		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
 		__vreg(vgt, reg + 4) = mmio_h2g_gmadr(vgt, reg + 4, __sreg(vgt, reg + 4));
@@ -602,12 +601,9 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 	 * update sreg if pass through;
 	 * update preg if boot_time or vgt is reg's cur owner
 	 */
-	if (reg_pt(pdev, reg)) {
-		__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
-
-		if (vgt_ops->boot_time || reg_is_owner(vgt, reg))
+	__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
+	if (reg_hw_access(vgt, reg))
 			VGT_MMIO_WRITE(pdev, reg, __sreg(vgt, reg));
-	}
 }
 
 static void vgt_update_reg_64(struct vgt_device *vgt, unsigned int reg)
@@ -617,13 +613,10 @@ static void vgt_update_reg_64(struct vgt_device *vgt, unsigned int reg)
 	 * update sreg if pass through;
 	 * update preg if boot_time or vgt is reg's cur owner
 	 */
-	if (reg_pt(pdev, reg)) {
-		__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
-		__sreg(vgt, reg + 4) = mmio_g2h_gmadr(vgt, reg + 4, __vreg(vgt, reg + 4));
-
-		if (vgt_ops->boot_time || reg_is_owner(vgt, reg))
+	__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
+	__sreg(vgt, reg + 4) = mmio_g2h_gmadr(vgt, reg + 4, __vreg(vgt, reg + 4));
+	if (reg_hw_access(vgt, reg))
 			VGT_MMIO_WRITE_BYTES(pdev, reg, __sreg64(vgt, reg), 8);
-	}
 }
 
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,
@@ -1547,45 +1540,14 @@ static void vgt_setup_render_regs(struct pgt_device *pdev)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_NUM(vgt_render_regs); i++)
+	for (i = 0; i < ARRAY_NUM(vgt_render_regs); i++) {
 		reg_set_owner(pdev, vgt_render_regs[i], VGT_OT_RENDER);
+		reg_set_pt(pdev, vgt_render_regs[i]);
+	}
 }
 
 /* TODO: lots of to fill */
 vgt_reg_t vgt_display_regs[] = {
-	_REG_FENCE_0_LOW,
-	_REG_FENCE_0_HIGH,
-	_REG_FENCE_1_LOW,
-	_REG_FENCE_1_HIGH,
-	_REG_FENCE_2_LOW,
-	_REG_FENCE_2_HIGH,
-	_REG_FENCE_3_LOW,
-	_REG_FENCE_3_HIGH,
-	_REG_FENCE_4_LOW,
-	_REG_FENCE_4_HIGH,
-	_REG_FENCE_5_LOW,
-	_REG_FENCE_5_HIGH,
-	_REG_FENCE_6_LOW,
-	_REG_FENCE_6_HIGH,
-	_REG_FENCE_7_LOW,
-	_REG_FENCE_7_HIGH,
-	_REG_FENCE_8_LOW,
-	_REG_FENCE_8_HIGH,
-	_REG_FENCE_9_LOW,
-	_REG_FENCE_9_HIGH,
-	_REG_FENCE_10_LOW,
-	_REG_FENCE_10_HIGH,
-	_REG_FENCE_11_LOW,
-	_REG_FENCE_11_HIGH,
-	_REG_FENCE_12_LOW,
-	_REG_FENCE_12_HIGH,
-	_REG_FENCE_13_LOW,
-	_REG_FENCE_13_HIGH,
-	_REG_FENCE_14_LOW,
-	_REG_FENCE_14_HIGH,
-	_REG_FENCE_15_LOW,
-	_REG_FENCE_15_HIGH,
-
 	_REG_CURACNTR	,
 	_REG_CURABASE	,
 	_REG_CURAPOS	,
@@ -1652,8 +1614,28 @@ static void vgt_setup_display_regs(struct pgt_device *pdev)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_NUM(vgt_display_regs); i++)
+	for (i = 0; i < ARRAY_NUM(vgt_display_regs); i++) {
 		reg_set_owner(pdev, vgt_display_regs[i], VGT_OT_DISPLAY);
+		reg_set_pt(pdev, vgt_display_regs[i]);
+	}
+
+	/* display pallete registers */
+	for (i = 0x4A000; i <= 0x4CFFF; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
+		reg_set_pt(pdev, i);
+	}
+
+	/* PIPE control */
+	for (i = 0x60000; i <= 0x6FFFF; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
+		reg_set_pt(pdev, i);
+	}
+
+	/* Plane and cursor control */
+	for (i = 0x70000; i <= 0x7FFFF; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
+		reg_set_pt(pdev, i);
+	}
 }
 
 /* TODO: lots of to fill */
@@ -1677,7 +1659,23 @@ static void vgt_setup_mgmt_regs(struct pgt_device *pdev)
 	int i;
 
 	for (i = 0; i < ARRAY_NUM(vgt_mgmt_regs); i++)
-		reg_set_owner(pdev, vgt_mgmt_regs[i], VGT_OT_PM);
+		reg_set_owner(pdev, vgt_mgmt_regs[i], VGT_OT_MGMT);
+}
+
+vgt_reg_t vgt_global_regs[] = {
+	_REG_MI_MODE,
+	_REG_GFX_MODE,
+	_REG_GT_MODE,
+	_REG_ARB_MODE,
+};
+
+/* global registers may need special handlers instead. study case by case later */
+static void vgt_setup_global_regs(struct pgt_device *pdev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_NUM(vgt_global_regs); i++)
+		reg_set_owner(pdev, vgt_global_regs[i], VGT_OT_GLOBAL);
 }
 
 void vgt_rendering_save_mmio(struct vgt_device *vgt)
@@ -2103,8 +2101,10 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	if (vgt->vm_id != 0)
 		vgt_hvm_info_init(vgt);
 
-	if (vgt->vm_id && vgt_ops->boot_time)
+	if (vgt->vm_id && vgt_ops->boot_time) {
 		vgt_ops->boot_time = 0;
+		vgt_super_owner = NULL;
+	}
 
 	return vgt;
 }
@@ -2338,28 +2338,12 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 	vgt_set_addr_mask(pdev, _REG_BCS_ACTHD, 0xFFFFF000);
 }
 
-static void vgt_setup_virt_regs(struct pgt_device *pdev)
+static void vgt_setup_always_virt(struct pgt_device *pdev)
 {
 	int i;
 
-	for (i = VGT_PVINFO_PAGE; i < VGT_PVINFO_PAGE + VGT_PVINFO_SIZE; i += 4)
-		reg_set_virt(pdev, i);
-}
-
-/*
- * Is this really required? If HW just says unexpected behavior, should
- * we just allow it?
- */
-static void vgt_setup_rdonly(struct pgt_device *pdev)
-{
-	reg_set_rdonly(pdev, _REG_RCS_BB_ADDR);
-	reg_set_rdonly(pdev, _REG_VCS_BB_ADDR);
-	reg_set_rdonly(pdev, _REG_BCS_BB_ADDR);
-
-	reg_set_rdonly(pdev, _REG_RCS_BB_PREEMPT_ADDR);
-	reg_set_rdonly(pdev, _REG_RCS_BB_ADDR_DIFF);
-
-	reg_set_rdonly(pdev, _REG_RCS_PP_DIR_BASE_READ);
+	for (i = VGT_PVINFO_PAGE; i < VGT_PVINFO_PAGE + VGT_PVINFO_SIZE; i += REG_SIZE)
+		reg_set_always_virt(pdev, i);
 }
 
 static void vgt_setup_hw_update_regs(struct pgt_device *pdev)
@@ -2387,12 +2371,10 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	vgt_setup_display_regs(pdev);
 	vgt_setup_pm_regs(pdev);
 	vgt_setup_mgmt_regs(pdev);
+	vgt_setup_global_regs(pdev);
 
-	/* then enable virt-only flag */
-	vgt_setup_virt_regs(pdev);
-
-	/* then setup read-only reg */
-	vgt_setup_rdonly(pdev);
+	/* then setup always virtualized reg */
+	vgt_setup_always_virt(pdev);
 
 	/* then mark regs updated by hw */
 	vgt_setup_hw_update_regs(pdev);
@@ -2643,6 +2625,7 @@ int vgt_initialize(struct pci_dev *dev)
 #ifndef SINGLE_VM_DEBUG
 	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
 #endif
+	vgt_super_owner = vgt_dom0;
 	dprintk("create dom0 instance succeeds\n");
 
 	/* FIXME: not sure why? update MI_MODE at this point has no effect! */
@@ -2661,6 +2644,7 @@ int vgt_initialize(struct pci_dev *dev)
 	current_display_owner(pdev) = vgt_dom0;
 	current_pm_owner(pdev) = vgt_dom0;
 	current_mgmt_owner(pdev) = vgt_dom0;
+	current_global_owner(pdev) = vgt_dom0;
 	pdev->ctx_check = 0;
 	pdev->ctx_switch = 0;
 	pdev->magic = 0;

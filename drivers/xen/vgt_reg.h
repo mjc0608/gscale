@@ -281,6 +281,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_GFX_MODE_IVB	0x229C
 #define _REG_ARB_MODE	0x4030
 #define		_REGBIT_ADDRESS_SWIZZLING		(3 << 4)
+#define _REG_GT_MODE	0x20D0
 
 #define _REG_RCS_BB_ADDR	0x2140
 #define _REG_VCS_BB_ADDR	0x12140
@@ -796,8 +797,10 @@ struct vgt_device {
 	bool		ballooning;		/* VM supports ballooning */
 };
 
+extern struct vgt_device *vgt_dom0;
 enum vgt_owner_type {
 	VGT_OT_INVALID = 0,
+	VGT_OT_GLOBAL,			// global registers controlled by dom0 or vGT only
 	VGT_OT_RCS,                  // the owner directly operating render command buffers
 	VGT_OT_BCS,                 // the owner directly operating blitter command buffers
 	VGT_OT_VCS,                   // the owner directly operating video command buffers
@@ -810,14 +813,14 @@ enum vgt_owner_type {
 
 /* owner type of the reg, up to 16 owner type */
 #define VGT_REG_OWNER		(0xF)
-/* reg access is only reflected in vReg */
-#define VGT_REG_VIRT		(1 << 4)
+/* reg access is propogated to sReg and pReg */
+#define VGT_REG_PT		(1 << 4)
 /* reg contains address, requiring fix */
 #define VGT_REG_ADDR_FIX	(1 << 5)
 /* HW updated regs */
 #define VGT_REG_HW_UPDATE	(1 << 6)
-/* Read-only */
-#define VGT_REG_RDONLY		(1 << 7)
+/* Always virtualized even at boot time */
+#define VGT_REG_ALWAYS_VIRT	(1 << 7)
 /* index into the address-fix table. Maximum 256 entries now */
 #define VGT_REG_INDEX_SHIFT	8
 #define VGT_REG_INDEX_MASK	(0xFF << VGT_REG_INDEX_SHIFT)
@@ -896,10 +899,12 @@ extern struct list_head pgt_devices;
 #define current_display_owner(d)	(vgt_get_owner(d, VGT_OT_DISPLAY))
 #define current_pm_owner(d)		(vgt_get_owner(d, VGT_OT_PM))
 #define current_mgmt_owner(d)		(vgt_get_owner(d, VGT_OT_MGMT))
+#define current_global_owner(d)		(vgt_get_owner(d, VGT_OT_GLOBAL))
 #define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
 #define is_current_display_owner(vgt)	(vgt && vgt == current_display_owner(vgt->pdev))
 #define is_current_pm_owner(vgt)	(vgt && vgt == current_pm_owner(vgt->pdev))
 #define is_current_mgmt_owner(vgt)	(vgt && vgt == current_mgmt_owner(vgt->pdev))
+#define is_current_global_owner(vgt)	(vgt && vgt == current_global_owner(vgt->pdev))
 #define previous_render_owner(d)	(vgt_get_previous_owner(d, VGT_OT_RENDER))
 #define previous_display_owner(d)	(vgt_get_previous_owner(d, VGT_OT_DISPLAY))
 #define previous_pm_owner(d)		(vgt_get_previous_owner(d, VGT_OT_PM))
@@ -907,16 +912,16 @@ extern struct list_head pgt_devices;
 #define vgt_ctx_check(d)		(d->ctx_check)
 #define vgt_ctx_switch(d)		(d->ctx_switch)
 
-#define reg_virt(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_VIRT)
-#define reg_pt(pdev, reg)		(!(reg_virt(pdev, reg)))
+#define reg_pt(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_PT)
+#define reg_virt(pdev, reg)		(!(reg_pt(pdev, reg)))
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
 #define reg_hw_update(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_UPDATE)
-#define reg_rdonly(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_RDONLY)
+#define reg_always_virt(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ALWAYS_VIRT)
 #define reg_addr_index(pdev, reg)	\
 	((pdev->reg_info[REG_INDEX(reg)] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
-static inline void reg_set_virt(struct pgt_device *pdev, vgt_reg_t reg)
+static inline void reg_set_pt(struct pgt_device *pdev, vgt_reg_t reg)
 {
-	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_VIRT;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_PT;
 }
 
 static inline void reg_set_hw_update(struct pgt_device *pdev, vgt_reg_t reg)
@@ -932,9 +937,9 @@ static inline void reg_set_addr_fix(struct pgt_device *pdev,
 		(index << VGT_REG_INDEX_SHIFT);
 }
 
-static inline void reg_set_rdonly(struct pgt_device *pdev, vgt_reg_t reg)
+static inline void reg_set_always_virt(struct pgt_device *pdev, vgt_reg_t reg)
 {
-	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_RDONLY;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ALWAYS_VIRT;
 }
 
 extern vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];
@@ -951,6 +956,7 @@ static inline void vgt_set_addr_mask(struct pgt_device *pdev,
 	ai_index++;
 }
 
+/* if the type is invalid, we assume dom0 always has the permission */
 static inline bool reg_is_owner(struct vgt_device *vgt, vgt_reg_t reg)
 {
 	enum vgt_owner_type type;
@@ -972,6 +978,28 @@ static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 	set_bit(flag, (void *)&pdev->request);
 	if (waitqueue_active(&pdev->wq))
 		wake_up(&pdev->wq);
+}
+
+extern struct vgt_device *vgt_super_owner;
+/* check whether a reg access should happen on real hw */
+static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
+{
+	struct pgt_device *pdev = vgt->pdev;
+
+	/* always virtualzed regs like PVINFO */
+	if (reg_always_virt(pdev, reg))
+		return false;
+
+	/* special phase of super owner like boot-time */
+	if (vgt_super_owner == vgt)
+		return true;
+
+	/* normal phase of passthrough registers if vgt is the owner */
+	if (reg_pt(pdev, reg) && reg_is_owner(vgt, reg))
+		return true;
+
+	/* or else by default no hw access */
+	return false;
 }
 
 /* definitions for physical aperture/GM space */
@@ -1424,7 +1452,7 @@ static inline bool vgt_register_mmio_write_virt(struct pgt_device *pdev,
 	int reg, vgt_mmio_write write)
 {
 	/* add virt policy to let common read handler to emulate read */
-	reg_set_virt(pdev, reg);
+	reg_set_always_virt(pdev, reg);
 	return vgt_register_mmio_write(reg, write);
 }
 
@@ -1432,7 +1460,7 @@ static inline bool vgt_register_mmio_read_virt(struct pgt_device *pdev,
 	int reg, vgt_mmio_read read)
 {
 	/* add virt policy to let common write handler to emulate write */
-	reg_set_virt(pdev, reg);
+	reg_set_always_virt(pdev, reg);
 	return vgt_register_mmio_read(reg, read);
 }
 
