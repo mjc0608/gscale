@@ -110,3 +110,7 @@ extern int hcall_mmio_write(
 #define VGT_ENABLE_ADDRESS_FIX_SAVE_RESTORE
 
 // MMIO definitions
+
+// Debugfs interface
+struct dentry *vgt_init_debugfs(void);
+int vgt_create_debugfs(struct vgt_device *vgt);

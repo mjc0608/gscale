@@ -2118,6 +2118,11 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 			vgt_super_owner = vgt;
 	}
 
+	/* create debugfs interface */
+	vgt_init_debugfs();
+	/* create debugfs per vgt */
+	vgt_create_debugfs(vgt);
+
 	return vgt;
 }
 
@@ -2678,6 +2683,7 @@ int vgt_initialize(struct pci_dev *dev)
      */
     //vgt_add_state_sysfs(vgt_dom0);
     vgt_init_sysfs(pdev);
+
 
 	printk("vgt_initialize succeeds.\n");
 	return 0;

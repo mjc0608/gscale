@@ -44,6 +44,7 @@ obj-$(CONFIG_XEN_VGT_I915)		+= vgt-interrupt.o vgt-snb.o
 obj-$(CONFIG_XEN_VGT_I915)		+= vgt-parser.o
 obj-$(CONFIG_XEN_VGT_I915)		+= vgt_sysfs.o
 obj-$(CONFIG_XEN_VGT_I915)		+= vgt_suspend.o
+obj-$(CONFIG_XEN_VGT_I915)		+= vgt_debugfs.o
 
 xen-evtchn-y				:= evtchn.o
 xen-gntdev-y				:= gntdev.o
