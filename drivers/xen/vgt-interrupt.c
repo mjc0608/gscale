@@ -361,17 +361,23 @@ static int vgt_core_register_event(struct vgt_device *dev, enum vgt_event_type e
 void vgt_irq_toggle_emulations(struct vgt_device *vstate,
 		enum vgt_owner_type owner, bool enable)
 {
-	int event;
+	int event,bit;
 	struct pgt_device *dev = vstate->pdev;
+	struct vgt_irq_info *info;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 
 	for_each_set_bit(event, vgt_state_emulated_events(vstate), IRQ_MAX) {
 		if (vgt_get_event_owner_type(dev, event) == owner &&
 		    !test_bit(event, vgt_always_emulated_events(dev))) {
+
+			info = ops->get_irq_info_from_event(dev, event);
+			bit = ops->get_bit_from_event(dev, event, info);
+
 			if (enable) {
-				vgt_run_emul(vstate, event, VGT_IRQ_BITWIDTH, true);
+				vgt_run_emul(vstate, event, bit, true);
 			} else {
 				if (test_bit(event, vgt_state_emulated_events(vstate)))
-					vgt_run_emul(vstate, event, VGT_IRQ_BITWIDTH, false);
+					vgt_run_emul(vstate, event, bit, false);
 			}
 		}
 	}
