@@ -107,6 +107,16 @@ static size_t format_array(char *buf, size_t bufsize, const char *fmt,
 	for(i = 0; i < array_size; i++) {
 		size_t len;
 
+		if (i % 16 == 0) {
+			len = snprintf(buf, bufsize, "0x%x:",i*4);
+			ret += len;
+
+			if (buf) {
+				buf += len;
+				bufsize -= len;
+			}
+		}
+
 		len = snprintf(buf, bufsize, fmt, array[i]);
 		len++;	/* ' ' or '\n' */
 		ret += len;
