@@ -65,6 +65,7 @@
 #include <linux/pci.h>
 #include <xen/events.h>
 #include <xen/vgt.h>
+#include <xen/interface/vcpu.h>
 #include "vgt_reg.h"
 
 /*
@@ -544,14 +545,32 @@ void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
 	local_irq_restore(flags);
 }
 
+#define MSI_CAP_OFFSET 0x90	/* FIXME. need to get from cfg emulation */
+#define MSI_CAP_CONTROL (MSI_CAP_OFFSET + 2)
+#define MSI_CAP_ADDRESS (MSI_CAP_OFFSET + 4)
+#define MSI_CAP_DATA	(MSI_CAP_OFFSET + 8)
 void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 {
-	printk("vGT: hvm injection not supported yet!\n");
+	struct vcpu_raw_msi_info info;
+	char *cfg_space = &vgt->state.cfg_space[0];
+	uint16_t control = *(uint16_t *)(cfg_space + MSI_CAP_CONTROL);
+
+	/* FIXME: now only handle one MSI format */
+	ASSERT_NUM(!(control & 0xfffe), control);
+	info.dom = vgt->vm_id;
+	info.address = *(uint32_t *)(cfg_space + MSI_CAP_ADDRESS);
+	info.data = *(uint16_t *)(cfg_space + MSI_CAP_DATA);
+	printk("vGT(%d): hvm injections. address (%x) data(%x)!\n",
+		vgt->vgt_id, info.address, info.data);
+
+	if (HYPERVISOR_vcpu_op(VCPUOP_inject_raw_msi,
+                        smp_processor_id(), &info) < 0)
+		printk("vGT(%d): failed to inject vmsi\n", vgt->vgt_id);
 }
 
 static int vgt_inject_virtual_interrupt(struct vgt_device *vstate)
 {
-	if (vstate->vgt_id)
+	if (vstate->vm_id)
 		inject_hvm_virtual_interrupt(vstate);
 	else
 		inject_dom0_virtual_interrupt(vstate);

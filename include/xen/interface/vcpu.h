@@ -231,4 +231,11 @@ struct vcpu_sysdata_request {
     };
 };
 
+/* inject a raw vMSI instance */
+#define VCPUOP_inject_raw_msi           17
+struct vcpu_raw_msi_info {
+    uint16_t dom;
+    uint16_t data;
+    uint32_t address;
+};
 #endif /* __XEN_PUBLIC_VCPU_H__ */
