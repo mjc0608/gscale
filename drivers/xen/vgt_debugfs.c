@@ -248,8 +248,8 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	unsigned int dspa_surf_size = VGT_MMIO_READ(pdev, _REG_DSPASIZE);
 	unsigned int dspb_surf_size = VGT_MMIO_READ(pdev, _REG_DSPBSIZE);
 
-	printk("vGT(%d): Display surface A size is %d\n", dspa_surf_size);
-	printk("vGT(%d): Display surface B size is %d\n", dspb_surf_size);
+	printk("vGT(%d): Display surface A size is %d\n", vgt_id, dspa_surf_size);
+	printk("vGT(%d): Display surface B size is %d\n", vgt_id, dspb_surf_size);
 
 	ASSERT(vgt);
 	ASSERT(d_vgt_debug);
