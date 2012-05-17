@@ -1,0 +1,30 @@
+--- drivers/xen/vgt_context.c
++++ drivers/xen/vgt_context.c
+@@ -1990,9 +1975,25 @@
+	cfg_space = &vgt->state.cfg_space[0];
+	memcpy (cfg_space, pdev->initial_cfg_space, VGT_CFG_SPACE_SZ);
+	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
+-	*(uint32_t *)(cfg_space + VGT_REG_CFG_SPACE_BAR1) =
+-		vgt_guest_aperture_base(vgt) | 0x4;	/* 64-bit MMIO bar */
++	*(uint32_t *)(cfg_space + VGT_REG_CFG_SPACE_BAR1) = aperture_base(pdev);
+
++	printk("Aperture: [%llx, %llx] guest [%llx, %llx] va(%llx)\n",
++		vgt_aperture_base(vgt),
++		vgt_aperture_end(vgt),
++		vgt_guest_aperture_base(vgt),
++		vgt_guest_aperture_end(vgt),
++		(uint64_t)vgt->aperture_base_va);
++
++	printk("GM: [%llx, %llx], [%llx, %llx], guest[%llx, %llx], [%llx, %llx]\n",
++		vgt_visible_gm_base(vgt),
++		vgt_visible_gm_end(vgt),
++		vgt_hidden_gm_base(vgt),
++		vgt_hidden_gm_end(vgt),
++		vgt_guest_visible_gm_base(vgt),
++		vgt_guest_visible_gm_end(vgt),
++		vgt_guest_hidden_gm_base(vgt),
++		vgt_guest_hidden_gm_end(vgt));
++
+	memcpy (vgt->state.vReg, pdev->initial_mmio_state, VGT_MMIO_SPACE_SZ);
+	vgt->pdev = pdev;
+	state_reg_v2s (vgt);

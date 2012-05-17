@@ -649,6 +649,7 @@ bool default_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	else
 		vgt_update_reg_64(vgt, offset);
 
+	return true;
 }
 
 #define PCI_BAR_ADDR_MASK (~0xFUL)  /* 4 LSB bits are not address */
@@ -745,6 +746,9 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		show_mode_settings(vgt->pdev);
 	}
 
+	if (offset == _REG_CURABASE || offset == _REG_DSPASURF)
+		printk("vGT(%d): write to surface base (%x) with (%x)\n",
+			vgt->vgt_id, offset, __vreg(vgt, offset));
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
@@ -975,7 +979,7 @@ int vgt_thread(void *priv)
 	long wait = 0;
 	int ring_id;
 
-	ASSERT(current_render_owner(pdev));
+	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
 	if (fastmode) {
 		printk("vGT: fastmode switch (in 50ms)\n");
@@ -2114,8 +2118,11 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		vgt_super_owner = NULL;
 
 		/* a special debug mode to give full access to hvm guest */
-		if (hvm_owner)
+		if (hvm_owner) {
 			vgt_super_owner = vgt;
+			current_render_owner(pdev) = vgt;
+			current_display_owner(pdev) = vgt;
+		}
 	}
 
 	/* create debugfs interface */
@@ -2657,8 +2664,11 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 	}
 
-	current_render_owner(pdev) = vgt_dom0;
-	current_display_owner(pdev) = vgt_dom0;
+	/* "hvm_owner" is a special mode where we give all the ownerships to the hvm guest */
+	if (!hvm_owner) {
+		current_render_owner(pdev) = vgt_dom0;
+		current_display_owner(pdev) = vgt_dom0;
+	}
 	current_pm_owner(pdev) = vgt_dom0;
 	current_mgmt_owner(pdev) = vgt_dom0;
 	current_global_owner(pdev) = vgt_dom0;
