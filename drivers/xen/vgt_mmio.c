@@ -382,6 +382,10 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 					*(char *)p_data, bytes);
 			break;
 
+		case 0x90:
+		case 0x94:
+		case 0x98:
+			printk("vGT: write to MSI capa(%x) with val (%x)\n", off, *(uint32_t *)p_data);
 		case VGT_REG_CFG_SPACE_BAR1+4:
 		case VGT_REG_CFG_SPACE_BAR0+4:
 		case VGT_REG_CFG_SPACE_BAR2+4:
