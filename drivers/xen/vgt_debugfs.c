@@ -239,7 +239,17 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 {
 	int vgt_id = vgt->vgt_id;
 	int retval;
-	struct dentry *d_vmmio, *d_smmio;
+	struct dentry *d_vmmio, *d_smmio,
+				  *d_vfb_a, *d_sfb_a,
+				  *d_vfb_b, *d_sfb_b;
+
+    struct pgt_device *pdev = vgt->pdev;
+
+	unsigned int dspa_surf_size = VGT_MMIO_READ(pdev, _REG_DSPASIZE);
+	unsigned int dspb_surf_size = VGT_MMIO_READ(pdev, _REG_DSPBSIZE);
+
+	printk("vGT(%d): Display surface A size is %d\n", dspa_surf_size);
+	printk("vGT(%d): Display surface B size is %d\n", dspb_surf_size);
 
 	ASSERT(vgt);
 	ASSERT(d_vgt_debug);
@@ -282,5 +292,29 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	else
 		printk("vGT(%d): create debugfs node: shadow_mmio_space\n", vgt_id);
 
+	d_sfb_b = vgt_debugfs_create_blob("shadow_surfB_fb",
+			0444,
+			d_per_vgt[vgt_id],
+			(u32 *)((void *)(vgt->state.sReg) + _REG_DSPBSURF),
+			1024*1024/4);
+
+	if (!d_sfb_b)
+		printk(KERN_ERR "vGT(%d): failed to create debugfs node: shadow_surfB_fb\n", vgt_id);
+	else
+		printk("vGT(%d): create debugfs node: shadow_surfB_fb\n", vgt_id);
+
+	d_sfb_a = vgt_debugfs_create_blob("shadow_surfA_fb",
+			0444,
+			d_per_vgt[vgt_id],
+			(u32 *)((void *)(vgt->state.sReg) + _REG_DSPASURF),
+			1024*1024/4);
+
+	if (!d_sfb_a)
+		printk(KERN_ERR "vGT(%d): failed to create debugfs node: shadow_surfA_fb\n", vgt_id);
+	else
+		printk("vGT(%d): create debugfs node: shadow_surfA_fb\n", vgt_id);
+
+
 	return 0;
 }
+
