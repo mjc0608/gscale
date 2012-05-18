@@ -560,7 +560,7 @@ void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 	info.dom = vgt->vm_id;
 	info.address = *(uint32_t *)(cfg_space + MSI_CAP_ADDRESS);
 	info.data = *(uint16_t *)(cfg_space + MSI_CAP_DATA);
-	printk("vGT(%d): hvm injections. address (%x) data(%x)!\n",
+	dprintk("vGT(%d): hvm injections. address (%x) data(%x)!\n",
 		vgt->vgt_id, info.address, info.data);
 
 	if (HYPERVISOR_vcpu_op(VCPUOP_inject_raw_msi,

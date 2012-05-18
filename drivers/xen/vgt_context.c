@@ -2122,6 +2122,8 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 			vgt_super_owner = vgt;
 			current_render_owner(pdev) = vgt;
 			current_display_owner(pdev) = vgt;
+			current_mgmt_owner(pdev) = vgt;
+			current_global_owner(pdev) = vgt;
 		}
 	}
 
