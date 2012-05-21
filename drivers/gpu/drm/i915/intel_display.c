@@ -3210,7 +3210,7 @@ static void gen6_fdi_link_train(struct drm_crtc *crtc)
 	I915_WRITE(reg, temp);
 
 	POSTING_READ(reg);
-	udelay(150);
+	mdelay(150);
 
 	/* enable CPU FDI TX and PCH FDI RX */
 	reg = FDI_TX_CTL(pipe);
@@ -3249,7 +3249,7 @@ static void gen6_fdi_link_train(struct drm_crtc *crtc)
 		I915_WRITE(reg, temp);
 
 		POSTING_READ(reg);
-		udelay(500);
+		mdelay(500);
 
 		for (retry = 0; retry < 5; retry++) {
 			reg = FDI_RX_IIR(pipe);
@@ -3302,7 +3302,7 @@ static void gen6_fdi_link_train(struct drm_crtc *crtc)
 		I915_WRITE(reg, temp);
 
 		POSTING_READ(reg);
-		udelay(500);
+		mdelay(500);
 
 		for (retry = 0; retry < 5; retry++) {
 			reg = FDI_RX_IIR(pipe);
@@ -3321,7 +3321,7 @@ static void gen6_fdi_link_train(struct drm_crtc *crtc)
 	if (i == 4)
 		DRM_ERROR("FDI train 2 fail!\n");
 
-	DRM_DEBUG_KMS("FDI train done.\n");
+	printk("FDI train done.\n");
 }
 
 /* Manual link training for Ivy Bridge A0 parts */
@@ -3362,6 +3362,9 @@ static void ivb_manual_fdi_link_train(struct drm_crtc *crtc)
 		temp &= ~FDI_LINK_TRAIN_PATTERN_MASK_CPT;
 		temp &= ~FDI_RX_ENABLE;
 		I915_WRITE(reg, temp);
+
+		POSTING_READ(reg);
+		mdelay(150);
 
 		/* enable CPU FDI TX and PCH FDI RX */
 		reg = FDI_TX_CTL(pipe);
@@ -3404,6 +3407,9 @@ static void ivb_manual_fdi_link_train(struct drm_crtc *crtc)
 			DRM_DEBUG_KMS("FDI train 1 fail on vswing %d\n", j / 2);
 			continue;
 		}
+
+		POSTING_READ(reg);
+		mdelay(150);
 
 		/* Train 2 */
 		reg = FDI_TX_CTL(pipe);
