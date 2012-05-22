@@ -242,6 +242,46 @@ bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static int vgt_hvm_map_rom (struct vgt_device *vgt, int map)
+{
+	char *cfg_space = &vgt->state.cfg_space[0];
+	uint64_t gfn_s, num, mfn_s;
+	struct xen_hvm_vgt_map_mmio memmap;
+	int r, i;
+
+	/* guarantee the sequence of map -> unmap -> map -> unmap */
+	if (map == vgt->state.bar_mapped[3])
+		return 0;
+
+	cfg_space += VGT_REG_CFG_SPACE_BAR_ROM;
+	gfn_s = (* (uint32_t*) cfg_space) >> PAGE_SHIFT;
+	num = vgt->state.bar_size[3] >> PAGE_SHIFT;
+	mfn_s = virt_to_mfn(__va(page_to_phys(vgt->pdev->vbios)));
+
+	if (gfn_s == 0) {
+		printk("vGT: map ROM bar to GFN ZERO!!!! exit!\n");
+		return 0;
+	}
+
+	for (i = 0; i < num; i++) {
+		memmap.first_gfn = gfn_s + i;
+		memmap.first_mfn = virt_to_mfn(__va(page_to_phys(vgt->pdev->vbios)) + i * PAGE_SIZE);
+		memmap.nr_mfns = 1;
+		memmap.map = map;
+		memmap.domid = vgt->vm_id;
+
+		printk("%s(rombar): domid=%d gfn_s=0x%lx mfn_s=0x%lx nr_mfns=0x%x\n", map==0? "remove_map":"add_map",
+				vgt->vm_id, memmap.first_gfn, memmap.first_mfn, memmap.nr_mfns);
+
+		r = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
+
+		if (r != 0)
+			printk(KERN_ERR "vgt_hvm_map_rom fail with %d!\n", r);
+	}
+
+	vgt->state.bar_mapped[3] = map;
+	return r;
+}
 /*
  * Map the apperture space (BAR1) of vGT device for direct access.
  */
@@ -253,7 +293,7 @@ static int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 	int r;
 
 	/* guarantee the sequence of map -> unmap -> map -> unmap */
-	if (map == vgt->state.bar1_mapped)
+	if (map == vgt->state.bar_mapped[1])
 		return 0;
 
 	cfg_space += VGT_REG_CFG_SPACE_BAR1;	/* APERTUR */
@@ -279,7 +319,7 @@ static int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 	if (r != 0)
 		printk(KERN_ERR "vgt_hvm_map_apperture fail with %d!\n", r);
 	else
-		vgt->state.bar1_mapped = map;
+		vgt->state.bar_mapped[1] = map;
 
 	return r;
 }
@@ -349,13 +389,17 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 		case VGT_REG_CFG_SPACE_BAR0:	/* GTTMMIO */
 		case VGT_REG_CFG_SPACE_BAR1:	/* GMADR */
 		case VGT_REG_CFG_SPACE_BAR2:	/* IO */
+		case VGT_REG_CFG_SPACE_BAR_ROM:	/* ROM */
 			ASSERT((bytes == 4) && (off & 3) == 0);
 
 			old = *cfg_reg & 0xf;
 			new = *(uint32_t *)p_data;
 			printk("Programming bar 0x%x with 0x%x\n", off, new);
-			size = vgt->state.bar_size[(off - VGT_REG_CFG_SPACE_BAR0)/8];
-			if ( new == 0xFFFFFFFF ) {
+			if ((off & ~3) != VGT_REG_CFG_SPACE_BAR_ROM)
+				size = vgt->state.bar_size[(off - VGT_REG_CFG_SPACE_BAR0)/8];
+			else
+				size = vgt->state.bar_size[3];
+			if ( new == 0xFFFFFFFF || new == 0xFFFFF800 ) {
 				/*
 				 * Power-up software can determine how much address
 				 * space the device requires by writing a value of
@@ -370,9 +414,13 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 			} else {
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
 					vgt_hvm_map_apperture(vgt, 0);
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR_ROM)
+					vgt_hvm_map_rom(vgt, 0);
 				*cfg_reg = (new & ~0xf) | old;
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
 					vgt_hvm_map_apperture(vgt, 1);
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR_ROM)
+					vgt_hvm_map_rom(vgt, 1);
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR0)
 					vgt_hvm_set_trap_area(vgt);
 			}

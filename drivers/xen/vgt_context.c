@@ -2278,12 +2278,19 @@ static bool save_vbios(struct pgt_device *pdev)
 	u64 size;
 	int i;
 	char sum = 0;
+	struct page *page;
+	char *vbios;
 
-	pdev->vbios = kzalloc(0x20000, GFP_KERNEL);
-	if (!pdev->vbios) {
+	pdev->vbios = NULL;
+	/* allocate 64KB buffer */
+	page = alloc_pages(GFP_KERNEL | __GFP_ZERO | GFP_DMA32, get_order(VGT_VBIOS_PAGES));
+	if (!page) {
 		printk("vGT: no enough memory for vBIOS\n");
 		return false;
 	}
+	pdev->vbios = page;
+	vbios = __va(page_to_phys(page));
+	printk("vGT: save vbios at %lx\n", (uint64_t)vbios);
 
 	if (*(uint16_t *)ptr != 0xAA55) {
 		printk("vGT: no valid VBIOS found!\n");
@@ -2292,11 +2299,10 @@ static bool save_vbios(struct pgt_device *pdev)
 
 	printk("vGT: found a valid VBIOS\n");
 	size = (ptr[2]) * 512;
-	ASSERT_NUM(size < 0x20000, size);
+	ASSERT_NUM(size < 64 * 1024, size);
 
 	printk("vGT: VBIOS size: %lx\n", size);
-	ASSERT(size > 64 * 1024);
-	memcpy(pdev->vbios, ptr, size);
+	memcpy(vbios, ptr, size);
 	for (i = 0; i + 4 < size; i++)
 		if (!memcmp(ptr + i, "$VBT", 4)) {
 			printk("vGT: find VBT table at %x\n", 0xC0000+i);
@@ -2876,6 +2882,8 @@ void vgt_destroy()
 	}
 	free_mtable();
 	kfree(pdev->reg_info);
+	if (pdev->vbios)
+		free_pages(pdev->vbios, get_order(VGT_VBIOS_PAGES));
 }
 
 

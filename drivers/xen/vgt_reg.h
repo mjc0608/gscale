@@ -832,6 +832,7 @@ typedef u16 reg_info_t;
 typedef vgt_reg_t vgt_addr_mask_t;
 
 struct vgt_irq_host_state;
+#define VGT_VBIOS_PAGES 16
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list;
@@ -881,7 +882,7 @@ struct pgt_device {
 
 	uint64_t vgtt_sz; /* in bytes */
 	uint32_t *vgtt; /* virtual GTT table for guest to read*/
-	char *vbios;
+	struct page *vbios;
 };
 
 extern struct list_head pgt_devices;
