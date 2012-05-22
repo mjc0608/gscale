@@ -2113,6 +2113,8 @@ void intel_flush_primary_plane(struct drm_i915_private *dev_priv,
 	struct drm_device *dev = dev_priv->dev;
 	u32 reg = INTEL_INFO(dev)->gen >= 4 ? DSPSURF(plane) : DSPADDR(plane);
 
+	printk("i915: intel_flush_display_plane\n");
+
 	I915_WRITE(reg, I915_READ(reg));
 	POSTING_READ(reg);
 }
@@ -3210,7 +3212,7 @@ static void gen6_fdi_link_train(struct drm_crtc *crtc)
 	I915_WRITE(reg, temp);
 
 	POSTING_READ(reg);
-	mdelay(150);
+	udelay(150);
 
 	/* enable CPU FDI TX and PCH FDI RX */
 	reg = FDI_TX_CTL(pipe);
@@ -3249,7 +3251,7 @@ static void gen6_fdi_link_train(struct drm_crtc *crtc)
 		I915_WRITE(reg, temp);
 
 		POSTING_READ(reg);
-		mdelay(500);
+		udelay(500);
 
 		for (retry = 0; retry < 5; retry++) {
 			reg = FDI_RX_IIR(pipe);
@@ -3302,7 +3304,7 @@ static void gen6_fdi_link_train(struct drm_crtc *crtc)
 		I915_WRITE(reg, temp);
 
 		POSTING_READ(reg);
-		mdelay(500);
+		udelay(500);
 
 		for (retry = 0; retry < 5; retry++) {
 			reg = FDI_RX_IIR(pipe);
@@ -3364,7 +3366,7 @@ static void ivb_manual_fdi_link_train(struct drm_crtc *crtc)
 		I915_WRITE(reg, temp);
 
 		POSTING_READ(reg);
-		mdelay(150);
+		udelay(150);
 
 		/* enable CPU FDI TX and PCH FDI RX */
 		reg = FDI_TX_CTL(pipe);
@@ -3409,7 +3411,7 @@ static void ivb_manual_fdi_link_train(struct drm_crtc *crtc)
 		}
 
 		POSTING_READ(reg);
-		mdelay(150);
+		udelay(150);
 
 		/* Train 2 */
 		reg = FDI_TX_CTL(pipe);
