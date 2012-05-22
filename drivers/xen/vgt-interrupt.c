@@ -472,16 +472,21 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 	    !test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
 	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))) &&
 	    test_bit(_REGSHIFT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
-		dprintk("vGT: set bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
+		if (vstate->vgt_id)
+			dprintk("vGT: set bit (%d) for (%s) for VM (%d)\n",
+				bit, info->name, vstate->vgt_id);
 		vgt_set_irq_pending(vstate);
 	} else {
-		dprintk("vGT: propogate bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
-		dprintk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
-			__vreg(vstate, vgt_isr(info->reg_base)),
-			__vreg(vstate, vgt_imr(info->reg_base)),
-			__vreg(vstate, vgt_iir(info->reg_base)),
-			__vreg(vstate, vgt_ier(info->reg_base)),
-			__vreg(vstate, _REG_DEIER));
+		if (vstate->vgt_id) {
+			dprintk("vGT: propogate bit (%d) for (%s) for VM (%d) w/o injection\n",
+				bit, info->name, vstate->vgt_id);
+			dprintk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
+				__vreg(vstate, vgt_isr(info->reg_base)),
+				__vreg(vstate, vgt_imr(info->reg_base)),
+				__vreg(vstate, vgt_iir(info->reg_base)),
+				__vreg(vstate, vgt_ier(info->reg_base)),
+				__vreg(vstate, _REG_DEIER));
+		}
 	}
 
 	if (test_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))))
@@ -776,6 +781,12 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 		if (unmasked)
 			val &= ~unmasked;
 
+		if (reg == _REG_DEIMR) {
+			if (masked & 0x88)
+				printk("XXX: mask vblank/vsync (%x)\n", masked);
+			if (unmasked & 0x88)
+				printk("XXX: unmask vblank/vsync (%x)\n", unmasked);
+		}
 		VGT_MMIO_WRITE(pdev, reg, val);
 		VGT_POST_READ(pdev, reg);
 	}
@@ -889,6 +900,12 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 			val |= ier_enabled;
 		if (ier_disabled)
 			val &= ~ier_disabled;
+		if (reg == _REG_DEIER) {
+			if (ier_disabled & 0x88)
+				printk("XXX: disable vblank/vsync (%x)\n", ier_disabled);
+			if (ier_enabled & 0x88)
+				printk("XXX: enable vblank/vsync (%x)\n", ier_enabled);
+		}
 		if (vgt_master_enable(pdev))
 			val |= _REGBIT_MASTER_INTERRUPT;
 		else

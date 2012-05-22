@@ -568,6 +568,8 @@ static unsigned long vgt_get_reg(struct vgt_device *vgt, unsigned int reg)
 	if (reg_hw_access(vgt, reg)) {
 		__sreg(vgt, reg) = VGT_MMIO_READ(pdev, reg);
 		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
+		if (reg == 0x78000)
+			printk("vGT: 0x78000 sreg(%x), vreg(%x)\n", __sreg(vgt, reg), __vreg(vgt, reg));
 	}
 
 	return __vreg(vgt, reg);
@@ -594,6 +596,26 @@ static unsigned long vgt_get_reg_64(struct vgt_device *vgt, unsigned int reg)
 	return __vreg64(vgt, reg);
 }
 
+static vgt_reg_t dom0_surf = 0;
+static bool dom0 = true;
+static struct vgt_device *vgt_dom1 = NULL;
+static struct hrtimer vgt_timer;
+static enum hrtimer_restart vgt_timer_fn(struct hrtimer *data)
+{
+	if (dom0) {
+		VGT_MMIO_WRITE(vgt_dom0->pdev, _REG_DSPASURF, __sreg(vgt_dom0, _REG_DSPASURF));
+		printk("XXXX: switch to dom0 (%x)%x\n", VGT_MMIO_READ(vgt_dom0->pdev, _REG_DSPASURF), __sreg(vgt_dom0, _REG_DSPASURF));
+		dom0 = false;
+	} else {
+		VGT_MMIO_WRITE(vgt_dom0->pdev, _REG_DSPASURF, __sreg(vgt_dom1, _REG_DSPASURF));
+		//VGT_MMIO_WRITE(vgt_dom0->pdev, _REG_DSPASURF, 0x64000);
+		printk("XXXX: switch to dom1 (%x)%x\n", VGT_MMIO_READ(vgt_dom0->pdev, _REG_DSPASURF), __sreg(vgt_dom1, _REG_DSPASURF));
+		dom0 = true;
+	}
+	hrtimer_add_expires_ns(data, 5000000000);
+	return HRTIMER_RESTART;
+}
+
 static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -602,8 +624,25 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 	 * update preg if boot_time or vgt is reg's cur owner
 	 */
 	__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
-	if (reg_hw_access(vgt, reg))
-			VGT_MMIO_WRITE(pdev, reg, __sreg(vgt, reg));
+	if (reg == _REG_DSPASURF)
+		printk("=======: write vReg(%x), sReg(%x)\n", __vreg(vgt, reg), __sreg(vgt, reg));
+	if (reg_hw_access(vgt, reg) || reg == _REG_DSPASURF || reg == _REG_CURABASE) {
+		if (vgt->vgt_id && !vgt_dom1) {
+			printk("XXXXXXXXX: start switch timer\n");
+			vgt_dom1 = vgt;
+			hrtimer_start(&vgt_timer, ktime_add_ns(ktime_get(), 5000000000), HRTIMER_MODE_ABS);
+		}
+		if (vgt->vgt_id)
+			printk("XXXX: write to reg (%x)\n", reg);
+		VGT_MMIO_WRITE(pdev, reg, __sreg(vgt, reg));
+#if 0
+		if (reg == _REG_DSPASURF && vgt->vgt_id != 0 ) {
+			memcpy(aperture_vbase(pdev) + __sreg(vgt, reg),
+				aperture_vbase(pdev) + __sreg(vgt, reg) + 0x8000000,
+				SIZE_1MB);
+		}
+#endif
+	}
 }
 
 static void vgt_update_reg_64(struct vgt_device *vgt, unsigned int reg)
@@ -696,6 +735,13 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 		default_mmio_read(vgt, offset, p_data, bytes);
 	}
 
+#if 0
+	if (vgt->vm_id) {
+		if (VGT_MMIO_READ(pdev, offset) != *(vgt_reg_t *)p_data)
+			printk("vGT: read reg(%x), p(%x), v(%x)\n",
+				offset, VGT_MMIO_READ(pdev, offset), *(vgt_reg_t *)p_data);
+	}
+#endif
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
@@ -746,9 +792,10 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		show_mode_settings(vgt->pdev);
 	}
 
-	if (offset == _REG_CURABASE || offset == _REG_DSPASURF)
-		printk("vGT(%d): write to surface base (%x) with (%x)\n",
-			vgt->vgt_id, offset, __vreg(vgt, offset));
+	if (offset == _REG_DSPASURF)
+		printk("vGT(%d): write to surface base (%x) with (%x), pReg(%x)\n",
+			vgt->vgt_id, offset, __vreg(vgt, offset),
+			VGT_MMIO_READ(pdev, offset));
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
@@ -901,10 +948,27 @@ static void check_gtt(struct pgt_device *pdev)
 		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x7ffff000)));
 }
 
-static bool hvm_owner = false;
+static bool hvm_render_owner = false;
+static int __init hvm_render_setup(char *str)
+{
+	hvm_render_owner = true;
+	return 1;
+}
+__setup("hvm_render_owner", hvm_render_setup);
+
+static bool hvm_dpy_owner = false;
+static int __init hvm_dpy_setup(char *str)
+{
+	hvm_dpy_owner = true;
+	return 1;
+}
+__setup("hvm_dpy_owner", hvm_dpy_setup);
+
 static int __init hvm_owner_setup(char *str)
 {
-	hvm_owner = true;
+	hvm_dpy_owner = true;
+	hvm_render_owner = true;
+
 	return 1;
 }
 __setup("hvm_owner", hvm_owner_setup);
@@ -1542,10 +1606,6 @@ vgt_reg_t vgt_render_regs[] = {
 	_REG_RCS_UHPTR,
 	_REG_BCS_UHPTR,
 	_REG_VCS_UHPTR,
-
-	_REG_RCS_IMR,
-	_REG_BCS_IMR,
-	_REG_VCS_IMR,
 };
 
 static void vgt_setup_render_regs(struct pgt_device *pdev)
@@ -1556,6 +1616,25 @@ static void vgt_setup_render_regs(struct pgt_device *pdev)
 		reg_set_owner(pdev, vgt_render_regs[i], VGT_OT_RENDER);
 		reg_set_pt(pdev, vgt_render_regs[i]);
 	}
+
+	/* RCS */
+	for (i = 0x2000; i <= 0x2FFF; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_RENDER);
+		reg_set_pt(pdev, i);
+	}
+
+	/* VCS */
+	for (i = 0x12000; i <= 0x12FFF; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_RENDER);
+		reg_set_pt(pdev, i);
+	}
+
+	/* BCS */
+	for (i = 0x22000; i <= 0x22FFF; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_RENDER);
+		reg_set_pt(pdev, i);
+	}
+
 }
 
 /* TODO: lots of to fill */
@@ -1618,8 +1697,6 @@ vgt_reg_t vgt_display_regs[] = {
 	_REG_DVSBTILEOFF,
 	_REG_DVSBSURFLIVE,
 	_REG_DVSBSCALE	,
-
-	_REG_PCH_DPB_AUX_CH_CTL,
 };
 
 static void vgt_setup_display_regs(struct pgt_device *pdev)
@@ -2118,13 +2195,12 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		vgt_super_owner = NULL;
 
 		/* a special debug mode to give full access to hvm guest */
-		if (hvm_owner) {
-			vgt_super_owner = vgt;
+		if (hvm_render_owner)
 			current_render_owner(pdev) = vgt;
+
+		//vgt_super_owner = vgt;
+		if (hvm_dpy_owner)
 			current_display_owner(pdev) = vgt;
-			current_mgmt_owner(pdev) = vgt;
-			current_global_owner(pdev) = vgt;
-		}
 	}
 
 	/* create debugfs interface */
@@ -2667,10 +2743,10 @@ int vgt_initialize(struct pci_dev *dev)
 	}
 
 	/* "hvm_owner" is a special mode where we give all the ownerships to the hvm guest */
-	if (!hvm_owner) {
+	if (!hvm_render_owner) {
 		current_render_owner(pdev) = vgt_dom0;
-		current_display_owner(pdev) = vgt_dom0;
 	}
+	current_display_owner(pdev) = vgt_dom0;
 	current_pm_owner(pdev) = vgt_dom0;
 	current_mgmt_owner(pdev) = vgt_dom0;
 	current_global_owner(pdev) = vgt_dom0;
@@ -2686,6 +2762,9 @@ int vgt_initialize(struct pci_dev *dev)
 	}
 	pdev->p_thread = p_thread;
 	show_debug(pdev);
+
+	hrtimer_init(&vgt_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+        vgt_timer.function = vgt_timer_fn;
 
 	list_add(&pdev->list, &pgt_devices);
 
