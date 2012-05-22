@@ -225,7 +225,7 @@ bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 	rc = default_mmio_write(vgt, offset,p_data, bytes);
 
-	if ( (vgt->vm_id != 0) && !reg_is_owner(vgt, reg)){
+	if ( !reg_hw_access(vgt, reg)) {
 		data = __vreg(vgt, reg);
 		if (data & _REGBIT_DP_AUX_CH_CTL_DONE)
 			data &= ~_REGBIT_DP_AUX_CH_CTL_DONE;
@@ -239,6 +239,7 @@ bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		}
 		__vreg(vgt, reg) = data;
 	}
+	return true;
 }
 
 /*
@@ -421,7 +422,6 @@ printk("mmio hooks initialized\n");
 
 	vgt_register_mmio_handler( _REG_PCH_DPD_AUX_CH_CTL, _REG_PCH_DPD_AUX_CH_CTL + 3,
 			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
-
 	return true;
 }
 

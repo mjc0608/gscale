@@ -1245,7 +1245,7 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 		/* print info every 32MB */
 		if (!(count % 8192))
-			printk("vGT(%d): capture ballooned write for %d times (%x)\n",
+			dprintk("vGT(%d): capture ballooned write for %d times (%x)\n",
 				vgt->vgt_id, count, off);
 
 		count++;

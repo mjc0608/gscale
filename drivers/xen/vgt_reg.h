@@ -961,14 +961,14 @@ static inline bool reg_is_owner(struct vgt_device *vgt, vgt_reg_t reg)
 {
 	enum vgt_owner_type type;
 
-	type = vgt->pdev->reg_info[reg] & VGT_REG_OWNER;
+	type = vgt->pdev->reg_info[REG_INDEX(reg)] & VGT_REG_OWNER;
 	return vgt == vgt_get_owner(vgt->pdev, type);
 }
 
 static inline void reg_set_owner(struct pgt_device *pdev,
 	vgt_reg_t reg, enum vgt_owner_type type)
 {
-	pdev->reg_info[reg] |= type & VGT_REG_OWNER;
+	pdev->reg_info[REG_INDEX(reg)] |= type & VGT_REG_OWNER;
 }
 
 /* request types to wake up main thread */
