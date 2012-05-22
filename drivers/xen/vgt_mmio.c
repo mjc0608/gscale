@@ -480,13 +480,20 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 					*(char *)p_data, bytes);
 			break;
 
+		case VGT_REG_CFG_SPACE_BAR1+4:
+		case VGT_REG_CFG_SPACE_BAR0+4:
+		case VGT_REG_CFG_SPACE_BAR2+4:
+			ASSERT((bytes == 4) && (off & 3) == 0);
+			if (*(uint32_t *)p_data == 0xFFFFFFFF)
+				/* BAR size is not beyond 4G, so return all-0 in uppper 32 bit */
+				*cfg_reg = 0;
+			else
+				*cfg_reg = *(uint32_t*)p_data;
+			break;
 		case 0x90:
 		case 0x94:
 		case 0x98:
 			printk("vGT: write to MSI capa(%x) with val (%x)\n", off, *(uint32_t *)p_data);
-		case VGT_REG_CFG_SPACE_BAR1+4:
-		case VGT_REG_CFG_SPACE_BAR0+4:
-		case VGT_REG_CFG_SPACE_BAR2+4:
 		default:
 			memcpy (&vgt->state.cfg_space[off], p_data, bytes);
 			break;
