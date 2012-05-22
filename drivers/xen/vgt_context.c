@@ -2017,6 +2017,7 @@ static void state_reg_v2s(struct vgt_device *vgt)
 static bool create_state_instance(struct vgt_device *vgt)
 {
 	vgt_state_t	*state;
+	int i;
 
 dprintk("create_state_instance\n");
 	state = &vgt->state;
@@ -2032,7 +2033,9 @@ dprintk("create_state_instance\n");
 		state->sReg = state->vReg = NULL;
 		return false;
 	}
-	state->bar1_mapped = 0;
+
+	for (i = 0; i < VGT_BAR_NUM; i++)
+		state->bar_mapped[i] = 0;
 	return true;
 }
 
@@ -2130,6 +2133,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	vgt->state.bar_size[1] =			/* Aperture */
 		vgt->ballooning ? pdev->bar_size[1] : vgt_aperture_sz(vgt);
 	vgt->state.bar_size[2] = pdev->bar_size[2];	/* PIO */
+	vgt->state.bar_size[3] = pdev->bar_size[3];	/* ROM */
 
 	/* Set initial configuration space and MMIO space registers. */
 	cfg_space = &vgt->state.cfg_space[0];
@@ -2268,6 +2272,53 @@ dprintk("read back bar_size2 %lx\n", bar_size);
         return bar_size;
 }
 
+static bool save_vbios(struct pgt_device *pdev)
+{
+	char *ptr = __va(0xC0000);
+	u64 size;
+	int i;
+	char sum = 0;
+
+	pdev->vbios = kzalloc(0x20000, GFP_KERNEL);
+	if (!pdev->vbios) {
+		printk("vGT: no enough memory for vBIOS\n");
+		return false;
+	}
+
+	if (*(uint16_t *)ptr != 0xAA55) {
+		printk("vGT: no valid VBIOS found!\n");
+		return false;
+	}
+
+	printk("vGT: found a valid VBIOS\n");
+	size = (ptr[2]) * 512;
+	ASSERT_NUM(size < 0x20000, size);
+
+	printk("vGT: VBIOS size: %lx\n", size);
+	ASSERT(size > 64 * 1024);
+	memcpy(pdev->vbios, ptr, size);
+	for (i = 0; i + 4 < size; i++)
+		if (!memcmp(ptr + i, "$VBT", 4)) {
+			printk("vGT: find VBT table at %x\n", 0xC0000+i);
+			break;
+		}
+
+	for (i = 0; i < size - 1; i++)
+		sum += ptr[i];
+	if (sum + ptr[size - 1] != 0) {
+		printk("vGT: adjust VBIOS checksum (%x->%x)\n", (u32)ptr[size - 1], (u32)-sum);
+		ptr[size - 1] = -sum;
+	}
+
+	/*
+	 * FIXME: ROM BAR on the physical device may be disabled, when the GEN is
+	 * used as the boot device. Hard code to 64KB now
+	 */
+	pdev->bar_size[3] = 64 * 1024;
+	pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR_ROM] &= 0x1; /* enabled */
+	return true;
+}
+
 bool initial_phys_states(struct pgt_device *pdev)
 {
 	int i;
@@ -2339,7 +2390,7 @@ dprintk("VGT: Initial_phys_states\n");
 	}
 #endif
 
-	return true;
+	return save_vbios(pdev);
 }
 
 /*

@@ -127,18 +127,19 @@ extern unsigned long vgt_id_alloc_bitmap;
 #define VGT_MMIO_SPACE_SZ	(2*SIZE_1MB)
 #define VGT_MMIO_REG_NUM	(VGT_MMIO_SPACE_SZ/REG_SIZE)	/* 2MB space in totoal */
 #define VGT_CFG_SPACE_SZ	256
+#define VGT_BAR_NUM		4
 typedef struct {
     int		regNum;		/* Total number of MMIO registers in vGT */
     uint64_t    mmio_base_gpa;	/* base guest physical address of the MMIO registers */
     vgt_reg_t	*vReg;		/* guest view of the register state */
     vgt_reg_t	*sReg;		/* Shadow (used by hardware) state of the register */
     uint8_t	cfg_space[VGT_CFG_SPACE_SZ];
-	bool	bar1_mapped;
+	bool	bar_mapped[VGT_BAR_NUM];
     uint64_t	gt_mmio_base;	/* bar0/GTTMMIO  */
     uint64_t	aperture_base;	/* bar1: guest aperture base */
 //    uint64_t	gt_gmadr_base;	/* bar1/GMADR */
 
-    uint32_t	bar_size[3];	/* 0: GTTMMIO, 1: GMADR, 2: PIO bar size */
+    uint32_t	bar_size[VGT_BAR_NUM];	/* 0: GTTMMIO, 1: GMADR, 2: PIO bar size */
 
     /* FIXME: take them as part of vReg/sReg ??? */
     /* save indexed MMIO */
@@ -720,6 +721,7 @@ struct vgt_intel_device_info {
 #define VGT_REG_CFG_SPACE_BAR0			0x10
 #define VGT_REG_CFG_SPACE_BAR1			0x18
 #define VGT_REG_CFG_SPACE_BAR2			0x20
+#define VGT_REG_CFG_SPACE_BAR_ROM		0x30
 #define VGT_REG_CFG_SPACE_MSAC			0x62
 
 //#define MSAC_APERTURE_SIZE_MASK		0x3
@@ -849,7 +851,7 @@ struct pgt_device {
 
 	vgt_reg_t initial_mmio_state[VGT_MMIO_REG_NUM];	/* copy from physical at start */
 	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */
-	uint32_t bar_size[3];
+	uint32_t bar_size[VGT_BAR_NUM];
 	uint64_t total_gm_sz;	/* size of available GM space */
 
 	uint64_t gttmmio_base;	/* base of GTT and MMIO */
@@ -879,6 +881,7 @@ struct pgt_device {
 
 	uint64_t vgtt_sz; /* in bytes */
 	uint32_t *vgtt; /* virtual GTT table for guest to read*/
+	char *vbios;
 };
 
 extern struct list_head pgt_devices;
