@@ -423,6 +423,8 @@ void intel_detect_pch(struct drm_device *dev)
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct pci_dev *pch = NULL;
 
+	printk("i915: intel_detect_pch\n");
+
 	/* In all current cases, num_pipes is equivalent to the PCH_NOP setting
 	 * (which really amounts to a PCH but no South Display).
 	 */
