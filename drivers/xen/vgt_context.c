@@ -661,7 +661,7 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 			}
 		}
 		if (vgt->vgt_id)
-			printk("XXXX(%d): write to reg (%x)\n", vgt->vgt_id, reg);
+			dprintk("XXXX(%d): write to reg (%x)\n", vgt->vgt_id, reg);
 		VGT_MMIO_WRITE(pdev, reg, __sreg(vgt, reg));
 #if 0
 		if (reg == _REG_DSPASURF && vgt->vgt_id != 0 ) {
@@ -1752,6 +1752,30 @@ static void vgt_setup_display_regs(struct pgt_device *pdev)
 
 	reg_set_owner(pdev, 0xe1180, VGT_OT_DISPLAY); /* PCH_LVDS */
 	reg_set_pt(pdev, 0xe1180);
+
+	/* PCH shared functions (gmbus, gpio, clock, power seq, backlight) */
+	for (i = 0xc0000; i <= 0xc7210; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
+		reg_set_pt(pdev, i);
+	}
+
+	/* PCH transcoder and port control */
+	for (i = 0xe0000; i <= 0xe4fff; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
+		reg_set_pt(pdev, i);
+	}
+
+	/* PCH transcoder and FDI control */
+	for (i = 0xf0000; i <= 0xf2fff; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
+		reg_set_pt(pdev, i);
+	}
+
+	/* FDI PLL control */
+	for (i = 0xee000; i <= 0xee007; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
+		reg_set_pt(pdev, i);
+	}
 }
 
 /* TODO: lots of to fill */
