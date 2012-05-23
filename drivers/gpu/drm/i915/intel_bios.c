@@ -44,6 +44,8 @@ find_section(struct bdb_header *bdb, int section_id)
 	u16 total, current_size;
 	u8 current_id;
 
+	printk("i915: id(%d), header(%x), size(%x)\n",
+		section_id, bdb->header_size, bdb->bdb_size);
 	/* skip to first section */
 	index += bdb->header_size;
 	total = bdb->bdb_size;
@@ -59,8 +61,10 @@ find_section(struct bdb_header *bdb, int section_id)
 		if (index + current_size > total)
 			return NULL;
 
-		if (current_id == section_id)
+		if (current_id == section_id) {
+			printk("i915: find section at %x\n", index);
 			return base + index;
+		}
 
 		index += current_size;
 	}
@@ -1203,10 +1207,31 @@ intel_parse_bios(struct drm_device *dev)
 	init_vbt_defaults(dev_priv);
 
 	/* XXX Should this validation be moved to intel_opregion.c? */
+<<<<<<< HEAD
 	if (!dmi_check_system(intel_no_opregion_vbt) && dev_priv->opregion.vbt)
 		bdb = validate_vbt((char *)dev_priv->opregion.header, OPREGION_SIZE,
 				   (struct vbt_header *)dev_priv->opregion.vbt,
 				   "OpRegion");
+=======
+	if (!dmi_check_system(intel_no_opregion_vbt) && dev_priv->opregion.vbt) {
+		struct vbt_header *vbt = dev_priv->opregion.vbt;
+		int i;
+		if (memcmp(vbt->signature, "$VBT", 4) == 0) {
+			DRM_DEBUG_KMS("Using VBT from OpRegion: %20s\n",
+					 vbt->signature);
+			bdb = (struct bdb_header *)((char *)vbt + vbt->bdb_offset);
+			printk("i915: VBT content in opregion (off %x):\n", (u32)vbt->bdb_offset);
+#if 0
+			for (i = 0; i < 0x4b0; i += 4) {
+				if (!(i % 16))
+					printk("\n[%4x]:", i + 0xab0);
+				printk(" %4x", *(uint32_t *)((char *)vbt + i));
+			}
+#endif
+		} else
+			dev_priv->opregion.vbt = NULL;
+	}
+>>>>>>> vGT: move VBT to the 1st page
 
 	if (bdb == NULL) {
 		size_t i, size;
@@ -1229,6 +1254,22 @@ intel_parse_bios(struct drm_device *dev)
 			pci_unmap_rom(pdev, bios);
 			return -1;
 		}
+<<<<<<< HEAD
+=======
+
+#if 0
+		printk("i915: VBT content:\n");
+		start = i;
+		for (i = start; i < start + 0x4b0; i += 4) {
+			if (!(i % 16))
+				printk("\n[%4x]:", i);
+			printk(" %4x", *(uint32_t *)(bios + i));
+		}
+		i = start;
+#endif
+		bdb = (struct bdb_header *)(bios + i + vbt->bdb_offset);
+		printk("i915: bdb offset (%x)\n", (u32)(i+vbt->bdb_offset));
+>>>>>>> vGT: move VBT to the 1st page
 	}
 
 	/* Grab useful general definitions */

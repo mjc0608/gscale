@@ -245,7 +245,7 @@ bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 static int vgt_hvm_map_rom (struct vgt_device *vgt, int map)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
-	uint64_t gfn_s, num, mfn_s;
+	uint64_t gfn_s, num;
 	struct xen_hvm_vgt_map_mmio memmap;
 	int r, i;
 
@@ -256,7 +256,6 @@ static int vgt_hvm_map_rom (struct vgt_device *vgt, int map)
 	cfg_space += VGT_REG_CFG_SPACE_BAR_ROM;
 	gfn_s = (* (uint32_t*) cfg_space) >> PAGE_SHIFT;
 	num = vgt->state.bar_size[3] >> PAGE_SHIFT;
-	mfn_s = virt_to_mfn(__va(page_to_phys(vgt->pdev->vbios)));
 
 	if (gfn_s == 0) {
 		printk("vGT: map ROM bar to GFN ZERO!!!! exit!\n");
@@ -265,7 +264,7 @@ static int vgt_hvm_map_rom (struct vgt_device *vgt, int map)
 
 	for (i = 0; i < num; i++) {
 		memmap.first_gfn = gfn_s + i;
-		memmap.first_mfn = virt_to_mfn(__va(page_to_phys(vgt->pdev->vbios)) + i * PAGE_SIZE);
+		memmap.first_mfn = pfn_to_mfn(page_to_pfn(vgt->pdev->vbios + i));
 		memmap.nr_mfns = 1;
 		memmap.map = map;
 		memmap.domid = vgt->vm_id;

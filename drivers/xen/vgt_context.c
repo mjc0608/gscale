@@ -66,6 +66,7 @@
 #include <linux/pci.h>
 #include <linux/hash.h>
 #include <linux/delay.h>
+#include <linux/highmem.h>
 #include <asm/bitops.h>
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
@@ -123,6 +124,31 @@ submit_context_command_t submit_context_command[MAX_ENGINES] = {
 };
 
 LIST_HEAD(pgt_devices);
+
+static bool hvm_render_owner = false;
+static int __init hvm_render_setup(char *str)
+{
+	hvm_render_owner = true;
+	return 1;
+}
+__setup("hvm_render_owner", hvm_render_setup);
+
+static bool hvm_dpy_owner = false;
+static int __init hvm_dpy_setup(char *str)
+{
+	hvm_dpy_owner = true;
+	return 1;
+}
+__setup("hvm_dpy_owner", hvm_dpy_setup);
+
+static int __init hvm_owner_setup(char *str)
+{
+	hvm_dpy_owner = true;
+	hvm_render_owner = true;
+
+	return 1;
+}
+__setup("hvm_owner", hvm_owner_setup);
 
 static struct pgt_device default_device = {
 	.bus = 0,
@@ -627,13 +653,15 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 	if (reg == _REG_DSPASURF)
 		printk("=======: write vReg(%x), sReg(%x)\n", __vreg(vgt, reg), __sreg(vgt, reg));
 	if (reg_hw_access(vgt, reg) || reg == _REG_DSPASURF || reg == _REG_CURABASE) {
-		if (vgt->vgt_id && !vgt_dom1) {
-			printk("XXXXXXXXX: start switch timer\n");
-			vgt_dom1 = vgt;
-			hrtimer_start(&vgt_timer, ktime_add_ns(ktime_get(), 5000000000), HRTIMER_MODE_ABS);
+		if (hvm_render_owner && !hvm_dpy_owner) {
+			if (vgt->vgt_id && !vgt_dom1) {
+				printk("XXXXXXXXX: start switch timer\n");
+				vgt_dom1 = vgt;
+				hrtimer_start(&vgt_timer, ktime_add_ns(ktime_get(), 5000000000), HRTIMER_MODE_ABS);
+			}
 		}
 		if (vgt->vgt_id)
-			printk("XXXX: write to reg (%x)\n", reg);
+			printk("XXXX(%d): write to reg (%x)\n", vgt->vgt_id, reg);
 		VGT_MMIO_WRITE(pdev, reg, __sreg(vgt, reg));
 #if 0
 		if (reg == _REG_DSPASURF && vgt->vgt_id != 0 ) {
@@ -947,31 +975,6 @@ static void check_gtt(struct pgt_device *pdev)
 		GTT_INDEX(pdev, 0x7ffff000),
 		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x7ffff000)));
 }
-
-static bool hvm_render_owner = false;
-static int __init hvm_render_setup(char *str)
-{
-	hvm_render_owner = true;
-	return 1;
-}
-__setup("hvm_render_owner", hvm_render_setup);
-
-static bool hvm_dpy_owner = false;
-static int __init hvm_dpy_setup(char *str)
-{
-	hvm_dpy_owner = true;
-	return 1;
-}
-__setup("hvm_dpy_owner", hvm_dpy_setup);
-
-static int __init hvm_owner_setup(char *str)
-{
-	hvm_dpy_owner = true;
-	hvm_render_owner = true;
-
-	return 1;
-}
-__setup("hvm_owner", hvm_owner_setup);
 
 static int start_period = 10; /* in unit of second */
 static int __init period_setup(char *str)
@@ -2276,21 +2279,30 @@ static bool save_vbios(struct pgt_device *pdev)
 {
 	char *ptr = __va(0xC0000);
 	u64 size;
-	int i;
+	int i, pages, cnt, rest, j, vbt_start = -1;
 	char sum = 0;
 	struct page *page;
 	char *vbios;
 
 	pdev->vbios = NULL;
 	/* allocate 64KB buffer */
-	page = alloc_pages(GFP_KERNEL | __GFP_ZERO | GFP_DMA32, get_order(VGT_VBIOS_PAGES));
+	page = alloc_pages(GFP_KERNEL | __GFP_ZERO, get_order(VGT_VBIOS_PAGES));
 	if (!page) {
 		printk("vGT: no enough memory for vBIOS\n");
 		return false;
 	}
 	pdev->vbios = page;
+	/* FIXME: not sure why the __va doesn't work sanely here */
+#if 0
 	vbios = __va(page_to_phys(page));
 	printk("vGT: save vbios at %lx\n", (uint64_t)vbios);
+	for (i = 0; i < VGT_VBIOS_PAGES; i++) {
+		printk("%d: pa(%lx), mfn (%lx), va1(%lx), va2(%lx)\n",
+			i, page_to_phys(page + i), g2m_pfn(0, page_to_pfn(page + i)) << PAGE_SHIFT,
+			pfn_to_kaddr(page_to_pfn(page + i)), __va(page_to_phys(page + i)));
+		*(char*)(__va(page_to_phys(page + i))) = 0xaa;
+	}
+#endif
 
 	if (*(uint16_t *)ptr != 0xAA55) {
 		printk("vGT: no valid VBIOS found!\n");
@@ -2298,29 +2310,60 @@ static bool save_vbios(struct pgt_device *pdev)
 	}
 
 	printk("vGT: found a valid VBIOS\n");
-	size = (ptr[2]) * 512;
-	ASSERT_NUM(size < 64 * 1024, size);
+	size = ptr[2] * 512;
+	ASSERT_NUM(size && (size < (VGT_VBIOS_PAGES << PAGE_SHIFT)), size);
 
-	printk("vGT: VBIOS size: %lx\n", size);
-	memcpy(vbios, ptr, size);
+	pages = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	printk("vGT: VBIOS size: %lx (%d pages)\n", size, pages);
+
 	for (i = 0; i + 4 < size; i++)
 		if (!memcmp(ptr + i, "$VBT", 4)) {
 			printk("vGT: find VBT table at %x\n", 0xC0000+i);
+			vbt_start = i;
 			break;
 		}
 
-	for (i = 0; i < size - 1; i++)
-		sum += ptr[i];
-	if (sum + ptr[size - 1] != 0) {
-		printk("vGT: adjust VBIOS checksum (%x->%x)\n", (u32)ptr[size - 1], (u32)-sum);
-		ptr[size - 1] = -sum;
+	rest = size;
+	cnt = PAGE_SIZE;
+	for (i = 0; i < pages; i++) {
+		if (rest < PAGE_SIZE)
+			cnt = rest;
+		vbios = (char *)kmap(page + i);
+		printk("vGT: copy %dth vbios page (pa-%lx, va-%lx, cnt-%x)\n", i,
+			page_to_phys(page + i), vbios, cnt);
+		memcpy(vbios, ptr + i * PAGE_SIZE, cnt);
+		/*
+		 * FIXME: now not sure the reason. only the 1st page can be correctly
+		 * scanned by the 2nd VM. fortunately the vbt size is 0xf61 on this
+		 * platform. So we move the vbt table to be fully within the 1st page
+		 * as a workaround.
+		 */
+		if (i == 0 && vbt_start != -1)
+			memcpy(vbios + 0x60, ptr + vbt_start, 0xf80);
+		for (j = 0; j < cnt; j++)
+			sum += vbios[j];
+		if (i == pages - 1 && sum + vbios[j-1] != 0) {
+			printk("vGT: adjust VBIOS checksum (%x->%x)\n", (u32)vbios[j - 1], (u32)-sum);
+			vbios[j - 1] = -sum;
+		}
+#if 0
+		/* check 1200B VBT table */
+		if (i == 0)
+			for (j = 0xab0; j < 0xab0 + 0x4b0; j += 4) {
+				if (!(j % 16))
+					printk("\n[%4x]:", j);
+				printk(" %4x", *(uint32_t *)(vbios + j));
+			}
+#endif
+		kunmap(page + i);
+		rest -= PAGE_SIZE;
 	}
 
 	/*
 	 * FIXME: ROM BAR on the physical device may be disabled, when the GEN is
 	 * used as the boot device. Hard code to 64KB now
 	 */
-	pdev->bar_size[3] = 64 * 1024;
+	pdev->bar_size[3] = VGT_VBIOS_PAGES << PAGE_SHIFT;
 	pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR_ROM] &= 0x1; /* enabled */
 	return true;
 }
