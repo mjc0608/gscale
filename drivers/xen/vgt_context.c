@@ -1728,6 +1728,30 @@ static void vgt_setup_display_regs(struct pgt_device *pdev)
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
 		reg_set_pt(pdev, i);
 	}
+
+	/* ============================== */
+	/* !!!below need double confirm in the future */
+
+	/* display watermark */
+	for (i = 0x45100; i <= 0x45130; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
+		reg_set_pt(pdev, i);
+	}
+
+	/* backlight */
+	for (i = 0x48250; i <= 0x48270; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
+		reg_set_pt(pdev, i);
+	}
+
+	/* panel power sequence */
+	for (i = 0xc7200; i <= 0xc7210; i += REG_SIZE) {
+		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
+		reg_set_pt(pdev, i);
+	}
+
+	reg_set_owner(pdev, 0xe1180, VGT_OT_DISPLAY); /* PCH_LVDS */
+	reg_set_pt(pdev, 0xe1180);
 }
 
 /* TODO: lots of to fill */
