@@ -262,6 +262,7 @@ static int vgt_hvm_map_rom (struct vgt_device *vgt, int map)
 		return 0;
 	}
 
+	num = 1;
 	for (i = 0; i < num; i++) {
 		memmap.first_gfn = gfn_s + i;
 		memmap.first_mfn = pfn_to_mfn(page_to_pfn(vgt->pdev->vbios + i));

@@ -2314,6 +2314,7 @@ static bool save_vbios(struct pgt_device *pdev)
 	ASSERT_NUM(size && (size < (VGT_VBIOS_PAGES << PAGE_SHIFT)), size);
 
 	pages = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	pages = 1;
 	printk("vGT: VBIOS size: %lx (%d pages)\n", size, pages);
 
 	for (i = 0; i + 4 < size; i++)
