@@ -248,6 +248,10 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	unsigned int dspa_surf_size = VGT_MMIO_READ(pdev, _REG_DSPASIZE);
 	unsigned int dspb_surf_size = VGT_MMIO_READ(pdev, _REG_DSPBSIZE);
 
+
+	u32 dspa_surf_base = *(u32 *)((void *)(vgt->state.sReg) + _REG_DSPASURF);
+	u32 dspb_surf_base = *(u32 *)((void *)(vgt->state.sReg) + _REG_DSPBSURF);
+
 	printk("vGT(%d): Display surface A size is %d\n", vgt_id, dspa_surf_size);
 	printk("vGT(%d): Display surface B size is %d\n", vgt_id, dspb_surf_size);
 
@@ -295,7 +299,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	d_sfb_b = vgt_debugfs_create_blob("shadow_surfB_fb",
 			0444,
 			d_per_vgt[vgt_id],
-			(u32 *)((void *)(vgt->state.sReg) + _REG_DSPBSURF),
+			(u32*)dspb_surf_base,
 			1024*1024/4);
 
 	if (!d_sfb_b)
@@ -306,7 +310,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	d_sfb_a = vgt_debugfs_create_blob("shadow_surfA_fb",
 			0444,
 			d_per_vgt[vgt_id],
-			(u32 *)((void *)(vgt->state.sReg) + _REG_DSPASURF),
+			(u32*)dspa_surf_base,
 			1024*1024/4);
 
 	if (!d_sfb_a)
