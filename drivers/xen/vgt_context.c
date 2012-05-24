@@ -1077,6 +1077,7 @@ int vgt_thread(void *priv)
 	int threshold = 2; /* print every 10s */
 	long wait = 0;
 	int ring_id;
+	cycles_t start, end;
 
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
@@ -1142,6 +1143,9 @@ int vgt_thread(void *priv)
 			if ( next != current_render_owner(pdev) )
 #endif
 			{
+				rdtsc_barrier();
+				start = get_cycles();
+				rdtsc_barrier();
 				/*
 				 * FIXME: now acquire the lock with interrupt disabled.
 				 * So far vGT's own interrupt handler hasn't been
@@ -1197,6 +1201,11 @@ int vgt_thread(void *priv)
 				previous_render_owner(pdev) = current_render_owner(pdev);
 				current_render_owner(pdev) = next;
 				vgt_irq_restore_context(next, VGT_OT_RENDER);
+
+				rdtsc_barrier();
+				end = get_cycles();
+				rdtsc_barrier();
+				printk("vGT: take %llx cycles\n", end - start);
 			}
 #ifndef SINGLE_VM_DEBUG
 			else
