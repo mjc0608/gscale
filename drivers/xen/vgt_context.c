@@ -920,6 +920,37 @@ void vgt_switch_display_owner(struct vgt_device *prev,
     vgt_save_state(prev);
     vgt_restore_state(next);
 }
+
+void do_vgt_display_switch(struct pgt_device *pdev)
+{
+	unsigned long flags;
+	printk(KERN_WARNING"xuanhua: vGT: display switched\n");
+	printk(KERN_WARNING"xuanhua: vGT: current display owner: %p; next display owner: %p\n",
+			current_display_owner(pdev), next_display_owner);
+
+	/* TODO: Because of assert in vgt_emulate_write/read,
+	 * we cannot use this lock in case deadlock */
+	/* FIXME: we do need other locks for this ??? */
+	//spin_lock_irqsave(&pdev->lock, flags);
+	vgt_irq_save_context(current_display_owner(pdev),
+			VGT_OT_DISPLAY);
+	vgt_switch_display_owner(current_display_owner(pdev),
+			next_display_owner);
+	previous_display_owner(pdev) = current_display_owner(pdev);
+	current_display_owner(pdev) = next_display_owner;
+	//next_display_owner = NULL;
+	vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
+	/*
+	 * Virtual interrupts pending right after display switch
+	 * Need send to both prev and next owner.
+	 */
+	if (pdev->request & VGT_REQUEST_IRQ) {
+		clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
+		vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
+	}
+	//spin_unlock_irqrestore(&pdev->lock, flags);
+}
+
 #endif
 
 static struct vgt_device *next_vgt(
@@ -1088,31 +1119,7 @@ int vgt_thread(void *priv)
 
 #ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
-		if (atomic_read(&display_switched)) {
-
-			printk(KERN_WARNING"xuanhua: vGT: display switched\n");
-			printk(KERN_WARNING"xuanhua: vGT: current display owner: %p; next display owner: %p\n",
-				current_display_owner(pdev), next_display_owner);
-			spin_lock_irq(&pdev->lock);
-			vgt_irq_save_context(current_display_owner(pdev),
-				VGT_OT_DISPLAY);
-			vgt_switch_display_owner(current_display_owner(pdev),
-					next_display_owner);
-			previous_display_owner(pdev) = current_display_owner(pdev);
-			current_display_owner(pdev) = next_display_owner;
-			//next_display_owner = NULL;
-			atomic_dec(&display_switched);
-			vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
-			/*
-			 * Virtual interrupts pending right after display switch
-			 * Need send to both prev and next owner.
-			 */
-			if (pdev->request & VGT_REQUEST_IRQ) {
-				clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
-				vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
-			}
-			spin_unlock_irq(&pdev->lock);
-		}
+		/* vgt display switch moved out rendering context switch. */
 #endif
 
 		if (list_empty(&pdev->rendering_runq_head)) {

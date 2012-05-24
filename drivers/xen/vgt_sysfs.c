@@ -129,7 +129,7 @@ static ssize_t vgt_display_owner_show(struct kobject *kobj, struct kobj_attribut
 
 struct vgt_device *vmid_2_vgt_device(int vmid);
 extern struct vgt_device *next_display_owner;
-extern atomic_t display_switched;
+void do_vgt_display_switch(struct pgt_device *pdev);
 static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
             const char *buf, size_t count)
 {
@@ -140,16 +140,13 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
     sscanf(buf, "%du", &vmid);
 
     /* FIXME: to avoid nested spin_lock_irq issue, use spin_lock_irqsave instead of spin_lock_irq*/
-    spin_lock_irqsave(&vgt_kobj_priv->lock, flags);
+    //spin_lock_irqsave(&vgt_kobj_priv->lock, flags);
     next_vgt = vmid_2_vgt_device(vmid);
-    if (next_vgt)
+    if (next_vgt) {
         next_display_owner = next_vgt;
-    spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
-
-    if (next_vgt)
-        atomic_inc(&display_switched);
-    else
-        printk(KERN_ERR"vGT sysfs switch display owner failed for invalid vmid: %d\n", vmid);
+		do_vgt_display_switch(vgt_kobj_priv);
+	}
+    //spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
 
     return count;
 }
