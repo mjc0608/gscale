@@ -85,18 +85,15 @@ struct vgt_if {
         struct    {
            uint32_t  my_base;
            uint32_t  my_size;
-        } aperture;
+        } low_gmadr;		/* aperture */
         /* GMADR register balooning */
         struct    {
            uint32_t  my_base;
            uint32_t  my_size;
-        } gmadr;
-        /* fence register balooning */
-        struct    {
-           uint32_t  my_base;
-           uint32_t  my_size;
-        } fence;
-        uint32_t  rsv2[2];
+        } high_gmadr;		/* non aperture */
+        /* allowed fence registers */
+        uint32_t fence_num;
+        uint32_t  rsv2[3];
     } avail_rs;			/* available/assigned resource */
     uint32_t  rsv3[0x400-0x60];	/* pad to one page */
 };

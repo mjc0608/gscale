@@ -2232,10 +2232,10 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		__vreg(vgt, vgt_info_off(version_minor)) = 0;
 		__vreg(vgt, vgt_info_off(display_ready)) = 0;
 		__vreg(vgt, vgt_info_off(vgt_id)) = vgt->vgt_id;
-		__vreg(vgt, vgt_info_off(avail_rs.aperture.my_base)) = vgt_visible_gm_base(vgt);
-		__vreg(vgt, vgt_info_off(avail_rs.aperture.my_size)) = vgt_aperture_sz(vgt);
-		__vreg(vgt, vgt_info_off(avail_rs.gmadr.my_base)) = vgt_hidden_gm_base(vgt);
-		__vreg(vgt, vgt_info_off(avail_rs.gmadr.my_size)) = vgt_hidden_gm_sz(vgt);
+		__vreg(vgt, vgt_info_off(avail_rs.low_gmadr.my_base)) = vgt_visible_gm_base(vgt);
+		__vreg(vgt, vgt_info_off(avail_rs.low_gmadr.my_size)) = vgt_aperture_sz(vgt);
+		__vreg(vgt, vgt_info_off(avail_rs.high_gmadr.my_base)) = vgt_hidden_gm_base(vgt);
+		__vreg(vgt, vgt_info_off(avail_rs.high_gmadr.my_size)) = vgt_hidden_gm_sz(vgt);
 	}
 
 	pdev->device[vgt->vgt_id] = vgt;

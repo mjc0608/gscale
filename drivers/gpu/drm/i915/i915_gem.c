@@ -223,10 +223,10 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 	if (version != VGT_IF_VERSION)
 		return 0;
 
-	apert_base = I915_READ(vgt_info_off(avail_rs.aperture.my_base));
-	apert_size = I915_READ(vgt_info_off(avail_rs.aperture.my_size));
-	gmadr_base = I915_READ(vgt_info_off(avail_rs.gmadr.my_base));
-	gmadr_size = I915_READ(vgt_info_off(avail_rs.gmadr.my_size));
+	apert_base = I915_READ(vgt_info_off(avail_rs.low_gmadr.my_base));
+	apert_size = I915_READ(vgt_info_off(avail_rs.low_gmadr.my_size));
+	gmadr_base = I915_READ(vgt_info_off(avail_rs.high_gmadr.my_base));
+	gmadr_size = I915_READ(vgt_info_off(avail_rs.high_gmadr.my_size));
 
 	printk("Balooning configuration: %lx %lx, %lx %lx\n",
 			apert_base, apert_size, gmadr_base, gmadr_size);
