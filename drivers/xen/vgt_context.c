@@ -150,6 +150,14 @@ static int __init hvm_owner_setup(char *str)
 }
 __setup("hvm_owner", hvm_owner_setup);
 
+static bool vgt_primary = false;
+static int __init vgt_primary_setup(char *str)
+{
+	vgt_primary = true;
+	return 1;
+}
+__setup("vgt_primary", vgt_primary_setup);
+
 static struct pgt_device default_device = {
 	.bus = 0,
 	.devfn = 0x10,		/* BDF: 0:2:0 */
@@ -2210,8 +2218,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		vgt_guest_hidden_gm_base(vgt),
 		vgt_guest_hidden_gm_end(vgt));
 
-
-	if (vgt->vm_id != 0){
+	if (vgt->vm_id != 0 && !vgt_primary){
 		/* Mark vgt device as non primary VGA */
 		cfg_space[VGT_REG_CFG_CLASS_CODE] = VGT_PCI_CLASS_VGA;
 		cfg_space[VGT_REG_CFG_SUB_CLASS_CODE] = VGT_PCI_CLASS_VGA_OTHER;
