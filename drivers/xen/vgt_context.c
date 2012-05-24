@@ -643,6 +643,34 @@ static enum hrtimer_restart vgt_timer_fn(struct hrtimer *data)
 	return HRTIMER_RESTART;
 }
 
+static int display_pointer_id = 0;
+void vgt_set_display_pointer(int vm_id)
+{
+	struct vgt_device *vgt = vmid_2_vgt_device(vm_id);
+
+	if (!vgt) {
+		printk("vGT: invalid vm_id (%d)\n", vm_id);
+		return;
+	}
+
+	VGT_MMIO_WRITE(vgt->pdev, _REG_DSPASURF, __sreg(vgt, _REG_DSPASURF));
+	VGT_MMIO_WRITE(vgt->pdev, _REG_CURABASE, __sreg(vgt, _REG_CURABASE));
+	printk("vGT: set display to vgt(%d) with (%x, %x)\n", vm_id,
+		__sreg(vgt, _REG_DSPASURF), __sreg(vgt, _REG_CURABASE));
+	display_pointer_id = vm_id;
+}
+
+ssize_t vgt_get_display_pointer(char *buf)
+{
+	struct vgt_device *vgt = vmid_2_vgt_device(display_pointer_id);
+
+	return sprintf(buf, "Current pointer: id [%d] sReg[%x,%x] pReg[%x,%x]\n",
+			display_pointer_id,
+			__sreg(vgt, _REG_DSPASURF), __sreg(vgt, _REG_CURABASE),
+			VGT_MMIO_READ(vgt->pdev, _REG_DSPASURF),
+			VGT_MMIO_READ(vgt->pdev, _REG_CURABASE));
+}
+
 static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -653,7 +681,7 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 	__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
 	if (reg == _REG_DSPASURF)
 		printk("=======: write vReg(%x), sReg(%x)\n", __vreg(vgt, reg), __sreg(vgt, reg));
-	if (reg_hw_access(vgt, reg) || reg == _REG_DSPASURF || reg == _REG_CURABASE) {
+	if (reg_hw_access(vgt, reg)) {
 		if (hvm_render_owner && !hvm_dpy_owner) {
 			if (vgt->vgt_id && !vgt_dom1) {
 				printk("XXXXXXXXX: start switch timer\n");

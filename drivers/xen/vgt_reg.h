@@ -2026,6 +2026,8 @@ extern char *vgt_irq_name[IRQ_MAX];
 struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id);
 void vgt_release_instance(struct vgt_device *vgt);
 int vgt_init_sysfs(struct pgt_device *pdev);
+extern void vgt_set_display_pointer(int vm_id);
+extern ssize_t vgt_get_display_pointer(char *buf);
 
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);
 bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes);

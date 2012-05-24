@@ -152,6 +152,23 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 }
 #endif
 
+static ssize_t vgt_display_pointer_store(struct kobject *kobj, struct kobj_attribute *attr,
+            const char *buf, size_t count)
+{
+	int vmid;
+
+	/* TODO: scanned value not checked */
+	sscanf(buf, "%du", &vmid);
+	vgt_set_display_pointer(vmid);
+	return count;
+}
+
+static ssize_t vgt_display_pointer_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	return vgt_get_display_pointer(buf);
+}
+
 static struct kobj_attribute create_vgt_instance_attrs =
 	__ATTR(create_vgt_instance, 0220, NULL, vgt_create_instance_store);
 #ifndef SINGLE_VM_DEBUG
@@ -159,11 +176,15 @@ static struct kobj_attribute display_owner_ctrl_attrs =
 	__ATTR(display_owner, 0660, vgt_display_owner_show, vgt_display_owner_store);
 #endif
 
+static struct kobj_attribute display_pointer_attrs =
+	__ATTR(display_pointer, 0666, vgt_display_pointer_show, vgt_display_pointer_store);
+
 static struct attribute *ctl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
 #ifndef SINGLE_VM_DEBUG
-    &display_owner_ctrl_attrs.attr,
+	&display_owner_ctrl_attrs.attr,
 #endif
+	&display_pointer_attrs.attr,
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 
@@ -277,7 +298,7 @@ static struct kobj_attribute aperture_base_va_attribute =
 static struct attribute *attrs[] = {
 	&gm_sz_attribute.attr,
 	&aperture_sz_attribute.attr,
-    &aperture_base_attribute.attr,
+	&aperture_base_attribute.attr,
 	&aperture_base_va_attribute.attr,
 	NULL,	/* need to NULL terminate the list of attributes */
 };
