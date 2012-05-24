@@ -204,15 +204,14 @@ static void i915_deballoon(struct drm_i915_private *dev_priv)
 	memset (&bl_info, 0, sizeof(bl_info));
 }
 
-static int i915_balloon(struct drm_i915_private *dev_priv)
+/*
+ *  return vgt version if it is, otherwise 0.
+ */
+int is_vgt(struct drm_i915_private *dev_priv)
 {
 	uint64_t	magic;
 	uint32_t	version;
-        unsigned long 	apert_base, apert_size;
-        unsigned long	gmadr_base, gmadr_size;
-	int	fail = 0;
 
-	printk("i915_balloon...\n");
 	magic = I915_READ64(vgt_info_off(magic));
 	if (magic != VGT_MAGIC)
 		return 0;
@@ -220,8 +219,18 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 	version = (I915_READ16(vgt_info_off(version_major)) << 16) |
 			I915_READ16(vgt_info_off(version_minor));
 
-	if (version != VGT_IF_VERSION)
+	return version;
+}
+
+static int i915_balloon(struct drm_i915_private *dev_priv)
+{
+        unsigned long 	apert_base, apert_size;
+        unsigned long	gmadr_base, gmadr_size;
+	int	fail = 0;
+
+	if ( is_vgt(dev_priv) != VGT_IF_VERSION )
 		return 0;
+	printk("i915_balloon...\n");
 
 	apert_base = I915_READ(vgt_info_off(avail_rs.low_gmadr.my_base));
 	apert_size = I915_READ(vgt_info_off(avail_rs.low_gmadr.my_size));
