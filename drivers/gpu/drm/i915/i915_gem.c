@@ -5229,6 +5229,7 @@ i915_gem_load(struct drm_device *dev)
 	else
 		dev_priv->num_fence_regs = 8;
 
+	printk("i915: the number of the fence registers (%d)\n", dev_priv->num_fence_regs);
 	/* Initialize fence registers to zero */
 	INIT_LIST_HEAD(&dev_priv->mm.fence_list);
 	i915_gem_restore_fences(dev);

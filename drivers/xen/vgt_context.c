@@ -457,9 +457,8 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	}
 #endif
 
-	if (reg >= _REG_FENCE_0_LOW && reg <= _REG_FENCE_15_HIGH) {
+	if (reg >= _REG_FENCE_0_LOW && reg <= _REG_FENCE_15_HIGH)
 		ASSERT(0);
-	}
 
 	dprintk("vGT: address fix g->h for reg (%lx)(%x)\n", reg, g_value);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];

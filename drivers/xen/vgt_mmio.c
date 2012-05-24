@@ -106,17 +106,17 @@ bool fence_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int id;
-	ASSERT(bytes == 4 && !(off & (bytes - 1)));
+	ASSERT(bytes <= 8 && !(off & (bytes - 1)));
 	id = (off - _REG_FENCE_0_LOW) >> 3;
-	ASSERT (id <16);
+	ASSERT (id < 16);
 
 	if ( id >= __vreg(vgt, vgt_info_off(avail_rs.fence_num)) ) {
-		printk("Guest %d , read fence register %x,"
+		printk("vGT(%d) , read fence register %x,"
 			" %x out of assignment %x.\n", vgt->vgt_id,
 			off, id,
 			__vreg(vgt, vgt_info_off(avail_rs.fence_num)));
 	}
-	memcpy (p_data, &__vreg(vgt, off), bytes);
+	memcpy (p_data, (char *)vgt->state.vReg + off, bytes);
 	return true;
 }
 
@@ -124,23 +124,28 @@ bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int id;
-	ASSERT(bytes == 4 && !(off & (bytes - 1)));
+	ASSERT(bytes <= 8 && !(off & (bytes - 1)));
 	id = (off - _REG_FENCE_0_LOW) >> 3;
-	ASSERT (id <16);
+	ASSERT (id < 16);
 
 	if ( id >= __vreg(vgt, vgt_info_off(avail_rs.fence_num)) ) {
-		printk("Guest %d , read fence register %x,"
+		printk("vGT (%d) , write fence register %x,"
 			" %x out of assignment %x.\n", vgt->vgt_id,
 			off, id,
 			__vreg(vgt, vgt_info_off(avail_rs.fence_num)));
 	}
 	else {
-		memcpy (&__vreg(vgt, off), p_data, bytes);
+		memcpy ((char *)vgt->state.vReg + off, p_data, bytes);
+		memcpy ((char *)vgt->state.sReg + off, p_data, bytes);
 		/* TODO: Check address space */
 
 		/* FENCE registers are physically assigned, update! */
-		VGT_MMIO_WRITE(vgt->pdev, off + vgt->fence_base * 8,
-				__vreg(vgt, off));
+		if (bytes < 8)
+			VGT_MMIO_WRITE(vgt->pdev, off + vgt->fence_base * 8,
+				__sreg(vgt, off));
+		else
+			VGT_MMIO_WRITE_BYTES(vgt->pdev, off + vgt->fence_base * 8,
+				__sreg64(vgt, off), 8);
 	}
 	return true;
 }
