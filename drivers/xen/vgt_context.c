@@ -1124,7 +1124,7 @@ int vgt_thread(void *priv)
 
 		if (list_empty(&pdev->rendering_runq_head)) {
 			/* Idle now, and no pending activity */
-			dprintk("....idle\n");
+			printk("....idle\n");
 			continue;
 		}
 
@@ -1136,7 +1136,8 @@ int vgt_thread(void *priv)
 		 */
 		spin_lock_irq(&pdev->lock);
 		if (is_rendering_engines_empty(pdev, &ring_id)) {
-			next = next_vgt(&pdev->rendering_runq_head, vgt);
+			next = next_vgt(&pdev->rendering_runq_head, current_render_owner(pdev));
+			printk("vGT: next vgt (%d)\n", next->vgt_id);
 #ifndef SINGLE_VM_DEBUG
 			if ( next != current_render_owner(pdev) )
 #endif
@@ -1211,6 +1212,7 @@ int vgt_thread(void *priv)
 #ifndef SINGLE_VM_DEBUG
 		/* Virtual interrupts pending right after render switch */
 		if (pdev->request & VGT_REQUEST_IRQ) {
+			printk("vGT: handle pending interrupt in the render context switch time\n");
 			spin_lock_irq(&pdev->lock);
 			clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
@@ -1906,7 +1908,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 
 		if (rc)
 			rb->initialized = true;
-		dprintk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
+		printk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
 
 	}
 	return rc;
@@ -2000,7 +2002,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 
 	/* Restore the PM */
 	restore_power_management(vgt);
-	dprintk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
+	printk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
 	return true;
 err:
 	/* TODO: need fall back to original VM's context */
