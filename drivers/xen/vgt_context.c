@@ -458,14 +458,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 #endif
 
 	if (reg >= _REG_FENCE_0_LOW && reg <= _REG_FENCE_15_HIGH) {
-		unsigned long fence;
-
-		fence = reg & ~0x7;
-		if (!(__vreg64(vgt, fence) & _REGBIT_FENCE_VALID)) {
-			dprintk("vGT(%d): clear fence (%lx) w/o addr fix\n",
-				vgt->vgt_id, reg);
-			return g_value;
-		}
+		ASSERT(0);
 	}
 
 	dprintk("vGT: address fix g->h for reg (%lx)(%x)\n", reg, g_value);
@@ -1565,39 +1558,6 @@ bool default_submit_context_command (struct vgt_device *vgt,
 
 /* FIXME: need audit all render resources carefully */
 vgt_reg_t vgt_render_regs[] = {
-	_REG_FENCE_0_LOW,
-	_REG_FENCE_0_HIGH,
-	_REG_FENCE_1_LOW,
-	_REG_FENCE_1_HIGH,
-	_REG_FENCE_2_LOW,
-	_REG_FENCE_2_HIGH,
-	_REG_FENCE_3_LOW,
-	_REG_FENCE_3_HIGH,
-	_REG_FENCE_4_LOW,
-	_REG_FENCE_4_HIGH,
-	_REG_FENCE_5_LOW,
-	_REG_FENCE_5_HIGH,
-	_REG_FENCE_6_LOW,
-	_REG_FENCE_6_HIGH,
-	_REG_FENCE_7_LOW,
-	_REG_FENCE_7_HIGH,
-	_REG_FENCE_8_LOW,
-	_REG_FENCE_8_HIGH,
-	_REG_FENCE_9_LOW,
-	_REG_FENCE_9_HIGH,
-	_REG_FENCE_10_LOW,
-	_REG_FENCE_10_HIGH,
-	_REG_FENCE_11_LOW,
-	_REG_FENCE_11_HIGH,
-	_REG_FENCE_12_LOW,
-	_REG_FENCE_12_HIGH,
-	_REG_FENCE_13_LOW,
-	_REG_FENCE_13_HIGH,
-	_REG_FENCE_14_LOW,
-	_REG_FENCE_14_HIGH,
-	_REG_FENCE_15_LOW,
-	_REG_FENCE_15_HIGH,
-
 	_REG_RCS_HWSTAM,
 	_REG_BCS_HWSTAM,
 	_REG_VCS_HWSTAM,
@@ -2103,10 +2063,11 @@ dprintk("create_state_instance\n");
  */
 struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 {
-	int i, vgt_id;
+	int i, vgt_id, num;
 	struct vgt_device *vgt;
 	vgt_state_ring_t	*rb;
 	char *cfg_space;
+	static int free_fence_base = 0;
 
 	printk("create_vgt_instance\n");
 	vgt = kmalloc (sizeof(*vgt), GFP_KERNEL);
@@ -2243,6 +2204,12 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		__vreg(vgt, vgt_info_off(avail_rs.low_gmadr.my_size)) = vgt_aperture_sz(vgt);
 		__vreg(vgt, vgt_info_off(avail_rs.high_gmadr.my_base)) = vgt_hidden_gm_base(vgt);
 		__vreg(vgt, vgt_info_off(avail_rs.high_gmadr.my_size)) = vgt_hidden_gm_sz(vgt);
+
+		vgt->fence_base = free_fence_base;
+		num = vgt_visible_fence_sz(vgt);
+		free_fence_base += num;
+		ASSERT (free_fence_base <= 16);	/* SNB only has 16 fence registers */
+		__vreg(vgt, vgt_info_off(avail_rs.fence_num)) = num;
 	}
 
 	pdev->device[vgt->vgt_id] = vgt;
@@ -2537,42 +2504,6 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 	vgt_set_addr_mask(pdev, _REG_RCS_PP_DIR_BASE_WRITE, 0xFFFF0000);
 	vgt_set_addr_mask(pdev, _REG_VCS_PP_DIR_BASE, 0xFFFF0000);
 	vgt_set_addr_mask(pdev, _REG_BCS_PP_DIR_BASE, 0xFFFF0000);
-
-#ifndef DOM0_NONIDEN_DISPLAY_ONLY
-	/* FIXME: similarly, a valid bit exists */
-	vgt_set_addr_mask(pdev, _REG_FENCE_0_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_0_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_1_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_1_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_2_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_2_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_3_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_3_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_4_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_4_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_5_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_5_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_6_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_6_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_7_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_7_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_8_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_8_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_9_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_9_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_10_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_10_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_11_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_11_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_12_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_12_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_13_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_13_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_14_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_14_HIGH, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_15_LOW, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_FENCE_15_HIGH, 0xFFFFF000);
-#endif
 
 	vgt_set_addr_mask(pdev, _REG_CURABASE, 0xFFFFF000);
 	vgt_set_addr_mask(pdev, _REG_CURBBASE, 0xFFFFF000);

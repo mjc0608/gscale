@@ -784,6 +784,7 @@ struct vgt_device {
 	uint64_t 	gm_sz;
 	uint64_t	aperture_offset;	/* address fix for visible GM */
 	uint64_t	hidden_gm_offset;	/* address fix for invisible GM */
+	int		fence_base;
 
 	uint64_t   vgtt_sz; /* virtual GTT size in byte */
 	uint32_t   *vgtt; /* virtual GTT table for guest to read */
@@ -1113,6 +1114,7 @@ static inline uint64_t get_vm_hidden_gm_end(struct pgt_device *pdev, int i)
 	(gm_base(vgt->pdev) + vgt_hidden_gm_offset(vgt))
 #define vgt_hidden_gm_end(vgt)		\
 	(vgt_hidden_gm_base(vgt) + vgt_hidden_gm_sz(vgt) - 1)
+#define vgt_visible_fence_sz(vgt)	8/* TO revist: make it configurable */
 
 /*
  * the view of the aperture/gm space from the VM's p.o.v

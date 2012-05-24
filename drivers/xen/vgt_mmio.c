@@ -76,6 +76,7 @@
 #include <xen/interface/hvm/ioreq.h>
 
 #include <xen/vgt.h>
+#include <xen/vgt-if.h>
 #include <xen/vgt-parser.h>
 #include "vgt_reg.h"
 
@@ -99,6 +100,49 @@ static void ring_debug(struct vgt_device *vgt, int ring_id)
 		VGT_MMIO_READ(vgt->pdev, RB_TAIL(ring_id)),
 		VGT_MMIO_READ(vgt->pdev, RB_START(ring_id)),
 		VGT_MMIO_READ(vgt->pdev, RB_CTL(ring_id)));
+}
+
+bool fence_mmio_read(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes)
+{
+	int id;
+	ASSERT(bytes == 4 && !(off & (bytes - 1)));
+	id = (off - _REG_FENCE_0_LOW) >> 3;
+	ASSERT (id <16);
+
+	if ( id >= __vreg(vgt, vgt_info_off(avail_rs.fence_num)) ) {
+		printk("Guest %d , read fence register %x,"
+			" %x out of assignment %x.\n", vgt->vgt_id,
+			off, id,
+			__vreg(vgt, vgt_info_off(avail_rs.fence_num)));
+	}
+	memcpy (p_data, &__vreg(vgt, off), bytes);
+	return true;
+}
+
+bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes)
+{
+	int id;
+	ASSERT(bytes == 4 && !(off & (bytes - 1)));
+	id = (off - _REG_FENCE_0_LOW) >> 3;
+	ASSERT (id <16);
+
+	if ( id >= __vreg(vgt, vgt_info_off(avail_rs.fence_num)) ) {
+		printk("Guest %d , read fence register %x,"
+			" %x out of assignment %x.\n", vgt->vgt_id,
+			off, id,
+			__vreg(vgt, vgt_info_off(avail_rs.fence_num)));
+	}
+	else {
+		memcpy (&__vreg(vgt, off), p_data, bytes);
+		/* TODO: Check address space */
+
+		/* FENCE registers are physically assigned, update! */
+		VGT_MMIO_WRITE(vgt->pdev, off + vgt->fence_base * 8,
+				__vreg(vgt, off));
+	}
+	return true;
 }
 
 bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
@@ -470,6 +514,9 @@ printk("mmio hooks initialized\n");
 
 	vgt_register_mmio_handler( _REG_PCH_DPD_AUX_CH_CTL, _REG_PCH_DPD_AUX_CH_CTL + 3,
 			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
+
+	vgt_register_mmio_handler( _REG_FENCE_0_LOW, _REG_FENCE_15_HIGH + 3,
+			fence_mmio_read, fence_mmio_write);
 	return true;
 }
 

@@ -205,6 +205,17 @@ static void i915_deballoon(struct drm_i915_private *dev_priv)
 }
 
 /*
+ * Get the number of assigned fence registers.
+ * through the PV INFO page.
+ */
+static inline int vgt_avail_fence_num(drm_i915_private_t *dev_priv)
+{
+	unsigned long   avail_fences;
+	avail_fences = I915_READ(vgt_info_off(avail_rs.fence_num));
+	return avail_fences;
+}
+
+/*
  *  return vgt version if it is, otherwise 0.
  */
 int is_vgt(struct drm_i915_private *dev_priv)
@@ -5209,7 +5220,9 @@ i915_gem_load(struct drm_device *dev)
 	if (!drm_core_check_feature(dev, DRIVER_MODESET))
 		dev_priv->fence_reg_start = 3;
 
-	if (INTEL_INFO(dev)->gen >= 7 && !IS_VALLEYVIEW(dev))
+	if (is_vgt(dev_priv) == VGT_IF_VERSION)
+		dev_priv->num_fence_regs = vgt_avail_fence_num(dev_priv);
+	else if (INTEL_INFO(dev)->gen >= 7 && !IS_VALLEYVIEW(dev))
 		dev_priv->num_fence_regs = 32;
 	else if (INTEL_INFO(dev)->gen >= 4 || IS_I945G(dev) || IS_I945GM(dev) || IS_G33(dev))
 		dev_priv->num_fence_regs = 16;
