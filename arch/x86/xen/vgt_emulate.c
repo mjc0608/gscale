@@ -911,10 +911,9 @@ static int vgt_emulate_ins(struct pt_regs *regs)
 	return rc;
 }
 
-static int vgt_io_forward = 0;
 static int xen_vgt_handler(struct pt_regs *regs, long error_code)
 {
-	if (!vgt_io_forward || (error_code != 0xe008 && error_code != 0xe00c))
+	if (error_code != 0xe008 && error_code != 0xe00c)
 		return 0;
 
 	return vgt_emulate_ins(regs) == X86EMUL_OKAY;
@@ -933,7 +932,6 @@ int xen_setup_vgt(vgt_ops_t *ops)
 			printk("vGT: failed to start I/O forwarding\n");
 			return -EINVAL;
 		} else {
-			vgt_io_forward = 1;
 			printk("vGT: trap_req.nr_pio_frags: mmio %d %lx %lx\n",
 				trap_req.nr_mmio_frags,
 				(long)trap_req.mmio_frags[0].s,
