@@ -2585,6 +2585,25 @@ static void vgt_setup_hw_update_regs(struct pgt_device *pdev)
 	//reg_set_hw_update(pdev, TIMESTAMP);
 }
 
+uint64_t vgt_get_gtt_size(struct pci_bus *bus)
+{
+	uint16_t gmch_ctrl;
+
+	ASSERT(!bus->number);
+	/* GTT size is within GMCH. */
+	pci_bus_read_config_word(bus, 0, _REG_GMCH_CONTRL, &gmch_ctrl);
+	switch ( (gmch_ctrl >> 8) & 3 ) {
+	case	1:
+		return 1 * SIZE_1MB;
+	case	2:
+		return 2 * SIZE_1MB;
+	default:
+		printk("Wrong GTT memory size\n");
+		break;
+	}
+	return 0;
+}
+
 static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
 {
 	pdev->pdev = dev;
@@ -2600,6 +2619,7 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 		return false;
 	}
 
+	gm_sz(pdev) = vgt_get_gtt_size(pdev->pbus) * 1024;
 	/* first setup the reg ownership mapping */
 	vgt_setup_render_regs(pdev);
 	vgt_setup_display_regs(pdev);
@@ -2706,16 +2726,6 @@ err_out:
 	return ret;
 }
 
-/* FIXME: invoked by AGP GTT code */
-static uint64_t tot_gm_size;
-void vgt_update_gtt_info(uint64_t gm_size)
-{
-	if (!xen_initial_domain())
-		return;
-	printk("GTT: tell vGT about total gm_size: %llx\n", gm_size);
-	tot_gm_size = gm_size;
-}
-
 /*
  * This interface is abandoned now, since with ballooning we
  * can have the guest to map the aperture starting from zero.
@@ -2747,14 +2757,8 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 	int i;
 	uint64_t dom0_start = aperture_base(pdev);
 
-	if (!tot_gm_size) {
-		printk("vGT: ZERO GM space !!!!\n");
-		tot_gm_size = aperture_sz(pdev);
-	}
-	gm_sz(pdev) = tot_gm_size;
 	printk("vGT: total aperture (%x), total GM space (%llx)\n",
 		aperture_sz(pdev), gm_sz(pdev));
-
 #ifndef DOM0_NON_IDENTICAL
 	pdev->max_vms = 1;		/* dom0 only */
 #else

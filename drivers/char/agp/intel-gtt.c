@@ -507,16 +507,11 @@ static unsigned int i965_gtt_total_entries(void)
 	return size/4;
 }
 
-/* FIXME: ballooning information is in i915 module. Need a clean way to hook later */
-static int ballooning = 1;
-extern void vgt_update_gtt_info(uint64_t gm_size);
 static unsigned int intel_gtt_total_entries(void)
 {
 	if (IS_G33 || INTEL_GTT_GEN == 4 || INTEL_GTT_GEN == 5)
 		return i965_gtt_total_entries();
 	else {
-		vgt_update_gtt_info((uint64_t)intel_private.gtt_mappable_entries*4096);
-
 		/* On previous hardware, the GTT size was just what was
 		 * required to map the aperture.
 		 */
@@ -552,10 +547,6 @@ static unsigned int intel_gtt_mappable_entries(void)
 	} else {
 		/* 9xx supports large sizes, just look at the length */
 		aperture_size = pci_resource_len(intel_private.pcidev, 2);
-		/* FIXME: now hardcode 64MB for SNB laptop */
-		if (!ballooning)
-			aperture_size = MB(64);
-		printk("vGT(i915): checked %x aperture size\n", aperture_size);
 	}
 
 	return aperture_size >> PAGE_SHIFT;

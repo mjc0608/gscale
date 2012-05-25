@@ -2031,4 +2031,10 @@ extern ssize_t vgt_get_display_pointer(char *buf);
 
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);
 bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes);
+
+/*
+ * Configuration register definition for BDF: 0:0:0.
+ */
+#define _REG_GMCH_CONTRL	0x50
+
 #endif	/* _VGT_REG_H_ */
