@@ -367,6 +367,7 @@ void vgt_irq_toggle_emulations(struct vgt_device *vstate,
 	struct vgt_irq_info *info;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 
+	dprintk("vGT: toggle event emulations at context switch\n");
 	for_each_set_bit(event, vgt_state_emulated_events(vstate), IRQ_MAX) {
 		if (vgt_get_event_owner_type(dev, event) == owner &&
 		    !test_bit(event, vgt_always_emulated_events(dev))) {
@@ -597,7 +598,7 @@ static void vgt_run_emul(struct vgt_device *vstate,
 	struct pgt_device *dev = vstate->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 
-	printk("vGT-IRQ(%d): %s emul handler for event %s\n", vstate->vgt_id,
+	dprintk("vGT-IRQ(%d): %s emul handler for event %s\n", vstate->vgt_id,
 		enable ? "enable" : "disable", vgt_irq_name[event]);
 	info = ops->get_irq_info_from_event(dev, event);
 	ASSERT(info);
@@ -611,8 +612,7 @@ static void vgt_run_emul(struct vgt_device *vstate,
 
 		if (enable)
 			set_bit(event, vgt_state_emulated_events(vstate));
-	} else
-		VGT_IRQ_WARN(info, event, "No emulation handler\n");
+	}
 }
 
 #if 0
@@ -648,6 +648,8 @@ static void vgt_toggle_emulated_bits(struct vgt_device *vgt,
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
+	dprintk("vGT: toggle event emulations at imr/ier emulation for reg (%s) bits (%x)\n",
+		ops->get_reg_name(pdev, reg), bits);
 	if (((reg == _REG_DEIER) || (reg == _REG_DEIMR)))
 		bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
 
@@ -783,17 +785,17 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 
 		if (reg == _REG_DEIMR) {
 			if (masked & 0x88)
-				printk("XXX: mask vblank/vsync (%x)\n", masked);
+				dprintk("XXX: mask vblank/vsync (%x)\n", masked);
 			if (unmasked & 0x88)
-				printk("XXX: unmask vblank/vsync (%x)\n", unmasked);
+				dprintk("XXX: unmask vblank/vsync (%x)\n", unmasked);
 		}
 		VGT_MMIO_WRITE(pdev, reg, val);
 		VGT_POST_READ(pdev, reg);
 	}
 
 	/* Then handle emulated events */
-	enabled &= ~unmasked;
-	disabled &= ~masked;
+	enabled &= ~(unmasked | _REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
+	disabled &= ~(masked | _REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
 	if (enabled)
 		vgt_toggle_emulated_bits(state, reg, enabled, true);
 	if (disabled)
@@ -902,9 +904,9 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 			val &= ~ier_disabled;
 		if (reg == _REG_DEIER) {
 			if (ier_disabled & 0x88)
-				printk("XXX: disable vblank/vsync (%x)\n", ier_disabled);
+				dprintk("XXX: disable vblank/vsync (%x)\n", ier_disabled);
 			if (ier_enabled & 0x88)
-				printk("XXX: enable vblank/vsync (%x)\n", ier_enabled);
+				dprintk("XXX: enable vblank/vsync (%x)\n", ier_enabled);
 		}
 		if (vgt_master_enable(pdev))
 			val |= _REGBIT_MASTER_INTERRUPT;
@@ -915,8 +917,8 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 	}
 
 	/* Then handle emulated events */
-	enabled &= ~ier_enabled;
-	disabled &= ~ier_disabled;
+	enabled &= ~(ier_enabled | _REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
+	disabled &= ~(ier_disabled | _REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
 	if (enabled)
 		vgt_toggle_emulated_bits(state, reg, enabled, true);
 	if (disabled)
