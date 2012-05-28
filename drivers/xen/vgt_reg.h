@@ -871,6 +871,7 @@ struct pgt_device {
 	uint64_t vm_gm_sz;
 	uint64_t	rsvd_aperture_pos;	/* position of the next free reserved page */
 	uint64_t  	scratch_page;		/* page used for data written from GPU */
+	uint64_t	dummy_area;
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */

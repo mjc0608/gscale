@@ -1309,7 +1309,10 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 {
 	dprintk("shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
 
-	ASSERT(srb->ctl & _RING_CTL_ENABLE);
+	if (!(srb->ctl & _RING_CTL_ENABLE)) {
+		printk("vGT: ring (%d) not enabled. exit restore\n", ring_id);
+		return;
+	}
 	disable_ring(pdev, ring_id);
 	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), srb->tail);
 	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
