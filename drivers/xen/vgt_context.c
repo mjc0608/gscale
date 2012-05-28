@@ -1953,7 +1953,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 
 		if (rc)
 			rb->initialized = true;
-		printk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
+		dprintk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
 
 	}
 	return rc;
@@ -1974,65 +1974,50 @@ bool vgt_restore_context (struct vgt_device *vgt)
 	for (i=0; i < MAX_ENGINES; i++) {
 		rb = &vgt->rb[i];
 
-		/* stateless engine doesn't have this flag set */
-		if (rb->initialized ) {	/* has saved context */
-			//vring_2_sring(vgt, rb);
-			ring_pre_shadow_2_phys (pdev, i, &rb->sring);
+		if (rb->stateless)
+			continue;
 
-			/* save 32 dwords of the ring */
-			save_ring_buffer (vgt, i);
+		//vring_2_sring(vgt, rb);
+		ring_pre_shadow_2_phys (pdev, i, &rb->sring);
 
-#ifdef SINGLE_VM_DEBUG
-			/*
-			 * for single VM debug, we need a dummy context to make sure
-			 * context save actually conducted
-			 */
-			dprintk("dummy switch\n");
-			cmds_save_context[2] = MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
-				MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN | 0xE000000;
-			pdev->magic++;
-			cmds_save_context[11] = pdev->magic;
-			rc = (*submit_context_command[i]) (vgt, i, cmds_save_context,
-				sizeof(cmds_save_context));
+		/* save 32 dwords of the ring */
+		save_ring_buffer (vgt, i);
 
-			/* reset the head/tail */
-			ring_pre_shadow_2_phys (pdev, i, &rb->sring);
-
-			if (!rc)
-				goto err;
-
-			dprintk("real switch\n");
-#endif
-
-			/*
-			 * Save current context to prev's vGT area, and restore
-			 * context from next's vGT area.
-			 */
-			switch (i) {
-				case RING_BUFFER_RCS:
+		switch (i) {
+			case RING_BUFFER_RCS:
+				if (rb->initialized) {
 					cmds_restore_context[2] =
 						rb->context_save_area |
 						MI_MM_SPACE_GTT |
 						MI_SAVE_EXT_STATE_EN |
 						MI_RESTORE_EXT_STATE_EN |
 						MI_FORCE_RESTORE;
-					cmds_restore_context[10] = vgt_data_ctx_magic(pdev);
-					pdev->magic++;
-					cmds_restore_context[11] = pdev->magic;
-					break;
-				default:
-					printk("vGT: unsupported engine (%d) switch \n", i);
-					break;
-			}
-			rc = (*submit_context_command[i]) (vgt, i, cmds_restore_context,
-				sizeof(cmds_restore_context));
-
-			/* restore 32 dwords of the ring */
-			restore_ring_buffer (vgt, i);
-
-			if (!rc)
-				goto err;
+				} else {
+					printk("vGT(%d): first initialization. switch to dummy context.\n",
+						vgt->vgt_id);
+					cmds_restore_context[2] =
+						pdev->dummy_area |
+						MI_MM_SPACE_GTT |
+						MI_SAVE_EXT_STATE_EN |
+						MI_RESTORE_EXT_STATE_EN |
+						MI_RESTORE_INHIBIT;
+				}
+				cmds_restore_context[10] = vgt_data_ctx_magic(pdev);
+				pdev->magic++;
+				cmds_restore_context[11] = pdev->magic;
+				break;
+			default:
+				printk("vGT: unsupported engine (%d) switch \n", i);
+				break;
 		}
+		rc = (*submit_context_command[i]) (vgt, i, cmds_restore_context,
+			sizeof(cmds_restore_context));
+
+		/* restore 32 dwords of the ring */
+		restore_ring_buffer (vgt, i);
+
+		if (!rc)
+			goto err;
 	}
 
 	vgt_rendering_restore_mmio(vgt);
@@ -2047,7 +2032,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 
 	/* Restore the PM */
 	restore_power_management(vgt);
-	printk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
+	dprintk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
 	return true;
 err:
 	/* TODO: need fall back to original VM's context */
@@ -2199,9 +2184,13 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 			i * SZ_CONTEXT_AREA_PER_RING);
 		rb->initialized = false;
 	}
-	vgt->rb[RING_BUFFER_RCS].stateless = 0;
-	vgt->rb[RING_BUFFER_VCS].stateless = 1;
-	vgt->rb[RING_BUFFER_BCS].stateless = 1;
+	/* TODO */
+	pdev->dummy_area = aperture_2_gm(pdev, vgt->rsvd_aperture_base +
+                        MAX_ENGINES * SZ_CONTEXT_AREA_PER_RING);
+
+	vgt->rb[RING_BUFFER_RCS].stateless = 0;	/* RCS */
+	vgt->rb[RING_BUFFER_VCS].stateless = 1;	/* BCS */
+	vgt->rb[RING_BUFFER_BCS].stateless = 1;	/* VCS */
 
 	vgt->state.bar_size[0] = pdev->bar_size[0];	/* MMIOGTT */
 	vgt->state.bar_size[1] =			/* Aperture */
