@@ -1059,7 +1059,7 @@ static int __init ctx_switch_setup(char *str)
 }
 __setup("vgt_ctx_switch", ctx_switch_setup);
 
-static int period = 5*HZ;	/* default slow mode */
+static int period = HZ/5;	/* default slow mode in 200ms */
 /*
  * The thread to perform the VGT ownership switch.
  *
@@ -1111,9 +1111,9 @@ int vgt_thread(void *priv)
 	if (fastmode) {
 		printk("vGT: fastmode switch (in 50ms)\n");
 		period = HZ/20;
-		threshold = 200;
 	}
 
+	threshold = (10 * HZ) /period;
 	wait = HZ*start_period;
 	while (!kthread_should_stop()) {
 		/*
@@ -1174,7 +1174,7 @@ int vgt_thread(void *priv)
 		spin_lock_irq(&pdev->lock);
 		if (is_rendering_engines_empty(pdev, &ring_id)) {
 			next = next_vgt(&pdev->rendering_runq_head, current_render_owner(pdev));
-			printk("vGT: next vgt (%d)\n", next->vgt_id);
+			dprintk("vGT: next vgt (%d)\n", next->vgt_id);
 #ifndef SINGLE_VM_DEBUG
 			if ( next != current_render_owner(pdev) )
 #endif
@@ -1241,7 +1241,7 @@ int vgt_thread(void *priv)
 				rdtsc_barrier();
 				end = get_cycles();
 				rdtsc_barrier();
-				printk("vGT: take %llx cycles\n", end - start);
+				printk("vGT: take %lld cycles\n", end - start);
 			}
 #ifndef SINGLE_VM_DEBUG
 			else
@@ -1275,7 +1275,7 @@ void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 {
 	dprintk("old head(%x), old tail(%x)\n", srb->head, srb->tail);
 	srb->head = VGT_MMIO_READ(pdev, RB_HEAD(ring_id));
-	dprintk("new head(%x), new tail(%x)\n", srb->head, VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
+	dprintk("new head(%x), new tail(%x)\n", srb->head, srb->tail);
 #if 0
 	srb->tail = VGT_MMIO_READ(pdev, &prb->tail);
 	srb->start = VGT_MMIO_READ(pdev, &prb->start);
