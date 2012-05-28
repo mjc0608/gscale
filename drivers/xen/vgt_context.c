@@ -1395,11 +1395,11 @@ static  void ring_save_commands (vgt_state_ring_t *rb,
 
 	ASSERT ((bytes & 3) == 0);
 	p_contents = p_aperture + rb->sring.start;
-	rbtail = rb->sring.tail; /* in byte unit */
+	rbtail = rb->sring.head & RB_HEAD_OFF_MASK; /* in byte unit */
 
 	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
 	to_tail = ring_size - rbtail;
-	dprintk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x, start: %x\n",
+	dprintk("p_contents(save): %lx, rbtail: %x, ring_size: %x, to_tail: %x, start: %x\n",
 		(unsigned long)p_contents, rbtail, ring_size, to_tail,
 		rb->sring.start);
 
@@ -1439,12 +1439,12 @@ static void ring_load_commands(vgt_state_ring_t *rb,
 	vgt_reg_t  ring_size, to_tail;	/* bytes */
 
 	p_contents = p_aperture + rb->sring.start;
-	/* reset to the tail for every load */
-	rbtail = rb->phys_tail = rb->sring.tail; /* in byte unit */
+	/* reset to the head for every load */
+	rbtail = rb->phys_tail = rb->sring.head & RB_HEAD_OFF_MASK; /* in byte unit */
 
 	ring_size = _RING_CTL_BUF_SIZE(rb->sring.ctl);
 	to_tail = ring_size - rbtail;
-	dprintk("p_contents: %lx, rbtail: %x, ring_size: %x, to_tail: %x, start: %x\n",
+	dprintk("p_contents(restore): %lx, rbtail: %x, ring_size: %x, to_tail: %x, start: %x\n",
 		(unsigned long)p_contents, rbtail, ring_size, to_tail,
 		rb->sring.start);
 
