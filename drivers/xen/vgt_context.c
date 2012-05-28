@@ -2881,10 +2881,7 @@ int vgt_initialize(struct pci_dev *dev)
 	if (setup_gtt(pdev))
 		goto err;
 
-	if (xen_register_vgt_device(0, vgt_dom0) != 0) {
-		xen_deregister_vgt_device(vgt_dom0);
-		goto err;
-	}
+	xen_vgt_dom0_ready(vgt_dom0);
 
 	/* "hvm_owner" is a special mode where we give all the ownerships to the hvm guest */
 	if (!hvm_render_owner) {
@@ -2901,7 +2898,6 @@ int vgt_initialize(struct pci_dev *dev)
 	init_waitqueue_head(&pdev->wq);
 	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
 	if (!p_thread) {
-		xen_deregister_vgt_device(vgt_dom0);
 		goto err;
 	}
 	pdev->p_thread = p_thread;

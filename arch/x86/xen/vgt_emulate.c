@@ -36,79 +36,22 @@
 #include <linux/page-flags.h>
 
 vgt_ops_t *vgt_ops = NULL;
-
-#define MAX_VGT_DEVICES     16
-unsigned long   vgt_device_bitmap = 0;
-
-/*
- * TODO: It seems we only needs to know dom0_vgt here,
- * and we can remove vgt_devices[] data structure.
- * Simplify it later on.
- */
-
-struct {
-    int dom_id;
-    struct vgt_device *vgt;
-} vgt_devices[MAX_VGT_DEVICES];      /* Dom0 is always in ..[0] */
-
-int find_free_device_id(void)
-{
-    int index;
-
-    do {
-        index = ffz (vgt_device_bitmap);
-        if (index >= MAX_VGT_DEVICES)
-            return -1;
-    } while (test_and_set_bit(index, &vgt_device_bitmap) != 0);
-    return index;
-}
-
-static inline void free_device_id(int id)
-{
-    clear_bit(id, &vgt_device_bitmap);
-}
+static struct vgt_device *dom0_vgt=NULL;
 
 /*
  * Return ID of registered vgt device.
  *  >= 0: successful
  *  -1: failed.
  */
-int xen_register_vgt_device(int dom_id, struct vgt_device *vgt)
+void xen_vgt_dom0_ready(struct vgt_device *vgt)
 {
-    int dev_id = find_free_device_id();
     bool ret = -1;
 
-printk("Eddie: xen_register_vgt_device %d %p\n", dom_id, vgt);
-    if ((dev_id < MAX_VGT_DEVICES) && (dev_id >= 0)) {
-        vgt_devices[dev_id].dom_id = dom_id;
-        vgt_devices[dev_id].vgt = vgt;
-
-        if (dev_id == 1) {
-            /* TODO: switch dom0 vgt from pass thru to virt. */
-            vgt_ops->boot_time = 0;
-        }
-        ret = dev_id;
-    }
+    dom0_vgt = vgt;
+printk("Eddie: xen_vgt_dom0_ready %p\n", vgt);
 
     if (!vgt_ops->initialized)
 	vgt_ops->initialized = 1;
-    return ret;
-}
-
-void xen_deregister_vgt_device(struct vgt_device *vgt)
-{
-    int i;
-
-printk("Eddie: xen_deregister_vgt_device %p\n", vgt);
-    for (i=0; i < MAX_VGT_DEVICES; i++)
-         if (vgt_devices[i].vgt == vgt) {
-            vgt_devices[i].vgt = NULL;
-            vgt_devices[i].dom_id = -1;
-            free_device_id(i);
-            return;
-        };
-
-    printk("xen_deregister_vgt_device failed\n");
 }
 
 #define ASSERT(x)						\
@@ -348,7 +291,7 @@ int vgt_cfg_write_emul(
 	 * FIXME: S3 suspend/resume needs to reset boot_time again!!!
 	 */
 	if (vgt_ops && !vgt_ops->boot_time) {
-		if (!vgt_ops->cfg_write(vgt_devices[dom_id].vgt,
+		if (!vgt_ops->cfg_write(dom0_vgt,
 			(vgt_cf8 & 0xfc) + (port & 3),
 			&val, bytes)) {
 			rc = X86EMUL_UNHANDLEABLE;
@@ -389,7 +332,7 @@ int vgt_cfg_read_emul(
 		if (rc != X86EMUL_OKAY)
 			goto out;
 	} else {
-		if (!vgt_ops->cfg_read(vgt_devices[dom_id].vgt,
+		if (!vgt_ops->cfg_read(dom0_vgt,
 			(vgt_cf8 & 0xfc) + (port & 3),
 			&data, bytes)) {
 			rc = X86EMUL_UNHANDLEABLE;
@@ -722,7 +665,7 @@ int emulate_read(
 			if (hcall_mmio_read(r_pa, bytes, &data) != X86EMUL_OKAY)
 				return X86EMUL_UNHANDLEABLE;
 		} else {
-			if (!vgt_ops->mem_read(vgt_devices[dom_id].vgt, r_pa, &data, bytes)) {
+			if (!vgt_ops->mem_read(dom0_vgt, r_pa, &data, bytes)) {
 				printk("vGT: failed to emulate memory read for (%lx)\n", r_pa);
 				return X86EMUL_UNHANDLEABLE;
 			}
@@ -776,7 +719,7 @@ int emulate_write(
 			if (hcall_mmio_write(w_pa, bytes, data) != X86EMUL_OKAY)
 				return X86EMUL_UNHANDLEABLE;
 		} else {
-			if (!vgt_ops->mem_write(vgt_devices[dom_id].vgt, w_pa, &data, bytes)) {
+			if (!vgt_ops->mem_write(dom0_vgt, w_pa, &data, bytes)) {
 				printk("vGT: failed to emulate memory write for (%lx)\n", w_pa);
 				return X86EMUL_UNHANDLEABLE;
 			}
@@ -919,7 +862,11 @@ static int xen_vgt_handler(struct pt_regs *regs, long error_code)
 	return vgt_emulate_ins(regs) == X86EMUL_OKAY;
 }
 
-int xen_setup_vgt(vgt_ops_t *ops)
+/*
+ * State load of vgt driver.
+ * (May extend with more communication parameters)
+ */
+int xen_register_vgt_driver(vgt_ops_t *ops)
 {
     vgt_ops = ops;
 	if (!register_gp_prehandler(xen_vgt_handler)) {
@@ -963,11 +910,10 @@ int xen_start_vgt(struct pci_dev *pdev)
 	return ret;
 }
 
-//core_initcall(xen_setup_vgt);
 /* for GFX driver */
 EXPORT_SYMBOL(xen_start_vgt);
 
 /* for vGT driver */
-EXPORT_SYMBOL(xen_setup_vgt);
-EXPORT_SYMBOL(xen_register_vgt_device);
-EXPORT_SYMBOL(xen_deregister_vgt_device);
+EXPORT_SYMBOL(xen_register_vgt_driver);
+EXPORT_SYMBOL(xen_vgt_dom0_ready);
+

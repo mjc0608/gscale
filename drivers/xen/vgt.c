@@ -139,7 +139,7 @@ static int __init vgt_init_module(void)
 	if(rc < 0)
 		return 0;
 
-	rc = xen_setup_vgt(&vgt_xops);
+	rc = xen_register_vgt_driver(&vgt_xops);
 
 
 	// fill other initialization works here
