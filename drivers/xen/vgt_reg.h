@@ -436,6 +436,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REGBIT_DP_AUX_CH_CTL_RECV_ERR (1 << 25)
 
 #define _REG_FORCEWAKE		0xA18C
+#define _REG_FORCEWAKE_ACK	0x130090
 
 #define MI_NOOP				0
 #define MI_FLUSH			(0x4 << 23)

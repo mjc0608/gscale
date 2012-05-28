@@ -1145,6 +1145,15 @@ int vgt_thread(void *priv)
 				vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
 		vgt_ctx_check(pdev)++;
 
+		/* FIXME: always enable forcewake to ensure <0x40000 mmio returning correct state */
+		if (VGT_MMIO_READ(pdev, _REG_FORCEWAKE) == 0) {
+			VGT_MMIO_WRITE(pdev, _REG_FORCEWAKE, 1);
+			while (!(VGT_MMIO_READ(pdev, _REG_FORCEWAKE_ACK) & 1));
+			printk("vGT: 1st forcewake set to %d(%x)\n",
+				VGT_MMIO_READ(pdev, _REG_FORCEWAKE),
+				VGT_MMIO_READ(pdev, _REG_FORCEWAKE_ACK));
+		}
+
 #ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
 		/* vgt display switch moved out rendering context switch. */
@@ -2578,6 +2587,16 @@ static void vgt_setup_always_virt(struct pgt_device *pdev)
 
 	for (i = VGT_PVINFO_PAGE; i < VGT_PVINFO_PAGE + VGT_PVINFO_SIZE; i += REG_SIZE)
 		reg_set_always_virt(pdev, i);
+	/*
+	 * FIXME: rinbbuffer registers may return ZERO when power management
+	 * is active. We tried to disable pm logic from i915 driver, but it
+	 * looks that it may not work well. So set the forcewake always virtualized
+	 * and force enabling it. In the future we need to fix this in fine-grained
+	 * level. One problem is that operating forcewake reg at this point has no
+	 * effect, so we postpone to the time at the 1st context switch
+	 */
+	reg_set_always_virt(pdev, _REG_FORCEWAKE);
+
 }
 
 static void vgt_setup_hw_update_regs(struct pgt_device *pdev)
