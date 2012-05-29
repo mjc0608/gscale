@@ -83,7 +83,7 @@ bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int off, void *p_data
 // function prototype definitions
 // defined in arch specific file
 extern int xen_register_vgt_driver(vgt_ops_t *ops);
-extern int xen_start_vgt(struct pci_dev *pdev);
+extern int xen_start_vgt();
 extern void xen_vgt_dom0_ready(struct vgt_device *vgt);
 extern void xen_deregister_vgt_device(struct vgt_device *vgt);
 
@@ -114,3 +114,4 @@ extern int hcall_mmio_write(
 // Debugfs interface
 struct dentry *vgt_init_debugfs(void);
 int vgt_create_debugfs(struct vgt_device *vgt);
+extern struct pci_dev *vgt_pci_dev;

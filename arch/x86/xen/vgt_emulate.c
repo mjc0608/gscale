@@ -868,7 +868,7 @@ static int xen_vgt_handler(struct pt_regs *regs, long error_code)
  */
 int xen_register_vgt_driver(vgt_ops_t *ops)
 {
-    vgt_ops = ops;
+	vgt_ops = ops;
 	if (!register_gp_prehandler(xen_vgt_handler)) {
 		trap_req.nr_pio_frags = 1;
 		trap_req.pio_frags[0].s = 0x3B0;
@@ -890,7 +890,7 @@ int xen_register_vgt_driver(vgt_ops_t *ops)
 	return 0;
 }
 
-int xen_start_vgt(struct pci_dev *pdev)
+int xen_start_vgt()
 {
 	int ret = 0;
 
@@ -906,7 +906,7 @@ int xen_start_vgt(struct pci_dev *pdev)
 	if (vgt_ops)
 	printk("Eddie: start_vgt %p\n", vgt_ops->start_vgt);
 	if (vgt_ops && vgt_ops->start_vgt)
-		ret = vgt_ops->start_vgt(pdev);
+		ret = vgt_ops->start_vgt(vgt_pci_dev);
 	return ret;
 }
 

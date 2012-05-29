@@ -71,7 +71,7 @@ MODULE_VERSION("0.1");
 
 static int start_vgt(struct pci_dev *pdev)
 {
-	dprintk("start_vgt.....\n");
+printk("eddie: start_vgt..... pdev %p %p\n", pdev, vgt_pci_dev);
     if (vgt_initialize(pdev) == 0) {
 	printk("vGT started\n");
 	return 1;
