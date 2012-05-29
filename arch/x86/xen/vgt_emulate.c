@@ -116,48 +116,48 @@ static inline uint16_t get_selector(
     return selector;
 }
 
-int _un_wbinvd(struct x86_emulate_ctxt *ctxt)
+static int _un_wbinvd(struct x86_emulate_ctxt *ctxt)
 {
 	UNSUPPORTED("wbinvd");
 }
 
-int _un_cpuid(unsigned int *eax, unsigned int *ebx,
+static int _un_cpuid(unsigned int *eax, unsigned int *ebx,
 	unsigned int *ecx, unsigned int *edx,
 	struct x86_emulate_ctxt *ctxt)
 {
 	UNSUPPORTED("cpuid");
 }
 
-int _un_inject_hw_exception(uint8_t vec, int32_t error_code,
+static int _un_inject_hw_exception(uint8_t vec, int32_t error_code,
 	struct x86_emulate_ctxt *ctxt)
 {
 	UNSUPPORTED("inject_hw_exception");
 }
 
-int _un_inject_sw_exception(uint8_t vec, uint8_t insn_len,
+static int _un_inject_sw_exception(uint8_t vec, uint8_t insn_len,
 	struct x86_emulate_ctxt *ctxt)
 {
 	UNSUPPORTED("inject_sw_exception");
 }
 
-int _un_get_fpu(void (*fn)(void *, struct cpu_user_regs *),
+static int _un_get_fpu(void (*fn)(void *, struct cpu_user_regs *),
 	void *args, enum x86_emulate_fpu_type type, struct x86_emulate_ctxt *ctxt)
 {
 	UNSUPPORTED("get_fpu");
 }
 
-void _un_put_fpu(struct x86_emulate_ctxt *ctxt)
+static void _un_put_fpu(struct x86_emulate_ctxt *ctxt)
 {
 	dprintk("VGT: Unsupported emulation of %s, gip=%lx\n",	\
 		"put_fpu", (unsigned long)ctxt->regs->rip); 		\
 }
 
-int _un_invlpg(enum x86_segment seg, unsigned long offset, struct x86_emulate_ctxt *ctxt)
+static int _un_invlpg(enum x86_segment seg, unsigned long offset, struct x86_emulate_ctxt *ctxt)
 {
 	UNSUPPORTED("invlpg");
 }
 
-int _un_read_msr(
+static int _un_read_msr(
         unsigned long reg,
         uint64_t *val,
         struct x86_emulate_ctxt *ctxt)
@@ -165,7 +165,7 @@ int _un_read_msr(
 	UNSUPPORTED("read_msr");
 }
 
-int _un_write_msr(
+static int _un_write_msr(
         unsigned long reg,
         uint64_t val,
         struct x86_emulate_ctxt *ctxt)
@@ -173,7 +173,7 @@ int _un_write_msr(
 	UNSUPPORTED("write_msr");
 }
 
-int _un_read_dr(
+static int _un_read_dr(
         unsigned int reg,
         unsigned long *val,
         struct x86_emulate_ctxt *ctxt)
@@ -181,7 +181,7 @@ int _un_read_dr(
 	UNSUPPORTED("read_dr");
 }
 
-int _un_write_dr(
+static int _un_write_dr(
         unsigned int reg,
         unsigned long val,
         struct x86_emulate_ctxt *ctxt)
@@ -189,7 +189,7 @@ int _un_write_dr(
 	UNSUPPORTED("write_dr");
 }
 
-int _un_read_cr(
+static int _un_read_cr(
         unsigned int reg,
         unsigned long *val,
         struct x86_emulate_ctxt *ctxt)
@@ -197,7 +197,7 @@ int _un_read_cr(
 	UNSUPPORTED("read_cr");
 }
 
-int _un_write_cr(
+static int _un_write_cr(
         unsigned int reg,
         unsigned long val,
         struct x86_emulate_ctxt *ctxt)
@@ -205,7 +205,7 @@ int _un_write_cr(
 	UNSUPPORTED("write_cr");
 }
 
-int is_vgt_trap_pio(unsigned int port)
+static int is_vgt_trap_pio(unsigned int port)
 {
 	int i;
 
@@ -217,7 +217,7 @@ int is_vgt_trap_pio(unsigned int port)
 	return 0;
 }
 
-int hcall_pio_write(
+static int hcall_pio_write(
         unsigned int port,
         unsigned int bytes,
         unsigned long val)
@@ -236,7 +236,7 @@ int hcall_pio_write(
     return X86EMUL_OKAY;
 }
 
-int hcall_pio_read(
+static int hcall_pio_read(
         unsigned int port,
         unsigned int bytes,
         unsigned long *val)
@@ -305,7 +305,7 @@ out:
     return rc;
 }
 
-int vgt_cfg_read_emul(
+static int vgt_cfg_read_emul(
         unsigned int port,
         unsigned int bytes,
         unsigned long *val)
@@ -349,7 +349,7 @@ out:
 }
 
 /* PIO read */
-int read_io(
+static int read_io(
         unsigned int port,
         unsigned int bytes,
         unsigned long *val,
@@ -386,7 +386,7 @@ int read_io(
     return X86EMUL_OKAY;
 }
 
-int write_io(
+static int write_io(
         unsigned int port,
         unsigned int bytes,
         unsigned long val,
@@ -437,7 +437,7 @@ static int xen_read_sys_data(void *p_data, unsigned long offset, int bytes)
     return X86EMUL_OKAY;
 }
 
-int read_segment(
+static int read_segment(
         enum x86_segment seg,
         struct segment_register *reg,
         struct x86_emulate_ctxt *ctxt)
@@ -487,7 +487,7 @@ int read_segment(
     return X86EMUL_OKAY;
 }
 
-int _un_write_segment(
+static int _un_write_segment(
         enum x86_segment seg,
         struct segment_register *reg,
         struct x86_emulate_ctxt *ctxt)
@@ -495,7 +495,7 @@ int _un_write_segment(
 	UNSUPPORTED("write_segment");
 }
 
-int _un_cmpxchg(
+static int _un_cmpxchg(
         enum x86_segment seg,
         unsigned long offset,
         void *p_old,
@@ -506,7 +506,7 @@ int _un_cmpxchg(
 	UNSUPPORTED("cmpxchg");
 }
 
-int _un_rep_ins(
+static int _un_rep_ins(
         uint16_t src_port,
         enum x86_segment dst_seg,
         unsigned long dst_offset,
@@ -517,7 +517,7 @@ int _un_rep_ins(
 	UNSUPPORTED("rep_ins");
 }
 
-int _un_rep_outs(
+static int _un_rep_outs(
         enum x86_segment src_seg,
         unsigned long src_offset,
         uint16_t dst_port,
@@ -528,7 +528,7 @@ int _un_rep_outs(
 	UNSUPPORTED("rep_outs");
 }
 
-int _un_rep_movs(
+static int _un_rep_movs(
         enum x86_segment src_seg,
         unsigned long src_offset,
         enum x86_segment dst_seg,
@@ -585,7 +585,7 @@ printk("pmd %p val %lx\n", pmd, (long)(*pmd).pmd);
 	return p_addr;
 }
 
-int is_vgt_trap_address(unsigned long pa)
+static int is_vgt_trap_address(unsigned long pa)
 {
 	int i;
 
@@ -640,7 +640,7 @@ int hcall_mmio_read(
     return X86EMUL_OKAY;
 }
 
-int emulate_read(
+static int emulate_read(
         enum x86_segment seg,
         unsigned long offset,
         void *p_data,
@@ -679,7 +679,7 @@ int emulate_read(
 	return X86EMUL_OKAY;
 }
 
-int emulate_insn_fetch (
+static int emulate_insn_fetch (
         enum x86_segment seg,
         unsigned long offset,
         void *p_data,
@@ -696,7 +696,7 @@ int emulate_insn_fetch (
 	return X86EMUL_OKAY;
 }
 
-int emulate_write(
+static int emulate_write(
         enum x86_segment seg,
         unsigned long offset,
         void *p_data,
@@ -777,7 +777,7 @@ static struct x86_emulate_ctxt ctxt = {
 	.regs = &em_regs,
 };
 
-void em_regs_2_pt_regs(
+static void em_regs_2_pt_regs(
 	struct cpu_user_regs *src_regs,
 	struct pt_regs *tgt_regs)
 {
@@ -810,7 +810,7 @@ void em_regs_2_pt_regs(
 #endif
 }
 
-void pt_regs_2_em_regs(
+static void pt_regs_2_em_regs(
 	struct pt_regs *src_regs,
 	struct cpu_user_regs *tgt_regs)
 {
