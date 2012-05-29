@@ -59,7 +59,6 @@
 // structures
 struct vgt_device;
 typedef struct {
-    int (*start_vgt)(struct pci_dev *pdev);
     bool (*mem_read)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
     bool (*mem_write)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
     bool (*cfg_read)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);

@@ -890,28 +890,6 @@ int xen_register_vgt_driver(vgt_ops_t *ops)
 	return 0;
 }
 
-int xen_start_vgt()
-{
-	int ret = 0;
-
-	if (!xen_initial_domain())
-		return 0;
-
-	if (vgt_ops && vgt_ops->initialized) {
-		printk("vgt_ops has been intialized\n");
-		return 0;
-	}
-
-	printk("eddie: xen_start_vgt vgt_ops %p \n", vgt_ops);
-	if (vgt_ops)
-	printk("Eddie: start_vgt %p\n", vgt_ops->start_vgt);
-	if (vgt_ops && vgt_ops->start_vgt)
-		ret = vgt_ops->start_vgt(vgt_pci_dev);
-	return ret;
-}
-
-/* for GFX driver */
-EXPORT_SYMBOL(xen_start_vgt);
 
 /* for vGT driver */
 EXPORT_SYMBOL(xen_register_vgt_driver);

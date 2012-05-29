@@ -1649,6 +1649,7 @@ printk("Eddie: -------------\n");
 #endif
 	}
 
+	/* enforce dependancy and initialize the vGT driver */
 	xen_start_vgt();
 	printk("i915: xen_start_vgt done\n");
 	return drm_pci_init(&driver, &i915_pci_driver);

@@ -69,19 +69,7 @@ MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION("0.1");
 
-static int start_vgt(struct pci_dev *pdev)
-{
-printk("eddie: start_vgt..... pdev %p %p\n", pdev, vgt_pci_dev);
-    if (vgt_initialize(pdev) == 0) {
-	printk("vGT started\n");
-	return 1;
-    }
-    printk("VGT couldn't be started\n");
-    return 0;
-}
-
 static vgt_ops_t vgt_xops = {
-    .start_vgt = start_vgt,
     .mem_read = vgt_emulate_read,
     .mem_write = vgt_emulate_write,
     .cfg_read = vgt_emulate_cfg_read,
@@ -127,6 +115,24 @@ void vgt_setup_irq(int pirq)
 	vgt_pirq(dev) = pirq;
 #endif
 }
+
+/* for GFX driver */
+int xen_start_vgt()
+{
+	if (!xen_initial_domain())
+		return 0;
+
+	if (vgt_xops.initialized) {
+		printk("vgt_ops has been intialized\n");
+		return 0;
+	}
+	if (vgt_pci_dev == NULL) {
+		printk("VGT: too early xen_start_vgt, check driver dependency!!!\n");
+	}
+
+	return vgt_initialize(vgt_pci_dev) == 0;
+}
+EXPORT_SYMBOL(xen_start_vgt);
 
 static int __init vgt_init_module(void)
 {
