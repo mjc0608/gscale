@@ -63,7 +63,13 @@ struct xen_hvm_vgt_map_mmio {
     uint64_t  first_mfn;
 };
 typedef struct xen_hvm_vgt_map_mmio xen_hvm_vgt_map_mmio_t;
- 
+
+#define HVMOP_vgt_enable           19
+struct xen_hvm_vgt_enable {
+	uint16_t  domid;
+};
+typedef struct xen_hvm_vgt_enable xen_hvm_vgt_enable_t;
+
 enum hvmmem_type_t {
     HVMMEM_ram_rw,             /* Normal read/write guest RAM */
     HVMMEM_ram_ro,             /* Read-only; writes are discarded */

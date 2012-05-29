@@ -2262,8 +2262,12 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
 
 	/* TODO: do clean up if vgt_hvm_init() failed */
-	if (vgt->vm_id != 0)
+	if (vgt->vm_id != 0){
+		/* HVM specific init */
 		vgt_hvm_info_init(vgt);
+		if (vgt_hvm_enable(vgt) != 0)
+			return NULL;
+	}
 
 	if (vgt->vm_id && vgt_ops->boot_time) {
 		vgt_ops->boot_time = 0;

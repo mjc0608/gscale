@@ -291,6 +291,20 @@ bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+int vgt_hvm_enable (struct vgt_device *vgt)
+{
+	struct xen_hvm_vgt_enable vgt_enable;
+	int rc;
+
+	vgt_enable.domid = vgt->vm_id;
+
+	rc = HYPERVISOR_hvm_op(HVMOP_vgt_enable, &vgt_enable);
+	if (rc != 0)
+		printk(KERN_ERR "Enable HVM vgt fail with %d!\n", rc);
+
+	return rc;
+}
+
 static int vgt_hvm_map_rom (struct vgt_device *vgt, int map)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
