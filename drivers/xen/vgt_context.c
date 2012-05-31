@@ -622,8 +622,6 @@ static unsigned long vgt_get_reg(struct vgt_device *vgt, unsigned int reg)
 	if (reg_hw_access(vgt, reg)) {
 		__sreg(vgt, reg) = VGT_MMIO_READ(pdev, reg);
 		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
-		if (reg == 0x78000)
-			printk("vGT: 0x78000 sreg(%x), vreg(%x)\n", __sreg(vgt, reg), __vreg(vgt, reg));
 	}
 
 	return __vreg(vgt, reg);
@@ -812,6 +810,16 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 		dprintk("vGT: capture >4 bytes read to %x\n", offset);
 
 	spin_lock_irqsave(&pdev->lock, flags);
+
+	/* FIXME: always enable forcewake to ensure <0x40000 mmio returning correct state */
+	if (VGT_MMIO_READ(pdev, _REG_FORCEWAKE) == 0) {
+		VGT_MMIO_WRITE(pdev, _REG_FORCEWAKE, 1);
+		while (!(VGT_MMIO_READ(pdev, _REG_FORCEWAKE_ACK) & 1));
+		printk("vGT: 1st forcewake set to %d(%x)\n",
+			VGT_MMIO_READ(pdev, _REG_FORCEWAKE),
+			VGT_MMIO_READ(pdev, _REG_FORCEWAKE_ACK));
+	}
+
 	mht = lookup_mtable(offset);
 	if ( mht && mht->read )
 		mht->read(vgt, offset, p_data, bytes);
@@ -863,6 +871,16 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 */
 
 	spin_lock_irqsave(&pdev->lock, flags);
+
+	/* FIXME: always enable forcewake to ensure <0x40000 mmio returning correct state */
+	if (VGT_MMIO_READ(pdev, _REG_FORCEWAKE) == 0) {
+		VGT_MMIO_WRITE(pdev, _REG_FORCEWAKE, 1);
+		while (!(VGT_MMIO_READ(pdev, _REG_FORCEWAKE_ACK) & 1));
+		printk("vGT: 1st forcewake set to %d(%x)\n",
+			VGT_MMIO_READ(pdev, _REG_FORCEWAKE),
+			VGT_MMIO_READ(pdev, _REG_FORCEWAKE_ACK));
+	}
+
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
@@ -1932,7 +1950,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 	if (vgt == NULL)
 		return false;
 
-	disable_power_management(vgt);
+	//disable_power_management(vgt);
 
 	vgt_rendering_save_mmio(vgt);
 
@@ -2064,7 +2082,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 	}
 
 	/* Restore the PM */
-	restore_power_management(vgt);
+	//restore_power_management(vgt);
 	dprintk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
 	return true;
 err:
