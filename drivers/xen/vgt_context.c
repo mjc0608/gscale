@@ -943,6 +943,8 @@ static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, bool ctx_s
 			printk("vGT(%s): wait %lld seconds for ring(%d)\n",
 				ctx_switch ? "ctx-switch" : "wait-empty",
 				count / 1000000, ring_id);
+
+			show_debug(pdev);
 			show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
 		}
 	}
@@ -1036,6 +1038,16 @@ static struct vgt_device *next_vgt(
 	if (next == head)
 		next = head->next;
 	return list_entry(next, struct vgt_device, list);
+}
+
+/* update the tail pointer after all the context is restored */
+static void vgt_resume_ringbuffers(struct vgt_device *vgt)
+{
+	int i;
+
+	for (i = 0; i < MAX_ENGINES; i++) {
+		VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(i), vgt->rb[i].sring.tail);
+	}
 }
 
 /*
@@ -1225,6 +1237,7 @@ int vgt_thread(void *priv)
 			if ( next != current_render_owner(pdev) )
 #endif
 			{
+				mdelay(5);
 				rdtsc_barrier();
 				start = get_cycles();
 				rdtsc_barrier();
@@ -1284,12 +1297,13 @@ int vgt_thread(void *priv)
 				previous_render_owner(pdev) = current_render_owner(pdev);
 				current_render_owner(pdev) = next;
 				vgt_irq_restore_context(next, VGT_OT_RENDER);
-
 				//show_seqno(pdev);
+				vgt_resume_ringbuffers(next);
+
 				rdtsc_barrier();
 				end = get_cycles();
 				rdtsc_barrier();
-				printk("vGT: take %lld cycles\n", end - start);
+				//printk("vGT: take %lld cycles\n", end - start);
 			}
 #ifndef SINGLE_VM_DEBUG
 			else
@@ -1355,41 +1369,27 @@ static inline void disable_ring(struct pgt_device *pdev, int ring_id)
  */
 void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	dprintk("shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
+	dprintk("shadow 2 phys: [%x, %x, %x, %x] \n", srb->head, srb->tail,
+		VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
+		VGT_MMIO_READ(pdev, RB_CTL(ring_id)));
 
 	if (!(srb->ctl & _RING_CTL_ENABLE)) {
 		printk("vGT: ring (%d) not enabled. exit restore\n", ring_id);
 		return;
 	}
 	disable_ring(pdev, ring_id);
-	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), srb->tail);
-	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
+
 	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
+
+	/* make head==tail when enabling the ring buffer */
+	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
+	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), srb->head);
+
+	/* enable the ring buffer */
 	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), srb->ctl);
-	VGT_POST_READ(pdev, RB_CTL(ring_id)); /* by ktian1 */
+	VGT_POST_READ(pdev, RB_CTL(ring_id));
 
 	dprintk("shadow 2 phys: [%x, %x]\n", VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
-		VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
-}
-
-/*
- * A pre-step to restore a new ring buffer. We can't restore both head/tail pointers,
- * if ctl reg is enabled, or else hw will start parsing it before we actually restore
- * the context. This pre-step restores to the new ring buffer, but with head==tail
- */
-void ring_pre_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
-{
-	dprintk("pre shadow 2 phys: [%x, %x]\n", srb->head, srb->tail);
-
-	ASSERT(srb->ctl & _RING_CTL_ENABLE);
-	disable_ring(pdev, ring_id);
-	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), srb->head);
-	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
-	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
-	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), srb->ctl);
-	VGT_POST_READ(pdev, RB_CTL(ring_id));	/* by ktian1 */
-
-	dprintk("pre shadow 2 phys: [%x, %x]\n", VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
 		VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 }
 
@@ -2029,7 +2029,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 			continue;
 
 		//vring_2_sring(vgt, rb);
-		ring_pre_shadow_2_phys (pdev, i, &rb->sring);
+		ring_shadow_2_phys (pdev, i, &rb->sring);
 
 		/* save 32 dwords of the ring */
 		save_ring_buffer (vgt, i);
@@ -2435,7 +2435,7 @@ static bool save_vbios(struct pgt_device *pdev)
 
 	pages = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	pages = 1;
-	printk("vGT: VBIOS size: %lx (%d pages)\n", size, pages);
+	printk("vGT: VBIOS size: %llx (%d pages)\n", size, pages);
 
 	for (i = 0; i + 4 < size; i++)
 		if (!memcmp(ptr + i, "$VBT", 4)) {
@@ -2450,8 +2450,8 @@ static bool save_vbios(struct pgt_device *pdev)
 		if (rest < PAGE_SIZE)
 			cnt = rest;
 		vbios = (char *)kmap(page + i);
-		printk("vGT: copy %dth vbios page (pa-%lx, va-%lx, cnt-%x)\n", i,
-			page_to_phys(page + i), vbios, cnt);
+		printk("vGT: copy %dth vbios page (pa-%llx, va-%llx, cnt-%x)\n", i,
+			(u64)page_to_phys(page + i), (u64)vbios, cnt);
 		memcpy(vbios, ptr + i * PAGE_SIZE, cnt);
 		/*
 		 * FIXME: now not sure the reason. only the 1st page can be correctly
@@ -2882,7 +2882,6 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 
 	/* serve as a simple linear allocator */
 	pdev->rsvd_aperture_pos = 0;
-
 }
 
 /*
