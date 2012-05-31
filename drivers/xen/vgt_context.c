@@ -557,6 +557,34 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	return (g_value & mask) | (h_value & ~mask);
 }
 
+/* show Linux specific seqno fields for all ringbuffers */
+static void show_seqno(struct pgt_device *pdev)
+{
+	char *p_contents;
+	vgt_reg_t addr;
+
+	addr = VGT_MMIO_READ(pdev, _REG_RCS_HWS_PGA);
+	p_contents = aperture_vbase(pdev) + addr;
+	printk("RCS HWS PGA: %x,%x,%x isr: %x, index: %x, seqno: %d\n",
+		addr, __vreg(vgt_dom0, _REG_RCS_HWS_PGA),
+		__sreg(vgt_dom0, _REG_RCS_HWS_PGA), *(u32*)(p_contents),
+		*(u32*)(p_contents + 0x20 * 4), *(u32*)(p_contents + 0x21 * 4));
+
+	addr = VGT_MMIO_READ(pdev, _REG_VCS_HWS_PGA);
+	p_contents = aperture_vbase(pdev) + addr;
+	printk("RCS HWS PGA: %x,%x,%x isr: %x, index: %x, seqno: %d\n",
+		addr, __vreg(vgt_dom0, _REG_VCS_HWS_PGA),
+		__sreg(vgt_dom0, _REG_VCS_HWS_PGA), *(u32*)(p_contents),
+		*(u32*)(p_contents + 0x20 * 4), *(u32*)(p_contents + 0x21 * 4));
+
+	addr = VGT_MMIO_READ(pdev, _REG_BCS_HWS_PGA);
+	p_contents = aperture_vbase(pdev) + addr;
+	printk("RCS HWS PGA: %x,%x,%x isr: %x, index: %x, seqno: %d\n",
+		addr, __vreg(vgt_dom0, _REG_BCS_HWS_PGA),
+		__sreg(vgt_dom0, _REG_BCS_HWS_PGA), *(u32*)(p_contents),
+		*(u32*)(p_contents + 0x20 * 4), *(u32*)(p_contents + 0x21 * 4));
+}
+
 /*
  * Given a ring buffer, print out the current data [-bytes, bytes]
  */
@@ -1196,6 +1224,7 @@ int vgt_thread(void *priv)
 				prev = current_render_owner(pdev);
 				vgt_ctx_switch(pdev)++;
 
+				//show_seqno(pdev);
 				if (!vgt_save_context(prev)) {
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
@@ -1238,6 +1267,7 @@ int vgt_thread(void *priv)
 				current_render_owner(pdev) = next;
 				vgt_irq_restore_context(next, VGT_OT_RENDER);
 
+				//show_seqno(pdev);
 				rdtsc_barrier();
 				end = get_cycles();
 				rdtsc_barrier();
