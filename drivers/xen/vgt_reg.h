@@ -284,6 +284,10 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define		_REGBIT_ADDRESS_SWIZZLING		(3 << 4)
 #define _REG_GT_MODE	0x20D0
 
+#define _REG_RCS_IMR		0x20A8
+#define _REG_VCS_IMR		0x120A8
+#define _REG_BCS_IMR		0x220A8
+
 #define _REG_RCS_BB_ADDR	0x2140
 #define _REG_VCS_BB_ADDR	0x12140
 #define _REG_BCS_BB_ADDR	0x22140

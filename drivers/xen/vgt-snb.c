@@ -526,9 +526,6 @@ static void vgt_snb_irq_init(struct pgt_device *dev)
 	vgt_register_mmio_write_virt(dev, _REG_SDEIER, vgt_reg_ier_handler);
 	vgt_register_mmio_write_virt(dev, _REG_SDEIIR, vgt_reg_irr_handler);
 #if 0
-	vgt_register_mmio_simple(_REG_SDEIMR, vgt_reg_imr_handler);
-	vgt_register_mmio_simple(_REG_SDEIER, vgt_reg_ier_handler);
-	vgt_register_mmio_simple(_REG_SDEIIR, vgt_reg_irr_handler);
 	vgt_register_mmio_simple(_REG_RCS_WATCHDOG_CTL, vgt_reg_watchdog_handler);
 	vgt_register_mmio_simple(_REG_RCS_WATCHDOG_THRSH, vgt_reg_watchdog_handler);
 	vgt_register_mmio_simple(_REG_RCS_WATCHDOG_CTR, vgt_reg_watchdog_handler);
@@ -622,6 +619,15 @@ static void vgt_snb_irq_restore(struct vgt_device *vgt,
 	local_irq_save(flags);
 	switch (owner) {
 		case VGT_OT_RENDER:
+			VGT_MMIO_WRITE(vgt->pdev, _REG_RCS_IMR,
+				__vreg(vgt, _REG_RCS_IMR));
+
+			VGT_MMIO_WRITE(vgt->pdev, _REG_BCS_IMR,
+				__vreg(vgt, _REG_BCS_IMR));
+
+			VGT_MMIO_WRITE(vgt->pdev, _REG_VCS_IMR,
+				__vreg(vgt, _REG_VCS_IMR));
+
 			VGT_MMIO_WRITE(vgt->pdev, _REG_GTIMR,
 				__vreg(vgt, _REG_GTIMR));
 
