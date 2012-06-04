@@ -44,7 +44,25 @@
 /* copied & modified from include/drm/drmP.h */
 #define VGT_DRIVER_MODESET     0x2000
 u32 __vgt_driver_cap = VGT_DRIVER_MODESET;
-#define vgt_driver_check_feature(feature)   (__vgt_driver_cap & (feature))
+//#define vgt_driver_check_feature(feature)   (__vgt_driver_cap & (feature))
+
+bool static vgt_driver_check_feature(struct vgt_device *vgt, int feature)
+{
+    vgt_reg_t sreg;
+    bool retval = false;
+#define _VGA_DISP_DISABLED   1 << 31
+    switch(feature) {
+        case VGT_DRIVER_MODESET:
+            sreg = __sreg(vgt, _REG_CPU_VGACNTRL);
+            if (sreg & _VGA_DISP_DISABLED)
+                retval = true;
+            break;
+        default:
+            printk(KERN_WARNING"%s:WARNING: vGT check UNKNOWN driver feature\n", __func__);
+    }
+
+    return retval;
+}
 
 /* FIXME: snb_devinfo copied from  */
 /* static const struct intel_device_info intel_sandybridge_d_info = {
@@ -111,11 +129,18 @@ struct vgt_intel_device_info *vgt_devinfo = &snb_devinfo;
         __vreg8(vgt, (offset)) = mmio_h2g_gmadr(vgt, (offset), __sreg8(vgt, (offset)));     \
     } while(0)
 
+#define vgt_save_mmio_reg_64(offset)    \
+    do {                                \
+        __sreg64(vgt, (offset)) = VGT_MMIO_READ_BYTES(pdev, (offset), 8);   \
+    } while(0)
+
 #define not_done()              \
     do {                        \
         printk(KERN_WARNING"%s: %d:  not done yet!\n", __func__, __LINE__);   \
         BUG();                  \
     } while(0)
+
+
 
 static void vgt_restore_vga(struct vgt_device *vgt)
 {
@@ -215,7 +240,7 @@ static void vgt_restore_modeset_reg(struct vgt_device *vgt)
 
     /* default support DRIVER_MODESET */
     /* TODO: checking feature DRIVER_MODESET */
-    if (vgt_driver_check_feature(VGT_DRIVER_MODESET))
+    if (vgt_driver_check_feature(vgt, VGT_DRIVER_MODESET))
         return;
 
     /* Fences */
@@ -580,6 +605,175 @@ static void vgt_save_vga(struct vgt_device *vgt)
 			vgt_read_indexed(vgt, _REG_VGA_SR_INDEX, _REG_VGA_SR_DATA, i);
 }
 
+/* FIXME: do we need to save MMIO, do we need to update vregs ??? */
+static void vgt_save_palette(struct vgt_device *vgt, enum vgt_pipe pipe)
+{
+    int i;
+    struct pgt_device *pdev = vgt->pdev;
+    unsigned long reg = (pipe == PIPE_A ? _REG_PALETTE_A : _REG_PALETTE_B);
+
+    if (!vgt_pipe_enabled(vgt, pipe))
+        return;
+
+    if (VGT_HAS_PCH_SPLIT(vgt))
+        reg = (pipe == PIPE_A) ? _REG_LGC_PALETTE_A : _REG_LGC_PALETTE_B;
+
+    for (i = 0; i < 256; i++)
+        vgt_save_mmio_reg(reg + (i << 2));
+}
+
+static void vgt_save_modeset_reg(struct vgt_device *vgt)
+{
+    struct pgt_device *pdev = vgt->pdev;
+    int i;
+
+    if (vgt_driver_check_feature(vgt, VGT_DRIVER_MODESET))
+        return;
+
+	/* Cursor state */
+    vgt_save_mmio_reg(_REG_CURACNTR);
+    vgt_save_mmio_reg(_REG_CURAPOS);
+    vgt_save_mmio_reg(_REG_CURABASE);
+    vgt_save_mmio_reg(_REG_CURBCNTR);
+    vgt_save_mmio_reg(_REG_CURBPOS);
+    vgt_save_mmio_reg(_REG_CURBBASE);
+	//if (IS_GEN2(dev))
+	//	dev_priv->saveCURSIZE = I915_READ(CURSIZE);
+
+    if (VGT_HAS_PCH_SPLIT(vgt)) {
+        vgt_save_mmio_reg(_REG_PCH_DREF_CONTROL);
+        vgt_save_mmio_reg(_REG_DISP_ARB_CTL);
+    }
+
+	/* Pipe & plane A info */
+    vgt_save_mmio_reg(_REG_PIPEACONF);
+    vgt_save_mmio_reg(_REG_PIPEASRC);
+    if (VGT_HAS_PCH_SPLIT(vgt)) {
+        vgt_save_mmio_reg(_REG_PCH_FPA0);
+        vgt_save_mmio_reg(_REG_PCH_FPA1);
+        vgt_save_mmio_reg(_REG_PCH_DPLL_A);
+    } else {
+        vgt_save_mmio_reg(_REG_FPA0);
+        vgt_save_mmio_reg(_REG_FPA1);
+        vgt_save_mmio_reg(_REG_DPLL_A);
+    }
+
+    if (VGT_GEN(vgt) >= 4 && !VGT_HAS_PCH_SPLIT(vgt))
+        vgt_save_mmio_reg(_REG_DPLL_A_MD);
+
+    vgt_save_mmio_reg(_REG_HTOTAL_A);
+    vgt_save_mmio_reg(_REG_HBLANK_A);
+    vgt_save_mmio_reg(_REG_HSYNC_A);
+    vgt_save_mmio_reg(_REG_VTOTAL_A);
+    vgt_save_mmio_reg(_REG_VBLANK_A);
+    vgt_save_mmio_reg(_REG_VSYNC_A);
+
+    if (!VGT_HAS_PCH_SPLIT(vgt))
+        vgt_save_mmio_reg(_REG_BCLRPAT_A);
+
+    if (VGT_HAS_PCH_SPLIT(vgt)) {
+        vgt_save_mmio_reg(_REG_PIPEA_DATA_M1);
+        vgt_save_mmio_reg(_REG_PIPEA_DATA_N1);
+        vgt_save_mmio_reg(_REG_PIPEA_LINK_M1);
+        vgt_save_mmio_reg(_REG_PIPEA_LINK_N1);
+
+        vgt_save_mmio_reg(_REG_FDI_TXA_CTL);
+        vgt_save_mmio_reg(_REG_FDI_RXA_CTL);
+
+        vgt_save_mmio_reg(_REG_PFA_CTL_1);
+        vgt_save_mmio_reg(_REG_PFA_WIN_SZ);
+        vgt_save_mmio_reg(_REG_PFA_WIN_POS);
+
+        vgt_save_mmio_reg(_REG_TRANSACONF);
+        vgt_save_mmio_reg(_REG_TRANS_HTOTAL_A);
+        vgt_save_mmio_reg(_REG_TRANS_HBLANK_A);
+        vgt_save_mmio_reg(_REG_TRANS_HSYNC_A);
+        vgt_save_mmio_reg(_REG_TRANS_VTOTAL_A);
+        vgt_save_mmio_reg(_REG_TRANS_VBLANK_A);
+        vgt_save_mmio_reg(_REG_TRANS_VSYNC_A);
+    }
+
+    vgt_save_mmio_reg(_REG_DSPACNTR);
+    vgt_save_mmio_reg(_REG_DSPASTRIDE);
+    vgt_save_mmio_reg(_REG_DSPASIZE);
+    vgt_save_mmio_reg(_REG_DSPAPOS);
+    vgt_save_mmio_reg(_REG_DSPALINOFF);
+
+    if (VGT_GEN(vgt) >= 4) {
+        vgt_save_mmio_reg(_REG_DSPASURF);
+        vgt_save_mmio_reg(_REG_DSPATILEOFF);
+    }
+
+    vgt_save_palette(vgt, PIPE_A);
+    vgt_save_mmio_reg(_REG_PIPEASTAT);
+
+	/* Pipe & plane B info */
+    vgt_save_mmio_reg(_REG_PIPEBCONF);
+    vgt_save_mmio_reg(_REG_PIPEBSRC);
+    if (VGT_HAS_PCH_SPLIT(vgt)) {
+        vgt_save_mmio_reg(_REG_PCH_FPB0);
+        vgt_save_mmio_reg(_REG_PCH_FPB1);
+        vgt_save_mmio_reg(_REG_PCH_DPLL_B);
+    } else {
+        vgt_save_mmio_reg(_REG_FPB0);
+        vgt_save_mmio_reg(_REG_FPB1);
+        vgt_save_mmio_reg(_REG_DPLL_B);
+    }
+
+    if (VGT_GEN(vgt) >= 4 && !VGT_HAS_PCH_SPLIT(vgt))
+        vgt_save_mmio_reg(_REG_DPLL_B_MD);
+
+    vgt_save_mmio_reg(_REG_HTOTAL_B);
+    vgt_save_mmio_reg(_REG_HBLANK_B);
+    vgt_save_mmio_reg(_REG_HSYNC_B);
+    vgt_save_mmio_reg(_REG_VTOTAL_B);
+    vgt_save_mmio_reg(_REG_VBLANK_B);
+    vgt_save_mmio_reg(_REG_VSYNC_B);
+
+    if (!VGT_HAS_PCH_SPLIT(vgt))
+        vgt_save_mmio_reg(_REG_BCLRPAT_B);
+
+    if (VGT_HAS_PCH_SPLIT(vgt)) {
+        vgt_save_mmio_reg(_REG_PIPEB_DATA_M1);
+        vgt_save_mmio_reg(_REG_PIPEB_DATA_N1);
+        vgt_save_mmio_reg(_REG_PIPEB_LINK_M1);
+        vgt_save_mmio_reg(_REG_PIPEB_LINK_N1);
+
+        vgt_save_mmio_reg(_REG_FDI_TXB_CTL);
+        vgt_save_mmio_reg(_REG_FDI_RXB_CTL);
+
+        vgt_save_mmio_reg(_REG_PFB_CTL_1);
+        vgt_save_mmio_reg(_REG_PFB_WIN_SZ);
+        vgt_save_mmio_reg(_REG_PFB_WIN_POS);
+
+        vgt_save_mmio_reg(_REG_TRANSBCONF);
+        vgt_save_mmio_reg(_REG_TRANS_HTOTAL_B);
+        vgt_save_mmio_reg(_REG_TRANS_HBLANK_B);
+        vgt_save_mmio_reg(_REG_TRANS_HSYNC_B);
+        vgt_save_mmio_reg(_REG_TRANS_VTOTAL_B);
+        vgt_save_mmio_reg(_REG_TRANS_VBLANK_B);
+        vgt_save_mmio_reg(_REG_TRANS_VSYNC_B);
+    }
+
+    vgt_save_mmio_reg(_REG_DSPBCNTR);
+    vgt_save_mmio_reg(_REG_DSPBSTRIDE);
+    vgt_save_mmio_reg(_REG_DSPBSIZE);
+    vgt_save_mmio_reg(_REG_DSPBPOS);
+    vgt_save_mmio_reg(_REG_DSPBLINOFF);
+
+    if (VGT_GEN(vgt) >= 4) {
+        vgt_save_mmio_reg(_REG_DSPBSURF);
+        vgt_save_mmio_reg(_REG_DSPBTILEOFF);
+    }
+
+    vgt_save_palette(vgt, PIPE_B);
+    vgt_save_mmio_reg(_REG_PIPEBSTAT);
+
+	/* Fences */
+    /* TODO: only save gen 6 now */
+    for (i = 0; i< 16; i++)
+        vgt_save_mmio_reg_64(_REG_FENCE_0_LOW + i * 8);
+}
 
 static int vgt_save_display(struct vgt_device *vgt)
 {
@@ -594,6 +788,7 @@ static int vgt_save_display(struct vgt_device *vgt)
     // TODO & FIXME: since by default support DRIVER_MODESET,
     //        this function will do nothing but returns
 	//i915_save_modeset_reg(dev);
+    vgt_save_modeset_reg(vgt);
 
 	/* CRT state */
     if (VGT_HAS_PCH_SPLIT(vgt)) {
@@ -661,7 +856,7 @@ int vgt_save_state(struct vgt_device *vgt)
     struct pgt_device *pdev = vgt->pdev;
 
     /* put 2 functions in i915_drm_freeze here */
-    // FIXME: how to emulate this function ???
+    // FIXME: is this totally software stuff ???
 	//drm_kms_helper_poll_disable(dev);
 
     // TODO: did not do pcie/pcix save, since 00:02.0 exposed as PCI device
@@ -729,6 +924,18 @@ int vgt_save_state(struct vgt_device *vgt)
     return 0;
 }
 
+/* FIXME: what about plane B ??? */
+static void  vgt_flush_display_plane(struct vgt_device *vgt)
+{
+    vgt_reg_t reg;
+    struct pgt_device *pdev = vgt->pdev;
+    printk("vGT: %s\n", __func__);
+    reg = VGT_MMIO_READ(pdev, _REG_DSPALINOFF);
+    VGT_MMIO_WRITE(pdev, _REG_DSPALINOFF, reg);
+    reg = VGT_MMIO_READ(pdev, _REG_DSPASURF);
+    VGT_MMIO_WRITE(pdev, _REG_DSPASURF, reg);
+}
+
 /* This function will be called from vgt_context.c */
 //int i915_restore_state(struct drm_device *dev)
 int vgt_restore_state(struct vgt_device *vgt)
@@ -770,6 +977,22 @@ int vgt_restore_state(struct vgt_device *vgt)
     /* TODO: FIXME: how to check these supported feature ??? and do init gating */
 	//if (drm_core_check_feature(dev, DRIVER_MODESET))
 	//	intel_init_clock_gating(dev);
+    /* FIXME: In intel_init_clock_gating we saw display A surface activated */
+    /* FIXME: refer ironlake_update_plane() */
+#define vgt_restore_sreg(reg)       \
+    do {    \
+        VGT_MMIO_WRITE(vgt->pdev, (reg), __sreg(vgt, (reg))); \
+    } while (0);
+
+    /* FIXME: this part of code come from ironlake_update_plane */
+    printk("vGT: restoring DSPAXXX ...\n");
+    vgt_restore_sreg(_REG_DSPACNTR);
+    vgt_restore_sreg(_REG_DSPASTRIDE);
+    vgt_restore_sreg(_REG_DSPASURF);
+    vgt_restore_sreg(_REG_DSPATILEOFF);
+    vgt_restore_sreg(_REG_DSPALINOFF);
+    VGT_MMIO_READ(vgt->pdev, _REG_DSPACNTR);
+    printk("vGT: restoring DSPAXXX done!\n");
 
     /* FIXME: snb is ironlake ??? */
 	//if (IS_IRONLAKE_M(dev)) {
@@ -808,5 +1031,8 @@ int vgt_restore_state(struct vgt_device *vgt)
     /* FIXME: do we need to to do this ??? */
     vgt_i2c_reset(vgt);
 
+    vgt_flush_display_plane(vgt);
+
     return 0;
 }
+

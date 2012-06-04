@@ -705,13 +705,16 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 	 */
 	__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
 	if (reg == _REG_DSPASURF)
-		printk("=======: write vReg(%x), sReg(%x)\n", __vreg(vgt, reg), __sreg(vgt, reg));
+		printk("%s: =======: write vReg(%x), sReg(%x)\n", __func__, __vreg(vgt, reg), __sreg(vgt, reg));
+	//if (reg_hw_access(vgt, reg) || reg == _REG_DSPASURF || reg == _REG_CURABASE) {
 	if (reg_hw_access(vgt, reg)) {
+        //printk("vGT: hvm_render_owner = %d, hvm_dpy_owner = %d\n", hvm_render_owner, hvm_dpy_owner);
+        //printk("vGT: vgt_id = %d, vgt_dom1 = %p\n", vgt->vgt_id, vgt_dom1);
 		if (hvm_render_owner && !hvm_dpy_owner) {
 			if (vgt->vgt_id && !vgt_dom1) {
 				printk("XXXXXXXXX: start switch timer\n");
 				vgt_dom1 = vgt;
-				hrtimer_start(&vgt_timer, ktime_add_ns(ktime_get(), 5000000000), HRTIMER_MODE_ABS);
+				//hrtimer_start(&vgt_timer, ktime_add_ns(ktime_get(), 5000000000), HRTIMER_MODE_ABS);
 			}
 		}
 		if (vgt->vgt_id)
@@ -999,6 +1002,7 @@ void vgt_switch_display_owner(struct vgt_device *prev,
 void do_vgt_display_switch(struct pgt_device *pdev)
 {
 	unsigned long flags;
+    struct vgt_device *cur, *pre;
 	printk(KERN_WARNING"xuanhua: vGT: display switched\n");
 	printk(KERN_WARNING"xuanhua: vGT: current display owner: %p; next display owner: %p\n",
 			current_display_owner(pdev), next_display_owner);
@@ -1024,6 +1028,21 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 		vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
 	}
 	//spin_unlock_irqrestore(&pdev->lock, flags);
+#if 0
+    cur = next_display_owner;
+    pre = current_display_owner(pdev);
+    if (cur == pre)
+        return;
+    else {
+        current_display_owner(pdev) = cur;
+        previous_display_owner(pdev) = pre;
+    }
+
+    /* double buffered */
+    VGT_MMIO_WRITE(cur->pdev, _REG_DSPASURF, __sreg(cur, _REG_DSPASURF));
+    VGT_MMIO_WRITE(cur->pdev, _REG_DSPASURF, __sreg(cur, _REG_DSPASURF));
+    printk("XXXX: display switch to dom %d\n", cur->vgt_id);
+#endif
 }
 
 #endif

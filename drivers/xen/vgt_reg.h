@@ -614,11 +614,13 @@ bool default_submit_context_command (struct vgt_device *vgt,
 /* Pipe A */
 #define _REG_PIPEADSL		0x70000
 #define _REG_PIPEACONF		0x70008
+#define _REG_PIPEASTAT		0x70024
 #define _REG_DSPARB			0x70030
 
 /* Pipe B */
 #define _REG_PIPEBDSL		0x71000
 #define _REG_PIPEBCONF		0x71008
+#define _REG_PIPEBSTAT		0x71024
 
 
 /* For Gen 2 */
