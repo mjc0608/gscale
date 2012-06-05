@@ -1978,6 +1978,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 	int 			i;
 	vgt_state_ring_t	*rb;
 	bool rc = true;
+	vgt_reg_t old_tail;
 
 	if (vgt == NULL)
 		return false;
@@ -1989,6 +1990,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 	/* save rendering engines */
 	for (i=0; i < MAX_ENGINES; i++) {
 		rb = &vgt->rb[i];
+		old_tail = rb->sring.tail;
 		ring_phys_2_shadow (pdev, i, &rb->sring);
 
 		sring_2_vring(vgt, i, &rb->sring, &rb->vring);
@@ -2036,6 +2038,11 @@ bool vgt_save_context (struct vgt_device *vgt)
 
 		if (rc)
 			rb->initialized = true;
+
+		if (old_tail != rb->sring.tail)
+			printk("!!!!!!!!!(save ring-%d, %d switch) tail moved from %x to %x\n",
+				i, vgt_ctx_switch(pdev), rb->sring.tail, old_tail);
+
 		dprintk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
 
 	}
@@ -2048,6 +2055,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 	int i;
 	vgt_state_ring_t	*rb;
 	bool rc;
+	vgt_reg_t old_tail;
 
 	if (vgt == NULL)
 		return false;
@@ -2060,6 +2068,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 		if (rb->stateless)
 			continue;
 
+		old_tail = rb->sring.tail;
 		//vring_2_sring(vgt, rb);
 		ring_shadow_2_phys (pdev, i, &rb->sring);
 
@@ -2101,6 +2110,10 @@ bool vgt_restore_context (struct vgt_device *vgt)
 
 		if (!rc)
 			goto err;
+
+		if (old_tail != rb->sring.tail)
+			printk("!!!!!!!!!(restore ring-%d, %d switch) tail moved from %x to %x\n",
+				i, vgt_ctx_switch(pdev), rb->sring.tail, old_tail);
 	}
 
 	vgt_rendering_restore_mmio(vgt);
