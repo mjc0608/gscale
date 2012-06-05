@@ -174,24 +174,24 @@ int ai_index;
  * Hope to introduce a sysfs interface to dump this information on demand
  * in the future
  */
-static void show_debug(struct pgt_device *pdev)
+static void show_debug(struct pgt_device *pdev, int ring_id)
 {
 	vgt_reg_t reg;
-	printk("debug registers:\n");
+	printk("debug registers(ring-%d, reg maked with <*> may not apply to every ring):\n", ring_id);
 	printk("....EIR: %x\n", VGT_MMIO_READ(pdev, _REG_RCS_EIR));
 	printk("....ESR: %x\n", VGT_MMIO_READ(pdev, _REG_RCS_ESR));
 	printk("....blit EIR: %x\n", VGT_MMIO_READ(pdev, _REG_BCS_EIR));
 	printk("....blit ESR: %x\n", VGT_MMIO_READ(pdev, _REG_BCS_ESR));
-	printk("....IPEHR(last executed inst): %x\n", VGT_MMIO_READ(pdev, 0x2068));
-	reg = VGT_MMIO_READ(pdev, 0x2070);
-	printk("....INSTPS (parser state): %x :\n", reg);
-	printk("....ACTHD(active header): %x\n", VGT_MMIO_READ(pdev, 0x2074));
-	printk("....DMA_FADD_P(current fetch DMA): %x\n", VGT_MMIO_READ(pdev, 0x2078));
-	printk("....CSCMDOP (instruction DWORD): %x\n", VGT_MMIO_READ(pdev, 0x220C));
-	printk("....CSCMDVLD (command buffer valid): %x\n", VGT_MMIO_READ(pdev, 0x2210));
+	printk("....IPEHR(last executed inst): %x\n", VGT_MMIO_READ(pdev, 0x2068 + 0x10000*ring_id));
+	reg = VGT_MMIO_READ(pdev, 0x2070 + 0x10000*ring_id);
+	printk("....INSTPS* (parser state): %x :\n", reg);
+	printk("....ACTHD(active header): %x\n", VGT_MMIO_READ(pdev, 0x2074 + 0x10000*ring_id));
+	printk("....DMA_FADD_P(current fetch DMA): %x\n", VGT_MMIO_READ(pdev, 0x2078 + 0x10000*ring_id));
+	printk("....CSCMDOP* (instruction DWORD): %x\n", VGT_MMIO_READ(pdev, 0x220C + 0x10000*ring_id));
+	printk("....CSCMDVLD* (command buffer valid): %x\n", VGT_MMIO_READ(pdev, 0x2210 + 0x10000*ring_id));
 	printk("(informative)\n");
-	printk("....INSTDONE_1(FYI): %x\n", VGT_MMIO_READ(pdev, 0x206C));
-	printk("....INSTDONE_2: %x\n", VGT_MMIO_READ(pdev, 0x207C));
+	printk("....INSTDONE_1(FYI)*: %x\n", VGT_MMIO_READ(pdev, 0x206C + 0x10000*ring_id));
+	printk("....INSTDONE_2*: %x\n", VGT_MMIO_READ(pdev, 0x207C + 0x10000*ring_id));
 }
 
 /*
@@ -947,7 +947,17 @@ static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, bool ctx_s
 				ctx_switch ? "ctx-switch" : "wait-empty",
 				count / 1000000, ring_id);
 
-			show_debug(pdev);
+			printk("vGT-cur(%d): head(%x), tail(%x), start(%x)\n",
+				current_render_owner(pdev)->vgt_id,
+				current_render_owner(pdev)->rb[ring_id].sring.head,
+				current_render_owner(pdev)->rb[ring_id].sring.tail,
+				current_render_owner(pdev)->rb[ring_id].sring.start);
+			printk("vGT-dom0(%d): head(%x), tail(%x), start(%x)\n",
+				vgt_dom0->vgt_id,
+				vgt_dom0->rb[ring_id].sring.head,
+				vgt_dom0->rb[ring_id].sring.tail,
+				vgt_dom0->rb[ring_id].sring.start);
+			show_debug(pdev, ring_id);
 			show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
 		}
 	}
@@ -2974,7 +2984,7 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 	}
 	pdev->p_thread = p_thread;
-	show_debug(pdev);
+	show_debug(pdev, 0);
 
 	hrtimer_init(&vgt_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
         vgt_timer.function = vgt_timer_fn;
