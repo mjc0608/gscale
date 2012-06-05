@@ -1200,8 +1200,8 @@ int vgt_thread(void *priv)
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
 	if (fastmode) {
-		printk("vGT: fastmode switch (in 50ms)\n");
-		period = HZ/20;
+		printk("vGT: fastmode switch (in 16ms)\n");
+		period = HZ/64;
 	}
 
 	threshold = (10 * HZ) /period;
