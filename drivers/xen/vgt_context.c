@@ -1075,6 +1075,10 @@ static void vgt_resume_ringbuffers(struct vgt_device *vgt)
 	int i;
 
 	for (i = 0; i < MAX_ENGINES; i++) {
+		if (!(vgt->rb[i].sring.ctl & _RING_CTL_ENABLE)) {
+			printk("vGT: ring (%d) not enabled. exit resume\n", i);
+			continue;
+		}
 		VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(i), vgt->rb[i].sring.tail);
 	}
 }
@@ -1266,7 +1270,6 @@ int vgt_thread(void *priv)
 			if ( next != current_render_owner(pdev) )
 #endif
 			{
-				mdelay(5);
 				rdtsc_barrier();
 				start = get_cycles();
 				rdtsc_barrier();
