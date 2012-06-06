@@ -238,10 +238,11 @@ static void vgt_restore_modeset_reg(struct vgt_device *vgt)
     struct pgt_device *pdev = vgt->pdev;
     int reg_index;
 
-    /* default support DRIVER_MODESET */
-    /* TODO: checking feature DRIVER_MODESET */
+    /* FIXME: unconditionlly restore all modeset regs */
+#if 0
     if (vgt_driver_check_feature(vgt, VGT_DRIVER_MODESET))
         return;
+#endif
 
     /* Fences */
     /* TODO: only support snb now */
@@ -627,8 +628,11 @@ static void vgt_save_modeset_reg(struct vgt_device *vgt)
     struct pgt_device *pdev = vgt->pdev;
     int i;
 
+    /* FIXME: unconditionally all modeset regs */
+#if 0
     if (vgt_driver_check_feature(vgt, VGT_DRIVER_MODESET))
         return;
+#endif
 
 	/* Cursor state */
     vgt_save_mmio_reg(_REG_CURACNTR);
