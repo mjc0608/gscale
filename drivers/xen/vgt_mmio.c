@@ -444,7 +444,7 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, int bytes)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
-	uint32_t *cfg_reg, old, new, size;
+	uint32_t *cfg_reg, new, size;
 
 	ASSERT ((off + bytes) <= VGT_CFG_SPACE_SZ);
 	cfg_reg = (uint32_t*)(cfg_space + (off & ~3));
@@ -455,7 +455,6 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 		case VGT_REG_CFG_SPACE_BAR_ROM:	/* ROM */
 			ASSERT((bytes == 4) && (off & 3) == 0);
 
-			old = *cfg_reg & 0xf;
 			new = *(uint32_t *)p_data;
 			printk("Programming bar 0x%x with 0x%x\n", off, new);
 			if ((off & ~3) != VGT_REG_CFG_SPACE_BAR_ROM)
@@ -473,13 +472,13 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 				new = new & ~(size-1);
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
 					vgt_hvm_map_apperture(vgt, 0);
-				*cfg_reg = (new & ~0xf) | old;
+				vgt_pci_bar_write_32(vgt, off, new);
 			} else {
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
 					vgt_hvm_map_apperture(vgt, 0);
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR_ROM)
 					vgt_hvm_map_rom(vgt, 0);
-				*cfg_reg = (new & ~0xf) | old;
+				vgt_pci_bar_write_32(vgt, off, new);
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
 					vgt_hvm_map_apperture(vgt, 1);
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR_ROM)

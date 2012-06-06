@@ -1488,6 +1488,17 @@ static inline bool vgt_register_mmio_read_virt(struct pgt_device *pdev,
 	return vgt_register_mmio_read(reg, read);
 }
 
+static inline void vgt_pci_bar_write_32(struct vgt_device *vgt, uint32_t bar_offset, uint32_t val)
+{
+	uint32_t* cfg_reg;
+
+	/* BAR offset should be 32 bits algiend */
+	cfg_reg = (uint32_t*)&vgt->state.cfg_space[bar_offset & ~3];
+
+	/* only write the bits 31-4, leave the 3-0 bits unchanged, as they are read-only */
+	*cfg_reg = (val & 0xFFFFFFF0) | (*cfg_reg & 0xF);
+}
+
 /* interrupt related definitions */
 #define _REG_DEISR	0x44000
 #define _REG_DEIMR	0x44004

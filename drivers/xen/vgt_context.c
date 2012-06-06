@@ -2298,8 +2298,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	cfg_space = &vgt->state.cfg_space[0];
 	memcpy (cfg_space, pdev->initial_cfg_space, VGT_CFG_SPACE_SZ);
 	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
-	*(uint32_t *)(cfg_space + VGT_REG_CFG_SPACE_BAR1) =
-		aperture_base(pdev) | 0x4;	/* 64-bit MMIO bar */
+	vgt_pci_bar_write_32(vgt, VGT_REG_CFG_SPACE_BAR1, aperture_base(pdev) );
 
 	printk("Aperture: [%llx, %llx] guest [%llx, %llx] va(%llx)\n",
 		vgt_aperture_base(vgt),
