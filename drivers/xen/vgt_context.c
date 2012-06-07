@@ -3064,7 +3064,7 @@ void vgt_destroy()
 	free_mtable();
 	kfree(pdev->reg_info);
 	if (pdev->vbios)
-		free_pages(pdev->vbios, get_order(VGT_VBIOS_PAGES));
+		__free_pages(pdev->vbios, get_order(VGT_VBIOS_PAGES));
 }
 
 
