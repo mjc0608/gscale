@@ -1893,6 +1893,8 @@ vgt_reg_t vgt_pm_regs[] = {
 	_REG_GT_CORE_STATUS,
 	_REG_FORCEWAKE,
 	_REG_FORCEWAKE_ACK,
+	_REG_RC_STATE_CTRL_1,
+	_REG_RC_STATE_CTRL_2,
 };
 
 static void vgt_setup_pm_regs(struct pgt_device *pdev)
@@ -2709,6 +2711,8 @@ static void vgt_setup_always_virt(struct pgt_device *pdev)
 	reg_set_always_virt(pdev, _REG_FORCEWAKE_ACK);
 	reg_set_always_virt(pdev, _REG_GT_CORE_STATUS);
 	reg_set_always_virt(pdev, _REG_GT_THREAD_STATUS);
+	reg_set_always_virt(pdev, _REG_RC_STATE_CTRL_1);
+	reg_set_always_virt(pdev, _REG_RC_STATE_CTRL_2);
 }
 
 static void vgt_setup_hw_update_regs(struct pgt_device *pdev)

@@ -292,6 +292,50 @@ bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+bool rc_state_ctrl_1_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	uint32_t data;
+
+	ASSERT(bytes == 4);
+
+	data = *(uint32_t*)p_data;
+	printk("VM%d write register RC_STATE_CTRL_1 with 0x%x\n", vgt->vm_id, data);
+
+	__vreg(vgt, _REG_RC_STATE_CTRL_1) = data;
+	if ( (data & _REGBIT_RC_HW_CTRL_ENABLE) && (data & (_REGBIT_RC_RC6_ENABLE
+					| _REGBIT_RC_DEEPEST_RC6_ENABLE	| _REGBIT_RC_DEEP_RC6_ENABLE) ) )
+		set_vRC_to_C6(vgt);
+	else
+		set_vRC_to_C0(vgt);
+
+	return true;
+}
+
+bool rc_state_ctrl_2_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	uint32_t data;
+
+	ASSERT(bytes == 4);
+
+	data = *(uint32_t*)p_data;
+	printk("VM%d write register RC_STATE_CTRL_2 with 0x%x\n", vgt->vm_id, data);
+
+	__vreg(vgt, _REG_RC_STATE_CTRL_2) = data;
+
+	/* bits 16:18 */
+	data = (data >> 16) & 7;
+
+	if ( data >= 4)
+		set_vRC_to_C6(vgt);
+	else
+		set_vRC_to_C0(vgt);
+
+	return true;
+}
+
+
 /* FIXME: add EDID virtualization in the future
  */
 bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
@@ -586,6 +630,10 @@ printk("mmio hooks initialized\n");
 			fence_mmio_read, fence_mmio_write);
 
 	vgt_register_mmio_write( _REG_FORCEWAKE, force_wake_write);
+
+	vgt_register_mmio_write( _REG_RC_STATE_CTRL_1, rc_state_ctrl_1_mmio_write);
+
+	vgt_register_mmio_write( _REG_RC_STATE_CTRL_2, rc_state_ctrl_2_mmio_write);
 
 	return true;
 }

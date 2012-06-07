@@ -443,6 +443,14 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_FORCEWAKE_ACK	0x130090
 #define _REG_GT_THREAD_STATUS  0x13805C
 #define _REG_GT_CORE_STATUS  0x138060
+#define _REG_RC_STATE_CTRL_1    0xA090
+#define _REG_RC_STATE_CTRL_2    0xA094
+
+#define _REGBIT_RC_HW_CTRL_ENABLE    (1<<31)
+#define _REGBIT_RC_RC1_ENABLE    (1<<20)
+#define _REGBIT_RC_RC6_ENABLE    (1<<18)
+#define _REGBIT_RC_DEEP_RC6_ENABLE    (1<<17)
+#define _REGBIT_RC_DEEPEST_RC6_ENABLE    (1<<16)
 
 #define MI_NOOP				0
 #define MI_FLUSH			(0x4 << 23)
