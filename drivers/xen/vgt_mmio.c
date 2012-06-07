@@ -250,6 +250,48 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
+static inline void set_vRC(struct vgt_device *vgt, int c)
+{
+	__vreg(vgt, _REG_GT_CORE_STATUS) = c;
+	__vreg(vgt, _REG_GT_THREAD_STATUS) = c;
+}
+
+static void set_vRC_to_C6(struct vgt_device *vgt)
+{
+	printk("Virtual Render C state set to C6\n");
+	set_vRC(vgt, 3);
+}
+
+static void set_vRC_to_C0(struct vgt_device *vgt)
+{
+	printk("Virtual Render C state set to C0\n");
+	set_vRC(vgt, 0);
+}
+
+bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	uint32_t data;
+
+	if (bytes > 4){
+		printk("invalid force wake data\n");
+		return false;
+	}
+
+	data = (*(uint32_t*) p_data) & 1 ;
+
+	printk("VM%d write register FORCE_WAKE with %x\n", vgt->vm_id, data);
+
+	__vreg(vgt, _REG_FORCEWAKE_ACK) = data;
+	__vreg(vgt, _REG_FORCEWAKE) = data;
+	if (data == 1)
+		set_vRC_to_C0(vgt);
+	else
+		set_vRC_to_C6(vgt);
+
+	return true;
+}
+
 /* FIXME: add EDID virtualization in the future
  */
 bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
@@ -542,6 +584,9 @@ printk("mmio hooks initialized\n");
 
 	vgt_register_mmio_handler( _REG_FENCE_0_LOW, 4,
 			fence_mmio_read, fence_mmio_write);
+
+	vgt_register_mmio_write( _REG_FORCEWAKE, force_wake_write);
+
 	return true;
 }
 
