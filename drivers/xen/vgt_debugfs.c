@@ -73,7 +73,6 @@
 #include <asm/bitops.h>
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
-#include <asm/system.h>
 #include <xen/vgt.h>
 #include "vgt_reg.h"
 #include <linux/debugfs.h>
