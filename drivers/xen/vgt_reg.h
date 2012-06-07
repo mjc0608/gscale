@@ -441,6 +441,8 @@ bool default_submit_context_command (struct vgt_device *vgt,
 
 #define _REG_FORCEWAKE		0xA18C
 #define _REG_FORCEWAKE_ACK	0x130090
+#define _REG_GT_THREAD_STATUS  0x13805C
+#define _REG_GT_CORE_STATUS  0x138060
 
 #define MI_NOOP				0
 #define MI_FLUSH			(0x4 << 23)

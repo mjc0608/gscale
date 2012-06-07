@@ -1885,6 +1885,10 @@ static void vgt_setup_display_regs(struct pgt_device *pdev)
 
 /* TODO: lots of to fill */
 vgt_reg_t vgt_pm_regs[] = {
+	_REG_GT_THREAD_STATUS,
+	_REG_GT_CORE_STATUS,
+	_REG_FORCEWAKE,
+	_REG_FORCEWAKE_ACK,
 };
 
 static void vgt_setup_pm_regs(struct pgt_device *pdev)
@@ -2135,14 +2139,28 @@ err:
 	return false;
 }
 
-/* TODO: figure out any security holes by giving the whole initial state */
-static void state_reg_v2s(struct vgt_device *vgt)
+static void state_vreg_init(struct vgt_device *vgt)
 {
-	vgt_reg_t *vreg, *sreg;
+	memcpy (vgt->state.vReg, vgt->pdev->initial_mmio_state, VGT_MMIO_SPACE_SZ);
 
-	vreg = vgt->state.vReg;
+	/* set the bit 0:2 (Thread C-State) to C0
+	 * TODO: consider other bit 3:31
+	 */
+	__vreg(vgt, _REG_GT_THREAD_STATUS) = 0;
+
+	/* set the bit 0:2(Core C-State ) to C0 */
+	__vreg(vgt, _REG_GT_CORE_STATUS) = 0;
+
+	/*TODO: init other regs that need different value from pdev */
+}
+
+/* TODO: figure out any security holes by giving the whole initial state */
+static void state_sreg_init(struct vgt_device *vgt)
+{
+	vgt_reg_t *sreg;
+
 	sreg = vgt->state.sReg;
-	memcpy (sreg, vreg, VGT_MMIO_SPACE_SZ);
+	memcpy (sreg, vgt->pdev->initial_mmio_state, VGT_MMIO_SPACE_SZ);
 
 	/*
 	 * Do we really need address fix for initial state? Any address information
@@ -2324,9 +2342,9 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		cfg_space[VGT_REG_CFG_CLASS_PROG_IF] = VGT_PCI_CLASS_VGA_OTHER;
 	}
 
-	memcpy (vgt->state.vReg, pdev->initial_mmio_state, VGT_MMIO_SPACE_SZ);
 	vgt->pdev = pdev;
-	state_reg_v2s (vgt);
+	state_sreg_init (vgt);
+	state_vreg_init(vgt);
 
 	if (vgt_vstate_irq_init(vgt) != 0)
 		return NULL;
@@ -2684,7 +2702,9 @@ static void vgt_setup_always_virt(struct pgt_device *pdev)
 	 * effect, so we postpone to the time at the 1st context switch
 	 */
 	reg_set_always_virt(pdev, _REG_FORCEWAKE);
-
+	reg_set_always_virt(pdev, _REG_FORCEWAKE_ACK);
+	reg_set_always_virt(pdev, _REG_GT_CORE_STATUS);
+	reg_set_always_virt(pdev, _REG_GT_THREAD_STATUS);
 }
 
 static void vgt_setup_hw_update_regs(struct pgt_device *pdev)
