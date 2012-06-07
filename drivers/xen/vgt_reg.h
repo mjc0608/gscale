@@ -741,13 +741,13 @@ struct vgt_intel_device_info {
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
 extern int vgt_initialize(struct pci_dev *dev);
-extern bool vgt_register_mmio_handler(int start, int end,
+extern bool vgt_register_mmio_handler(int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write);
 
 static inline bool vgt_register_mmio_single(int reg,
 	vgt_mmio_read read, vgt_mmio_write write)
 {
-	return vgt_register_mmio_handler(reg, reg + REG_SIZE - 1,
+	return vgt_register_mmio_handler(reg, REG_SIZE,
 			read, write);
 }
 

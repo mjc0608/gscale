@@ -367,11 +367,15 @@ static void register_mhash_entry(struct mmio_hash_table *mht)
 	_add_mtable(index, mht);
 }
 
-bool vgt_register_mmio_handler(int start, int end,
+bool vgt_register_mmio_handler(int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write)
 {
-	int i;
+	int i, end;
 	struct mmio_hash_table *mht;
+
+	end = start + bytes -1;
+
+	printk("start=0x%x end=0x%x\n", start, end);
 
 	ASSERT((start & 3) == 0);
 	ASSERT(((end+1) & 3) == 0);

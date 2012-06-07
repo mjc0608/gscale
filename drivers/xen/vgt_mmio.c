@@ -527,20 +527,20 @@ printk("mmio hooks initialized\n");
 	/* ring registers */
 	for (i=0; i < MAX_ENGINES; i++)
 		if (!vgt_register_mmio_handler(ring_mmio_base[i],
-			ring_mmio_base[i] + RB_REGS_SIZE - 1,
+			 RB_REGS_SIZE,
 			ring_mmio_read, ring_mmio_write))
 			return false;
 
-	vgt_register_mmio_handler( _REG_PCH_DPB_AUX_CH_CTL, _REG_PCH_DPB_AUX_CH_CTL + 3,
+	vgt_register_mmio_handler( _REG_PCH_DPB_AUX_CH_CTL, 4,
 			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
 
-	vgt_register_mmio_handler( _REG_PCH_DPC_AUX_CH_CTL, _REG_PCH_DPC_AUX_CH_CTL + 3,
+	vgt_register_mmio_handler( _REG_PCH_DPC_AUX_CH_CTL, 4,
 			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
 
-	vgt_register_mmio_handler( _REG_PCH_DPD_AUX_CH_CTL, _REG_PCH_DPD_AUX_CH_CTL + 3,
+	vgt_register_mmio_handler( _REG_PCH_DPD_AUX_CH_CTL, 4,
 			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
 
-	vgt_register_mmio_handler( _REG_FENCE_0_LOW, _REG_FENCE_15_HIGH + 3,
+	vgt_register_mmio_handler( _REG_FENCE_0_LOW, 4,
 			fence_mmio_read, fence_mmio_write);
 	return true;
 }
