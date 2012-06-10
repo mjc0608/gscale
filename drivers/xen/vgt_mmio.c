@@ -335,6 +335,41 @@ bool rc_state_ctrl_2_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+bool hdcp_status_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	ASSERT(bytes == 4);
+
+	printk("VM%d read HDCP status register 0x%x\n", vgt->vm_id, offset);
+
+	*(uint32_t*)p_data = _REGBIT_HDCP_CIPHER_AN_READY;
+
+	return true;
+}
+
+bool hdcp_key_status_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	ASSERT(bytes == 4);
+
+	printk("VM%d read HDCP KEY status register 0x%x\n", vgt->vm_id, offset);
+
+	*(uint32_t*)p_data = _REGBIT_HDCP_KEY_DONE;
+
+	return true;
+}
+
+bool hdcp_pch_boot_auth_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	ASSERT(bytes == 4);
+
+	printk("VM%d read HDCP PCH Boot Authentication Status Register 0x%x\n", vgt->vm_id, offset);
+
+	*(uint32_t*)p_data = _REGBIT_HDCP_PCH_BOOT_AUTH_STATUS_READY;
+
+	return true;
+}
 
 /* FIXME: add EDID virtualization in the future
  */
@@ -634,6 +669,14 @@ printk("mmio hooks initialized\n");
 	vgt_register_mmio_write( _REG_RC_STATE_CTRL_1, rc_state_ctrl_1_mmio_write);
 
 	vgt_register_mmio_write( _REG_RC_STATE_CTRL_2, rc_state_ctrl_2_mmio_write);
+
+	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_1, hdcp_status_mmio_read);
+	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_2, hdcp_status_mmio_read);
+	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_3, hdcp_status_mmio_read);
+	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_4, hdcp_status_mmio_read);
+	vgt_register_mmio_read( _REG_HDCP_KEY_STATUS_REG, hdcp_key_status_mmio_read);
+	vgt_register_mmio_read( _REG_HDCP_PCH_BOOT_AUTH_STATUS_REG ,
+			hdcp_pch_boot_auth_mmio_read);
 
 	return true;
 }

@@ -452,6 +452,18 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REGBIT_RC_DEEP_RC6_ENABLE    (1<<17)
 #define _REGBIT_RC_DEEPEST_RC6_ENABLE    (1<<16)
 
+#define _REG_HDCP_STATUS_REG_1	0xE651C
+#define _REG_HDCP_STATUS_REG_2	0xE661C
+#define _REG_HDCP_STATUS_REG_3	0xE671C
+#define _REG_HDCP_STATUS_REG_4	0xE681C
+#define _REGBIT_HDCP_CIPHER_AN_READY	(1<<17)
+
+#define _REG_HDCP_KEY_STATUS_REG	0xE6C04
+#define _REGBIT_HDCP_KEY_DONE		(3)
+
+#define _REG_HDCP_PCH_BOOT_AUTH_STATUS_REG     0xE6E1C
+#define _REGBIT_HDCP_PCH_BOOT_AUTH_STATUS_READY (0x2F << 16)
+
 #define MI_NOOP				0
 #define MI_FLUSH			(0x4 << 23)
 #define MI_SUSPEND_FLUSH		(0xb << 23)
