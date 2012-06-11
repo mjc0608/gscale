@@ -1024,24 +1024,31 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 	/* TODO: Because of assert in vgt_emulate_write/read,
 	 * we cannot use this lock in case deadlock */
 	/* FIXME: we do need other locks for this ??? */
-	//spin_lock_irqsave(&pdev->lock, flags);
+	spin_lock_irqsave(&pdev->lock, flags);
+	dprintk("before irq save\n");
 	vgt_irq_save_context(current_display_owner(pdev),
 			VGT_OT_DISPLAY);
+	dprintk("after irq save\n");
 	vgt_switch_display_owner(current_display_owner(pdev),
 			next_display_owner);
 	previous_display_owner(pdev) = current_display_owner(pdev);
 	current_display_owner(pdev) = next_display_owner;
 	//next_display_owner = NULL;
+	dprintk("before irq restore\n");
 	vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
+	spin_unlock_irqrestore(&pdev->lock, flags);
+	dprintk("after irq restore\n");
 	/*
 	 * Virtual interrupts pending right after display switch
 	 * Need send to both prev and next owner.
 	 */
 	if (pdev->request & VGT_REQUEST_IRQ) {
+		printk("vGT: handle pending interrupt in the display context switch time\n");
+		spin_lock_irqsave(&pdev->lock, flags);
 		clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 		vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
+		spin_unlock_irqrestore(&pdev->lock, flags);
 	}
-	//spin_unlock_irqrestore(&pdev->lock, flags);
 #if 0
     cur = next_display_owner;
     pre = current_display_owner(pdev);

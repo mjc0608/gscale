@@ -881,10 +881,6 @@ int vgt_save_state(struct vgt_device *vgt)
 	vgt_save_display(vgt);
 
     if (VGT_HAS_PCH_SPLIT(pdev)) {
-        vgt_save_mmio_reg(_REG_DEIER);
-        vgt_save_mmio_reg(_REG_DEIMR);
-        vgt_save_mmio_reg(_REG_GTIER);
-        vgt_save_mmio_reg(_REG_GTIMR);
         vgt_save_mmio_reg(_REG_FDI_RXA_IMR);
         vgt_save_mmio_reg(_REG_FDI_RXB_IMR);
         vgt_save_mmio_reg(_REG_RSTDBYCTL);
@@ -962,17 +958,8 @@ int vgt_restore_state(struct vgt_device *vgt)
 
 	/* Interrupt state */
     if (VGT_HAS_PCH_SPLIT(vgt)) {
-        vgt_restore_mmio_reg(_REG_DEIER);
-        vgt_restore_mmio_reg(_REG_DEIMR);
-        vgt_restore_mmio_reg(_REG_GTIER);
-        vgt_restore_mmio_reg(_REG_GTIMR);
         vgt_restore_mmio_reg(_REG_FDI_RXA_IMR);
         vgt_restore_mmio_reg(_REG_FDI_RXB_IMR);
-        vgt_restore_mmio_reg(_REG_SHOTPLUG_CTL);
-    } else {
-        /* FIXME: Is this MMIO ??? */
-        vgt_restore_mmio_reg(_REG_IER);
-        vgt_restore_mmio_reg(_REG_IMR);
     }
 
     /* FIXME: do we need lock ??? */
