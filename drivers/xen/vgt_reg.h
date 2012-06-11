@@ -1811,6 +1811,9 @@ struct vgt_irq_ops {
 	struct vgt_irq_info *(*get_irq_info_from_event) (
 			struct pgt_device *dev, enum vgt_event_type event);
 
+	struct vgt_irq_info *(*get_irq_info_from_owner) (
+			struct pgt_device *dev, enum vgt_owner_type owner);
+
 	char *(*get_reg_name)(struct pgt_device *dev, uint32_t reg);
 };
 

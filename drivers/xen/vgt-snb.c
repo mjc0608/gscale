@@ -303,6 +303,18 @@ static struct vgt_irq_info* vgt_snb_get_irq_info_from_event(struct pgt_device *d
 		return NULL;
 }
 
+static struct vgt_irq_info* vgt_snb_get_irq_info_from_owner(struct pgt_device *dev, enum vgt_owner_type owner)
+{
+	if (owner == VGT_OT_RENDER)
+		return &snb_render_irq_info;
+	/* FIXME: both de and pch should be returned */
+	if (owner == VGT_OT_DISPLAY || owner == VGT_OT_MGMT)
+		return &snb_dpy_irq_info;
+	if (owner == VGT_OT_PM)
+		return &snb_pm_irq_info;
+	return NULL;
+}
+
 static inline struct vgt_irq_info* vgt_snb_get_irq_info_from_reg(int reg)
 {
 	if (reg >= _REG_GTISR && reg < _REG_GTIER + 4)
@@ -587,22 +599,26 @@ static void vgt_snb_irq_save(struct vgt_device *vgt,
 {
 	vgt_reg_t val;
 	unsigned long flags;
+	struct pgt_device *pdev = vgt->pdev;
 
 	local_irq_save(flags);
 	switch (owner) {
 		case VGT_OT_RENDER:
 			/* disable all GT events */
-			VGT_MMIO_WRITE(vgt->pdev, _REG_GTIER, 0U);
+			VGT_MMIO_WRITE(pdev, _REG_GTIER, 0U);
+			VGT_POST_READ(pdev, _REG_GTIER);
 			break;
 		case VGT_OT_DISPLAY:
 			/* disable all display events from DE and PCH. */
-			val = VGT_MMIO_READ(vgt->pdev, _REG_DEIER);
-			val &= ~vgt_de_dpy_mask(vgt->pdev);
-			VGT_MMIO_WRITE(vgt->pdev, _REG_DEIER, val);
+			val = VGT_MMIO_READ(pdev, _REG_DEIER);
+			val &= ~vgt_de_dpy_mask(pdev);
+			VGT_MMIO_WRITE(pdev, _REG_DEIER, val);
+			VGT_POST_READ(pdev, _REG_DEIER);
 
-			val = VGT_MMIO_READ(vgt->pdev, _REG_SDEIER);
-			val &= ~vgt_pch_dpy_mask(vgt->pdev);
-			VGT_MMIO_WRITE(vgt->pdev, _REG_SDEIER, val);
+			val = VGT_MMIO_READ(pdev, _REG_SDEIER);
+			val &= ~vgt_pch_dpy_mask(pdev);
+			VGT_MMIO_WRITE(pdev, _REG_SDEIER, val);
+			VGT_POST_READ(pdev, _REG_SDEIER);
 			break;
 		default:
 			break;
@@ -615,24 +631,30 @@ static void vgt_snb_irq_restore(struct vgt_device *vgt,
 {
 	vgt_reg_t val;
 	unsigned long flags;
+	struct pgt_device *pdev = vgt->pdev;
 
 	local_irq_save(flags);
 	switch (owner) {
 		case VGT_OT_RENDER:
 			VGT_MMIO_WRITE(vgt->pdev, _REG_RCS_IMR,
 				__vreg(vgt, _REG_RCS_IMR));
+			VGT_POST_READ(pdev, _REG_RCS_IMR);
 
 			VGT_MMIO_WRITE(vgt->pdev, _REG_BCS_IMR,
 				__vreg(vgt, _REG_BCS_IMR));
+			VGT_POST_READ(pdev, _REG_BCS_IMR);
 
 			VGT_MMIO_WRITE(vgt->pdev, _REG_VCS_IMR,
 				__vreg(vgt, _REG_VCS_IMR));
+			VGT_POST_READ(pdev, _REG_VCS_IMR);
 
 			VGT_MMIO_WRITE(vgt->pdev, _REG_GTIMR,
 				__vreg(vgt, _REG_GTIMR));
+			VGT_POST_READ(pdev, _REG_GTIMR);
 
 			VGT_MMIO_WRITE(vgt->pdev, _REG_GTIER,
 				__vreg(vgt, _REG_GTIER));
+			VGT_POST_READ(pdev, _REG_GTIER);
 			break;
 		case VGT_OT_DISPLAY:
 			/* merge new owner's display bits with other bits */
@@ -640,21 +662,36 @@ static void vgt_snb_irq_restore(struct vgt_device *vgt,
 			val = (val & ~vgt_de_dpy_mask(vgt->pdev)) |
 			      (__vreg(vgt, _REG_DEIMR) & vgt_de_dpy_mask(vgt->pdev));
 			VGT_MMIO_WRITE(vgt->pdev, _REG_DEIMR, val);
+			VGT_POST_READ(pdev, _REG_DEIMR);
 
 			val = VGT_MMIO_READ(vgt->pdev, _REG_SDEIMR);
 			val = (val & ~vgt_pch_dpy_mask(vgt->pdev)) |
 			      (__vreg(vgt, _REG_SDEIMR) & vgt_pch_dpy_mask(vgt->pdev));
 			VGT_MMIO_WRITE(vgt->pdev, _REG_SDEIMR, val);
+			VGT_POST_READ(pdev, _REG_SDEIMR);
 
 			val = VGT_MMIO_READ(vgt->pdev, _REG_SDEIER);
 			val = (val & ~vgt_pch_dpy_mask(vgt->pdev)) |
 			      (__vreg(vgt, _REG_SDEIER) & vgt_pch_dpy_mask(vgt->pdev));
 			VGT_MMIO_WRITE(vgt->pdev, _REG_SDEIER, val);
+			VGT_POST_READ(pdev, _REG_SDEIER);
 
 			val = VGT_MMIO_READ(vgt->pdev, _REG_DEIER);
 			val = (val & ~vgt_de_dpy_mask(vgt->pdev)) |
 			      (__vreg(vgt, _REG_DEIER) & vgt_de_dpy_mask(vgt->pdev));
 			VGT_MMIO_WRITE(vgt->pdev, _REG_DEIER, val);
+			VGT_POST_READ(pdev, _REG_DEIER);
+
+			printk("vGT: after restore deimr(%x) deier(%x) deiir(%x) deisr(%x)\n",
+					VGT_MMIO_READ(vgt->pdev, _REG_DEIMR),
+					VGT_MMIO_READ(vgt->pdev, _REG_DEIER),
+					VGT_MMIO_READ(vgt->pdev, _REG_DEIIR),
+					VGT_MMIO_READ(vgt->pdev, _REG_DEISR));
+			printk("vGT: after restore sdeimr(%x) sdeier(%x) sdeiir(%x) sdeisr(%x)\n",
+					VGT_MMIO_READ(vgt->pdev, _REG_SDEIMR),
+					VGT_MMIO_READ(vgt->pdev, _REG_SDEIER),
+					VGT_MMIO_READ(vgt->pdev, _REG_SDEIIR),
+					VGT_MMIO_READ(vgt->pdev, _REG_SDEISR));
 			break;
 		default:
 			break;
@@ -706,5 +743,6 @@ struct vgt_irq_ops snb_irq_ops = {
 	.get_event_type_from_bit = vgt_snb_get_event_type_from_bit,
 	.get_bit_from_event = vgt_snb_get_bit_from_event,
 	.get_irq_info_from_event = vgt_snb_get_irq_info_from_event,
+	.get_irq_info_from_owner = vgt_snb_get_irq_info_from_owner,
 	.get_reg_name = vgt_snb_get_reg_name,
 };

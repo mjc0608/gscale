@@ -367,15 +367,17 @@ void vgt_irq_toggle_emulations(struct vgt_device *vstate,
 	struct vgt_irq_info *info;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 
-	dprintk("vGT: toggle event emulations at context switch\n");
-	for_each_set_bit(event, vgt_state_emulated_events(vstate), IRQ_MAX) {
-		if (vgt_get_event_owner_type(dev, event) == owner &&
-		    !test_bit(event, vgt_always_emulated_events(dev))) {
+	printk("vGT: toggle event emulations at context switch\n");
+	info = ops->get_irq_info_from_owner(dev, owner);
+	for (bit = 0; bit < info->table_size; bit++) {
+		if (info->table[bit].emul_handler) {
+			event = info->table[bit].event;
+			if (test_bit(event, vgt_always_emulated_events(dev)))
+				continue;
 
-			info = ops->get_irq_info_from_event(dev, event);
-			bit = ops->get_bit_from_event(dev, event, info);
-
-			if (enable) {
+			if (enable &&
+			    !test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
+			    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base)))) {
 				vgt_run_emul(vstate, event, bit, true);
 			} else {
 				if (test_bit(event, vgt_state_emulated_events(vstate)))
@@ -598,13 +600,13 @@ static void vgt_run_emul(struct vgt_device *vstate,
 	struct pgt_device *dev = vstate->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 
-	dprintk("vGT-IRQ(%d): %s emul handler for event %s\n", vstate->vgt_id,
-		enable ? "enable" : "disable", vgt_irq_name[event]);
 	info = ops->get_irq_info_from_event(dev, event);
 	ASSERT(info);
 
 	entry = info->table + bit;
 	if (entry->emul_handler) {
+		dprintk("vGT-IRQ(%d): %s emul handler for event %s\n", vstate->vgt_id,
+				enable ? "enable" : "disable", vgt_irq_name[event]);
 		if (!enable)
 			clear_bit(event, vgt_state_emulated_events(vstate));
 
