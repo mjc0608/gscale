@@ -270,10 +270,10 @@ static struct kobj_attribute display_pointer_attrs =
 	__ATTR(display_pointer, 0660, vgt_display_pointer_show, vgt_display_pointer_store);
 
 static struct kobj_attribute hot_plug_event_attrs =
-	__ATTR(hot_plug_event, 0666, vgt_hot_plug_reader, vgt_hot_plug_trigger);
+	__ATTR(hot_plug_event, 0660, vgt_hot_plug_reader, vgt_hot_plug_trigger);
 
 static struct kobj_attribute reg_owner_attrs =
-	__ATTR(reg_owner, 0666, vgt_reg_owner_show, vgt_reg_owner_store);
+	__ATTR(reg_owner, 0660, vgt_reg_owner_show, vgt_reg_owner_store);
 
 static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,

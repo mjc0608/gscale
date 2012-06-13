@@ -3196,7 +3196,7 @@ int vgt_initialize(struct pci_dev *dev)
 	 * and NON_REENTRANT
 	 */
 	pdev->pgt_wq = alloc_workqueue("vgt_workqueue",
-			WQ_UNBOUND | WQ_NON_REENTRANT,
+			WQ_UNBOUND,
 			1);
 	if (!pdev->pgt_wq) {
 		printk("vGT: failed to create kthread: vgt_workqueue.\n");

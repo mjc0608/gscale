@@ -117,7 +117,7 @@ void vgt_setup_irq(int pirq)
 }
 
 /* for GFX driver */
-int xen_start_vgt()
+int xen_start_vgt(struct pci_dev *pdev)
 {
 	if (!xen_initial_domain())
 		return 0;
@@ -126,11 +126,8 @@ int xen_start_vgt()
 		printk("vgt_ops has been intialized\n");
 		return 0;
 	}
-	if (vgt_pci_dev == NULL) {
-		printk("VGT: too early xen_start_vgt, check driver dependency!!!\n");
-	}
 
-	return vgt_initialize(vgt_pci_dev) == 0;
+	return vgt_initialize(pdev) == 0;
 }
 EXPORT_SYMBOL(xen_start_vgt);
 

@@ -914,9 +914,9 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	driver.driver_features &= ~(DRIVER_USE_AGP);
 
-	/* TO inform VGT */
-	xen_start_vgt();
-	printk("i915: xen_start_vgt done in i915_pci_probe.\n");
+	/* enforce dependancy and initialize the vGT driver */
+	xen_start_vgt(pdev);
+	printk("i915: xen_start_vgt done\n");
 
 	return drm_get_pci_dev(pdev, ent, &driver);
 }
@@ -1649,9 +1649,6 @@ printk("Eddie: -------------\n");
 #endif
 	}
 
-	/* enforce dependancy and initialize the vGT driver */
-	xen_start_vgt();
-	printk("i915: xen_start_vgt done\n");
 	return drm_pci_init(&driver, &i915_pci_driver);
 }
 

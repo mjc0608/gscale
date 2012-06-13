@@ -1624,8 +1624,6 @@ static int only_one_child(struct pci_bus *bus)
 		return 1;
 	return 0;
 }
-struct pci_dev *vgt_pci_dev = NULL;
-EXPORT_SYMBOL(vgt_pci_dev);
 
 /**
  * pci_scan_slot - scan a PCI slot on a bus for devices.
@@ -1651,11 +1649,6 @@ int pci_scan_slot(struct pci_bus *bus, int devfn)
 		return 0;
 	if (!dev->is_added)
 		nr++;
-
-	if ( bus->number == VGT_BUS_ID && devfn == VGT_DEVFN ) {
-		printk("VGT: Found GT device at %p\n", dev);
-		vgt_pci_dev = dev;
-	}
 
 	for (fn = next_fn(bus, dev, 0); fn > 0; fn = next_fn(bus, dev, fn)) {
 		dev = pci_scan_single_device(bus, devfn + fn);
