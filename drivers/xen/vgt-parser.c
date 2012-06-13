@@ -116,6 +116,7 @@ static int vgt_addr_fix_list_init(void)
 	addr_list.pos = 0;
 	addr_list.entrys = vmalloc( sizeof(struct vgt_addr_fix_entry) * addr_list.len );
 	ASSERT(addr_list.entrys);
+	spin_lock_init(&addr_list.lock);
 	return 0;
 }
 #else
