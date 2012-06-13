@@ -873,7 +873,7 @@ int xen_register_vgt_driver(vgt_ops_t *ops)
 			printk("vGT: failed to start I/O forwarding\n");
 			return -EINVAL;
 		} else {
-			printk("vGT: trap_req.nr_pio_frags: mmio %d %lx %lx\n",
+			printk("vGT: trap_req.nr_mmio_frags: mmio %d %lx %lx\n",
 				trap_req.nr_mmio_frags,
 				(long)trap_req.mmio_frags[0].s,
 				(long)trap_req.mmio_frags[0].e
