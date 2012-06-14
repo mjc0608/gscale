@@ -466,6 +466,31 @@ static int vgt_hvm_map_rom (struct vgt_device *vgt, int map)
 	vgt->state.bar_mapped[3] = map;
 	return r;
 }
+
+#define OPREGION_PAGES	2
+#define PCI_CONFIG_OPREGION 0xFC
+static int vgt_hvm_map_opregion (struct vgt_device *vgt, int map)
+{
+	uint32_t opregion;
+	struct xen_hvm_vgt_map_mmio memmap;
+	int rc;
+
+	opregion = *(uint32_t*)(vgt->state.cfg_space + PCI_CONFIG_OPREGION );
+
+	printk("Direct map OpRegion 0x%x\n", opregion);
+
+	memmap.first_gfn = opregion >> PAGE_SHIFT;
+	memmap.first_mfn = opregion >> PAGE_SHIFT;
+	memmap.nr_mfns = OPREGION_PAGES ;
+	memmap.map = map;
+	memmap.domid = vgt->vm_id;
+	rc = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
+	if (rc != 0)
+		printk(KERN_ERR "vgt_hvm_map_opregion fail with %d!\n", rc);
+
+	return rc;
+}
+
 /*
  * Map the apperture space (BAR1) of vGT device for direct access.
  */
@@ -951,6 +976,12 @@ static irqreturn_t vgt_hvm_io_req_handler(int irq, void* dev)
 	notify_remote_via_irq(irq);
 
 	return IRQ_HANDLED;
+}
+
+int vgt_hvm_io_init(struct vgt_device *vgt)
+{
+	vgt_hvm_map_opregion(vgt, 1);
+	return 0;
 }
 
 int vgt_hvm_info_init(struct vgt_device *vgt)

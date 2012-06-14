@@ -785,6 +785,7 @@ static inline bool vgt_register_mmio_read(int reg,
 
 extern bool vgt_initialize_mmio_hooks(void);
 extern int vgt_hvm_info_init(struct vgt_device *vgt);
+extern int vgt_hvm_io_init(struct vgt_device *vgt);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
 extern int vgt_hvm_enable(struct vgt_device *vgt);
 

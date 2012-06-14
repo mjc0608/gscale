@@ -2388,6 +2388,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	if (vgt->vm_id != 0){
 		/* HVM specific init */
 		vgt_hvm_info_init(vgt);
+		vgt_hvm_io_init(vgt);
 		if (vgt_hvm_enable(vgt) != 0)
 			return NULL;
 	}
