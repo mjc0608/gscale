@@ -752,6 +752,7 @@ struct vgt_intel_device_info {
 #define VGT_REG_CFG_SPACE_BAR2			0x20
 #define VGT_REG_CFG_SPACE_BAR_ROM		0x30
 #define VGT_REG_CFG_SPACE_MSAC			0x62
+#define VGT_REG_CFG_SWSCI_TRIGGER		0xE8
 
 //#define MSAC_APERTURE_SIZE_MASK		0x3
 #define MSAC_APERTURE_SIZE_128M			(0 << 1)

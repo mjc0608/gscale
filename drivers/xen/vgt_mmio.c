@@ -62,6 +62,7 @@
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/slab.h>
+#include <linux/pci.h>
 
 #include <asm/xen/hypercall.h>
 #include <asm/xen/hypervisor.h>
@@ -568,6 +569,51 @@ static int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 	return r;
 }
 
+typedef union _SCI_REG_DATA{
+	uint16_t data;
+	struct {
+		uint16_t trigger:1; /* bit 0: trigger SCI */
+		uint16_t reserve:14;
+		uint16_t method:1; /* bit 15: 1 - SCI, 0 - SMI */
+	};
+} SCI_REG_DATA;
+
+static bool vgt_cfg_sci_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, int bytes)
+{
+	printk("VM%d Read SCI Trigger Register, bytes=%d value=0x%x\n", vgt->vm_id, bytes, *(uint16_t*)p_data);
+
+	return true;
+}
+
+static bool vgt_cfg_sci_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, int bytes)
+{
+	SCI_REG_DATA sci_reg;
+
+	printk("VM%d Write SCI Trigger Register, bytes=%d value=0x%x\n", vgt->vm_id, bytes, *(uint32_t*)p_data);
+
+	if( (bytes == 2) || (bytes == 4)){
+		memcpy (&vgt->state.cfg_space[offset], p_data, bytes);
+	} else {
+		printk("Warning: VM%d vgt_cfg_sci_write invalid bytes=%d, ignore it\n", vgt->vm_id, bytes);
+		return false;
+	}
+
+	sci_reg.data = *(uint16_t*)(vgt->state.cfg_space + offset);
+	sci_reg.method = 1; /* set method to SCI */
+	if (sci_reg.trigger == 1){
+		printk("SW SCI Triggered by VM%d\n", vgt->vm_id);
+		/* TODO: add SCI emulation */
+		sci_reg.trigger = 0; /* SCI completion indicator */
+	}
+
+	memcpy (&vgt->state.cfg_space[offset], &sci_reg.data , 2);
+
+	return true;
+}
+
+
 bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int offset, void *p_data, int bytes)
 {
 
@@ -580,6 +626,9 @@ bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int offset, void *p_d
 		case 0:
 		case 4:
 		break;
+		case VGT_REG_CFG_SWSCI_TRIGGER:
+			vgt_cfg_sci_read(vgt, offset, p_data, bytes);
+			break;
 		default:
 		break;
 	}
@@ -591,6 +640,7 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint32_t *cfg_reg, new, size;
+	bool rc = true;
 
 	ASSERT ((off + bytes) <= VGT_CFG_SPACE_SZ);
 	cfg_reg = (uint32_t*)(cfg_space + (off & ~3));
@@ -639,6 +689,10 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 					*(char *)p_data, bytes);
 			break;
 
+		case VGT_REG_CFG_SWSCI_TRIGGER:
+			rc = vgt_cfg_sci_write(vgt, off, p_data, bytes);
+			break;
+
 		case VGT_REG_CFG_SPACE_BAR1+4:
 		case VGT_REG_CFG_SPACE_BAR0+4:
 		case VGT_REG_CFG_SPACE_BAR2+4:
@@ -662,7 +716,7 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 	 * the real conf space. In the case where propogation is required
 	 * but value needs be changed (sReg), do it here
 	 */
-	return true;
+	return rc;
 }
 
 bool vgt_initialize_mmio_hooks()
