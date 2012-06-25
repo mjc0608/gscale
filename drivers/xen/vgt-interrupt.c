@@ -1804,7 +1804,8 @@ int vgt_irq_init(struct pgt_device *dev)
 
 	spin_lock_init(&(dev->irq_hstate->lock));
 
-	if (snb_device(dev))
+	/* FIXME IVB: check any difference */
+	if (dev->is_sandybridge || dev->is_ivybridge)
 		dev->irq_hstate->ops = &snb_irq_ops;
 	else {
 		dprintk("vGT: no irq ops found!\n");
