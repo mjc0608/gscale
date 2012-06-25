@@ -939,7 +939,7 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
  *
  * TODO: IIR can cache two pending events
  */
-bool vgt_reg_irr_handler(struct vgt_device *vgt, unsigned int reg,
+bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 	void *p_data, unsigned int bytes)
 {
 	vgt_reg_t iir = *(vgt_reg_t *)p_data;

@@ -2066,7 +2066,7 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 	unsigned int reg, void *p_data, unsigned int bytes);
 bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	unsigned int reg, void *p_data, unsigned int bytes);
-bool vgt_reg_irr_handler(struct vgt_device *vgt, unsigned int reg,
+bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 	void *p_data, unsigned int bytes);
 void vgt_reg_watchdog_handler(struct vgt_device *state,
 	uint32_t reg, uint32_t val, bool write, ...);
