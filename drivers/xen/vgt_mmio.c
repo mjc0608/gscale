@@ -390,6 +390,34 @@ bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 
 }
 
+bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+        void *p_data, unsigned int bytes)
+{
+    unsigned int reg;
+    uint32_t wr_data;
+    vgt_reg_t vreg_data;
+    bool rc;
+
+    ASSERT(bytes == 4);
+
+    reg = offset & ~(bytes - 1);
+
+    wr_data = *((uint32_t *)p_data);
+    /* vreg status will be updated when when read hardware status */
+    if (!reg_hw_access(vgt, reg)) {
+        if (wr_data & _REGBIT_PIPE_ENABLE)
+            wr_data |= _REGBIT_PIPE_STAT_ENABLED;
+        else if (!(wr_data & _REGBIT_PIPE_ENABLE))
+            wr_data &= ~_REGBIT_PIPE_STAT_ENABLED;
+    }
+
+    /* FIXME: this will cause writing to bit _REGBIT_PIPE_STAT_ENABLED,
+     * this bit indicate actual pipe state, but in prm, not marked
+     * readonly bit
+     */
+    return default_mmio_write(vgt, offset, &wr_data, bytes);
+}
+
 bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -764,6 +792,8 @@ printk("mmio hooks initialized\n");
 	vgt_register_mmio_read( _REG_HDCP_PCH_BOOT_AUTH_STATUS_REG ,
 			hdcp_pch_boot_auth_mmio_read);
 
+	vgt_register_mmio_write(_REG_PIPEACONF, pipe_conf_mmio_write);
+	vgt_register_mmio_write(_REG_PIPEBCONF, pipe_conf_mmio_write);
 	return true;
 }
 

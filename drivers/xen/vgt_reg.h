@@ -644,6 +644,8 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_PIPEBCONF		0x71008
 #define _REG_PIPEBSTAT		0x71024
 
+#define _REGBIT_PIPE_ENABLE    (1 << 31)
+#define _REGBIT_PIPE_STAT_ENABLED  (1 << 30)
 
 /* For Gen 2 */
 #define _REG_CURSIZE			0x700a0
