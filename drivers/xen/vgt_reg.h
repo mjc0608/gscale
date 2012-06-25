@@ -583,6 +583,9 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_FDI_RXA_CTL             0xf000c
 #define _REG_FDI_RXB_CTL             0xf100c
 
+#define _REG_FDI_RXA_IIR           0xf0014
+#define _REG_FDI_RXB_IIR           0xf1014
+
 /* CPU: FDI_TX */
 #define _REG_FDI_TXA_CTL             0x60100
 #define _REG_FDI_TXB_CTL             0x61100

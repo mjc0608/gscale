@@ -418,6 +418,29 @@ bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
     return default_mmio_write(vgt, offset, &wr_data, bytes);
 }
 
+bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
+    void *p_data, unsigned int bytes)
+{
+    unsigned int reg;
+    bool rc = true;
+    vgt_reg_t wr_data = *(vgt_reg_t *)p_data;
+    vgt_reg_t old_iir = __vreg(vgt, reg);
+
+    ASSERT(bytes == 4 && !(offset & (bytes - 1)));
+
+    reg = offset & ~(bytes -1);
+
+    rc = default_mmio_write(vgt, offset, p_data, bytes);
+
+    /* FIXME: sreg will be updated only when reading hardware status happened,
+     * so when dumping sreg space, the "hardware status" related bits may not
+     * be trusted */
+    if (!reg_hw_access(vgt, reg))
+        __vreg(vgt, reg) = old_iir ^ wr_data;
+
+    return rc;
+}
+
 bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -794,6 +817,9 @@ printk("mmio hooks initialized\n");
 
 	vgt_register_mmio_write(_REG_PIPEACONF, pipe_conf_mmio_write);
 	vgt_register_mmio_write(_REG_PIPEBCONF, pipe_conf_mmio_write);
+	vgt_register_mmio_write(_REG_FDI_RXA_IIR, fdi_rx_iir_mmio_write);
+	vgt_register_mmio_write(_REG_FDI_RXB_IIR, fdi_rx_iir_mmio_write);
+	/* TODO: vgt_register_mmio_write(_REG_FDI_RX_IIR_C,...)*/
 	return true;
 }
 
