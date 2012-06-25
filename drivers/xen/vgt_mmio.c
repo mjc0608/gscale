@@ -441,6 +441,104 @@ bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
     return rc;
 }
 
+
+
+#define FDI_LINK_TRAIN_PATTERN_1    0
+#define FDI_LINK_TRAIN_PATTERN_2    1
+/* FIXME: this function is highly platform-dependent (SNB + CPT) */
+static bool check_fdi_rx_train_status(struct vgt_device *vgt, enum vgt_pipe pipe, unsigned int train_pattern)
+{
+    unsigned int fdi_rx_imr, fdi_tx_ctl, fdi_rx_ctl;
+    unsigned int fdi_rx_check_bits, fdi_tx_check_bits, fdi_rx_train_bits, fdi_tx_train_bits, fdi_iir_check_bits;
+    switch (pipe) {
+        case PIPE_A:
+            fdi_rx_imr = _REG_FDI_RXA_IMR;
+            fdi_tx_ctl = _REG_FDI_TXA_CTL;
+            fdi_rx_ctl = _REG_FDI_RXA_CTL;
+            break;
+        case PIPE_B:
+            fdi_rx_imr = _REG_FDI_RXB_IMR;
+            fdi_tx_ctl = _REG_FDI_TXB_CTL;
+            fdi_rx_ctl = _REG_FDI_RXB_CTL;
+            break;
+        default: BUG();
+    };
+
+    switch (train_pattern) {
+        case FDI_LINK_TRAIN_PATTERN_1:
+            fdi_rx_train_bits =_REGBIT_FDI_LINK_TRAIN_PATTERN_1_CPT;
+            fdi_tx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_1;
+            fdi_iir_check_bits = _REGBIT_FDI_RX_BIT_LOCK;
+            break;
+        case FDI_LINK_TRAIN_PATTERN_2:
+            fdi_rx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_2_CPT;
+            fdi_tx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_2;
+            fdi_iir_check_bits = _REGBIT_FDI_RX_SYMBOL_LOCK;
+            break;
+        default: BUG();
+    }
+
+    fdi_rx_check_bits = _REGBIT_FDI_RX_ENABLE
+        | fdi_rx_train_bits;
+    fdi_tx_check_bits = _REGBIT_FDI_TX_ENABLE
+        | fdi_tx_train_bits;
+
+    /* If imr bit not been masked */
+    if (((__vreg(vgt, fdi_rx_imr) & fdi_iir_check_bits) == 0 )
+            && ((__vreg(vgt, fdi_tx_ctl) & fdi_tx_check_bits) == fdi_tx_check_bits)
+            && ((__vreg(vgt, fdi_rx_ctl) & fdi_rx_check_bits) == fdi_rx_check_bits))
+        return true;
+    else
+        return false;
+}
+
+bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset,
+    void *p_data, unsigned int bytes)
+{
+    enum vgt_pipe pipe;
+    unsigned int reg, fdi_rx_iir;
+    bool rc;
+
+    ASSERT(bytes == 4 && (offset & 0x3) == 0);
+
+    reg = offset & ~(bytes - 1);
+
+    switch (offset) {
+        case _REG_FDI_RXA_CTL:
+        case _REG_FDI_TXA_CTL:
+        case _REG_FDI_RXA_IMR:
+            pipe = PIPE_A;
+            break;
+        case _REG_FDI_RXB_CTL:
+        case _REG_FDI_TXB_CTL:
+        case _REG_FDI_RXB_IMR:
+            pipe = PIPE_B;
+            break;
+        default:
+            BUG();
+    }
+
+    switch (pipe) {
+        case PIPE_A:
+            fdi_rx_iir = _REG_FDI_RXA_IIR;
+            break;
+        case PIPE_B:
+            fdi_rx_iir = _REG_FDI_RXB_IIR;
+            break;
+        default:
+            BUG();
+    }
+
+    rc = default_mmio_write(vgt, offset, p_data, bytes);
+    if (!reg_hw_access(vgt, reg)) {
+        if (check_fdi_rx_train_status(vgt, pipe, FDI_LINK_TRAIN_PATTERN_1))
+            __vreg(vgt, fdi_rx_iir) |= _REGBIT_FDI_RX_BIT_LOCK;
+        if (check_fdi_rx_train_status(vgt, pipe, FDI_LINK_TRAIN_PATTERN_2))
+            __vreg(vgt, fdi_rx_iir) |= _REGBIT_FDI_RX_SYMBOL_LOCK;
+    }
+    return rc;
+}
+
 bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -820,6 +918,12 @@ printk("mmio hooks initialized\n");
 	vgt_register_mmio_write(_REG_FDI_RXA_IIR, fdi_rx_iir_mmio_write);
 	vgt_register_mmio_write(_REG_FDI_RXB_IIR, fdi_rx_iir_mmio_write);
 	/* TODO: vgt_register_mmio_write(_REG_FDI_RX_IIR_C,...)*/
+	vgt_register_mmio_write(_REG_FDI_RXA_CTL, update_fdi_rx_iir_status);
+	vgt_register_mmio_write(_REG_FDI_RXB_CTL, update_fdi_rx_iir_status);
+	vgt_register_mmio_write(_REG_FDI_TXA_CTL, update_fdi_rx_iir_status);
+	vgt_register_mmio_write(_REG_FDI_TXB_CTL, update_fdi_rx_iir_status);
+	vgt_register_mmio_write(_REG_FDI_RXA_IMR, update_fdi_rx_iir_status);
+	vgt_register_mmio_write(_REG_FDI_RXB_IMR, update_fdi_rx_iir_status);
 	return true;
 }
 

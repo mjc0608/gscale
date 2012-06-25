@@ -583,12 +583,23 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_FDI_RXA_CTL             0xf000c
 #define _REG_FDI_RXB_CTL             0xf100c
 
+#define _REGBIT_FDI_RX_ENABLE       (1 << 31)
+#define _REGBIT_FDI_LINK_TRAIN_PATTERN_1_CPT       (0<<8)
+#define _REGBIT_FDI_LINK_TRAIN_PATTERN_2_CPT       (1<<8)
+
 #define _REG_FDI_RXA_IIR           0xf0014
 #define _REG_FDI_RXB_IIR           0xf1014
+
+#define _REGBIT_FDI_RX_BIT_LOCK     (1 << 8) /* train 1*/
+#define _REGBIT_FDI_RX_SYMBOL_LOCK  (1 << 9) /* train 2*/
 
 /* CPU: FDI_TX */
 #define _REG_FDI_TXA_CTL             0x60100
 #define _REG_FDI_TXB_CTL             0x61100
+
+#define _REGBIT_FDI_TX_ENABLE       (1 << 31)
+#define _REGBIT_FDI_LINK_TRAIN_PATTERN_1    (0 << 28)
+#define _REGBIT_FDI_LINK_TRAIN_PATTERN_2    (1 << 28)
 
 /* CRT */
 #define _REG_PCH_ADPA                0xe1100
