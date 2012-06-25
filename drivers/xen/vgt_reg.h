@@ -114,7 +114,7 @@ typedef struct {
 #define VGT_DOM0_APERTURE_SZ		(64*SIZE_1MB)	/* 64MB for dom0 */
 #define VGT_MIN_APERTURE_SZ		(128*SIZE_1MB)	/* minimum 128MB for other VMs */
 /* only 1G/2G is supported on SNB. Need a way to enlighten the driver */
-#define VGT_MIN_GM_SZ			(256*SIZE_1MB)	/* the power of 2 */
+#define VGT_MIN_GM_SZ			(512*SIZE_1MB)	/* the power of 2 */
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
 #define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 64 KB for now */

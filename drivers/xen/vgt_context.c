@@ -2674,10 +2674,13 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 
 	vgt_set_addr_mask(pdev, _REG_RCS_FBC_RT_BASE_ADDR, 0xFFFFF000);
 
+#if 0
+	/* not conduct address fix for PPGTT BASE */
 	vgt_set_addr_mask(pdev, _REG_RCS_PP_DIR_BASE_READ, 0xFFFF0000);
 	vgt_set_addr_mask(pdev, _REG_RCS_PP_DIR_BASE_WRITE, 0xFFFF0000);
 	vgt_set_addr_mask(pdev, _REG_VCS_PP_DIR_BASE, 0xFFFF0000);
 	vgt_set_addr_mask(pdev, _REG_BCS_PP_DIR_BASE, 0xFFFF0000);
+#endif
 
 	vgt_set_addr_mask(pdev, _REG_CURABASE, 0xFFFFF000);
 	vgt_set_addr_mask(pdev, _REG_CURBBASE, 0xFFFFF000);

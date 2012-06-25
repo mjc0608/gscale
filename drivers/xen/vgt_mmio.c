@@ -160,6 +160,13 @@ bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes <= 4 && !(off & (bytes - 1)));
 	//printk("vGT:ring_mmio_read (%x)\n", off);
 
+	if (is_current_render_owner(vgt)){
+		unsigned long data;
+		data = VGT_MMIO_READ_BYTES(vgt->pdev, off, bytes);
+		memcpy(p_data, &data, bytes);
+		return true;
+	}
+
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 	ring_id = tail_to_ring_id ( _tail_reg_(off) );
 	vring = &vgt->rb[ring_id].vring;
