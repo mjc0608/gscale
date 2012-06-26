@@ -254,10 +254,10 @@ config XEN_EFI
 	depends on X86_64 && EFI
 
 config XEN_VGT_I915
-	tristate "Xen vGT i915 driver"
+	bool "Xen vGT i915 driver"
 	depends on X86 && XEN
 	select XEN_VGT_EMULATOR
-	default m
+	default y
 	help
 	  Enabling vGT mediated graphics passthrough technique for Intel i915
 	  based integrated graphics card. With vGT, it's possible to have one
