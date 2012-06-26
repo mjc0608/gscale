@@ -805,6 +805,7 @@ extern int vgt_hvm_info_init(struct vgt_device *vgt);
 extern int vgt_hvm_io_init(struct vgt_device *vgt);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
 extern int vgt_hvm_enable(struct vgt_device *vgt);
+extern bool hvm_render_owner;
 
 struct vgt_irq_virt_state;
 

@@ -160,7 +160,7 @@ bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes <= 4 && !(off & (bytes - 1)));
 	//printk("vGT:ring_mmio_read (%x)\n", off);
 
-	if (is_current_render_owner(vgt)){
+	if (hvm_render_owner && (vgt->vm_id != 0) ){
 		unsigned long data;
 		data = VGT_MMIO_READ_BYTES(vgt->pdev, off, bytes);
 		memcpy(p_data, &data, bytes);

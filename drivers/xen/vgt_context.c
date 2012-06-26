@@ -125,7 +125,7 @@ submit_context_command_t submit_context_command[MAX_ENGINES] = {
 
 LIST_HEAD(pgt_devices);
 
-static bool hvm_render_owner = false;
+bool hvm_render_owner = false;
 static int __init hvm_render_setup(char *str)
 {
 	hvm_render_owner = true;
