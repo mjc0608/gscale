@@ -789,7 +789,7 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 	uint32_t enabled, disabled, ier, iir, isr, val;
 	unsigned long imr = *(unsigned long *)p_data;
 	struct pgt_device *pdev = state->pdev;
-	//struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
 	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
 
@@ -907,7 +907,7 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 	uint32_t enabled, disabled, ier_enabled, ier_disabled;
 	unsigned long ier = *(unsigned long *)p_data;
 	struct pgt_device *pdev = state->pdev;
-	//struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 	vgt_reg_t val;
 
 	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
@@ -1027,12 +1027,12 @@ bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 	void *p_data, unsigned int bytes)
 {
 	vgt_reg_t iir = *(vgt_reg_t *)p_data;
-	//struct vgt_irq_ops *ops = vgt_get_irq_ops(vgt->pdev);
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(vgt->pdev);
 
 	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
 
 	dprintk("vGT-IRQ: capture IIR write on reg (%s) with val (%lx)\n",
-		ops->get_reg_name(vgt->pdev, reg), val);
+		ops->get_reg_name(vgt->pdev, reg), iir);
 
 
 	dprintk("vGT: update %s: %x -> %x\n", ops->get_reg_name(vgt->pdev, reg),
