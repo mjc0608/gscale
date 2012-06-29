@@ -1145,7 +1145,7 @@ static int __init period_setup(char *str)
 }
 __setup("vgt_start_period=", period_setup);
 
-static int fastmode = 0;
+static int fastmode = 1;
 static int __init mode_setup(char *str)
 {
 	fastmode = 1;
@@ -1153,7 +1153,7 @@ static int __init mode_setup(char *str)
 }
 __setup("vgt_fastmode", mode_setup);
 
-static int vgt_ctx_switch = 0;
+static int vgt_ctx_switch = 1;
 static int __init ctx_switch_setup(char *str)
 {
 	vgt_ctx_switch = 1;
@@ -3018,9 +3018,10 @@ int vgt_initialize(struct pci_dev *dev)
 	xen_vgt_dom0_ready(vgt_dom0);
 
 	/* "hvm_owner" is a special mode where we give all the ownerships to the hvm guest */
-	if (!hvm_render_owner) {
+	if (!hvm_render_owner)
 		current_render_owner(pdev) = vgt_dom0;
-	}
+	else
+		vgt_ctx_switch = 0;
 	current_display_owner(pdev) = vgt_dom0;
 	current_pm_owner(pdev) = vgt_dom0;
 	current_mgmt_owner(pdev) = vgt_dom0;
