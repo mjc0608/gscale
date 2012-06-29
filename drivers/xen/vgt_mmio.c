@@ -266,13 +266,13 @@ static inline void set_vRC(struct vgt_device *vgt, int c)
 
 static void set_vRC_to_C6(struct vgt_device *vgt)
 {
-	printk("Virtual Render C state set to C6\n");
+	dprintk("Virtual Render C state set to C6\n");
 	set_vRC(vgt, 3);
 }
 
 static void set_vRC_to_C0(struct vgt_device *vgt)
 {
-	printk("Virtual Render C state set to C0\n");
+	dprintk("Virtual Render C state set to C0\n");
 	set_vRC(vgt, 0);
 }
 
@@ -288,7 +288,7 @@ bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 
 	data = (*(uint32_t*) p_data) & 1 ;
 
-	printk("VM%d write register FORCE_WAKE with %x\n", vgt->vm_id, data);
+	dprintk("VM%d write register FORCE_WAKE with %x\n", vgt->vm_id, data);
 
 	__vreg(vgt, _REG_FORCEWAKE_ACK) = data;
 	__vreg(vgt, _REG_FORCEWAKE) = data;
