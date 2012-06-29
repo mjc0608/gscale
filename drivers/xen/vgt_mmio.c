@@ -896,7 +896,7 @@ printk("mmio hooks initialized\n");
 	vgt_register_mmio_handler( _REG_PCH_DPD_AUX_CH_CTL, 4,
 			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
 
-	vgt_register_mmio_handler( _REG_FENCE_0_LOW, 4,
+	vgt_register_mmio_handler( _REG_FENCE_0_LOW, 0x80,
 			fence_mmio_read, fence_mmio_write);
 
 	vgt_register_mmio_write( _REG_FORCEWAKE, force_wake_write);
