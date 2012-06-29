@@ -2699,9 +2699,6 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 	/* TLB registers */
 	/* performance statistics registers like OABUFFER */
 	/* debug registers */
-	vgt_set_addr_mask(pdev, _REG_RCS_ACTHD, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_VCS_ACTHD, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_BCS_ACTHD, 0xFFFFF000);
 }
 
 static void vgt_setup_always_virt(struct pgt_device *pdev)
