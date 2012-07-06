@@ -706,7 +706,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_FDI_RXA_IMR             0xf0018
 #define _REG_FDI_RXB_IMR             0xf1018
 #define _REG_IER		0x020a0
-#define _REG_IMR      0x6c
+#define _REG_IMR      0x020a8
 
 #define _REG_CACHE_MODE_0	0x02120 /* 915+ only */
 #define _REG_MI_ARB_STATE	0x020e4 /* 915+ only */

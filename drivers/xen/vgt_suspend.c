@@ -41,6 +41,8 @@
 #include <xen/vgt-parser.h>
 #include "vgt_reg.h"
 
+#undef VGT_DEBUG
+
 /* copied & modified from include/drm/drmP.h */
 #define VGT_DRIVER_MODESET     0x2000
 u32 __vgt_driver_cap = VGT_DRIVER_MODESET;
@@ -100,19 +102,33 @@ struct vgt_intel_device_info *vgt_devinfo = &snb_devinfo;
         VGT_MMIO_WRITE_BYTES(pdev, (offset), __sreg8(vgt, (offset)), 1);            \
     } while(0)
 
-#define vgt_restore_mmio_reg(offset)    \
-    do { __sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset))); \
-        VGT_MMIO_WRITE(pdev, (offset), __sreg(vgt, (offset)));                    \
+#define vgt_restore_mmio_reg(offset)                            \
+    do {                                                        \
+        if (!reg_is_owner(vgt, (offset))) {                     \
+            dprintk("vGT: restore non-owner reg(%x)\n", (offset)); \
+            break;                                              \
+        }                                                       \
+        __sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset))); \
+        VGT_MMIO_WRITE(pdev, (offset), __sreg(vgt, (offset)));      \
     } while(0)
 
-#define vgt_restore_mmio_reg_64(offset) \
-    do {   __sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset)));  \
+#define vgt_restore_mmio_reg_64(offset)                         \
+    do {                                                        \
+        if (!reg_is_owner(vgt, (offset))) {                     \
+            dprintk("vGT: restore non-owner reg(%x)\n", (offset)); \
+            break;                                              \
+        }                                                       \
+        __sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset)));  \
         __sreg(vgt, (offset) + 4) = mmio_g2h_gmadr(vgt, (offset) + 4, __vreg(vgt, (offset) + 4));  \
         VGT_MMIO_WRITE_BYTES(pdev, (offset), __sreg64(vgt, (offset)), 8);             \
     } while(0)
 
 #define vgt_restore_mmio_reg_8(offset) \
     do {                                    \
+        if (!reg_is_owner(vgt, (offset))) {                     \
+            dprintk("vGT: restore non-owner reg(%x)\n", (offset)); \
+            break;                                              \
+        }                                                       \
         __sreg8(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg8(vgt, (offset))); \
         VGT_MMIO_WRITE_BYTES(pdev, (offset), __sreg8(vgt, (offset)), 1); \
     } while(0)
@@ -245,9 +261,11 @@ static void vgt_restore_modeset_reg(struct vgt_device *vgt)
 #endif
 
     /* Fences */
-    /* TODO: only support snb now */
+    /* Fence registers are partitioned, no need to save/restore */
+#if 0
     for (reg_index = 0; reg_index < 16; reg_index++)
         vgt_restore_mmio_reg_64(_REG_FENCE_0_LOW + (reg_index * 8));
+#endif
 
 
     /* TODO: only support snb, default as support PCH_SPLIT */
@@ -865,17 +883,25 @@ int vgt_save_state(struct vgt_device *vgt)
 
     // TODO: did not do pcie/pcix save, since 00:02.0 exposed as PCI device
     //pci_save_state()
+    /* FIXME: no need to save pci state */
+#if 0
     vgt_pci_save_state(vgt);
+#endif
 
     /* i915_save_state go from here */
 
 	//pci_read_config_byte(dev->pdev, LBB, &dev_priv->saveLBB);
+    /* FIXME: no need to save PCI configure */
+#if 0
     vgt_emulate_cfg_read(vgt, _REG_LBB, vgt->state.cfg_space, 1);
+#endif
 
     /* Any lock we need ? */
 	//mutex_lock(&dev->struct_mutex);
 
 	/* Hardware status page */
+    /* FIXME: _REG_HWS_PGA is only used in i915 for dmah, this
+     * not used by any other vGT code */
     vgt_save_mmio_reg(_REG_HWS_PGA);
 
 	vgt_save_display(vgt);
@@ -945,13 +971,15 @@ int vgt_restore_state(struct vgt_device *vgt)
     char *cfg_space;
 
 	//pci_write_config_byte(dev->pdev, LBB, dev_priv->saveLBB);
+    /* FIXME: no need to restore pci configure */
+#if 0
     cfg_space = &vgt->state.cfg_space[0];
     vgt_emulate_cfg_write(vgt, _REG_LBB,
             (void*)(cfg_space + ((_REG_LBB) & ~3)), 1);
+#endif
 
     /* FIXME: any lock we need ???  */
 	//mutex_lock(&dev->struct_mutex);
-
     vgt_restore_mmio_reg(_REG_HWS_PGA);
 
     vgt_restore_display(vgt);
@@ -1019,8 +1047,10 @@ int vgt_restore_state(struct vgt_device *vgt)
     /* TODO: lock we need ? */
 	//mutex_unlock(&dev->struct_mutex);
 
-    /* FIXME: do we need to to do this ??? */
+    /* FIXME: left i2c what it remains */
+#if 0
     vgt_i2c_reset(vgt);
+#endif
 
     vgt_flush_display_plane(vgt);
 

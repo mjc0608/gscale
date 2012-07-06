@@ -1187,7 +1187,8 @@ void vgt_handle_hotplug(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt)
 {
-	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured hotplug event (no handler)!!!\n")
+	//VGT_IRQ_WARN_ONCE(info, entry->event, "Captured hotplug event (no handler)!!!\n")
+	printk("xuanhua: Captured hotplug event (no handler)!!!\n");
 	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
 }
 
