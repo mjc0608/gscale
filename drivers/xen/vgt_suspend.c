@@ -960,6 +960,12 @@ static void  vgt_flush_display_plane(struct vgt_device *vgt)
     VGT_MMIO_WRITE(pdev, _REG_DSPALINOFF, reg);
     reg = VGT_MMIO_READ(pdev, _REG_DSPASURF);
     VGT_MMIO_WRITE(pdev, _REG_DSPASURF, reg);
+
+    /* FIXME: flush plane B */
+    reg = VGT_MMIO_READ(pdev, _REG_DSPBLINOFF);
+    VGT_MMIO_WRITE(pdev, _REG_DSPBLINOFF, reg);
+    reg = VGT_MMIO_READ(pdev, _REG_DSPBSURF);
+    VGT_MMIO_WRITE(pdev, _REG_DSPBSURF, reg);
 }
 
 /* This function will be called from vgt_context.c */
@@ -1012,6 +1018,15 @@ int vgt_restore_state(struct vgt_device *vgt)
     vgt_restore_sreg(_REG_DSPALINOFF);
     VGT_MMIO_READ(vgt->pdev, _REG_DSPACNTR);
     printk("vGT: restoring DSPAXXX done!\n");
+
+    printk("vGT: restoring DSPBXXX ...\n");
+    vgt_restore_sreg(_REG_DSPBCNTR);
+    vgt_restore_sreg(_REG_DSPBSTRIDE);
+    vgt_restore_sreg(_REG_DSPBSURF);
+    vgt_restore_sreg(_REG_DSPBTILEOFF);
+    vgt_restore_sreg(_REG_DSPBLINOFF);
+    VGT_MMIO_READ(vgt->pdev, _REG_DSPACNTR);
+    printk("vGT: restoring DSPBXXX done!\n");
 
     /* FIXME: snb is ironlake ??? */
 	//if (IS_IRONLAKE_M(dev)) {
