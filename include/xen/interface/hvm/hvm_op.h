@@ -89,4 +89,14 @@ struct xen_hvm_get_mem_type {
 };
 DEFINE_GUEST_HANDLE_STRUCT(xen_hvm_get_mem_type);
 
+#define HVMOP_vgt_wp_pages         20  /* writeprotection to guest pages */
+#define MAX_WP_BATCH_PAGES         128
+struct xen_hvm_vgt_wp_pages {
+	uint16_t domid;
+	uint16_t set;            /* 1: set WP, 0: remove WP */
+	uint16_t nr_pages;
+	unsigned long  wp_pages[MAX_WP_BATCH_PAGES];
+};
+typedef struct xen_hvm_vgt_wp_pages xen_hvm_vgt_wp_pages_t;
+
 #endif /* __XEN_PUBLIC_HVM_HVM_OP_H__ */
