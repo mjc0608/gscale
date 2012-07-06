@@ -152,6 +152,17 @@ typedef struct {
 	vgt_reg_t mode;
 } vgt_ring_ppgtt_t;
 
+typedef struct {
+	void		*virt;
+	unsigned long	shadow_mpfn;
+	struct page	*pte_page;
+} vgt_ppgtt_pte_t;
+
+typedef struct {
+	dma_addr_t	virtual_phyaddr;
+	dma_addr_t	shadow_pte_phyaddr;
+} vgt_ppgtt_pde_t;
+
 #define __vreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.vReg + off))
 #define __vreg8(vgt, off) (*(char *)((char *)vgt->state.vReg + off))
 #define __sreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.sReg + off))
@@ -301,6 +312,14 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_RCS_GFX_MODE	0x0229C
 #define _REG_VCS_MI_MODE	0x1209C
 #define _REG_VCS_MFX_MODE	0x1229C
+
+/* PPGTT entry */
+#define _REGBIT_PDE_VALID	(1<<0)
+#define _REGBIT_PDE_PAGE_32K	(1<<1)
+#define _REGBIT_PTE_VALID	(1<<0)
+/* control bits except address and valid bit */
+#define _REGBIT_PTE_CTL_MASK_GEN7	0xe	/* SNB/IVB */
+#define _REGBIT_PTE_CTL_MASK_GEN7_5	0x80e	/* HSW */
 
 #define _REG_RCS_IMR		0x20A8
 #define _REG_VCS_IMR		0x120A8
@@ -969,6 +988,8 @@ struct vgt_device {
 	 * table.
 	 */
 	struct mmio_hash_table	*wp_table[MHASH_SIZE];	/* hash for WP pages */
+	vgt_ppgtt_pde_t	shadow_pde_table[1024];	 /* current max PDE entries should be 512 for 2G mapping */
+	vgt_ppgtt_pte_t shadow_pte_table[1024];
 };
 
 extern struct vgt_device *vgt_dom0;

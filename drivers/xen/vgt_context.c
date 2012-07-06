@@ -934,6 +934,16 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 	unsigned int offset;
 	unsigned long flags;
 
+	/* XXX PPGTT PTE WP comes here too. */
+	if (pdev->enable_ppgtt) {
+		mht = vgt_hash_lookup_mtable(vgt, VGT_HASH_WP_PAGE, pa);
+		if (mht && mht->write) {
+			/* XXX lock? */
+			mht->write(vgt, offset, p_data, bytes);
+			return true;
+		}
+	}
+
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
 	/* for single-VM UP dom0 case, no nest is expected */
