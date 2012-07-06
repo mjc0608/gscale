@@ -1,0 +1,29 @@
+# WARNING: for testing you should not try to use echo something to the screen. For the udev configure you may not even notice any output.
+#		   So if you really want to verify if some uevents are received. You should not connt on any output message of your tested program.
+#
+# This file is used to describe the uevents from vGT driver. And should be placed under /etc/udev/rules.d
+# All the *.rules files are scaned on lexical sequence by udev deamon when it boots.
+#
+# udevinfo seemed like a legacy tool. Not sure if deprecated now. But not available on redhat 6.2.
+# If you want to check the info of some sys node, e.g /sys/kernel/vgt
+# you can use this command:
+#
+#	udevadm info --attribute-walk  --path=/sys/kernel/vgt
+#
+# Also if you just want to monitor the kernel event on realtime, you can use this command:
+#
+#	udevadm monitor --kernel
+#
+# When you do not have any idea about how to write udev rules, you can use this way to check if your desired uevents sent out.
+#
+# Also, please remember run:
+#
+#	udevadm control --reload-rules
+#
+# To reload these rules, or you cannot make the udevd apply the updated rules.
+#
+# by axu
+#
+ACTION=="change", KERNEL=="control", ENV{HOTPLUG}=="1", RUN+="/bin/sh -c 'echo CRT monitor inserted! >> /tmp/hotplug'"
+ACTION=="change", KERNEL=="control", ENV{HOTPLUG}=="0", RUN+="/bin/sh -c 'echo CRT monitor removed! >> /tmp/hotplug'"
+#KERNEL=="control", RUN+="/bin/sh -c 'echo inserted >> /tmp/hotplug'"
