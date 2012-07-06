@@ -417,9 +417,6 @@ int allocate_vgt_id(void)
 {
 	unsigned long bit_index;
 
-	ASSERT((vgt_id_alloc_bitmap & VGT_ID_ALLOC_BITMAP)
-		!= VGT_ID_ALLOC_BITMAP);
-
 	do {
 		bit_index = ffz (vgt_id_alloc_bitmap);
 		ASSERT (bit_index < VGT_MAX_VMS);
