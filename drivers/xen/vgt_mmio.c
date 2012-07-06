@@ -395,8 +395,6 @@ bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 {
     unsigned int reg;
     uint32_t wr_data;
-    vgt_reg_t vreg_data;
-    bool rc;
 
     ASSERT(bytes == 4);
 
@@ -423,12 +421,13 @@ bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
 {
     unsigned int reg;
     bool rc = true;
-    vgt_reg_t wr_data = *(vgt_reg_t *)p_data;
-    vgt_reg_t old_iir = __vreg(vgt, reg);
 
     ASSERT(bytes == 4 && !(offset & (bytes - 1)));
 
     reg = offset & ~(bytes -1);
+
+    vgt_reg_t wr_data = *(vgt_reg_t *)p_data;
+    vgt_reg_t old_iir = __vreg(vgt, reg);
 
     rc = default_mmio_write(vgt, offset, p_data, bytes);
 
