@@ -77,18 +77,16 @@
 #include <xen/vgt.h>
 #include "vgt_reg.h"
 
-static struct kobject *vgt_kobj;
+struct kobject *vgt_ctrl_kobj;
+struct kset *vgt_kset;
 static struct pgt_device *vgt_kobj_priv;
 struct vgt_device *vmid_2_vgt_device(int vmid);
 
-static int vgt_create_topdir_kobject(void)
+static void vgt_kobj_release(struct kobject *kobj)
 {
-    /* Place vgt directory under /sys/kernel */
-    vgt_kobj = kobject_create_and_add("vgt", kernel_kobj);
-    if (!vgt_kobj)
-        return -ENOMEM;
-
-    return 0;
+	pr_debug("kobject: (%p): %s\n", kobj, __func__);
+    /* FIXME: we do not deallocate our kobject */
+	//kfree(kobj);
 }
 
 #if 0
@@ -179,7 +177,7 @@ static struct kobj_attribute display_owner_ctrl_attrs =
 static struct kobj_attribute display_pointer_attrs =
 	__ATTR(display_pointer, 0666, vgt_display_pointer_show, vgt_display_pointer_store);
 
-static struct attribute *ctl_attrs[] = {
+static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
 #ifndef SINGLE_VM_DEBUG
 	&display_owner_ctrl_attrs.attr,
@@ -188,28 +186,6 @@ static struct attribute *ctl_attrs[] = {
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 
-static struct attribute_group ctl_attr_group = {
-	.attrs = ctl_attrs,
-};
-
-int vgt_init_sysfs(struct pgt_device *pdev)
-{
-    int retval;
-
-    vgt_kobj = kobject_create_and_add("vgt", kernel_kobj);
-    if (!vgt_kobj)
-        return -ENOMEM;
-
-	/* Create the files associated with this kobject */
-	retval = sysfs_create_group(vgt_kobj, &ctl_attr_group);
-	if (retval) {
-		kobject_put(vgt_kobj);
-        return retval;
-    }
-
-    vgt_kobj_priv = pdev;
-    return 0;
-}
 
 /* copied code from here */
 static ssize_t kobj_attr_show(struct kobject *kobj, struct attribute *attr,
@@ -241,17 +217,7 @@ const struct sysfs_ops vgt_kobj_sysfs_ops = {
 	.store	= kobj_attr_store,
 };
 
-static void vgt_kobj_release(struct kobject *kobj)
-{
-	pr_debug("kobject: (%p): %s\n", kobj, __func__);
-    /* FIXME: we do not deallocate our kobject */
-	//kfree(kobj);
-}
 
-static struct kobj_type vgt_kobj_ktype = {
-	.release	= vgt_kobj_release,
-	.sysfs_ops	= &vgt_kobj_sysfs_ops,
-};
 /* copied code end */
 
 #define kobj_to_vgt(kobj) container_of((kobj), struct vgt_device, kobj)
@@ -295,7 +261,7 @@ static struct kobj_attribute aperture_base_va_attribute =
  * Create a group of attributes so that we can create and destroy them all
  * at once.
  */
-static struct attribute *attrs[] = {
+static struct attribute *vgt_instance_attrs[] = {
 	&gm_sz_attribute.attr,
 	&aperture_sz_attribute.attr,
 	&aperture_base_attribute.attr,
@@ -309,9 +275,24 @@ static struct attribute *attrs[] = {
  * created for the attributes with the directory being the name of the
  * attribute group.
  */
+#if 0
 static struct attribute_group attr_group = {
 	.attrs = attrs,
 };
+#endif
+
+static struct kobj_type vgt_instance_ktype = {
+	.release	= vgt_kobj_release,
+	.sysfs_ops	= &vgt_kobj_sysfs_ops,
+    .default_attrs = vgt_instance_attrs,
+};
+
+static struct kobj_type vgt_ctrl_ktype = {
+    .release    = vgt_kobj_release,
+    .sysfs_ops  = &vgt_kobj_sysfs_ops,
+    .default_attrs = vgt_ctrl_attrs,
+};
+
 
 int vgt_add_state_sysfs(int vm_id)
 {
@@ -325,11 +306,7 @@ int vgt_add_state_sysfs(int vm_id)
 	 * not known ahead of time.
 	 */
 
-    if (!vgt_kobj) {
-        retval = vgt_create_topdir_kobject();
-        if (retval < 0)
-            return retval;
-    }
+    ASSERT(vgt_ctrl_kobj);
 
     /* check if such vmid has been used */
     if (vmid_2_vgt_device(vm_id))
@@ -340,20 +317,18 @@ int vgt_add_state_sysfs(int vm_id)
         return -1;
 
     /* init kobject */
-	kobject_init(&vgt->kobj, &vgt_kobj_ktype);
+	kobject_init(&vgt->kobj, &vgt_instance_ktype);
 
-    /* add kobject */
-    retval = kobject_add(&vgt->kobj, vgt_kobj, "vm%u", vgt->vm_id);
+    /* set it before calling the kobject core */
+    vgt->kobj.kset = vgt_kset;
+
+    /* add kobject, NULL parent indicates using kset as parent */
+    retval = kobject_add(&vgt->kobj, NULL, "vm%u", vgt->vm_id);
     if (retval) {
         printk(KERN_WARNING "%s: vgt kobject add error: %d\n",
                 __func__, retval);
         kobject_put(&vgt->kobj);
     }
-
-	/* Create the files associated with this kobject */
-	retval = sysfs_create_group(&vgt->kobj, &attr_group);
-	if (retval)
-		kobject_put(&vgt->kobj);
 
 	return retval;
 }
@@ -367,4 +342,29 @@ void vgt_del_state_sysfs(int vmid)
 
     kobject_put(&vgt->kobj);
     vgt_release_instance(vgt);
+}
+
+
+int vgt_init_sysfs(struct pgt_device *pdev)
+{
+    int retval;
+
+    vgt_kset = kset_create_and_add("vgt", NULL, kernel_kobj);
+    if (!vgt_kset)
+        return -ENOMEM;
+
+    vgt_ctrl_kobj = kzalloc(sizeof(struct kobject), GFP_KERNEL);
+    if (!vgt_ctrl_kobj)
+        return -ENOMEM;
+
+    vgt_ctrl_kobj->kset = vgt_kset;
+
+    retval = kobject_init_and_add(vgt_ctrl_kobj, &vgt_ctrl_ktype, NULL, "control");
+    if (retval) {
+        kobject_put(vgt_ctrl_kobj);
+        return -EINVAL;
+    }
+
+    vgt_kobj_priv = pdev;
+    return 0;
 }
