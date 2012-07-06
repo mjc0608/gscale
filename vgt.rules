@@ -24,6 +24,6 @@
 #
 # by axu
 #
-ACTION=="change", KERNEL=="control", ENV{HOTPLUG}=="1", RUN+="/bin/sh -c 'echo CRT monitor inserted! >> /tmp/hotplug'"
-ACTION=="change", KERNEL=="control", ENV{HOTPLUG}=="0", RUN+="/bin/sh -c 'echo CRT monitor removed! >> /tmp/hotplug'"
+ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo CRT monitor inserted! >> /tmp/hotplug'"
+ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo CRT monitor removed! >> /tmp/hotplug'"
 #KERNEL=="control", RUN+="/bin/sh -c 'echo inserted >> /tmp/hotplug'"
