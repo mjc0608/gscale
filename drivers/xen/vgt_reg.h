@@ -1028,6 +1028,7 @@ static inline void reg_set_owner(struct pgt_device *pdev,
 
 /* request types to wake up main thread */
 #define VGT_REQUEST_IRQ		0	/* a new irq pending from device */
+#define VGT_REQUEST_UEVENT  1
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {
 	set_bit(flag, (void *)&pdev->request);
@@ -1575,6 +1576,7 @@ static inline void vgt_pci_bar_write_32(struct vgt_device *vgt, uint32_t bar_off
 #define	_REG_SDEISR	0xC4000
 #define	_REG_SDEIMR	0xC4004
 #define	_REG_SDEIIR	0xC4008
+#define     _REGBIT_CRT_HOTPLUG         (1 << 19)
 #define	_REG_SDEIER	0xC400C
 #define _REG_SHOTPLUG_CTL	0xC4030
 #define		_REGBIT_DP_B_STATUS			(3 << 0)
@@ -2074,6 +2076,8 @@ void vgt_handle_aux_channel(struct pgt_device *dev,
 void vgt_handle_gmbus(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt);
+
+void vgt_signal_uevent(struct pgt_device *dev);
 
 void vgt_emulate_watchdog(struct vgt_device *vstate, enum vgt_event_type event, bool enable);
 void vgt_emulate_dpy_status(struct vgt_device *vstate, enum vgt_event_type event, bool enable);

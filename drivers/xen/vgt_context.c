@@ -404,13 +404,11 @@ unsigned long vgt_id_alloc_bitmap;
 /*TODO: may need lock to protect default_deivce */
 struct vgt_device *vmid_2_vgt_device(int vmid)
 {
-    unsigned int nvms, vgt_id;
+    unsigned int bit;
     struct vgt_device *vgt;
     /* TODO: check if vgt_id_alloc_bitmap is ~0UL */
-    nvms = ffz(vgt_id_alloc_bitmap);
-    ASSERT(nvms <= VGT_MAX_VMS);
-    for (vgt_id = 0; vgt_id < nvms; vgt_id++) {
-        vgt = default_device.device[vgt_id];
+    for_each_set_bit(bit, &vgt_id_alloc_bitmap, (8 * sizeof(unsigned long))) {
+        vgt = default_device.device[bit];
         if (vgt->vm_id == vmid)
             return vgt;
     }
@@ -1232,6 +1230,10 @@ int vgt_thread(void *priv)
 		/* Handle virtual interrupt injection to current owner */
 		if (test_and_clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request))
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_INVALID);
+
+        /* Send uevent to userspace */
+        if (test_and_clear_bit(VGT_REQUEST_UEVENT, (void *)&pdev->request))
+            vgt_signal_uevent(pdev);
 
 		/* context switch timeout hasn't expired */
 		if (wait)

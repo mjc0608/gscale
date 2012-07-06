@@ -291,6 +291,58 @@ enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
 	[IRQ_RESERVED] = VGT_OT_INVALID,
 };
 
+enum vgt_uevent_type {
+    CRT_HOTPLUG_IN = 0,
+    CRT_HOTPLUG_OUT,
+    UEVENT_MAX
+};
+
+DECLARE_BITMAP(vgt_uevents_bitmap, UEVENT_MAX);
+extern struct kobject *vgt_ctrl_kobj;
+
+struct vgt_uevent_info {
+    char *uevent_name;
+    enum kobject_action action;
+    char *env_var_table[2];
+    bool (*vgt_uevent_handler)(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev);
+};
+
+bool vgt_default_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev)
+{
+    int retval;
+    retval = kobject_uevent_env(vgt_ctrl_kobj, uevent_entry->action, uevent_entry->env_var_table);
+    if (retval == 0)
+        return true;
+    else
+        return false;
+}
+
+static struct vgt_uevent_info vgt_default_uevent_info_table[UEVENT_MAX] = {
+    {"CRT insert", KOBJ_ADD, {"CRT_INSERT=1", NULL}, vgt_default_uevent_handler},
+    {"CRT remove", KOBJ_REMOVE, {"CRT_REMOVE=1", NULL}, vgt_default_uevent_handler},
+};
+
+void vgt_signal_uevent(struct pgt_device *dev)
+{
+    struct vgt_uevent_info *info_entry;
+    bool rc;
+    int bit;
+
+    for_each_set_bit(bit, &vgt_uevents_bitmap, UEVENT_MAX) {
+        clear_bit(bit, &vgt_uevents_bitmap);
+
+        info_entry = &vgt_default_uevent_info_table[bit];
+
+        ASSERT(info_entry);
+        ASSERT(info_entry->vgt_uevent_handler);
+
+        rc = info_entry->vgt_uevent_handler(info_entry, dev);
+        if (rc == false)
+            printk("%s: %d: vGT: failed to send uevent [%s]!\n",
+                    __func__, __LINE__, info_entry->uevent_name);
+    }
+}
+
 static void vgt_run_emul(struct vgt_device *vstate,
 		enum vgt_event_type event, int bit, bool enable);
 /* =============Configurations (statc/dynamic)================ */
@@ -1187,9 +1239,26 @@ void vgt_handle_hotplug(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt)
 {
-	//VGT_IRQ_WARN_ONCE(info, entry->event, "Captured hotplug event (no handler)!!!\n")
-	printk("xuanhua: Captured hotplug event (no handler)!!!\n");
-	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
+    vgt_reg_t sde_isr;
+
+    if (physical == false)
+        return;
+
+    /* Consume irq to prevent virtual irq triggered */
+    vgt_sde_iir(dev) &= ~_REGBIT_CRT_HOTPLUG;
+
+    /* Check plugged in or out */
+    sde_isr = VGT_MMIO_READ(dev, _REG_SDEISR);
+    if (sde_isr & _REGBIT_CRT_HOTPLUG) {
+        printk("%s: %d: vGT: detect crt insert uevent!\n", __func__, __LINE__);
+        set_bit(CRT_HOTPLUG_IN, &vgt_uevents_bitmap);
+    } else {
+        printk("%s: %d: vGT: detect crt evict uevent!\n", __func__, __LINE__);
+        set_bit(CRT_HOTPLUG_OUT, &vgt_uevents_bitmap);
+    }
+
+    vgt_raise_request(dev, VGT_REQUEST_UEVENT);
+	//vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
 }
 
 void vgt_handle_aux_channel(struct pgt_device *dev,
