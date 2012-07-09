@@ -399,7 +399,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_DSPBPOS		0x7118C
 #define _REG_DSPBSIZE		0x71190
 #define _REG_DSPBSURF		0x7119C
-#define _REG_DSPBTILEOFF	0x701A4
+#define _REG_DSPBTILEOFF	0x711A4
 #define _REG_DSPBSURFLIVE	0x711AC
 
 #define _REG_DVSACNTR		0x72180
@@ -517,20 +517,20 @@ bool default_submit_context_command (struct vgt_device *vgt,
 /* Pipe A timing regs */
 #define _REG_HTOTAL_A	0x60000
 #define _REG_HBLANK_A	0x60004
-#define _REG_HSYNC_A		0x60008
+#define _REG_HSYNC_A	0x60008
 #define _REG_VTOTAL_A	0x6000c
 #define _REG_VBLANK_A	0x60010
-#define _REG_VSYNC_A		0x60014
+#define _REG_VSYNC_A	0x60014
 #define _REG_PIPEASRC	0x6001c
 #define _REG_BCLRPAT_A	0x60020
 
 /* Pipe B timing regs */
 #define _REG_HTOTAL_B	0x61000
 #define _REG_HBLANK_B	0x61004
-#define _REG_HSYNC_B		0x61008
+#define _REG_HSYNC_B	0x61008
 #define _REG_VTOTAL_B	0x6100c
 #define _REG_VBLANK_B	0x61010
-#define _REG_VSYNC_B		0x61014
+#define _REG_VSYNC_B	0x61014
 #define _REG_PIPEBSRC	0x6101c
 #define _REG_BCLRPAT_B	0x61020
 
@@ -607,7 +607,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 /* PCH SDVOB multiplex with HDMIB */
 #define _REG_PCH_LVDS	0xe1180
 #define _REG_BLC_PWM_CPU_CTL2	0x48250
-#define _REG_BLC_PWM_CPU_CTL		0x48254
+#define _REG_BLC_PWM_CPU_CTL	0x48254
 #define _REG_BLC_PWM_PCH_CTL1	0xc8250
 #define _REG_BLC_PWM_PCH_CTL2	0xc8254
 #define _REG_PCH_PP_ON_DELAYS	0xc7208

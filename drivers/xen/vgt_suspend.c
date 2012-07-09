@@ -148,6 +148,8 @@ struct vgt_intel_device_info *vgt_devinfo = &snb_devinfo;
 #define vgt_save_mmio_reg_64(offset)    \
     do {                                \
         __sreg64(vgt, (offset)) = VGT_MMIO_READ_BYTES(pdev, (offset), 8);   \
+        __vreg(vgt, (offset)) = mmio_h2g_gmadr(vgt, (offset), __sreg(vgt, (offset)));   \
+        __vreg(vgt, (offset) + 4) = mmio_h2g_gmadr(vgt, (offset) + 4, __sreg(vgt, (offset) + 4));   \
     } while(0)
 
 #define not_done()              \
@@ -345,8 +347,8 @@ static void vgt_restore_modeset_reg(struct vgt_device *vgt)
     vgt_restore_palette(vgt, PIPE_A);
 	/* Enable the plane */
     vgt_restore_mmio_reg(_REG_DSPACNTR);
-    __sreg(vgt, _REG_DSPBCNTR)= VGT_MMIO_READ(pdev, _REG_DSPBLINOFF);
-    VGT_MMIO_WRITE(pdev, _REG_DSPBLINOFF, __sreg(vgt, _REG_DSPBCNTR));
+    __sreg(vgt, _REG_DSPALINOFF)= VGT_MMIO_READ(pdev, _REG_DSPALINOFF);
+    VGT_MMIO_WRITE(pdev, _REG_DSPALINOFF, __sreg(vgt, _REG_DSPALINOFF));
 
     /* Pipe & plane B info */
     /* FIXME: since we support PCH split, so use PCH_DPLL_B */
@@ -416,8 +418,8 @@ static void vgt_restore_modeset_reg(struct vgt_device *vgt)
 	vgt_restore_palette(vgt, PIPE_B);
 	/* Enable the plane */
     vgt_restore_mmio_reg(_REG_DSPBCNTR);
-    __sreg(vgt, _REG_DSPBCNTR)= VGT_MMIO_READ(pdev, _REG_DSPBLINOFF);
-    VGT_MMIO_WRITE(pdev, _REG_DSPBLINOFF, __sreg(vgt, _REG_DSPBCNTR));
+    __sreg(vgt, _REG_DSPBLINOFF)= VGT_MMIO_READ(pdev, _REG_DSPBLINOFF);
+    VGT_MMIO_WRITE(pdev, _REG_DSPBLINOFF, __sreg(vgt, _REG_DSPBLINOFF));
 
 	/* Cursor state */
     vgt_restore_mmio_reg(_REG_CURAPOS);
@@ -519,6 +521,8 @@ static void vgt_restore_display(struct vgt_device *vgt)
     vgt_restore_vga(vgt);
 }
 
+/* FIXME: No need to operate on i2c ? */
+#if 0
 void
 vgt_i2c_reset(struct vgt_device *vgt)
 {
@@ -528,7 +532,10 @@ vgt_i2c_reset(struct vgt_device *vgt)
     else
         vgt_write_mmio_reg(_REG_GMBUS0, 0);
 }
+#endif
 
+/* No need to save PCI configure */
+#if 0
 //pci_save_state()
 int vgt_pci_save_state(struct vgt_device *vgt)
 {
@@ -542,6 +549,7 @@ int vgt_pci_save_state(struct vgt_device *vgt)
 
     return 0;
 }
+#endif
 
 static u8 vgt_read_indexed(struct vgt_device *vgt, u16 index_port, u16 data_port, u8 index)
 {
@@ -791,10 +799,13 @@ static void vgt_save_modeset_reg(struct vgt_device *vgt)
     vgt_save_palette(vgt, PIPE_B);
     vgt_save_mmio_reg(_REG_PIPEBSTAT);
 
+    /* FIXME: no need to save fence registers */
+# if 0
 	/* Fences */
     /* TODO: only save gen 6 now */
     for (i = 0; i< 16; i++)
         vgt_save_mmio_reg_64(_REG_FENCE_0_LOW + i * 8);
+#endif
 }
 
 static int vgt_save_display(struct vgt_device *vgt)
@@ -901,7 +912,8 @@ int vgt_save_state(struct vgt_device *vgt)
 
 	/* Hardware status page */
     /* FIXME: _REG_HWS_PGA is only used in i915 for dmah, this
-     * not used by any other vGT code */
+     * not used by any other vGT code, it seems like a legacy register
+     */
     vgt_save_mmio_reg(_REG_HWS_PGA);
 
 	vgt_save_display(vgt);
