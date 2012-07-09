@@ -2638,6 +2638,15 @@ dprintk("VGT: Initial_phys_states\n");
 	}
 #endif
 
+	/* FIXME: GMBUS2 has an in-use bit as the hw semaphore, and we should recover
+	 * it after the snapshot. Remove this workaround after GMBUS virtualization
+	 */
+	{
+		u32 val = VGT_MMIO_READ(pdev, 0xc5108);
+		printk("vGT: GMBUS2 init value: %x, %x\n", pdev->initial_mmio_state[0xc5100], val);
+		VGT_MMIO_WRITE(pdev, 0xc5108, val | 0x8000);
+	}
+
 	return save_vbios(pdev);
 }
 
