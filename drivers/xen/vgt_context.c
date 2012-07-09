@@ -707,7 +707,7 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 	 */
 	__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
 	if (reg == _REG_DSPASURF)
-		printk("%s: =======: write vReg(%x), sReg(%x)\n", __func__, __vreg(vgt, reg), __sreg(vgt, reg));
+		dprintk("%s: =======: write vReg(%x), sReg(%x)\n", __func__, __vreg(vgt, reg), __sreg(vgt, reg));
 	//if (reg_hw_access(vgt, reg) || reg == _REG_DSPASURF || reg == _REG_CURABASE) {
 	if (reg_hw_access(vgt, reg)) {
         //printk("vGT: hvm_render_owner = %d, hvm_dpy_owner = %d\n", hvm_render_owner, hvm_dpy_owner);
@@ -900,7 +900,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	}
 
 	if (offset == _REG_DSPASURF)
-		printk("vGT(%d): write to surface base (%x) with (%x), pReg(%x)\n",
+		dprintk("vGT(%d): write to surface base (%x) with (%x), pReg(%x)\n",
 			vgt->vgt_id, offset, __vreg(vgt, offset),
 			VGT_MMIO_READ(pdev, offset));
 	spin_unlock_irqrestore(&pdev->lock, flags);
