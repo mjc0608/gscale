@@ -77,7 +77,6 @@
 
 #include <xen/vgt.h>
 #include <xen/vgt-if.h>
-#include <xen/vgt-parser.h> /* for g2m_pfn() */
 #include "vgt_reg.h"
 
 unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
