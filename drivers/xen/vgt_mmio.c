@@ -623,21 +623,19 @@ static int vgt_hvm_map_rom (struct vgt_device *vgt, int map)
 	return r;
 }
 
-#define OPREGION_PAGES	2
-#define PCI_CONFIG_OPREGION 0xFC
 static int vgt_hvm_map_opregion (struct vgt_device *vgt, int map)
 {
 	uint32_t opregion;
 	struct xen_hvm_vgt_map_mmio memmap;
 	int rc;
 
-	opregion = *(uint32_t*)(vgt->state.cfg_space + PCI_CONFIG_OPREGION );
+	opregion = vgt->opregion_pa;
 
 	printk("Direct map OpRegion 0x%x\n", opregion);
 
 	memmap.first_gfn = opregion >> PAGE_SHIFT;
 	memmap.first_mfn = opregion >> PAGE_SHIFT;
-	memmap.nr_mfns = OPREGION_PAGES ;
+	memmap.nr_mfns =  VGT_OPREGION_PAGES;
 	memmap.map = map;
 	memmap.domid = vgt->vm_id;
 	rc = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
@@ -1198,8 +1196,24 @@ static irqreturn_t vgt_hvm_io_req_handler(int irq, void* dev)
 	return IRQ_HANDLED;
 }
 
+static void vgt_hvm_opregion_init(struct vgt_device *vgt)
+{
+	uint8_t* buf;
+	vgt->opregion_pa = *(uint32_t*)(vgt->state.cfg_space + VGT_REG_CFG_OPREGION );
+	vgt->opregion_va = __va(vgt->opregion_pa);
+
+	/* for unknown reason, the value in LID field is incorrect
+	   which block the windows guest, so workaround it by force
+	   setting it to "OPEN"
+	 **/
+
+	buf = (uint8_t*)vgt->opregion_va;
+	buf[VGT_OPREGION_REG_CLID] = 0x3;
+}
+
 int vgt_hvm_io_init(struct vgt_device *vgt)
 {
+	vgt_hvm_opregion_init(vgt);
 	vgt_hvm_map_opregion(vgt, 1);
 	return 0;
 }

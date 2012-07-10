@@ -768,6 +768,10 @@ struct vgt_intel_device_info {
 #define VGT_REG_CFG_SPACE_BAR_ROM		0x30
 #define VGT_REG_CFG_SPACE_MSAC			0x62
 #define VGT_REG_CFG_SWSCI_TRIGGER		0xE8
+#define VGT_REG_CFG_OPREGION			0xFC
+
+#define VGT_OPREGION_PAGES				2
+#define VGT_OPREGION_REG_CLID			0x1AC
 
 //#define MSAC_APERTURE_SIZE_MASK		0x3
 #define MSAC_APERTURE_SIZE_128M			(0 << 1)
@@ -846,6 +850,8 @@ struct vgt_device {
 	struct kobject kobj;
 
 	bool		ballooning;		/* VM supports ballooning */
+	void*		opregion_va;
+	uint32_t	opregion_pa;
 };
 
 extern struct vgt_device *vgt_dom0;
