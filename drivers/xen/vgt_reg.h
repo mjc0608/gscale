@@ -65,7 +65,6 @@
 #include <linux/wait.h>
 #include <xen/interface/hvm/ioreq.h>
 
-//#define SINGLE_VM_DEBUG
 #define SANDY_BRIDGE
 #define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); BUG();}} while (0);
 #define ASSERT_NUM(x,y) do { if (!(x)) {printk("Assert at %s line %d para %llx\n", __FILE__, __LINE__, (u64)y); BUG();}} while (0);

@@ -208,7 +208,7 @@ static void i915_deballoon(struct drm_i915_private *dev_priv)
  * Get the number of assigned fence registers.
  * through the PV INFO page.
  */
-static inline int vgt_avail_fence_num(drm_i915_private_t *dev_priv)
+static inline int vgt_avail_fence_num(struct drm_i915_private *dev_priv)
 {
 	unsigned long   avail_fences;
 	avail_fences = I915_READ(vgt_info_off(avail_rs.fence_num));

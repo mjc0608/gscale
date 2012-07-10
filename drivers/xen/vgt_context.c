@@ -294,10 +294,8 @@ static void enforce_mode_setting(struct pgt_device *pdev)
 #endif
 }
 
-#ifndef SINGLE_VM_DEBUG
 struct vgt_device *next_display_owner;
 atomic_t display_switched = ATOMIC_INIT(0);
-#endif
 struct vgt_device *vgt_dom0;
 struct vgt_device *vgt_super_owner;
 struct mmio_hash_table	*mtable[MHASH_SIZE];
@@ -801,10 +799,8 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
-//#ifdef SINGLE_VM_DEBUG
 	/* for single-VM UP dom0 case, no nest is expected */
 	ASSERT(!spin_is_locked(&pdev->lock));
-//#endif
 
 //	ASSERT (offset + bytes <= vgt->state.regNum *
 //				sizeof(vgt->state.vReg[0]));
@@ -857,9 +853,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
-//#ifdef SINGLE_VM_DEBUG
 	ASSERT(!spin_is_locked(&pdev->lock));
-//#endif
 //	ASSERT (offset + bytes <= vgt->state.regNum *
 //				sizeof(vgt->state.vReg[0]));
 	/* at least FENCE registers are accessed in 8 bytes */
@@ -991,7 +985,6 @@ bool is_rendering_engines_empty(struct pgt_device *pdev, int *ring_id)
 	return true;
 }
 
-#ifndef SINGLE_VM_DEBUG
 /*
  * Request from user level daemon/IOCTL
  */
@@ -1063,8 +1056,6 @@ void do_vgt_display_switch(struct pgt_device *pdev)
     printk("XXXX: display switch to dom %d\n", cur->vgt_id);
 #endif
 }
-
-#endif
 
 static struct vgt_device *next_vgt(
 	struct list_head *head, struct vgt_device *vgt)
@@ -1258,11 +1249,8 @@ int vgt_thread(void *priv)
 				VGT_MMIO_READ(pdev, _REG_FORCEWAKE_ACK));
 		}
 
-#ifndef SINGLE_VM_DEBUG
 		/* Response to the monitor switch request. */
 		/* vgt display switch moved out rendering context switch. */
-#endif
-
 		if (list_empty(&pdev->rendering_runq_head)) {
 			/* Idle now, and no pending activity */
 			printk("....idle\n");
@@ -1279,9 +1267,7 @@ int vgt_thread(void *priv)
 		if (is_rendering_engines_empty(pdev, &ring_id)) {
 			next = next_vgt(&pdev->rendering_runq_head, current_render_owner(pdev));
 			dprintk("vGT: next vgt (%d)\n", next->vgt_id);
-#ifndef SINGLE_VM_DEBUG
 			if ( next != current_render_owner(pdev) )
-#endif
 			{
 				rdtsc_barrier();
 				start = get_cycles();
@@ -1350,10 +1336,8 @@ int vgt_thread(void *priv)
 				rdtsc_barrier();
 				//printk("vGT: take %lld cycles\n", end - start);
 			}
-#ifndef SINGLE_VM_DEBUG
 			else
 				dprintk("....no other instance\n");
-#endif
 		} else {
 			printk("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
 				vgt_ctx_switch(pdev), ring_id,
@@ -1361,7 +1345,6 @@ int vgt_thread(void *priv)
 			show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
 		}
 		spin_unlock_irq(&pdev->lock);
-#ifndef SINGLE_VM_DEBUG
 		/* Virtual interrupts pending right after render switch */
 		if (pdev->request & VGT_REQUEST_IRQ) {
 			printk("vGT: handle pending interrupt in the render context switch time\n");
@@ -1370,7 +1353,6 @@ int vgt_thread(void *priv)
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
 			spin_unlock_irq(&pdev->lock);
 		}
-#endif
 	}
 	return 0;
 }
@@ -3013,9 +2995,7 @@ int vgt_initialize(struct pci_dev *dev)
 	vgt_dom0 = create_vgt_instance(pdev, 0);   /* TODO: */
 	if (vgt_dom0 == NULL)
 		goto err;
-#ifndef SINGLE_VM_DEBUG
 	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
-#endif
 	vgt_super_owner = vgt_dom0;
 	dprintk("create dom0 instance succeeds\n");
 

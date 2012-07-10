@@ -915,7 +915,7 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	driver.driver_features &= ~(DRIVER_USE_AGP);
 
 	/* TO inform VGT */
-	xen_start_vgt(pdev);
+	xen_start_vgt();
 	printk("i915: xen_start_vgt done in i915_pci_probe.\n");
 
 	return drm_get_pci_dev(pdev, ent, &driver);
