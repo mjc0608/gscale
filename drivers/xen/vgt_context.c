@@ -1151,6 +1151,16 @@ static int __init ctx_switch_setup(char *str)
 __setup("vgt_ctx_switch", ctx_switch_setup);
 
 static int period = HZ/5;	/* default slow mode in 200ms */
+
+/* enable this to use the old style switch context */
+static int use_old_ctx_switch = false;
+static int __init use_old_ctx_switch_setup(char *str)
+{
+    use_old_ctx_switch = true;
+    return 1;
+}
+__setup("use_old_ctx_switch", use_old_ctx_switch_setup);
+
 /*
  * The thread to perform the VGT ownership switch.
  *
@@ -1199,6 +1209,7 @@ int vgt_thread(void *priv)
 
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
+	printk("vGT: dexuan: use %s style context switch\n", use_old_ctx_switch ? "old": "new");
 	if (fastmode) {
 		printk("vGT: fastmode switch (in 16ms)\n");
 		period = HZ/64;
@@ -1391,6 +1402,13 @@ static inline void disable_ring(struct pgt_device *pdev, int ring_id)
 	VGT_POST_READ(pdev, RB_CTL(ring_id));
 }
 
+static inline void enable_ring(struct pgt_device *pdev, int ring_id, vgt_reg_t val)
+{
+	ASSERT(val & _RING_CTL_ENABLE);
+	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), val);
+	VGT_POST_READ(pdev, RB_CTL(ring_id));
+}
+
 /*
  * to restore to a new ring buffer, we need restore all ring regs including head.
  */
@@ -1412,9 +1430,7 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
 	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), srb->head);
 
-	/* enable the ring buffer */
-	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), srb->ctl);
-	VGT_POST_READ(pdev, RB_CTL(ring_id));
+	enable_ring(pdev, ring_id, srb->ctl);
 
 	dprintk("shadow 2 phys: [%x, %x]\n", VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
 		VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
@@ -1598,8 +1614,11 @@ static void restore_power_management(struct vgt_device *vgt)
  * MI_SUSPEND_FLUSH is necessary for GEN5, but not SNB.
  * IVB furthers requires MI_ARB_ON_OFF to disable preemption
  * (from intel-gfx community)
+ *
+ * cmds_save_context should be a multiple of 8-bytes.
+ * let's use sizeof(rb_dword)*16=64 bytes.
  */
-static rb_dword	cmds_save_context[] = {
+static rb_dword	cmds_save_context[16] = {
 	MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
 	MI_SET_CONTEXT, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT,
 	MI_NOOP,
@@ -1608,11 +1627,14 @@ static rb_dword	cmds_save_context[] = {
 	MI_FLUSH,
 	MI_NOOP,
 	MI_STORE_DATA_IMM | MI_SDI_USE_GTT, MI_NOOP, MI_NOOP, MI_NOOP,
-	MI_NOOP,
+	MI_NOOP,MI_NOOP,MI_NOOP,MI_NOOP,
 };
 
 /* TODO: MI_FORCE_RESTORE is only required for initialization */
-static rb_dword	cmds_restore_context[] = {
+/* cmds_restore_context should be a multiple of 8-bytes.
+ * let's use sizeof(rb_dword)*16=64 bytes.
+ */
+static rb_dword	cmds_restore_context[16] = {
 	MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN,
 	MI_SET_CONTEXT, MI_MM_SPACE_GTT | MI_FORCE_RESTORE,
 	MI_NOOP,
@@ -1621,7 +1643,7 @@ static rb_dword	cmds_restore_context[] = {
 	MI_FLUSH,
 	MI_NOOP,
 	MI_STORE_DATA_IMM | MI_SDI_USE_GTT, MI_NOOP, MI_NOOP, MI_NOOP,
-	MI_NOOP,
+	MI_NOOP,MI_NOOP,MI_NOOP,MI_NOOP,
 };
 
 /*
@@ -1659,8 +1681,36 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 
 	dprintk("old magic number: %d\n",
 		*(u32 *)(aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
-	ring_load_commands (rb, aperture_vbase(pdev), (char*)cmds, bytes);
-	VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
+
+	if (!use_old_ctx_switch) {
+		char *p_aperture;
+
+		disable_ring(pdev, ring_id);
+
+		p_aperture = aperture_vbase(pdev) + pdev->ctx_switch_rb_page;
+		memcpy(p_aperture, cmds, bytes);
+
+		VGT_MMIO_WRITE(pdev, RB_START(ring_id), pdev->ctx_switch_rb_page);
+		VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), 0);
+		VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), 0);
+
+		// ctx_switch_rb_page has a size of 1 page.
+		enable_ring(pdev, ring_id, _RING_CTL_ENABLE);
+
+		VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), bytes);
+	} else {
+		//prepare for switching to the new ring
+		ASSERT((cmds == cmds_save_context)||(cmds == cmds_restore_context));
+		if (cmds == cmds_restore_context)
+			//vring_2_sring(vgt, rb);
+			ring_shadow_2_phys (pdev, ring_id, &rb->sring);
+
+		// save 32 dwords of the ring
+		save_ring_buffer (vgt, ring_id);
+
+		ring_load_commands (rb, aperture_vbase(pdev), (char*)cmds, bytes);
+		VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
+	}
 	//mdelay(1);
 
 	if (!ring_wait_for_empty(pdev, ring_id, true)) {
@@ -1668,6 +1718,11 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 		show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
 		return false;
 	}
+
+	if (use_old_ctx_switch)
+		// restore 32 dwords of the ring
+		restore_ring_buffer (vgt, ring_id);
+
 	dprintk("new magic number: %d\n",
 		*(u32 *)(aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
 
@@ -2000,9 +2055,6 @@ bool vgt_save_context (struct vgt_device *vgt)
 		if (rb->stateless)
 			continue;
 
-		/* save 32 dwords of the ring */
-		save_ring_buffer (vgt, i);
-
 		/* No need to submit ArbOnOffInstruction */
 
 		/*
@@ -2035,7 +2087,6 @@ bool vgt_save_context (struct vgt_device *vgt)
 
 		rc = (*submit_context_command[i]) (vgt, i, cmds_save_context,
 				sizeof(cmds_save_context));
-		restore_ring_buffer (vgt, i);
 
 		if (rc)
 			rb->initialized = true;
@@ -2070,11 +2121,6 @@ bool vgt_restore_context (struct vgt_device *vgt)
 			continue;
 
 		old_tail = rb->sring.tail;
-		//vring_2_sring(vgt, rb);
-		ring_shadow_2_phys (pdev, i, &rb->sring);
-
-		/* save 32 dwords of the ring */
-		save_ring_buffer (vgt, i);
 
 		switch (i) {
 			case RING_BUFFER_RCS:
@@ -2105,9 +2151,6 @@ bool vgt_restore_context (struct vgt_device *vgt)
 		}
 		rc = (*submit_context_command[i]) (vgt, i, cmds_restore_context,
 			sizeof(cmds_restore_context));
-
-		/* restore 32 dwords of the ring */
-		restore_ring_buffer (vgt, i);
 
 		if (!rc)
 			goto err;
@@ -2990,6 +3033,12 @@ int vgt_initialize(struct pci_dev *dev)
 	printk("scratch page is allocated at gm(%llx)\n", pdev->scratch_page);
 	/* reserve the 1st trunk for vGT's general usage */
 	pdev->rsvd_aperture_pos += VGT_APERTURE_PER_INSTANCE_SZ;
+
+	/* reserve 1 page as the temporary ring buffer for context switch */
+	pdev->ctx_switch_rb_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
+		pdev->rsvd_aperture_pos);
+	pdev->rsvd_aperture_pos += PAGE_SIZE;
+	printk("dexuan: ctx_switch_rb_page is allocated at gm(%llx)\n", pdev->ctx_switch_rb_page);
 
 	/* create domain 0 instance */
 	vgt_dom0 = create_vgt_instance(pdev, 0);   /* TODO: */
