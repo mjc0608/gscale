@@ -349,30 +349,30 @@ struct mmio_hash_table gtt_mmio_handler={
 
 static void vgt_hash_add_mtable(struct vgt_device *vgt, int table, int index, struct mmio_hash_table *mht)
 {
-	struct mmio_hash_table *t;
+	struct mmio_hash_table **t = NULL;
 
 	switch(table) {
 	case VGT_HASH_MMIO:
-		t = mtable[index];
+		t = &mtable[index];
 		break;
 	case VGT_HASH_WP_PAGE:
-		t = vgt->wp_table[index];
+		t = &vgt->wp_table[index];
 		break;
 	}
 
-	if ( !t ) {
-		t = mht;
+	if (!*t) {
+		*t = mht;
 		mht->next = NULL;
 	} else {
-		mht->next = t;
-		t = mht;
+		mht->next = *t;
+		*t = mht;
 	}
 }
 
 struct mmio_hash_table *vgt_hash_lookup_mtable(struct vgt_device *vgt, int table, int item)
 {
 	int index;
-	struct mmio_hash_table *mht;
+	struct mmio_hash_table *mht = NULL;
 
 	index = mhash(item);
 
@@ -386,6 +386,8 @@ struct mmio_hash_table *vgt_hash_lookup_mtable(struct vgt_device *vgt, int table
 		mht = vgt->wp_table[index];
 		break;
 	}
+
+	item &= ~3;
 
 	while (mht) {
 		if (mht->mmio_base == item)
@@ -430,7 +432,7 @@ void vgt_hash_register_entry(struct vgt_device *vgt, int table, struct mmio_hash
 void vgt_hash_remove_entry(struct vgt_device *vgt, int table, int key)
 {
 	int index = mhash(key);
-	struct mmio_hash_table *mht, *p;
+	struct mmio_hash_table *mht = NULL, *p;
 
 	switch(table) {
 	case VGT_HASH_MMIO:
