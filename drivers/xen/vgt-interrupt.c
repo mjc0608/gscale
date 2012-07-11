@@ -328,8 +328,8 @@ void vgt_signal_uevent(struct pgt_device *dev)
     bool rc;
     int bit;
 
-    for_each_set_bit(bit, &vgt_uevents_bitmap, UEVENT_MAX) {
-        clear_bit(bit, &vgt_uevents_bitmap);
+    for_each_set_bit(bit, vgt_uevents_bitmap, UEVENT_MAX) {
+        clear_bit(bit, vgt_uevents_bitmap);
 
         info_entry = &vgt_default_uevent_info_table[bit];
 
@@ -1251,10 +1251,10 @@ void vgt_handle_hotplug(struct pgt_device *dev,
     sde_isr = VGT_MMIO_READ(dev, _REG_SDEISR);
     if (sde_isr & _REGBIT_CRT_HOTPLUG) {
         printk("%s: %d: vGT: detect crt insert uevent!\n", __func__, __LINE__);
-        set_bit(CRT_HOTPLUG_IN, &vgt_uevents_bitmap);
+        set_bit(CRT_HOTPLUG_IN, vgt_uevents_bitmap);
     } else {
         printk("%s: %d: vGT: detect crt evict uevent!\n", __func__, __LINE__);
-        set_bit(CRT_HOTPLUG_OUT, &vgt_uevents_bitmap);
+        set_bit(CRT_HOTPLUG_OUT, vgt_uevents_bitmap);
     }
 
     vgt_raise_request(dev, VGT_REQUEST_UEVENT);
