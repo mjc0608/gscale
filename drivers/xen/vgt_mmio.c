@@ -538,6 +538,63 @@ bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset,
     return rc;
 }
 
+bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
+			void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	vgt_reg_t reg_data;
+	bool rc;
+	struct pgt_device *pdev = vgt->pdev;
+
+	rc = default_mmio_read(vgt, offset, p_data, bytes);
+	if (reg_hw_access(vgt, reg)) {
+		reg_data = *(vgt_reg_t *)p_data;
+		if (reg_data & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK)
+			set_bit(VGT_CRT, pdev->port_detect_status);
+		else
+			clear_bit(VGT_CRT, pdev->port_detect_status);
+	}
+
+	return rc;
+}
+
+bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	vgt_reg_t wr_data, vreg_data;
+	bool rc;
+	struct pgt_device *pdev = vgt->pdev;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+
+	reg = offset & ~(bytes - 1);
+	wr_data = *(vgt_reg_t *)p_data;
+
+	/* FIXME: suppose the CRT has been plugged in
+	 * Actually we need dom0 to tell hvm such info
+	 */
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
+	if (!reg_hw_access(vgt, reg)) {
+		vreg_data = wr_data;
+		/* Tell VM if CRT monitor physically plugged in */
+		if (test_bit(VGT_CRT, pdev->port_detect_status)) {
+			/* Emulation: trap hotplug force trigger */
+			if ((wr_data & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER) && !(wr_data & _REGBIT_ADPA_DAC_ENABLE)) {
+				/* clear the force trigger and set read only bits */
+				vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER;
+			}
+			vreg_data |= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+
+		} else
+			vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+
+		__vreg(vgt, reg) = vreg_data;
+	}
+
+	return rc;
+}
+
 bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -896,6 +953,9 @@ printk("mmio hooks initialized\n");
 	vgt_register_mmio_handler( _REG_FENCE_0_LOW, 0x80,
 			fence_mmio_read, fence_mmio_write);
 
+	vgt_register_mmio_handler(_REG_PCH_ADPA, 4,
+			pch_adpa_mmio_read, pch_adpa_mmio_write);
+
 	vgt_register_mmio_write( _REG_FORCEWAKE, force_wake_write);
 
 	vgt_register_mmio_write( _REG_RC_STATE_CTRL_1, rc_state_ctrl_1_mmio_write);
@@ -921,6 +981,7 @@ printk("mmio hooks initialized\n");
 	vgt_register_mmio_write(_REG_FDI_TXB_CTL, update_fdi_rx_iir_status);
 	vgt_register_mmio_write(_REG_FDI_RXA_IMR, update_fdi_rx_iir_status);
 	vgt_register_mmio_write(_REG_FDI_RXB_IMR, update_fdi_rx_iir_status);
+
 	return true;
 }
 

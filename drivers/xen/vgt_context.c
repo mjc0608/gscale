@@ -2827,6 +2827,9 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 
 	/* then add addr fix info for pass-through regs */
 	vgt_setup_addr_fix_info(pdev);
+
+	/* clean port status, 0 means not plugged in */
+	memset(pdev->port_detect_status, 0, sizeof(pdev->port_detect_status));
 	return true;
 }
 

@@ -602,6 +602,9 @@ bool default_submit_context_command (struct vgt_device *vgt,
 
 /* CRT */
 #define _REG_PCH_ADPA                0xe1100
+#define _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER (1 << 16)
+#define _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK (3 << 24)
+#define _REGBIT_ADPA_DAC_ENABLE (1 << 31)
 
 /* PCH SDVOB multiplex with HDMIB */
 #define _REG_PCH_LVDS	0xe1180
@@ -888,6 +891,24 @@ typedef vgt_reg_t vgt_addr_mask_t;
 
 struct vgt_irq_host_state;
 #define VGT_VBIOS_PAGES 16
+
+enum vgt_port_type {
+	VGT_CRT = 0,
+	VGT_DP_A,
+	VGT_DP_B,   /* DP use the same physical pins as HDMI/DVI, therefore HDMI/DI and DP cannot be enabled simultaneously */
+	VGT_DP_C,
+	VGT_DP_D,
+	VGT_SDVO_B, /* HDMI port B can be used for sDVO by setting the encoding field */
+	VGT_DVI_B,
+	VGT_DVI_C,
+	VGT_DVI_D,
+	VGT_HIMI_B,
+	VGT_HDMI_C, /* HDMI port C can only be used for HDMI/DVI */
+	VGT_HDMI_D,
+	VGT_LVDS,
+	VGT_PORT_MAX
+};
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list;
@@ -940,6 +961,8 @@ struct pgt_device {
 	uint64_t vgtt_sz; /* in bytes */
 	uint32_t *vgtt; /* virtual GTT table for guest to read*/
 	struct page *vbios;
+
+	DECLARE_BITMAP(port_detect_status, VGT_PORT_MAX); /* Temperary solution: use this to tell hvm domain if external monitors are detected */
 };
 
 extern struct list_head pgt_devices;
