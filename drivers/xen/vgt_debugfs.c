@@ -188,6 +188,7 @@ static const struct file_operations u32_array_fops = {
 	.llseek = no_llseek,
 };
 
+#if 0
 static struct dentry *vgt_debugfs_create_u32_array(const char *name, mode_t mode,
 					    struct dentry *parent,
 					    u32 *array, unsigned elements)
@@ -202,6 +203,7 @@ static struct dentry *vgt_debugfs_create_u32_array(const char *name, mode_t mode
 
 	return debugfs_create_file(name, mode, parent, data, &u32_array_fops);
 }
+#endif
 
 /* TODO: dummy function, ringbuffer specific read
  * operation should involved in file operations */
@@ -239,17 +241,13 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	int vgt_id = vgt->vgt_id;
 	int retval;
 	struct dentry *d_vmmio, *d_smmio,
-				  *d_vfb_a, *d_sfb_a,
-				  *d_vfb_b, *d_sfb_b;
+				  *d_fb_a, *d_fb_b;
 
-    struct pgt_device *pdev = vgt->pdev;
+	unsigned int dspa_surf_size = __sreg(vgt, _REG_DSPASIZE);
+	unsigned int dspb_surf_size = __sreg(vgt, _REG_DSPBSIZE);
 
-	unsigned int dspa_surf_size = VGT_MMIO_READ(pdev, _REG_DSPASIZE);
-	unsigned int dspb_surf_size = VGT_MMIO_READ(pdev, _REG_DSPBSIZE);
-
-
-	u32 dspa_surf_base = *(u32 *)((void *)(vgt->state.sReg) + _REG_DSPASURF);
-	u32 dspb_surf_base = *(u32 *)((void *)(vgt->state.sReg) + _REG_DSPBSURF);
+	void *dspa_surf_base = vgt_aperture_vbase(vgt) + ((__sreg(vgt, _REG_DSPASURF)) & PAGE_MASK);
+	void *dspb_surf_base = vgt_aperture_vbase(vgt) + ((__sreg(vgt, _REG_DSPBSURF)) & PAGE_MASK);
 
 	printk("vGT(%d): Display surface A size is %d\n", vgt_id, dspa_surf_size);
 	printk("vGT(%d): Display surface B size is %d\n", vgt_id, dspb_surf_size);
@@ -295,24 +293,24 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	else
 		printk("vGT(%d): create debugfs node: shadow_mmio_space\n", vgt_id);
 
-	d_sfb_b = vgt_debugfs_create_blob("shadow_surfB_fb",
+	d_fb_b = vgt_debugfs_create_blob("surfB_fb",
 			0444,
 			d_per_vgt[vgt_id],
 			(u32*)dspb_surf_base,
 			1024*1024/4);
 
-	if (!d_sfb_b)
+	if (!d_fb_b)
 		printk(KERN_ERR "vGT(%d): failed to create debugfs node: shadow_surfB_fb\n", vgt_id);
 	else
 		printk("vGT(%d): create debugfs node: shadow_surfB_fb\n", vgt_id);
 
-	d_sfb_a = vgt_debugfs_create_blob("shadow_surfA_fb",
+	d_fb_a = vgt_debugfs_create_blob("surfA_fb",
 			0444,
 			d_per_vgt[vgt_id],
 			(u32*)dspa_surf_base,
 			1024*1024/4);
 
-	if (!d_sfb_a)
+	if (!d_fb_a)
 		printk(KERN_ERR "vGT(%d): failed to create debugfs node: shadow_surfA_fb\n", vgt_id);
 	else
 		printk("vGT(%d): create debugfs node: shadow_surfA_fb\n", vgt_id);
