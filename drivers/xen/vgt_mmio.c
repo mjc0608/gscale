@@ -94,6 +94,7 @@ static inline int tail_to_ring_id(unsigned int tail_off)
 	return 0;
 }
 
+#if 0
 static void ring_debug(struct vgt_device *vgt, int ring_id)
 {
 	printk("phead (%x), ptail(%x), pstart(%x), pctl(%x)\n",
@@ -102,6 +103,7 @@ static void ring_debug(struct vgt_device *vgt, int ring_id)
 		VGT_MMIO_READ(vgt->pdev, RB_START(ring_id)),
 		VGT_MMIO_READ(vgt->pdev, RB_CTL(ring_id)));
 }
+#endif
 
 bool fence_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
@@ -419,15 +421,15 @@ bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
     void *p_data, unsigned int bytes)
 {
-    unsigned int reg;
-    bool rc = true;
+	unsigned int reg;
+	vgt_reg_t wr_data, old_iir;
+	bool rc;
 
     ASSERT(bytes == 4 && !(offset & (bytes - 1)));
-
     reg = offset & ~(bytes -1);
 
-    vgt_reg_t wr_data = *(vgt_reg_t *)p_data;
-    vgt_reg_t old_iir = __vreg(vgt, reg);
+    wr_data = *(vgt_reg_t *)p_data;
+    old_iir = __vreg(vgt, reg);
 
     rc = default_mmio_write(vgt, offset, p_data, bytes);
 
@@ -546,6 +548,9 @@ bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	bool rc;
 	struct pgt_device *pdev = vgt->pdev;
 
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+	reg = offset & ~(bytes - 1);
+
 	rc = default_mmio_read(vgt, offset, p_data, bytes);
 	if (reg_hw_access(vgt, reg)) {
 		reg_data = *(vgt_reg_t *)p_data;
@@ -588,6 +593,205 @@ bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 		} else
 			vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+
+		__vreg(vgt, reg) = vreg_data;
+	}
+
+	return rc;
+}
+
+
+bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
+			void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	vgt_reg_t reg_data;
+	bool rc;
+	struct pgt_device *pdev = vgt->pdev;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+	reg = offset & ~(bytes - 1);
+
+	rc = default_mmio_read(vgt, offset, p_data, bytes);
+	if (reg_hw_access(vgt, reg)) {
+		reg_data = *(vgt_reg_t *)p_data;
+		if (reg_data & _REGBIT_DP_PORT_DETECTED) {
+			switch (reg) {
+				case _REG_DP_A_CTL:
+					set_bit(VGT_DP_A, pdev->port_detect_status);
+					break;
+				case _REG_DP_B_CTL:
+					set_bit(VGT_DP_B, pdev->port_detect_status);
+					break;
+				case _REG_DP_C_CTL:
+					set_bit(VGT_DP_C, pdev->port_detect_status);
+					break;
+				case _REG_DP_D_CTL:
+					set_bit(VGT_DP_D, pdev->port_detect_status);
+					break;
+				default:
+					BUG();
+			}
+		} else {
+			switch (reg) {
+				case _REG_DP_A_CTL:
+					clear_bit(VGT_DP_A, pdev->port_detect_status);
+					break;
+				case _REG_DP_B_CTL:
+					clear_bit(VGT_DP_B, pdev->port_detect_status);
+					break;
+				case _REG_DP_C_CTL:
+					clear_bit(VGT_DP_C, pdev->port_detect_status);
+					break;
+				case _REG_DP_D_CTL:
+					clear_bit(VGT_DP_D, pdev->port_detect_status);
+					break;
+				default:
+					BUG();
+			}
+		}
+	}
+
+	return rc;
+}
+
+bool dp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	vgt_reg_t vreg_data;
+	bool rc;
+	struct pgt_device *pdev = vgt->pdev;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+
+	reg = offset & ~(bytes - 1);
+	vreg_data = *(vgt_reg_t *)p_data;
+
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
+	if (!reg_hw_access(vgt, reg)) {
+		/* Read only bit should be keeped coherent with intended hardware status */
+		switch (reg) {
+			case _REG_DP_A_CTL:
+				if (test_bit(VGT_DP_A, pdev->port_detect_status))
+					vreg_data |= _REGBIT_DP_PORT_DETECTED;
+				else
+					vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
+				break;
+			case _REG_DP_B_CTL:
+				if (test_bit(VGT_DP_B, pdev->port_detect_status))
+					vreg_data |= _REGBIT_DP_PORT_DETECTED;
+				else
+					vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
+				break;
+			case _REG_DP_C_CTL:
+				if (test_bit(VGT_DP_C, pdev->port_detect_status))
+					vreg_data |= _REGBIT_DP_PORT_DETECTED;
+				else
+					vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
+				break;
+			case _REG_DP_D_CTL:
+				if (test_bit(VGT_DP_D, pdev->port_detect_status))
+					vreg_data |= _REGBIT_DP_PORT_DETECTED;
+				else
+					vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
+				break;
+			default:
+				BUG();
+		}
+
+		__vreg(vgt, reg) = vreg_data;
+	}
+
+	return rc;
+}
+
+bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
+			void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	vgt_reg_t reg_data;
+	bool rc;
+	struct pgt_device *pdev = vgt->pdev;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+	reg = offset & ~(bytes - 1);
+
+	rc = default_mmio_read(vgt, offset, p_data, bytes);
+	if (reg_hw_access(vgt, reg)) {
+		reg_data = *(vgt_reg_t *)p_data;
+		if (reg_data & _REGBIT_HDMI_PORT_DETECTED) {
+			switch (reg) {
+				case _REG_HDMI_B_CTL:
+					set_bit(VGT_HDMI_B, pdev->port_detect_status);
+					break;
+				case _REG_HDMI_C_CTL:
+					set_bit(VGT_HDMI_C, pdev->port_detect_status);
+					break;
+				case _REG_HDMI_D_CTL:
+					set_bit(VGT_HDMI_D, pdev->port_detect_status);
+					break;
+				default:
+					BUG();
+			}
+		} else {
+			switch (reg) {
+				case _REG_HDMI_B_CTL:
+					clear_bit(VGT_HDMI_B, pdev->port_detect_status);
+					break;
+				case _REG_HDMI_C_CTL:
+					clear_bit(VGT_HDMI_C, pdev->port_detect_status);
+					break;
+				case _REG_HDMI_D_CTL:
+					clear_bit(VGT_HDMI_D, pdev->port_detect_status);
+					break;
+				default:
+					BUG();
+			}
+		}
+	}
+
+	return rc;
+}
+
+bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	vgt_reg_t vreg_data;
+	bool rc;
+	struct pgt_device *pdev = vgt->pdev;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+
+	reg = offset & ~(bytes - 1);
+	vreg_data = *(vgt_reg_t *)p_data;
+
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
+	if (!reg_hw_access(vgt, reg)) {
+		/* Read only bit should be keeped coherent with intended hardware status */
+		switch (reg) {
+			case _REG_HDMI_B_CTL:
+				if (test_bit(VGT_HDMI_B, pdev->port_detect_status))
+					vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
+				else
+					vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
+				break;
+			case _REG_HDMI_C_CTL:
+				if (test_bit(VGT_HDMI_C, pdev->port_detect_status))
+					vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
+				else
+					vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
+				break;
+			case _REG_HDMI_D_CTL:
+				if (test_bit(VGT_HDMI_D, pdev->port_detect_status))
+					vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
+				else
+					vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
+				break;
+			default:
+				BUG();
+		}
 
 		__vreg(vgt, reg) = vreg_data;
 	}
@@ -667,7 +871,7 @@ static int vgt_hvm_map_rom (struct vgt_device *vgt, int map)
 		memmap.map = map;
 		memmap.domid = vgt->vm_id;
 
-		printk("%s(rombar): domid=%d gfn_s=0x%lx mfn_s=0x%lx nr_mfns=0x%x\n", map==0? "remove_map":"add_map",
+		printk("%s(rombar): domid=%d gfn_s=0x%llx mfn_s=0x%llx nr_mfns=0x%x\n", map==0? "remove_map":"add_map",
 				vgt->vm_id, memmap.first_gfn, memmap.first_mfn, memmap.nr_mfns);
 
 		r = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
@@ -731,7 +935,7 @@ static int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 	memmap.map = map;
 	memmap.domid = vgt->vm_id;
 
-	printk("%s: domid=%d gfn_s=0x%lx mfn_s=0x%lx nr_mfns=0x%x\n", map==0? "remove_map":"add_map",
+	printk("%s: domid=%d gfn_s=0x%llx mfn_s=0x%llx nr_mfns=0x%x\n", map==0? "remove_map":"add_map",
 			vgt->vm_id, memmap.first_gfn, memmap.first_mfn, memmap.nr_mfns);
 
 	r = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
@@ -955,6 +1159,27 @@ printk("mmio hooks initialized\n");
 
 	vgt_register_mmio_handler(_REG_PCH_ADPA, 4,
 			pch_adpa_mmio_read, pch_adpa_mmio_write);
+
+	vgt_register_mmio_handler(_REG_DP_A_CTL, 4,
+			dp_ctl_mmio_read, dp_ctl_mmio_write);
+
+	vgt_register_mmio_handler(_REG_DP_B_CTL, 4,
+			dp_ctl_mmio_read, dp_ctl_mmio_write);
+
+	vgt_register_mmio_handler(_REG_DP_C_CTL, 4,
+			dp_ctl_mmio_read, dp_ctl_mmio_write);
+
+	vgt_register_mmio_handler(_REG_DP_D_CTL, 4,
+			dp_ctl_mmio_read, dp_ctl_mmio_write);
+
+	vgt_register_mmio_handler(_REG_HDMI_B_CTL, 4,
+			hdmi_ctl_mmio_read, hdmi_ctl_mmio_write);
+
+	vgt_register_mmio_handler(_REG_HDMI_C_CTL, 4,
+			hdmi_ctl_mmio_read, hdmi_ctl_mmio_write);
+
+	vgt_register_mmio_handler(_REG_HDMI_D_CTL, 4,
+			hdmi_ctl_mmio_read, hdmi_ctl_mmio_write);
 
 	vgt_register_mmio_write( _REG_FORCEWAKE, force_wake_write);
 

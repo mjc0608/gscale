@@ -606,6 +606,22 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK (3 << 24)
 #define _REGBIT_ADPA_DAC_ENABLE (1 << 31)
 
+/* Display port */
+#define _REG_DP_B_CTL	0xe4100
+#define _REG_DP_C_CTL	0xe4200
+#define _REG_DP_D_CTL   0xe4300
+#define _REGBIT_DP_PORT_DETECTED	(1 << 2)
+
+/* Digital display A (DP_A, embedded) */
+#define _REG_DP_A_CTL	0x64000
+
+/* HDMI/DVI/SDVO port */
+#define _REG_HDMI_B_CTL	0xe1140
+#define _REG_HDMI_C_CTL	0xe1150
+#define _REG_HDMI_D_CTL	0xe1160
+#define _REGBIT_HDMI_PORT_DETECTED	(1 << 2)
+
+
 /* PCH SDVOB multiplex with HDMIB */
 #define _REG_PCH_LVDS	0xe1180
 #define _REG_BLC_PWM_CPU_CTL2	0x48250
@@ -902,7 +918,7 @@ enum vgt_port_type {
 	VGT_DVI_B,
 	VGT_DVI_C,
 	VGT_DVI_D,
-	VGT_HIMI_B,
+	VGT_HDMI_B,
 	VGT_HDMI_C, /* HDMI port C can only be used for HDMI/DVI */
 	VGT_HDMI_D,
 	VGT_LVDS,
