@@ -580,22 +580,21 @@ bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	 * Actually we need dom0 to tell hvm such info
 	 */
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
-	if (!reg_hw_access(vgt, reg)) {
-		vreg_data = wr_data;
-		/* Tell VM if CRT monitor physically plugged in */
-		if (test_bit(VGT_CRT, pdev->port_detect_status)) {
-			/* Emulation: trap hotplug force trigger */
-			if ((wr_data & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER) && !(wr_data & _REGBIT_ADPA_DAC_ENABLE)) {
-				/* clear the force trigger and set read only bits */
-				vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER;
-			}
-			vreg_data |= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+	vreg_data = wr_data;
+	/* Tell VM if CRT monitor physically plugged in */
+	if (test_bit(VGT_CRT, pdev->port_detect_status)) {
+		/* Emulation: trap hotplug force trigger */
+		if ((wr_data & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER) && !(wr_data & _REGBIT_ADPA_DAC_ENABLE)) {
+			/* clear the force trigger and set read only bits */
+			vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER;
+		}
+		/* FIXME: sometimes only one channel is OK ??? (blue and green channel) */
+		vreg_data |= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 
-		} else
-			vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+	} else
+		vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 
-		__vreg(vgt, reg) = vreg_data;
-	}
+	__vreg(vgt, reg) = vreg_data;
 
 	return rc;
 }
@@ -632,6 +631,7 @@ bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 				default:
 					BUG();
 			}
+			vgt_set_all_vreg_bit(pdev, _REGBIT_DP_PORT_DETECTED, reg);
 		} else {
 			switch (reg) {
 				case _REG_DP_A_CTL:
@@ -649,6 +649,7 @@ bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 				default:
 					BUG();
 			}
+			vgt_clear_all_vreg_bit(pdev, _REGBIT_DP_PORT_DETECTED, reg);
 		}
 	}
 
@@ -669,39 +670,37 @@ bool dp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	vreg_data = *(vgt_reg_t *)p_data;
 
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
-	if (!reg_hw_access(vgt, reg)) {
-		/* Read only bit should be keeped coherent with intended hardware status */
-		switch (reg) {
-			case _REG_DP_A_CTL:
-				if (test_bit(VGT_DP_A, pdev->port_detect_status))
-					vreg_data |= _REGBIT_DP_PORT_DETECTED;
-				else
-					vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
-				break;
-			case _REG_DP_B_CTL:
-				if (test_bit(VGT_DP_B, pdev->port_detect_status))
-					vreg_data |= _REGBIT_DP_PORT_DETECTED;
-				else
-					vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
-				break;
-			case _REG_DP_C_CTL:
-				if (test_bit(VGT_DP_C, pdev->port_detect_status))
-					vreg_data |= _REGBIT_DP_PORT_DETECTED;
-				else
-					vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
-				break;
-			case _REG_DP_D_CTL:
-				if (test_bit(VGT_DP_D, pdev->port_detect_status))
-					vreg_data |= _REGBIT_DP_PORT_DETECTED;
-				else
-					vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
-				break;
-			default:
-				BUG();
-		}
-
-		__vreg(vgt, reg) = vreg_data;
+	/* Read only bit should be keeped coherent with intended hardware status */
+	switch (reg) {
+		case _REG_DP_A_CTL:
+			if (test_bit(VGT_DP_A, pdev->port_detect_status))
+				vreg_data |= _REGBIT_DP_PORT_DETECTED;
+			else
+				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
+			break;
+		case _REG_DP_B_CTL:
+			if (test_bit(VGT_DP_B, pdev->port_detect_status))
+				vreg_data |= _REGBIT_DP_PORT_DETECTED;
+			else
+				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
+			break;
+		case _REG_DP_C_CTL:
+			if (test_bit(VGT_DP_C, pdev->port_detect_status))
+				vreg_data |= _REGBIT_DP_PORT_DETECTED;
+			else
+				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
+			break;
+		case _REG_DP_D_CTL:
+			if (test_bit(VGT_DP_D, pdev->port_detect_status))
+				vreg_data |= _REGBIT_DP_PORT_DETECTED;
+			else
+				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
+			break;
+		default:
+			BUG();
 	}
+
+	__vreg(vgt, reg) = vreg_data;
 
 	return rc;
 }
@@ -734,6 +733,7 @@ bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 				default:
 					BUG();
 			}
+			vgt_set_all_vreg_bit(pdev, _REGBIT_HDMI_PORT_DETECTED, reg);
 		} else {
 			switch (reg) {
 				case _REG_HDMI_B_CTL:
@@ -748,6 +748,7 @@ bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 				default:
 					BUG();
 			}
+			vgt_clear_all_vreg_bit(pdev, _REGBIT_HDMI_PORT_DETECTED, reg);
 		}
 	}
 
@@ -768,33 +769,31 @@ bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	vreg_data = *(vgt_reg_t *)p_data;
 
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
-	if (!reg_hw_access(vgt, reg)) {
-		/* Read only bit should be keeped coherent with intended hardware status */
-		switch (reg) {
-			case _REG_HDMI_B_CTL:
-				if (test_bit(VGT_HDMI_B, pdev->port_detect_status))
-					vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
-				else
-					vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
-				break;
-			case _REG_HDMI_C_CTL:
-				if (test_bit(VGT_HDMI_C, pdev->port_detect_status))
-					vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
-				else
-					vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
-				break;
-			case _REG_HDMI_D_CTL:
-				if (test_bit(VGT_HDMI_D, pdev->port_detect_status))
-					vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
-				else
-					vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
-				break;
-			default:
-				BUG();
-		}
-
-		__vreg(vgt, reg) = vreg_data;
+	/* Read only bit should be keeped coherent with intended hardware status */
+	switch (reg) {
+		case _REG_HDMI_B_CTL:
+			if (test_bit(VGT_HDMI_B, pdev->port_detect_status))
+				vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
+			else
+				vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
+			break;
+		case _REG_HDMI_C_CTL:
+			if (test_bit(VGT_HDMI_C, pdev->port_detect_status))
+				vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
+			else
+				vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
+			break;
+		case _REG_HDMI_D_CTL:
+			if (test_bit(VGT_HDMI_D, pdev->port_detect_status))
+				vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
+			else
+				vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
+			break;
+		default:
+			BUG();
 	}
+
+	__vreg(vgt, reg) = vreg_data;
 
 	return rc;
 }

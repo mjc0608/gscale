@@ -158,7 +158,7 @@ static struct vgt_irq_info snb_dpy_irq_info = {
 		{IRQ_DPST_PHASE_IN, 		vgt_handle_phase_in,	NULL},		// bit 16
 		{IRQ_DPST_HISTOGRAM, 		vgt_handle_histogram,	NULL},		// bit 17
 		{IRQ_GSE, 			vgt_default_event_handler,	NULL},	// bit 18
-		{IRQ_DP_A_HOTPLUG, 		vgt_handle_hotplug,	NULL},		// bit 19
+		{IRQ_DP_A_HOTPLUG, 		vgt_handle_dp_a_hotplug,	NULL},		// bit 19
 		{IRQ_AUX_CHANNEL_A, 		vgt_handle_aux_channel,	NULL},	// bit 20
 		{IRQ_PCH_IRQ,			NULL,	NULL},		// bit 21
 		{IRQ_PERF_COUNTER, 		NULL,	NULL},		// bit 22
@@ -266,14 +266,14 @@ static struct vgt_irq_info snb_pch_irq_info = {
 
 		{IRQ_ERR_AND_DBG, 			NULL,	NULL},			// bit 16
 		{IRQ_GMBUS, 				vgt_handle_gmbus,	NULL},		// bit 17
-		{IRQ_SDVO_B_HOTPLUG, 			vgt_handle_hotplug,	NULL},		// bit 18
-		{IRQ_CRT_HOTPLUG, 			vgt_handle_hotplug,	NULL},		// bit 19
+		{IRQ_SDVO_B_HOTPLUG,		vgt_handle_sdvo_b_hotplug,	NULL},		// bit 18
+		{IRQ_CRT_HOTPLUG, 			vgt_handle_crt_hotplug,	NULL},		// bit 19
 
 		{IRQ_RESERVED, 				NULL,	NULL},
 
-		{IRQ_DP_B_HOTPLUG, 			vgt_handle_hotplug,	NULL},		// bit 21
-		{IRQ_DP_C_HOTPLUG, 			vgt_handle_hotplug,	NULL},		// bit 22
-		{IRQ_DP_D_HOTPLUG, 			vgt_handle_hotplug,	NULL},		// bit 23
+		{IRQ_DP_B_HOTPLUG, 			vgt_handle_dp_hdmi_b_hotplug,	NULL},		// bit 21
+		{IRQ_DP_C_HOTPLUG, 			vgt_handle_dp_hdmi_c_hotplug,	NULL},		// bit 22
+		{IRQ_DP_D_HOTPLUG, 			vgt_handle_dp_hdmi_d_hotplug,	NULL},		// bit 23
 
 		{IRQ_RESERVED, 				NULL,	NULL},
 

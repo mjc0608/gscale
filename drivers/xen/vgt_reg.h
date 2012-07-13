@@ -614,6 +614,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 
 /* Digital display A (DP_A, embedded) */
 #define _REG_DP_A_CTL	0x64000
+#define _REGBIT_DP_PORT_A_DETECTED	(1 << 2)
 
 /* HDMI/DVI/SDVO port */
 #define _REG_HDMI_B_CTL	0xe1140
@@ -978,7 +979,13 @@ struct pgt_device {
 	uint32_t *vgtt; /* virtual GTT table for guest to read*/
 	struct page *vbios;
 
-	DECLARE_BITMAP(port_detect_status, VGT_PORT_MAX); /* Temperary solution: use this to tell hvm domain if external monitors are detected */
+	/* FIXME: Temperary solution: use this to tell hvm domain if external
+	 * monitors are detected. This should be per vm, that
+	 * we can decide how many monitors each vm can use, this
+	 * data structure is mainly to provide the "read only"
+	 * protection upon virtual regs
+	 */
+	DECLARE_BITMAP(port_detect_status, VGT_PORT_MAX);
 };
 
 extern struct list_head pgt_devices;
@@ -1593,6 +1600,7 @@ static inline void vgt_pci_bar_write_32(struct vgt_device *vgt, uint32_t bar_off
 #define _REG_DEIER	0x4400C
 #define		_REGSHIFT_MASTER_INTERRUPT	31
 #define		_REGBIT_MASTER_INTERRUPT	(1 << 31)
+#define		_REGBIT_DP_A_HOTPLUG		(1 << 19)
 /* FIXME: make better name for shift and bit */
 #define		_REGSHIFT_PCH			21
 #define		_REGBIT_PCH			(1 << 21)
@@ -1622,6 +1630,10 @@ static inline void vgt_pci_bar_write_32(struct vgt_device *vgt, uint32_t bar_off
 #define	_REG_SDEIMR	0xC4004
 #define	_REG_SDEIIR	0xC4008
 #define     _REGBIT_CRT_HOTPLUG         (1 << 19)
+#define		_REGBIT_SDVO_B_HOTPLUG		(1 << 18)
+#define		_REGBIT_DP_B_HOTPLUG		(1 << 21)
+#define		_REGBIT_DP_C_HOTPLUG		(1 << 22)
+#define		_REGBIT_DP_D_HOTPLUG		(1 << 23)
 #define	_REG_SDEIER	0xC400C
 #define _REG_SHOTPLUG_CTL	0xC4030
 #define		_REGBIT_DP_B_STATUS			(3 << 0)
@@ -2111,7 +2123,22 @@ void vgt_handle_phase_in(struct pgt_device *dev,
 void vgt_handle_histogram(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt);
-void vgt_handle_hotplug(struct pgt_device *dev,
+void vgt_handle_crt_hotplug(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	bool physical, struct vgt_device *vgt);
+void vgt_handle_sdvo_b_hotplug(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	bool physical, struct vgt_device *vgt);
+void vgt_handle_dp_hdmi_b_hotplug(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	bool physical, struct vgt_device *vgt);
+void vgt_handle_dp_hdmi_c_hotplug(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	bool physical, struct vgt_device *vgt);
+void vgt_handle_dp_hdmi_d_hotplug(struct pgt_device *dev,
+	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
+	bool physical, struct vgt_device *vgt);
+void vgt_handle_dp_a_hotplug(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt);
 
@@ -2145,6 +2172,8 @@ extern ssize_t vgt_get_display_pointer(char *buf);
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);
 bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes);
 
+void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset);
+void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset);
 /*
  * Configuration register definition for BDF: 0:0:0.
  */
