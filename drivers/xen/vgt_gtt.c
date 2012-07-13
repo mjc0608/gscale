@@ -386,7 +386,7 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 
 bool vgt_setup_ppgtt(struct vgt_device *vgt)
 {
-	u32 base = vgt->rb[0].vring_ppgtt_info.base;
+	u32 base = vgt->rb[0].sring_ppgtt_info.base;
 	int pde_entries = 512;	/* XXX current assume 512 entries for 2G mapping */
 	int i;
 	u32 pde, shadow_pde;
