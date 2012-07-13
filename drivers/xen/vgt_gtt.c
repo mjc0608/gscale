@@ -215,6 +215,8 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 	int index, i;
 	u32 *pte;
 
+	dprintk("PTE WP handler: offset 0x%x data 0x%x\n", offset, *(unsigned int *)p_data);
+
 	/* need to know: fault pfn, write fault address, write fault data */
 
 	/* find shadow PTE */
@@ -321,8 +323,10 @@ void *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, int gpfn)
 	unsigned long mfn;
 
 	mfn = g2m_pfn(vgt->vm_id, gpfn);
-	if (mfn == INVALID_MFN)
+	if (mfn == INVALID_MFN) {
+		printk(KERN_ERR "Try to get VM PTE page frame number failed!\n");
 		return NULL;
+	}
 
 	return xen_remap_domain_mfn_range_in_kernel(mfn, 1, vgt->vm_id);
 }
@@ -391,6 +395,8 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 	int i;
 	u32 pde, shadow_pde;
 	dma_addr_t pte_phy;
+
+	printk(KERN_INFO "vgt_setup_ppgtt: PDE base 0x%x\n", base);
 
 	for (i = 0; i < pde_entries; i++) {
 		pde = vgt_read_gtt(vgt->pdev, base + i);

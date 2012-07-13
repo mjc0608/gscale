@@ -572,8 +572,10 @@ static int ring_pp_dir_base_write(struct vgt_device *vgt, int ring_id, u32 off, 
 	v_info->base = base;
 	s_info->base = mmio_g2h_gmadr(vgt, off, v_info->base);
 
-	if (reg_hw_access(vgt, off))
+	if (reg_hw_access(vgt, off)) {
+		dprintk("PP_DIR_BASE off 0x%x write 0x%x\n", off, s_info->base);
 		VGT_MMIO_WRITE(vgt->pdev, off, s_info->base);
+	}
 
 	vgt->rb[ring_id].has_ppgtt_base_set = 1;
 
@@ -591,6 +593,9 @@ bool rcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->base;
+
+	dprintk("RCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
+
 	return true;
 }
 
@@ -601,6 +606,7 @@ bool rcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
+	dprintk("RCS_PP_DIR_BASE write: 0x%x\n", base);
 	ring_pp_dir_base_write(vgt, RING_BUFFER_RCS, off, base);
 	return true;
 }
@@ -614,6 +620,7 @@ bool bcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->base;
+	dprintk("BCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
 	return true;
 }
 
@@ -624,6 +631,7 @@ bool bcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
+	dprintk("BCS_PP_DIR_BASE write: 0x%x\n", base);
 	ring_pp_dir_base_write(vgt, RING_BUFFER_BCS, off, base);
 	return true;
 }
@@ -637,6 +645,7 @@ bool vcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->base;
+	dprintk("VCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
 	return true;
 }
 
@@ -647,6 +656,7 @@ bool vcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
+	dprintk("VCS_PP_DIR_BASE write: 0x%x\n", base);
 	ring_pp_dir_base_write(vgt, RING_BUFFER_VCS, off, base);
 	return true;
 }
@@ -659,6 +669,7 @@ bool rcs_gfx_mode_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->mode;
+	dprintk("RCS_GFX_MODE read: 0x%x\n", v_info->mode);
 	return true;
 }
 
@@ -670,6 +681,7 @@ bool bcs_blt_mode_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->mode;
+	dprintk("BCS_BLT_MODE read: 0x%x\n", v_info->mode);
 	return true;
 }
 
@@ -681,6 +693,7 @@ bool vcs_mfx_mode_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->mode;
+	dprintk("VCS_MFX_MODE read: 0x%x\n", v_info->mode);
 	return true;
 }
 
@@ -692,12 +705,14 @@ int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
 	v_info->mode = mode;
 	s_info->mode = mode;
 
-	if (reg_hw_access(vgt, off))
+	if (reg_hw_access(vgt, off)) {
+		dprintk("RING mode: off 0x%x write 0x%x\n", off, s_info->mode);
 		VGT_MMIO_WRITE(vgt->pdev, off, s_info->mode);
+	}
 
 	/* sanity check */
 	if ((mode & _REGBIT_PPGTT_ENABLE) && (mode & (_REGBIT_PPGTT_ENABLE << 16))) {
-		printk("PPGTT enabling\n");
+		printk("PPGTT enabling on ring %d\n", ring_id);
 		/* XXX the order of mode enable for PPGTT and PPGTT dir base
 		 * setting is not strictly defined, e.g linux driver first
 		 * enables PPGTT bit in mode reg, then write PP dir base...
@@ -715,6 +730,7 @@ bool rcs_gfx_mode_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
+	dprintk("RCS_GFX_MODE write: 0x%x\n", mode);
 	ring_ppgtt_mode(vgt, RING_BUFFER_RCS, off, mode);
 
 	return true;
@@ -727,6 +743,7 @@ bool bcs_blt_mode_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
+	dprintk("BCS_BLT_MODE write: 0x%x\n", mode);
 	ring_ppgtt_mode(vgt, RING_BUFFER_BCS, off, mode);
 
 	return true;
@@ -739,6 +756,7 @@ bool vcs_mfx_mode_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
+	dprintk("VCS_MFX_MODE write: 0x%x\n", mode);
 	ring_ppgtt_mode(vgt, RING_BUFFER_VCS, off, mode);
 
 	return true;
@@ -1685,6 +1703,7 @@ bool vgt_initialize_mmio_hooks(struct pgt_device *pdev)
 	vgt_register_mmio_write(_REG_FDI_RXB_IMR, update_fdi_rx_iir_status);
 
 	if (pdev->enable_ppgtt) {
+		dprintk("Hook up PPGTT register handlers\n");
 		/* trap PPGTT base register */
 		vgt_register_mmio_handler(_REG_RCS_PP_DIR_BASE_IVB, 4,
 				rcs_pp_dir_base_read, rcs_pp_dir_base_write);
