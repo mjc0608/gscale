@@ -64,6 +64,7 @@
 #include <linux/sched.h>
 #include <linux/wait.h>
 #include <xen/interface/hvm/ioreq.h>
+#include "vgt_edid.h"
 
 #define SANDY_BRIDGE
 #define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); BUG();}} while (0);
@@ -429,15 +430,34 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_DVSBSCALE		0x73204
 /* DVSBGAMC: 0x73300 - 0x7334B */
 
-#define _REG_PCH_DPB_AUX_CH_CTL 0xe4110
-#define _REG_PCH_DPC_AUX_CH_CTL 0xe4210
-#define _REG_PCH_DPD_AUX_CH_CTL 0xe4310
-#define _REGBIT_DP_AUX_CH_CTL_SEND_BUSY (1 << 31)
-#define _REGBIT_DP_AUX_CH_CTL_DONE (1 << 30)
+#define _REG_PCH_DPB_AUX_CH_CTL 	0xe4110
+#define _REG_PCH_DPB_AUX_CH_DATA1	0xe4114
+#define _REG_PCH_DPB_AUX_CH_DATA2	0xe4118
+#define _REG_PCH_DPB_AUX_CH_DATA3	0xe411c
+#define _REG_PCH_DPB_AUX_CH_DATA4	0xe4120
+#define _REG_PCH_DPB_AUX_CH_DATA5	0xe4124
+
+#define _REG_PCH_DPC_AUX_CH_CTL		0xe4210
+#define _REG_PCH_DPC_AUX_CH_DATA1	0xe4214
+#define _REG_PCH_DPC_AUX_CH_DATA2	0xe4218
+#define _REG_PCH_DPC_AUX_CH_DATA3	0xe421c
+#define _REG_PCH_DPC_AUX_CH_DATA4	0xe4220
+#define _REG_PCH_DPC_AUX_CH_DATA5	0xe4224
+
+#define _REG_PCH_DPD_AUX_CH_CTL 	0xe4310
+#define _REG_PCH_DPD_AUX_CH_DATA1	0xe4314
+#define _REG_PCH_DPD_AUX_CH_DATA2	0xe4318
+#define _REG_PCH_DPD_AUX_CH_DATA3	0xe431c
+#define _REG_PCH_DPD_AUX_CH_DATA4	0xe4320
+#define _REG_PCH_DPD_AUX_CH_DATA5	0xe4324
+
 #define _REGBIT_DP_AUX_CH_CTL_INTERRUPT (1 << 29)
 #define _REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR (1 << 28)
 #define _REGBIT_DP_AUX_CH_CTL_RECV_ERR (1 << 25)
-
+#define _REGBIT_DP_AUX_CH_CTL_TIME_OUT_400us	(0 << 26)
+#define _DP_DETECTED			(1 << 2)
+#define _DP_AUX_CH_CTL_BIT_CLOCK_2X_SHIFT 	0
+#define _DP_AUX_CH_CTL_PRECHARGE_2US_SHIFT	16
 #define _REG_FORCEWAKE		0xA18C
 #define _REG_FORCEWAKE_ACK	0x130090
 #define _REG_GT_THREAD_STATUS  0x13805C
@@ -536,7 +556,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_DISP_ARB_CTL	0x45000
 
 /* PCH */
-#define _REG_PCH_DREF_CONTROL        0xC6200
+#define _REG_PCH_DREF_CONTROL        0xc6200
 
 /*
  * digital port hotplug
@@ -736,18 +756,53 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_SWF30			0x72414
 
 /* digital port hotplug */
+
+#define _REG_PCH_GPIOA		0xc5010
+#define _REG_PCH_GPIOB		0xc5014
+#define _REG_PCH_GPIOC		0xc5018
+#define _REG_PCH_GPIOD		0xc501c
+#define _REG_PCH_GPIOE		0xc5020
+#define _REG_PCH_GPIOF		0xc5024
+
 #define _REG_PCH_GMBUS0		0xc5100
+#define _REG_PCH_GMBUS1		0xc5104
+#define _REG_PCH_GMBUS2		0xc5108
+#define _REG_PCH_GMBUS3		0xc510c
+
+#define _GMBUS_SW_CLR_INT	(1<<31)
+#define _GMBUS_SW_RDY		(1<<30)
+#define _GMBUS_CYCLE_WAIT	(1<<25)
+#define _GMBUS_CYCLE_STOP	(4<<25)
+#define _GMBUS_HW_RDY		(1<<11)
+#define _GMBUS_SATOER		(1<<10)
+#define _GMBUS_SLAVE_READ	(1<<0)
+#define _GMBUS_SLAVE_WRITE	(0<<0)
+#define _GMBUS_BYTE_COUNT_SHIFT	16
+#define _GMBUS_SLAVE_ADDR_SHIFT	1
 
 /*
  * GPIO regs
  */
 #define _REG_GMBUS0			0x5100 /* clock/port select */
+
 enum vgt_pipe {
 	PIPE_A = 0,
 	PIPE_B,
 	PIPE_C,
 	I915_MAX_PIPES
 };
+
+#define EDID_NUM	8
+typedef enum {
+	EDID_VGA = 0,
+	EDID_LVDS,
+	EDID_HDMIC,
+	EDID_HDMIB,
+	EDID_HDMID,
+	EDID_DPB,
+	EDID_DPC,
+	EDID_DPD
+}edid_index_t;
 
 struct vgt_intel_device_info {
 	u8 gen;
@@ -829,6 +884,7 @@ extern int vgt_hvm_io_init(struct vgt_device *vgt);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
 extern int vgt_hvm_enable(struct vgt_device *vgt);
 extern bool hvm_render_owner;
+extern void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs);
 
 struct vgt_irq_virt_state;
 
@@ -849,6 +905,9 @@ struct vgt_device {
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
 	vgt_reg_t		last_scan_head[MAX_ENGINES];
 	bool			last_scan_head_valid[MAX_ENGINES];
+
+	vgt_i2c_bus_t		vgt_i2c_bus;	/* i2c bus state emulaton for reading EDID */
+	vgt_edid_data_t		*vgt_edids[EDID_NUM];	/* per display EDID information */
 
 	uint64_t	aperture_base;
 	void		*aperture_base_va;
@@ -952,6 +1011,8 @@ struct pgt_device {
 	void *gttmmio_base_va;	/* virtual base of mmio */
 	uint64_t gmadr_base;	/* base of GMADR */
 	void *gmadr_va;		/* virtual base of GMADR */
+
+	vgt_edid_data_t		*pdev_edids[EDID_NUM];	/* per display EDID information */
 
 	int max_vms;		/* maximum supported VMs */
 	uint64_t rsvd_aperture_sz;
@@ -2142,6 +2203,8 @@ void vgt_handle_dp_a_hotplug(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt);
 
+void vgt_trigger_display_hot_plug(struct pgt_device *dev, unsigned hotplug_cmd);
+
 void vgt_handle_aux_channel(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt);
@@ -2168,6 +2231,9 @@ void vgt_release_instance(struct vgt_device *vgt);
 int vgt_init_sysfs(struct pgt_device *pdev);
 extern void vgt_set_display_pointer(int vm_id);
 extern ssize_t vgt_get_display_pointer(char *buf);
+extern void vgt_probe_edid(struct pgt_device *pdev, int index);
+extern void vgt_propagate_edid(struct vgt_device *vgt, int index);
+extern void vgt_clear_edid(struct vgt_device *vgt, int index);
 
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);
 bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes);

@@ -24,6 +24,9 @@
 #
 # by axu
 #
-ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo CRT monitor inserted! >> /tmp/hotplug'"
-ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo CRT monitor removed! >> /tmp/hotplug'"
+#ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo CRT monitor inserted! >> /tmp/hotplug'"
+#ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo CRT monitor removed! >> /tmp/hotplug'"
 #KERNEL=="control", RUN+="/bin/sh -c 'echo inserted >> /tmp/hotplug'"
+
+ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xf1 > /sys/kernel/vgt/control/hot_plug_event'"
+ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xf0 > /sys/kernel/vgt/control/hot_plug_event'"

@@ -244,7 +244,7 @@ enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
 	[IRQ_DPST_PHASE_IN] = VGT_OT_DISPLAY,	// ???
 	[IRQ_DPST_HISTOGRAM] = VGT_OT_DISPLAY,	// ???
 	[IRQ_GSE] = VGT_OT_MGMT,
-	[IRQ_DP_A_HOTPLUG] = VGT_OT_MGMT,
+	[IRQ_DP_A_HOTPLUG] = VGT_OT_DISPLAY,
 	[IRQ_AUX_CHANNEL_A] = VGT_OT_MGMT,
 	[IRQ_PCH_IRQ] = VGT_OT_INVALID,		// 2nd level events
 	[IRQ_PERF_COUNTER] = VGT_OT_DISPLAY,
@@ -276,11 +276,11 @@ enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
 	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_C] = VGT_OT_DISPLAY,
 	[IRQ_ERR_AND_DBG] = VGT_OT_DISPLAY,	// ???
 	[IRQ_GMBUS] = VGT_OT_MGMT,
-	[IRQ_SDVO_B_HOTPLUG] = VGT_OT_MGMT,
-	[IRQ_CRT_HOTPLUG] = VGT_OT_MGMT,
-	[IRQ_DP_B_HOTPLUG] = VGT_OT_MGMT,
-	[IRQ_DP_C_HOTPLUG] = VGT_OT_MGMT,
-	[IRQ_DP_D_HOTPLUG] = VGT_OT_MGMT,
+	[IRQ_SDVO_B_HOTPLUG] = VGT_OT_DISPLAY,
+	[IRQ_CRT_HOTPLUG] = VGT_OT_DISPLAY,
+	[IRQ_DP_B_HOTPLUG] = VGT_OT_DISPLAY,
+	[IRQ_DP_C_HOTPLUG] = VGT_OT_DISPLAY,
+	[IRQ_DP_D_HOTPLUG] = VGT_OT_DISPLAY,
 	[IRQ_AUX_CHENNEL_B] = VGT_OT_MGMT,
 	[IRQ_AUX_CHENNEL_C] = VGT_OT_MGMT,
 	[IRQ_AUX_CHENNEL_D] = VGT_OT_MGMT,
@@ -1305,7 +1305,6 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 {
     vgt_reg_t sde_isr;
 	struct pgt_device *pdev = vgt->pdev;
-	int i;
 
 	/* send out udev events when handling physical interruts */
 	if (physical == true) {
@@ -1328,11 +1327,14 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 		vgt_raise_request(dev, VGT_REQUEST_UEVENT);
 		//vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
 	} else {
+#if 0
+		int i;
 		/* broadcast hotplug interrupts to all domains (dom0 + hvms) */
 		for (i = 0; i < VGT_MAX_VMS; i++) {
 			if (pdev->device[i])
 				info->propogate_virtual_event(pdev->device[i], bit, info);
 		}
+#endif
 
 	}
 }
@@ -1696,6 +1698,83 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 #endif
 
 	return IRQ_HANDLED;
+}
+
+
+static inline int get_env_and_edid_info(unsigned cmd,
+				enum vgt_event_type *pevent,
+				edid_index_t *pedid_idx)
+{
+	int ret = 0;
+	switch((cmd & 0x7) >> 1) {
+	case 0:
+		*pedid_idx = EDID_VGA;
+		*pevent = IRQ_CRT_HOTPLUG;
+		break;
+	case 1:
+		printk("vGT: Not supported hot plug type: DP_A!\n");
+		ret = -1;
+		break;
+	case 2:
+		*pedid_idx = EDID_DPB;
+		*pevent = IRQ_DP_B_HOTPLUG;
+		break;
+	case 3:
+		*pedid_idx = EDID_DPC;
+		*pevent = IRQ_DP_C_HOTPLUG;
+		break;
+	case 4:
+		*pedid_idx = EDID_DPD;
+		*pevent = IRQ_DP_D_HOTPLUG;
+		break;
+	default:
+		printk("vGT: Not supported hot plug type: 0x%x!\n",
+			(cmd & 0x7) >> 1);
+		ret = -1;
+		break;
+	}
+	return ret;
+}
+
+void vgt_trigger_display_hot_plug(struct pgt_device *dev, unsigned hotplug_cmd)
+{
+	int i;
+	int vmid = (hotplug_cmd & 0xf0) >> 8;
+
+	for (i = 0; i < VGT_MAX_VMS; ++ i) {
+		int bit;
+		struct vgt_irq_info *info;
+		struct vgt_irq_ops *ops;
+		enum vgt_event_type event = 0;
+		edid_index_t edid_idx = 0;
+		struct vgt_device *vgt = dev->device[i];
+
+		if (!vgt || ((vmid != 0xf) && (vgt->vgt_id != vmid))) {
+			continue;
+		}
+
+		if (get_env_and_edid_info(hotplug_cmd, &event, &edid_idx)) {
+			continue;
+		}
+
+		ops = vgt_get_irq_ops(dev);
+		info = ops->get_irq_info_from_event(dev, event);
+		ASSERT(info);
+		bit = ops->get_bit_from_event(dev, event, info);
+
+		if (hotplug_cmd & 0x1) {
+			/* plug in */
+			vgt_propagate_edid(vgt, edid_idx);
+		} else {
+			/* pull out */
+			vgt_clear_edid(vgt, edid_idx);
+		}
+
+		info->propogate_virtual_event(vgt, bit, info);
+	}
+
+	vgt_raise_request(dev, VGT_REQUEST_IRQ);
+	return;
 }
 
 /* =====================Initializations======================= */

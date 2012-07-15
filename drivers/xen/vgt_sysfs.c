@@ -165,6 +165,41 @@ static ssize_t vgt_display_pointer_show(struct kobject *kobj, struct kobj_attrib
 	return vgt_get_display_pointer(buf);
 }
 
+static ssize_t vgt_hot_plug_reader(struct kobject *kobj,
+				struct kobj_attribute *attr, char *buf)
+{
+	/* read the hot-plug node, do nothing */
+	return 0;
+}
+
+/* bit field definition of the hot_plug trigger value:
+ *
+ * bit 31 - bit 16	: Reserved;
+ * bit 15 - bit 8	: vmid;
+ * bit 7 - bit 4	: Reserved;
+ * bit 3 - bit 1	: Monitor selection:
+ * 		0	-	CRT
+ * 		1	-	DP_A
+ * 		2	-	DP_B
+ * 		3	-	DP_C
+ * 		4	-	DP_D
+ *		5	-	HDMIB
+ *		6	-	HDMIC
+ *		7	-	HDMID
+ * bit 0 - bit 0	: Direction.
+ *		0: pull out;
+ *		1: plug in;
+ */
+static ssize_t vgt_hot_plug_trigger(struct kobject *kobj,
+				struct kobj_attribute *attr,
+				const char *buf, size_t count)
+{
+	unsigned hotplug_cmd = 0;
+	sscanf(buf, "%du", &hotplug_cmd);
+	vgt_trigger_display_hot_plug(vgt_kobj_priv, hotplug_cmd);
+	return count;
+}
+
 static ssize_t vgt_reg_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
             const char *buf, size_t count)
 {
@@ -226,8 +261,6 @@ static ssize_t vgt_reg_owner_show(struct kobject *kobj, struct kobj_attribute *a
 			);
 }
 
-
-
 static struct kobj_attribute create_vgt_instance_attrs =
 	__ATTR(create_vgt_instance, 0220, NULL, vgt_create_instance_store);
 static struct kobj_attribute display_owner_ctrl_attrs =
@@ -236,6 +269,9 @@ static struct kobj_attribute display_owner_ctrl_attrs =
 static struct kobj_attribute display_pointer_attrs =
 	__ATTR(display_pointer, 0660, vgt_display_pointer_show, vgt_display_pointer_store);
 
+static struct kobj_attribute hot_plug_event_attrs =
+	__ATTR(hot_plug_event, 0666, vgt_hot_plug_reader, vgt_hot_plug_trigger);
+
 static struct kobj_attribute reg_owner_attrs =
 	__ATTR(reg_owner, 0666, vgt_reg_owner_show, vgt_reg_owner_store);
 
@@ -243,6 +279,7 @@ static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
 	&display_owner_ctrl_attrs.attr,
 	&display_pointer_attrs.attr,
+	&hot_plug_event_attrs.attr,
 	&reg_owner_attrs.attr,
 	NULL,	/* need to NULL terminate the list of attributes */
 };

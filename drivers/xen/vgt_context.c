@@ -1246,9 +1246,14 @@ int vgt_thread(void *priv)
 		if (test_and_clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request))
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_INVALID);
 
-        /* Send uevent to userspace */
-        if (test_and_clear_bit(VGT_REQUEST_UEVENT, (void *)&pdev->request))
-            vgt_signal_uevent(pdev);
+		/* Send uevent to userspace */
+		if (test_and_clear_bit(VGT_REQUEST_UEVENT, (void *)&pdev->request)) {
+			/* TODO: Give a new type of request when not all
+			 *	 uevents are for hotplug
+			 */
+			vgt_probe_edid(pdev, -1);
+			vgt_signal_uevent(pdev);
+		}
 
 		/* context switch timeout hasn't expired */
 		if (wait)
@@ -1927,6 +1932,24 @@ static void vgt_setup_display_regs(struct pgt_device *pdev)
 		reg_set_pt(pdev, i);
 	}
 
+	/* gmbus are fully virtualized */
+	/* FIXME: The pt is still set for below registers who are fully
+	 *	  virtualized. It is not a problem since the reg_hw_access()
+	 *	  will not check "pt" if reg is "always_virt". In future,
+	 *	  above loop should be modified to handle display registers
+	 *	  one by one.
+	 */
+
+#ifndef ENABLE_GPIO_EMULATION
+	for (i = _REG_PCH_GPIOA; i <= _REG_PCH_GPIOF; i += REG_SIZE) {
+		reg_set_always_virt(pdev, i);
+	}
+#endif /* ENABLE_GPIO_EMULATION */
+
+	for (i = _REG_PCH_GMBUS0; i <= _REG_PCH_GMBUS3; i += REG_SIZE) {
+		reg_set_always_virt(pdev, i);
+	}
+
 	/* PCH transcoder and port control */
 	for (i = 0xe0000; i <= 0xe4fff; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
@@ -2399,8 +2422,15 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	state_sreg_init (vgt);
 	state_vreg_init(vgt);
 
-	if (vgt_vstate_irq_init(vgt) != 0)
+	if (vgt_vstate_irq_init(vgt) != 0) {
+		printk("vGT: failed to initialize vstate irq!\n");
+		kfree(vgt->vgtt);
+		kfree(vgt->state.vReg);
+		kfree(vgt->state.sReg);
+		free_vgt_id(vgt_id);
+		kfree(vgt);
 		return NULL;
+	}
 
 	/* setup the ballooning information */
 	if (vgt->ballooning) {
@@ -2450,12 +2480,18 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	vgt_init_debugfs();
 	/* create debugfs per vgt */
 	vgt_create_debugfs(vgt);
+	/* initialize i2c states */
+	vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
+	/* assign aux_ch vregs for aux_ch virtualization */
+	vgt_init_aux_ch_vregs(&vgt->vgt_i2c_bus, vgt->state.vReg);
+	vgt_propagate_edid(vgt, -1);
 
 	return vgt;
 }
 
 void vgt_release_instance(struct vgt_device *vgt)
 {
+	int i;
 	struct list_head *pos;
 
 	list_for_each (pos, &vgt->pdev->rendering_runq_head)
@@ -2473,6 +2509,12 @@ void vgt_release_instance(struct vgt_device *vgt)
 	vgt_vstate_irq_exit(vgt);
 	/* already idle */
 	list_del(&vgt->list);
+
+	for (i = 0; i < EDID_NUM; ++ i) {
+		if (vgt->vgt_edids[i]) {
+			kfree(vgt->pdev->pdev_edids[i]);
+		}
+	}
 
 	kfree(vgt->vgtt);
 	kfree(vgt->state.vReg);
@@ -3024,6 +3066,7 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 //int vgt_add_state_sysfs(struct vgt_device *vgt);
 int vgt_initialize(struct pci_dev *dev)
 {
+	int i;
 	struct pgt_device *pdev = &default_device;
 	struct task_struct *p_thread;
 
@@ -3055,6 +3098,9 @@ int vgt_initialize(struct pci_dev *dev)
 		pdev->rsvd_aperture_pos);
 	pdev->rsvd_aperture_pos += PAGE_SIZE;
 	printk("dexuan: ctx_switch_rb_page is allocated at gm(%llx)\n", pdev->ctx_switch_rb_page);
+
+	/* initialize EDID data */
+	vgt_probe_edid(pdev, -1);
 
 	/* create domain 0 instance */
 	vgt_dom0 = create_vgt_instance(pdev, 0);   /* TODO: */
@@ -3099,13 +3145,12 @@ int vgt_initialize(struct pci_dev *dev)
 
 	list_add(&pdev->list, &pgt_devices);
 
-    /* FIXME: only support ONE vgt device now,
-     * you cannot call this function more than
-     * once
-     */
-    //vgt_add_state_sysfs(vgt_dom0);
-    vgt_init_sysfs(pdev);
-
+	/* FIXME: only support ONE vgt device now,
+	 * you cannot call this function more than
+	 * once
+	 */
+	//vgt_add_state_sysfs(vgt_dom0);
+	vgt_init_sysfs(pdev);
 
 	printk("vgt_initialize succeeds.\n");
 	return 0;
@@ -3158,6 +3203,13 @@ void vgt_destroy()
 	kfree(pdev->reg_info);
 	if (pdev->vbios)
 		__free_pages(pdev->vbios, get_order(VGT_VBIOS_PAGES));
+
+	for (i = 0; i < EDID_NUM; ++ i) {
+		if (pdev->pdev_edids[i]) {
+			kfree(pdev->pdev_edids[i]);
+			pdev->pdev_edids[i] = NULL;
+		}
+	}
 }
 
 

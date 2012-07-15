@@ -105,6 +105,161 @@ static void ring_debug(struct vgt_device *vgt, int ring_id)
 }
 #endif
 
+bool gmbus_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc = true;
+	vgt_edid_data_t	**pedid = vgt->vgt_i2c_bus.gmbus.pedid;
+
+	ASSERT(bytes <= 8 && !(offset & (bytes - 1)));
+	printk("vGT(%d): read gmbus register with offset%x and size %d.\n", vgt->vgt_id, offset, bytes);
+
+	vgt_i2c_handle_gmbus_read(&vgt->vgt_i2c_bus, offset, p_data);
+
+	return rc;
+}
+
+bool gmbus_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc = true;
+	vgt_edid_data_t **pedid = NULL;
+	printk("vGT(%d): write gmbus register with offset %x and size %d, value 0x%x.\n",
+			vgt->vgt_id, offset, bytes, *((int *)p_data));
+
+	if (offset == _REG_PCH_GMBUS0) {
+		/* select the port */
+		unsigned port = *(int *)p_data & 0x7;
+		switch (port) {
+		case 0: /* disabled. Be treated as reset */
+			pedid = NULL;
+			break;
+		case 1: /* LCTRCLK */
+			/* Is there really the case? If so, need to handle.*/
+			printk("vGT(%d): WARNING: Accessing LCTRCLK which is not supported!\n",
+					vgt->vgt_id);
+			BUG();
+			break;
+		case 2: /* Analog Mon */
+			pedid = (vgt_edid_data_t **)
+					&vgt->vgt_edids[EDID_VGA];
+			break;
+		case 3: /* LVDS */
+			pedid = (vgt_edid_data_t **)
+					&vgt->vgt_edids[EDID_LVDS];
+			break;
+		case 4: /* Port C*/
+			pedid = (vgt_edid_data_t **)
+					&vgt->vgt_edids[EDID_HDMIC];
+			break;
+		case 5: /* Should not happen. */
+			ASSERT(0);
+			break;
+		case 6: /* Port D */
+			pedid = (vgt_edid_data_t **)
+					&vgt->vgt_edids[EDID_HDMID];
+			break;
+		case 7: /* Reserved */
+			/*
+			 * Well, it actually happened...
+			 */
+#if 0
+			ASSERT(0);
+#else
+			printk("vGT(%d): WARNING: GMBUS accessing reserved port!!!!\n", vgt->vgt_id);
+			return true;
+#endif
+			break;
+		default:
+			break;
+		}
+		vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
+		vgt->vgt_i2c_bus.state = VGT_I2C_SEND;
+		vgt->vgt_i2c_bus.gmbus.pedid = pedid;
+	} else {
+		vgt_i2c_handle_gmbus_write (&vgt->vgt_i2c_bus,
+						offset, p_data);
+		pedid = vgt->vgt_i2c_bus.gmbus.pedid;
+	}
+	return rc;
+}
+
+#ifdef ENABLE_GPIO_EMULATION
+bool gpio_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc = true;
+	vgt_edid_data_t **pedid;
+
+	ASSERT(bytes == 4 && !(offset & (bytes - 1)));
+
+	// printk("[I2C_EDID] gpio_mmio_read( offset:0x%x, bytes:%d).\n", offset, bytes);
+	if (offset == _REG_PCH_GPIOA) {
+		//printk("vGT(%d): Reading GPIO_A.\n", vgt->vgt_id);
+		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_VGA];
+	} else if (offset == _REG_PCH_GPIOC) {
+		//printk("vGT(%d): Reading GPIO_C.\n", vgt->vgt_id);
+		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_LVDS];
+	} else if (offset == _REG_PCH_GPIOD) {
+		//printk("vGT(%d): Reading GPIO_D.\n", vgt->vgt_id);
+		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMIC];
+	} else if (offset == _REG_PCH_GPIOE) {
+		//printk("vGT(%d): Reading GPIO_E.\n", vgt->vgt_id);
+		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMIB];
+	} else if (offset == _REG_PCH_GPIOF) {
+		//printk("vGT(%d): Reading GPIO_F.\n", vgt->vgt_id);
+		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMID];
+	} else {
+		// not supported yet GPIO access
+		printk("vGT(%d): Not supported GPIO access! \n", vgt->vgt_id);
+		dump_stack();
+		ASSERT (0);
+		return false;
+	}
+
+	vgt_i2c_handle_gpio_read(&vgt->vgt_i2c_bus, pedid, p_data);
+
+	return rc;
+}
+
+bool gpio_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc = true;
+	vgt_edid_data_t **pedid;
+
+	ASSERT(bytes == 4 && !(offset & (bytes - 1)));
+
+	//printk("[I2C_EDID] gpio_mmio_write( offset:0x%x, bytes:%d, data:0x%x).\n", offset, bytes, *(unsigned int *)p_data);
+	if (offset == _REG_PCH_GPIOA) {
+		//printk("vGT(%d): Writing GPIO_A.\n", vgt->vgt_id);
+		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_VGA];
+	} else if (offset == _REG_PCH_GPIOC) {
+		//printk("vGT(%d): Writing GPIO_C.\n", vgt->vgt_id);
+		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_LVDS];
+	} else if (offset == _REG_PCH_GPIOD) {
+		//printk("vGT(%d): Writing GPIO_D.\n", vgt->vgt_id);
+		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMIC];
+	} else if (offset == _REG_PCH_GPIOE) {
+		//printk("vGT(%d): Writing GPIO_E.\n", vgt->vgt_id);
+		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMIB];
+	} else if (offset == _REG_PCH_GPIOF) {
+		//printk("vGT(%d): Writing GPIO_F.\n", vgt->vgt_id);
+		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMID];
+	} else {
+		// not supported yet GPIO access
+		printk("vGT(%d): Not supported GPIO access! \n", vgt->vgt_id);
+		dump_stack();
+		ASSERT (0);
+		return false;
+	}
+
+	vgt_i2c_handle_gpio_write(&vgt->vgt_i2c_bus, pedid, p_data);
+
+	return rc;
+}
+#endif /* ENABLE_GPIO_EMULATION */
+
 bool fence_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
@@ -386,10 +541,45 @@ bool hdcp_pch_boot_auth_mmio_read(struct vgt_device *vgt, unsigned int offset,
 bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
+	bool rc = true;
+	vgt_edid_data_t **pedid = NULL;
+	VGT_DP_PORTS_IDX port_idx;
+
 	ASSERT(bytes == 4);
+	ASSERT((offset & (bytes - 1)) == 0);
 
-	return default_mmio_read(vgt, offset,p_data, bytes);
+#ifdef AUX_CH_WORKAROUND
+	/*TODO
+	 *
+	 * Old logic to simply do the default_mmio access. This is kept
+	 * to maintain the system behavior unchanged. It will be chagned
+	 * after aux_ch virtualization has been completely supported.
+	 */
+	rc = default_mmio_read(vgt, offset, p_data, bytes);
+#endif /* AUX_CH_WORKAROUND */
 
+	port_idx = vgt_get_dp_port_idx(offset);
+	switch (port_idx) {
+	case VGT_DPB_IDX:
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPB];
+		break;
+	case VGT_DPC_IDX:
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPC];
+		break;
+	case VGT_DPD_IDX:
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPD];
+		break;
+	default:
+		printk("vGT(%d): WARNING: Unsupported DP port [0x%x]access!\n",
+				vgt->vgt_id, offset);
+		BUG();
+		break;
+	}
+
+	vgt_i2c_handle_aux_ch_read(&vgt->vgt_i2c_bus, pedid,
+				offset, port_idx, p_data);
+
+	return rc;
 }
 
 bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
@@ -801,17 +991,37 @@ bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	unsigned int reg;
+	unsigned int reg = 0;
 	uint32_t data;
 	bool rc;
+	vgt_edid_data_t **pedid = NULL;
+	VGT_DP_PORTS_IDX port_idx = vgt_get_dp_port_idx(offset);
 
 	ASSERT(bytes == 4);
+	ASSERT((offset & (bytes - 1)) == 0);
 
-	reg = offset & ~(bytes - 1);
+#ifdef AUX_CH_WORKAROUND
+	/* TODO
+	 * It is the old logic just to make the i915 driver init not being
+	 * blocked by aux_ch. More decent handling is needed.
+	 *
+	 * Currently the code is kept for incremental code change. When adding
+	 * EDID support, we do not want other things through AUX_CH is
+	 * destroyed. AUX_CH supports two modes. One is native mode and
+	 * another is I2C-over-AUX_CH. We do full virtualization for the latter
+	 * case and seems that the EDID access is the only user of this.
+	 *
+	 * In future, the native mode of AUX_CH access will be handled. Then
+	 * the trick below is not needed.
+	 */
+	reg = offset & ~(bytes -1);
 
-	rc = default_mmio_write(vgt, offset,p_data, bytes);
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
 
-	if ( !reg_hw_access(vgt, reg)) {
+	if ( !reg_hw_access(vgt, reg) &&
+             ((reg == _REG_PCH_DPB_AUX_CH_CTL) ||
+	      (reg == _REG_PCH_DPC_AUX_CH_CTL) ||
+	      (reg == _REG_PCH_DPD_AUX_CH_CTL))) {
 		data = __vreg(vgt, reg);
 		if (data & _REGBIT_DP_AUX_CH_CTL_DONE)
 			data &= ~_REGBIT_DP_AUX_CH_CTL_DONE;
@@ -825,6 +1035,25 @@ bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		}
 		__vreg(vgt, reg) = data;
 	}
+#endif /* AUX_CH_WORKAROUND */
+	switch (port_idx) {
+	case VGT_DPB_IDX:
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPB];
+		break;
+	case VGT_DPC_IDX:
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPC];
+		break;
+	case VGT_DPD_IDX:
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPD];
+		break;
+	default:
+		printk("vGT(%d): WARNING: Unsupported DP port access!\n",
+				vgt->vgt_id);
+		BUG();
+		break;
+	}
+	vgt_i2c_handle_aux_ch_write(&vgt->vgt_i2c_bus, pedid,
+				offset, port_idx, p_data);
 	return true;
 }
 
@@ -1136,7 +1365,7 @@ bool vgt_initialize_mmio_hooks()
 {
     int i;
 
-printk("mmio hooks initialized\n");
+	printk("mmio hooks initialized\n");
 	/* ring registers */
 	for (i=0; i < MAX_ENGINES; i++)
 		if (!vgt_register_mmio_handler(ring_mmio_base[i],
@@ -1144,13 +1373,13 @@ printk("mmio hooks initialized\n");
 			ring_mmio_read, ring_mmio_write))
 			return false;
 
-	vgt_register_mmio_handler( _REG_PCH_DPB_AUX_CH_CTL, 4,
+	vgt_register_mmio_handler( _REG_PCH_DPB_AUX_CH_CTL, 6*4,
 			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
 
-	vgt_register_mmio_handler( _REG_PCH_DPC_AUX_CH_CTL, 4,
+	vgt_register_mmio_handler( _REG_PCH_DPC_AUX_CH_CTL, 6*4,
 			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
 
-	vgt_register_mmio_handler( _REG_PCH_DPD_AUX_CH_CTL, 4,
+	vgt_register_mmio_handler( _REG_PCH_DPD_AUX_CH_CTL, 6*4,
 			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
 
 	vgt_register_mmio_handler( _REG_FENCE_0_LOW, 0x80,
@@ -1158,6 +1387,14 @@ printk("mmio hooks initialized\n");
 
 	vgt_register_mmio_handler(_REG_PCH_ADPA, 4,
 			pch_adpa_mmio_read, pch_adpa_mmio_write);
+
+	vgt_register_mmio_handler( _REG_PCH_GMBUS0, 4*4,
+			gmbus_mmio_read, gmbus_mmio_write);
+
+#ifdef ENABLE_GPIO_EMULATION
+	vgt_register_mmio_handler( _REG_PCH_GPIOA, 6*4,
+			gpio_mmio_read, gpio_mmio_write);
+#endif /* ENABLE_GPIO_EMULATION */
 
 	vgt_register_mmio_handler(_REG_DP_A_CTL, 4,
 			dp_ctl_mmio_read, dp_ctl_mmio_write);
@@ -1577,4 +1814,346 @@ out1:
 	kfree(info);
 
 	return;
+}
+
+#ifdef AUX_CH_WORKAROUND
+void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs)
+{
+	int i, j;
+	for (i = 0; i < VGT_DP_NUM; ++ i) {
+		for (j = 0; j < AUX_REGISTER_NUM; ++ j) {
+			i2c_bus->aux_ch.aux_registers[i][j] =
+				&(i2c_bus->aux_ch.aux_shadow_reg[i][j]);
+		}
+	}
+}
+#else /* AUX_CH_WORKAROUND */
+static inline void vgt_aux_register_assign(aux_reg_t *dst[AUX_REGISTER_NUM],
+					vgt_reg_t *reg_base)
+{
+	int i;
+	AUX_CH_REGISTERS reg_idx = AUX_CH_CTL;
+
+	for (i = 0; i < AUX_REGISTER_NUM; i ++) {
+		dst[reg_idx] = (aux_reg_t *)((char *)reg_base + (i << 2));
+		reg_idx ++;
+	}
+}
+
+void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs)
+{
+	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DP_B],
+		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPB_AUX_CH_CTL));
+
+	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DP_C],
+		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPC_AUX_CH_CTL));
+
+	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DP_D],
+		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPD_AUX_CH_CTL));
+}
+#endif /* AUX_CH_WORKAROUND */
+
+/* vgt_aux_ch_transaction()
+ *
+ * msg_size will not be larger than 4.
+ */
+static unsigned int vgt_aux_ch_transaction(struct pgt_device *pdev,
+				unsigned int aux_ctrl_addr,
+				unsigned int msg, int msg_size)
+{
+	/* TODO: DATA from the i915 driver. Need more handling.
+	 */
+	int aux_clock_divider = 62;
+	int precharge = 3;		//GEN6
+	unsigned int status;
+
+	while (VGT_MMIO_READ(pdev, aux_ctrl_addr) &
+				_REGBIT_DP_AUX_CH_CTL_SEND_BUSY);
+
+	VGT_MMIO_WRITE(pdev, aux_ctrl_addr + 4, msg);
+	VGT_MMIO_WRITE(pdev, aux_ctrl_addr,
+				_REGBIT_DP_AUX_CH_CTL_SEND_BUSY	|
+				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_400us |
+				msg_size << _DP_AUX_CH_CTL_MESSAGE_SIZE_SHIFT |
+				precharge << _DP_AUX_CH_CTL_PRECHARGE_2US_SHIFT	|
+				aux_clock_divider << _DP_AUX_CH_CTL_BIT_CLOCK_2X_SHIFT |
+				_REGBIT_DP_AUX_CH_CTL_DONE |
+				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR |
+				_REGBIT_DP_AUX_CH_CTL_RECV_ERR);
+
+	while((status = VGT_MMIO_READ(pdev, aux_ctrl_addr)) &
+		_REGBIT_DP_AUX_CH_CTL_SEND_BUSY);
+
+	VGT_MMIO_WRITE(pdev, aux_ctrl_addr,
+				status |
+				_REGBIT_DP_AUX_CH_CTL_DONE |
+				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR |
+				_REGBIT_DP_AUX_CH_CTL_RECV_ERR);
+
+	return VGT_MMIO_READ(pdev, aux_ctrl_addr + 4);
+}
+
+void vgt_probe_edid(struct pgt_device *pdev, int index)
+{
+	int i;
+
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
+
+	for (i = 0; i < EDID_NUM; ++ i) {
+		int gmbus_port = 0;
+		unsigned int aux_ch_addr = 0;
+		vgt_edid_data_t **pedid = &(pdev->pdev_edids[i]);
+
+		if ((i != index) && (index != -1)) {
+			continue;
+		}
+		switch (i) {
+		case EDID_VGA:
+			printk("EDID_PROBE: VGA.\n");
+			gmbus_port = 2;
+			break;
+		case EDID_LVDS:
+			printk("EDID_PROBE: LVDS.\n");
+			gmbus_port = 3;
+			break;
+		case EDID_HDMIC:
+			printk("EDID_PROBE: HDMI C.\n");
+			gmbus_port = 4;
+			break;
+		case EDID_HDMIB:
+			printk("EDID_PROBE: HDMI B.\n");
+			// no gmbus corresponding interface. Do not handle it.
+			break;
+		case EDID_HDMID:
+			printk("EDID_PROBE: HDMI D.\n");
+			gmbus_port = 6;
+			break;
+		case EDID_DPB:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPB_AUX_CH_CTL) | _DP_DETECTED) {
+				printk("EDID_PROBE: DP B Detected.\n");
+				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
+			} else {
+				printk("EDID_PROBE: DP B is not detected.\n");
+			}
+			break;
+		case EDID_DPC:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPC_AUX_CH_CTL) | _DP_DETECTED) {
+				printk("EDID_PROBE: DP C Detected.\n");
+				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
+			} else {
+				printk("EDID_PROBE: DP C is not detected.\n");
+			}
+			break;
+		case EDID_DPD:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPD_AUX_CH_CTL) | _DP_DETECTED) {
+				printk("EDID_PROBE: DP D Detected.\n");
+				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
+			} else {
+				printk("EDID_PROBE: DP D is not detected.\n");
+			}
+			break;
+		default:
+			printk("EDID_PROBE: Others?\n");
+			break;
+		}
+
+		if (gmbus_port || aux_ch_addr) {
+			if (!*pedid) {
+				printk("EDID_PROBE: Allocate new memory.\n");
+				*pedid = kmalloc(sizeof(vgt_edid_data_t),
+							GFP_KERNEL);
+				if (*pedid == NULL) {
+					printk("ERROR: Insufficient memory in %s\n",
+							__FUNCTION__);
+					BUG();
+				}
+			}
+		} else {
+			if (*pedid) {
+				printk("EDID_PROBE: Free edid memory.\n");
+				kfree(*pedid);
+				*pedid = NULL;
+			}
+		}
+
+		if (gmbus_port) {
+			int length;
+			int val;
+			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, gmbus_port);
+			// write addr and offset
+			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS3, 0);
+			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1,
+					_GMBUS_SW_RDY |
+					_GMBUS_CYCLE_WAIT |
+					(1 << _GMBUS_BYTE_COUNT_SHIFT) |
+					(EDID_ADDR << _GMBUS_SLAVE_ADDR_SHIFT) |
+					_GMBUS_SLAVE_WRITE);
+			VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
+			while (!((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+				 & (_GMBUS_SATOER | _GMBUS_HW_WAIT_PHASE)));
+			if (val & _GMBUS_SATOER) {
+				printk("EDID_PROBE: 1 Error happens while reading from GMBUS! val:0x%x\n", val);
+				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
+				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
+				kfree(*pedid);
+				*pedid = NULL;
+				continue;
+			}
+
+			// start read.
+			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1,
+					_GMBUS_SW_RDY |
+					_GMBUS_CYCLE_STOP | _GMBUS_CYCLE_WAIT |
+					(EDID_SIZE << _GMBUS_BYTE_COUNT_SHIFT) |
+					(EDID_ADDR << _GMBUS_SLAVE_ADDR_SHIFT) |
+					_GMBUS_SLAVE_READ);
+			VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
+
+			length = 0;
+			do {
+				int j = 0;
+				while (!((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+					 & (_GMBUS_SATOER | _GMBUS_HW_RDY)));
+				if (val & _GMBUS_SATOER) {
+					printk("EDID_PROBE: 2 Error happens while reading from GMBUS! val:0x%x\n", val);
+					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
+					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
+					kfree(*pedid);
+					*pedid = NULL;
+					break;
+				}
+
+				printk("EDID_PROBE: Reading result from GMBUS.\n");
+				val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS3);
+				for (j = 0; j < 4; ++ j) {
+					(*pedid)->edid_block[length] = (val) & 0xff;
+					length ++;
+					val >>= 8;
+				}
+			} while (length < EDID_SIZE);
+
+			/* finish reading. Check the hw state and disable gmbus. */
+			while (((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2)) & _GMBUS_ACTIVE) != 0);
+			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
+		}
+
+		if (aux_ch_addr) {
+			unsigned int msg;
+			unsigned int value;
+			int length;
+
+			msg = ((VGT_AUX_I2C_MOT << 4) << 24) |
+				(0 << 16) |
+				(EDID_ADDR << 8) |
+				0;
+			/* start */
+			vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 3);
+
+			/* read */
+			msg = (((VGT_AUX_I2C_MOT | VGT_AUX_I2C_READ) << 4) << 24) |
+				(0 << 16) |
+				(EDID_ADDR << 8) |
+				0;
+
+			for (length = 0; length < EDID_SIZE; length ++) {
+				printk("EDID_PROBE: Reading result from AUX_CH.\n");
+				value = vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 4);
+				(*pedid)->edid_block[length] = ((value) & 0xff0000) >> 16;
+			}
+		}
+#if 1
+		if (*pedid) {
+			int i;
+			unsigned char *block = (*pedid)->edid_block;
+			printk("EDID_PROBE: EDID is:\n");
+			for (i = 0; i < EDID_SIZE; ++ i) {
+				if ((block[i] >= 'a' && block[i] <= 'z') ||
+				(block[i] >= 'A' && block[i] <= 'Z')) {
+					printk ("%c ", block[i]);
+				} else {
+					printk ("0x%x ", block[i]);
+				}
+				if (((i + 1) & 0xf) == 0) {
+					printk ("\n");
+				}
+			}
+		}
+#endif
+	}
+}
+
+/* vgt_propagate_edid
+ *
+ * Propagate the EDID information stored in pdev to vdev device.
+ * Right now the vgt uses the same EDID. In future, there could be
+ * policy to change the EDID that is used by vdev instances.
+ */
+void vgt_propagate_edid(struct vgt_device *vgt, int index)
+{
+	int i;
+
+	for (i = 0; i < EDID_NUM; ++ i) {
+		vgt_edid_data_t	*edid = vgt->pdev->pdev_edids[i];
+
+		if ((i != index) && (index != -1)) {
+			continue;
+		}
+
+		if (!edid) {
+			printk ("EDID_PROPAGATE: Clear EDID %d\n", i);
+			if (vgt->vgt_edids[i]) {
+				kfree(vgt->vgt_edids[i]);
+				vgt->vgt_edids[i] = NULL;
+			}
+		} else {
+			printk ("EDID_PROPAGATE: Propagate EDID %d\n", i);
+			if (!vgt->vgt_edids[i]) {
+				vgt->vgt_edids[i] = kmalloc(
+						sizeof(vgt_edid_data_t),
+						GFP_KERNEL);
+				if (vgt->vgt_edids[i] == NULL) {
+					printk("ERROR: Insufficient memory in %s\n",
+							__FUNCTION__);
+					BUG();
+					return;
+				}
+			}
+			memcpy(vgt->vgt_edids[i], edid,
+				sizeof(vgt_edid_data_t));
+#if 1
+			{
+			int j;
+			unsigned char *block = vgt->vgt_edids[i]->edid_block;
+			printk("EDID_PROPAGATE: EDID[%d] is:\n", i);
+			for (j = 0; j < EDID_SIZE; ++ j) {
+				if ((block[j] >= 'a' && block[j] <= 'z') ||
+				(block[j] >= 'A' && block[j] <= 'Z')) {
+					printk ("%c ", block[j]);
+				} else {
+					printk ("0x%x ", block[j]);
+				}
+				if (((j + 1) & 0xf) == 0) {
+					printk ("\n");
+				}
+			}
+			}
+#endif
+		}
+	}
+}
+
+void vgt_clear_edid(struct vgt_device *vgt, int index)
+{
+	int i;
+
+	for (i = 0; i < EDID_NUM; ++ i) {
+		if ((i == index) || (index == -1)) {
+			if (vgt->vgt_edids[i]) {
+				printk("EDID_CLEAR: Clear EDID[0x%x] of vgt %d\n",
+					i, vgt->vm_id);
+				kfree(vgt->vgt_edids[i]);
+				vgt->vgt_edids[i] = NULL;
+			}
+		}
+	}
 }
