@@ -66,14 +66,15 @@
  * (One page for now)
  */
 #define    VGT_MAGIC         0x4776544776544776    /* 'vGTvGTvG' */
+#define    VGT_VERSION_MAJOR 1
+#define    VGT_VERSION_MINOR 0
+
 struct vgt_if {
     uint64_t  magic;      /* VGT_MAGIC */
     uint16_t  version_major;
     uint16_t  version_minor;
-    uint32_t  rsv1;
-    uint32_t  display_ready;/* ready for display owner switch */
     uint32_t  vgt_id;       /* ID of vGT instance */
-    uint32_t  rsv2[10];	    /* pad to offset 0x40 */
+    uint32_t  rsv2[12];	    /* pad to offset 0x40 */
     /*
      *  Data structure to describe the balooning info of resources.
      *  Each VM can only have one portion of continuous area for now.
@@ -95,7 +96,29 @@ struct vgt_if {
         uint32_t fence_num;
         uint32_t  rsv2[3];
     } avail_rs;			/* available/assigned resource */
-    uint32_t  rsv3[0x400-0x60];	/* pad to one page */
+    uint32_t  rsv3[0x200-0x60];	/* pad to half page */
+    /*
+     * The bottom half page is for the response from Gfx driver to hypervisor.
+     */
+    uint16_t  drv_version_major;
+    uint16_t  drv_version_minor;
+    uint32_t  display_ready;/* ready for display owner switch */
+    /*
+     * driver reported status/error code
+     *     0: if the avail_rs is sufficient to driver
+     *  Bit 2,1,0 set indicating
+     *       Insufficient low_gmadr, high_gmadr, fence resources.
+     *  Other bits are reserved.
+     */
+    uint32_t  rs_insufficient;
+    /*
+     * The driver is required to update the following field with minimal
+     * required resource size.
+     */
+    uint32_t  min_low_gmadr;
+    uint32_t  min_high_gmadr;
+    uint32_t  min_fence_num;
+    uint32_t  rsv4[0x200-4];    /* pad to one page */
 };
 
 #define vgt_info_off(x)        (VGT_PVINFO_PAGE + (long)&((struct vgt_if*) NULL)->x)
