@@ -118,7 +118,7 @@ struct vgt_if {
     uint32_t  min_low_gmadr;
     uint32_t  min_high_gmadr;
     uint32_t  min_fence_num;
-    uint32_t  rsv4[0x200-4];    /* pad to one page */
+    uint32_t  rsv4[0x200-6];    /* pad to one page */
 };
 
 #define vgt_info_off(x)        (VGT_PVINFO_PAGE + (long)&((struct vgt_if*) NULL)->x)
