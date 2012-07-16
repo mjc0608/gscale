@@ -498,6 +498,65 @@ bool rc_state_ctrl_2_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+bool pch_pp_control_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	uint32_t data;
+	uint32_t reg;
+	union PCH_PP_CONTROL pp_control;
+	union PCH_PP_STAUTS pp_status;
+
+	ASSERT(bytes == 4);
+
+	reg = offset & ~(bytes - 1);
+	if (reg_hw_access(vgt, reg)){
+		return default_mmio_write(vgt, offset, p_data, bytes);
+	}
+
+	data = *(uint32_t*)p_data;
+
+	__vreg(vgt, _REG_PCH_PP_CONTROL) = data;
+
+	pp_control.data = data;
+	pp_status.data = __vreg(vgt, _REG_PCH_PP_STATUS);
+	if (pp_control.power_state_target == 1){
+		/* power on panel */
+		pp_status.panel_powere_on_statue = 1;
+		pp_status.power_sequence_progress = 0;
+		pp_status.power_cycle_delay_active = 0;
+	} else {
+		/* power down panel */
+		pp_status.panel_powere_on_statue = 0;
+		pp_status.power_sequence_progress = 0;
+		pp_status.power_cycle_delay_active = 0;
+	}
+	__vreg(vgt, _REG_PCH_PP_STATUS) = pp_status.data;
+
+	return true;
+}
+
+bool transaconf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	uint32_t reg;
+	union _TRANS_CONFIG config;
+
+	ASSERT(bytes == 4);
+
+	reg = offset & ~(bytes - 1);
+	if (reg_hw_access(vgt, reg)){
+		return default_mmio_write(vgt, offset, p_data, bytes);
+	}
+
+	config.data = *(uint32_t*)p_data;
+	/* transcoder state should synced with enable */
+	config.transcoder_state = config.transcoder_enable;
+
+	__vreg(vgt, reg) = config.data;
+
+	return true;
+}
+
 bool hdcp_status_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -1676,6 +1735,10 @@ bool vgt_initialize_mmio_hooks(struct pgt_device *pdev)
 	vgt_register_mmio_write( _REG_RC_STATE_CTRL_1, rc_state_ctrl_1_mmio_write);
 
 	vgt_register_mmio_write( _REG_RC_STATE_CTRL_2, rc_state_ctrl_2_mmio_write);
+
+	vgt_register_mmio_write( _REG_PCH_PP_CONTROL, pch_pp_control_mmio_write);
+	vgt_register_mmio_write( _REG_TRANSACONF, transaconf_mmio_write);
+	vgt_register_mmio_write( _REG_TRANSBCONF, transaconf_mmio_write);
 
 	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_1, hdcp_status_mmio_read);
 	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_2, hdcp_status_mmio_read);

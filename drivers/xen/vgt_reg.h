@@ -716,6 +716,36 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_PCH_PP_DIVISOR		0xc7210
 #define _REG_PCH_PP_CONTROL		0xc7204
 
+union PCH_PP_CONTROL
+{
+	uint32_t data;
+	struct
+	{
+		uint32_t power_state_target	: 1; // bit 0
+		uint32_t power_down_on_reset	: 1; // bit 1
+		uint32_t backlight_enable	: 1; // bit 2
+		uint32_t edp_vdd_override_for_aux : 1; // bit 3
+		uint32_t reserve : 12; // bits 15:4
+		uint32_t write_protect_key :16; // bits 31:16 0xABCD to disable protected)
+	};
+};
+
+#define _REG_PCH_PP_STATUS		0xc7200
+
+union PCH_PP_STAUTS
+{
+	uint32_t data;
+	struct
+	{
+		uint32_t reserv1	: 4;	// bit 3:0
+		uint32_t reserv2	: 23;	// bit 26:4
+		uint32_t power_cycle_delay_active	:1;	// bit 27
+		uint32_t power_sequence_progress	:2;	// bits 29:28
+		uint32_t require_asset_status		:1; // bit 30
+		uint32_t panel_powere_on_statue		:1; // bit 31   (0 - Disable, 1 - Enable)
+	};
+};
+
 /* Clocking configuration register */
 #define _REG_RSTDBYCTL		0x111b8
 
@@ -731,6 +761,21 @@ bool default_submit_context_command (struct vgt_device *vgt,
 /* Per-transcoder DIP controls */
 #define _REG_TRANSACONF              0xf0008
 #define _REG_TRANSBCONF              0xf1008
+
+union _TRANS_CONFIG
+{
+	uint32_t data;
+	struct
+	{
+		uint32_t reserve1 : 10;   // bit 9:0
+		uint32_t xvycc_color_range_limit : 1; // bit 10
+		uint32_t reserve2 : 10; // bit 20:11
+		uint32_t interlaced_mode: 3; // bit 23:21
+		uint32_t reserve3 : 6; // bit 29:24
+		uint32_t transcoder_state : 1; // bit 30
+		uint32_t transcoder_enable : 1; // bit 31
+	};
+};
 
 /* transcoder */
 #define _REG_TRANS_HTOTAL_A          0xe0000
