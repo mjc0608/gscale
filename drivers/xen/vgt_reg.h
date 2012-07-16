@@ -1597,7 +1597,7 @@ static inline bool is_ring_empty(struct pgt_device *pgt, int ring_id)
 	 * FIXME: PRM said bit2-20 for head count, but bit3-20 for tail count
 	 * however doing that makes tail always head/2.
 	 */
-	tail &= RB_HEAD_OFF_MASK;
+	tail &= RB_TAIL_OFF_MASK;
 	return (head == tail);
 }
 
