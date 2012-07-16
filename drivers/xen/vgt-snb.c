@@ -289,12 +289,57 @@ static struct vgt_irq_info snb_pch_irq_info = {
 	},
 };
 
+static struct vgt_irq_info gen7_de_irq_info = {
+	.name = "Gen7 DE IRQ",
+	.reg_base = _REG_DEISR,
+	.table_size = VGT_IRQ_BITWIDTH,
+	.propogate_virtual_event = vgt_propogate_virtual_event,
+	.table = {
+		{IRQ_PIPE_A_VBLANK,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 0
+		{IRQ_PIPE_A_VSYNC,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 1
+		{IRQ_PIPE_A_LINE_COMPARE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 2
+		{IRQ_PRIMARY_A_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 3
+		{IRQ_SPRITE_A_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 4
+		{IRQ_PIPE_B_VBLANK,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 5
+		{IRQ_PIPE_B_VSYNC,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 6
+		{IRQ_PIPE_B_LINE_COMPARE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 7
+		{IRQ_PRIMARY_B_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 8
+		{IRQ_SPRITE_B_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 9
+		{IRQ_PIPE_C_VBLANK,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 10
+		{IRQ_PIPE_C_VSYNC,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 11
+		{IRQ_PIPE_C_LINE_COMPARE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 12
+		{IRQ_PRIMARY_C_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 13
+		{IRQ_SPRITE_C_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 14
+		{IRQ_RESERVED,			NULL,				NULL},				/* bit 15 reserved */
+		{IRQ_RESERVED,			NULL,				NULL},				/* bit 16 reserved */
+		{IRQ_RESERVED,			NULL,				NULL},				/* bit 17 reserved */
+		{IRQ_RESERVED,			NULL,				NULL},				/* bit 18 reserved */
+		{IRQ_RESERVED,			NULL,				NULL},				/* bit 19 reserved */
+		{IRQ_RESERVED,			NULL,				NULL},				/* bit 20 reserved */
+		{IRQ_RESERVED,			NULL,				NULL},				/* bit 21 reserved */
+		{IRQ_RESERVED,			NULL,				NULL},				/* bit 22 reserved */
+		{IRQ_RESERVED,			NULL,				NULL},				/* bit 23 reserved */
+		{IRQ_DPST_PHASE_IN,	vgt_handle_phase_in,		NULL},				// bit 24
+		{IRQ_DPST_HISTOGRAM,	vgt_handle_histogram,		NULL},				// bit 25
+		{IRQ_AUX_CHANNEL_A,		vgt_handle_aux_channel,		NULL},				// bit 26
+		{IRQ_DP_A_HOTPLUG,		vgt_handle_hotplug,		NULL},				// bit 27
+		{IRQ_PCH_IRQ,	NULL,				NULL},				// bit 28
+		{IRQ_GSE,			vgt_default_event_handler,	NULL},				// bit 29
+		{IRQ_ERROR_INTERRUPT_COMBINED,	NULL,				NULL},				// bit 30
+		{IRQ_RESERVED,		NULL,				NULL},				// bit 31
+	},
+};
+
 static struct vgt_irq_info* vgt_snb_get_irq_info_from_event(struct pgt_device *dev, enum vgt_event_type event)
 {
 	if (VGT_RENDER_EVENT(event))
 		return &snb_render_irq_info;
-	else if (VGT_DPY_EVENT(event))
-		return &snb_dpy_irq_info;
+	else if (VGT_DPY_EVENT(event)) {
+		if (dev->is_sandybridge)
+			return &snb_dpy_irq_info;
+		else if (dev->is_ivybridge)
+			return &gen7_de_irq_info;
+	}
 	else if (VGT_PCH_EVENT(event))
 		return &snb_pch_irq_info;
 	else if (VGT_PM_EVENT(event))
@@ -308,19 +353,27 @@ static struct vgt_irq_info* vgt_snb_get_irq_info_from_owner(struct pgt_device *d
 	if (owner == VGT_OT_RENDER)
 		return &snb_render_irq_info;
 	/* FIXME: both de and pch should be returned */
-	if (owner == VGT_OT_DISPLAY || owner == VGT_OT_MGMT)
-		return &snb_dpy_irq_info;
+	if (owner == VGT_OT_DISPLAY || owner == VGT_OT_MGMT) {
+		if (dev->is_sandybridge)
+			return &snb_dpy_irq_info;
+		else if (dev->is_ivybridge)
+			return &gen7_de_irq_info;
+	}
 	if (owner == VGT_OT_PM)
 		return &snb_pm_irq_info;
 	return NULL;
 }
 
-static inline struct vgt_irq_info* vgt_snb_get_irq_info_from_reg(int reg)
+static inline struct vgt_irq_info* vgt_snb_get_irq_info_from_reg(struct pgt_device *dev, int reg)
 {
 	if (reg >= _REG_GTISR && reg < _REG_GTIER + 4)
 		return &snb_render_irq_info;
-	else if (reg >= _REG_DEISR && reg < _REG_DEIER + 4)
-		return &snb_dpy_irq_info;
+	else if (reg >= _REG_DEISR && reg < _REG_DEIER + 4) {
+		if (dev->is_sandybridge)
+			return &snb_dpy_irq_info;
+		else if (dev->is_ivybridge)
+			return &gen7_de_irq_info;
+	}
 	else if (reg >= _REG_SDEISR && reg < _REG_SDEIER + 4)
 		return &snb_pch_irq_info;
 	else if (reg >= _REG_PMISR && reg < _REG_PMIER + 4)
@@ -405,14 +458,21 @@ static void vgt_snb_handle_virtual_interrupt(struct pgt_device *dev, enum vgt_ow
 
 	if (vgt_de_iir(dev)) {
 		dprintk("vGT-IRQ-SNB: handle virtual de_iir(%x)\n", vgt_de_iir(dev));
-		vgt_irq_handle_event(dev, &vgt_de_iir(dev), &snb_dpy_irq_info, false, type);
+		if (dev->is_sandybridge)
+			vgt_irq_handle_event(dev, &vgt_de_iir(dev), &snb_dpy_irq_info, false, type);
+		else if (dev->is_ivybridge)
+			vgt_irq_handle_event(dev, &vgt_de_iir(dev), &gen7_de_irq_info, false, type);
 	}
 
 	/* check pending virtual PCH interrupt for active VMs */
 	for (i = 0; i < VGT_MAX_VMS; i++) {
 		if (dev->device[i] && vgt_has_pch_irq_pending(dev->device[i])) {
-			vgt_propogate_virtual_event(dev->device[i],
-				_REGSHIFT_PCH, &snb_dpy_irq_info);
+			if (dev->is_sandybridge)
+				vgt_propogate_virtual_event(dev->device[i],
+							    _REGSHIFT_PCH, &snb_dpy_irq_info);
+			else if (dev->is_ivybridge)
+				vgt_propogate_virtual_event(dev->device[i],
+							    _REGSHIFT_PCH_GEN7, &gen7_de_irq_info);
 			vgt_clear_pch_irq_pending(dev->device[i]);
 		}
 	}
@@ -427,6 +487,7 @@ static void vgt_snb_handle_virtual_interrupt(struct pgt_device *dev, enum vgt_ow
 static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 {
 	u32 gt_iir, pm_iir, de_iir, sde_iir, tmp_de_iir;
+	int pch_irq = 0;
 
 	/* read physical IIRs */
 	gt_iir = VGT_MMIO_READ(dev, _REG_GTIIR);
@@ -440,13 +501,22 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 	vgt_irq_handle_event(dev, &gt_iir, &snb_render_irq_info, true, VGT_OT_INVALID);
 
 	dprintk("vGT-IRQ-SNB: handle de_iir(%x), tmp_de_iir(%x)\n", de_iir, tmp_de_iir);
-	tmp_de_iir = de_iir & ~_REGBIT_PCH;
-	vgt_irq_handle_event(dev, &tmp_de_iir, &snb_dpy_irq_info, true, VGT_OT_INVALID);
+	if (dev->is_sandybridge) {
+		if (de_iir & _REGBIT_PCH)
+			pch_irq = 1;
+		tmp_de_iir = de_iir & ~_REGBIT_PCH;
+		vgt_irq_handle_event(dev, &tmp_de_iir, &snb_dpy_irq_info, true, VGT_OT_INVALID);
+	} else if (dev->is_ivybridge) {
+		if (de_iir & _REGBIT_PCH_GEN7)
+			pch_irq = 1;
+		tmp_de_iir = de_iir & ~_REGBIT_PCH_GEN7;
+		vgt_irq_handle_event(dev, &tmp_de_iir, &gen7_de_irq_info, true, VGT_OT_INVALID);
+	}
 
 	dprintk("vGT-IRQ-SNB: handle pm_iir(%x)\n", pm_iir);
 	vgt_irq_handle_event(dev, &pm_iir, &snb_pm_irq_info, true, VGT_OT_INVALID);
 
-	if (de_iir & _REGBIT_PCH) {
+	if (pch_irq) {
 		sde_iir = VGT_MMIO_READ(dev, _REG_SDEIIR);
 		dprintk("vGT-IRQ-SNB: handle sde_iir(%x)\n", sde_iir);
 		vgt_irq_handle_event(dev, &sde_iir, &snb_pch_irq_info, true, VGT_OT_INVALID);
@@ -460,7 +530,7 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 
 	vgt_gt_iir(dev) |= gt_iir;
 	vgt_pm_iir(dev) |= pm_iir;
-	if (de_iir & _REGBIT_PCH)
+	if (pch_irq)
 		vgt_sde_iir(dev) |= sde_iir;
 	vgt_de_iir(dev) |= tmp_de_iir;
 	return IRQ_HANDLED;
@@ -469,7 +539,7 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 static void vgt_snb_irq_init(struct pgt_device *dev)
 {
 	int i;
-	struct vgt_irq_info *info;
+	struct vgt_irq_info *info = NULL;
 	printk("vGT: snb irq init\n");
 
 	printk("vGT: DEISR is %x, DEIIR is %x, DEIMR is %x, DEIER is %x\n",
@@ -549,7 +619,12 @@ static void vgt_snb_irq_init(struct pgt_device *dev)
 
 	vgt_de_dpy_mask(dev) = 0;
 	vgt_de_mgmt_mask(dev) = 0;
-	info = &snb_dpy_irq_info;
+
+	if (dev->is_sandybridge)
+		info = &snb_dpy_irq_info;
+	else if (dev->is_ivybridge)
+		info = &gen7_de_irq_info;
+
 	for (i = 0; i < info->table_size; i++) {
 		if (info->table[i].event == IRQ_RESERVED)
 			continue;
@@ -701,7 +776,7 @@ static void vgt_snb_irq_restore(struct vgt_device *vgt,
 
 enum vgt_event_type vgt_snb_get_event_type_from_bit(struct pgt_device *dev, uint32_t reg, uint32_t bit)
 {
-	struct vgt_irq_info *info = vgt_snb_get_irq_info_from_reg(reg);
+	struct vgt_irq_info *info = vgt_snb_get_irq_info_from_reg(dev, reg);
 
 	ASSERT(info != NULL);
 	dprintk("vGT-IRQ-SNB: search table (%s) for bit(%d) with type(%d, %s)\n",

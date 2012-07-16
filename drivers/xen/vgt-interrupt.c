@@ -205,9 +205,11 @@ enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
 	[IRQ_RCS_MMIO_SYNC_FLUSH] = VGT_OT_RENDER,
 	[IRQ_RCS_CMD_STREAMER_ERR] = VGT_OT_RENDER,
 	[IRQ_RCS_PIPE_CONTROL] = VGT_OT_RENDER,
+	[IRQ_RCS_L3_PARITY_ERR] = VGT_OT_RENDER,
 	[IRQ_RCS_WATCHDOG_EXCEEDED] = VGT_OT_RENDER,
 	[IRQ_RCS_PAGE_DIRECTORY_FAULT] = VGT_OT_RENDER,
 	[IRQ_RCS_AS_CONTEXT_SWITCH] = VGT_OT_RENDER,
+	[IRQ_RCS_MONITOR_BUFF_HALF_FULL] = VGT_OT_RENDER,
 
 	[IRQ_VCS_MI_USER_INTERRUPT] = VGT_OT_RENDER,
 	[IRQ_VCS_MMIO_SYNC_FLUSH] = VGT_OT_RENDER,
@@ -254,6 +256,12 @@ enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
 	[IRQ_PRIMARY_B_FLIP_DONE] = VGT_OT_DISPLAY,
 	[IRQ_SPRITE_A_FLIP_DONE] = VGT_OT_DISPLAY,
 	[IRQ_SPRITE_B_FLIP_DONE] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_C_VBLANK] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_C_VSYNC] = VGT_OT_DISPLAY,
+	[IRQ_PIPE_C_LINE_COMPARE] = VGT_OT_DISPLAY,
+	[IRQ_PRIMARY_C_FLIP_DONE] = VGT_OT_DISPLAY,
+	[IRQ_SPRITE_C_FLIP_DONE] = VGT_OT_DISPLAY,
+	[IRQ_ERROR_INTERRUPT_COMBINED] = VGT_OT_MGMT,
 
 	// PM
 	[IRQ_GV_DOWN_INTERVAL] = VGT_OT_PM,
@@ -736,8 +744,12 @@ static void vgt_toggle_emulated_bits(struct vgt_device *vgt,
 
 	dprintk("vGT: toggle event emulations at imr/ier emulation for reg (%s) bits (%x)\n",
 		ops->get_reg_name(pdev, reg), bits);
-	if (((reg == _REG_DEIER) || (reg == _REG_DEIMR)))
-		bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
+	if (((reg == _REG_DEIER) || (reg == _REG_DEIMR))) {
+		if (pdev->is_sandybridge)
+			bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
+		else if (pdev->is_ivybridge)
+			bits &= ~(_REGBIT_PCH_GEN7 | _REGBIT_MASTER_INTERRUPT);
+	}
 
 	for_each_set_bit(bit, (void *)&bits, VGT_IRQ_BITWIDTH) {
 		event = ops->get_event_type_from_bit(pdev, reg, bit);
@@ -761,12 +773,18 @@ static uint32_t vgt_keep_owner_bits(struct vgt_device *vgt,
 	val = 0;
 	/* PCH and maste interrupt are shared */
 	if (((reg == _REG_DEIER) || (reg == _REG_DEIMR))) {
-		if (bits & _REGBIT_PCH)
-			val |= _REGBIT_PCH;
 		if (bits & _REGBIT_MASTER_INTERRUPT)
 			val |= _REGBIT_MASTER_INTERRUPT;
 
-		bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
+		if (pdev->is_sandybridge) {
+			if (bits & _REGBIT_PCH)
+				val |= _REGBIT_PCH;
+			bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
+		} else if (pdev->is_ivybridge) {
+			if (bits & _REGBIT_PCH_GEN7)
+				val |= _REGBIT_PCH_GEN7;
+			bits &= ~(_REGBIT_PCH_GEN7 | _REGBIT_MASTER_INTERRUPT);
+		}
 	}
 
 	for_each_set_bit(bit, (void *)&bits, VGT_IRQ_BITWIDTH) {
@@ -790,6 +808,7 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 	unsigned long imr = *(unsigned long *)p_data;
 	struct pgt_device *pdev = state->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
+	u32 pch_irq_mask = 0;
 
 	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
 
@@ -831,17 +850,22 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 		}
 	}
 
+	if (pdev->is_sandybridge)
+		pch_irq_mask = _REGBIT_PCH;
+	else if (pdev->is_ivybridge)
+		pch_irq_mask = _REGBIT_PCH_GEN7;
+
 	/* merge pch bits */
 	if (reg == _REG_DEIMR) {
-		if (masked & _REGBIT_PCH) {
+		if (masked & pch_irq_mask) {
 			printk("vGT-IRQ(%d): newly mask PCH\n", state->vgt_id);
 			clear_bit(state->vgt_id, (void *)&vgt_pch_unmask(pdev));
 			/* only mask when all VMs mask */
 			if (vgt_pch_unmask(pdev))
-				masked &= ~_REGBIT_PCH;
+				masked &= ~pch_irq_mask;
 		}
 
-		if (unmasked & _REGBIT_PCH) {
+		if (unmasked & pch_irq_mask) {
 			printk("vGT-IRQ(%d): newly unmask PCH\n", state->vgt_id);
 			set_bit(state->vgt_id, (void *)&vgt_pch_unmask(pdev));
 		}
@@ -880,8 +904,8 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 	}
 
 	/* Then handle emulated events */
-	enabled &= ~(unmasked | _REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
-	disabled &= ~(masked | _REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
+	enabled &= ~(unmasked | pch_irq_mask | _REGBIT_MASTER_INTERRUPT);
+	disabled &= ~(masked | pch_irq_mask | _REGBIT_MASTER_INTERRUPT);
 	if (enabled)
 		vgt_toggle_emulated_bits(state, reg, enabled, true);
 	if (disabled)
@@ -909,6 +933,7 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 	struct pgt_device *pdev = state->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 	vgt_reg_t val;
+	u32 pch_irq_mask = 0;
 
 	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
 
@@ -944,18 +969,23 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 		}
 	}
 
+	if (pdev->is_sandybridge)
+		pch_irq_mask = _REGBIT_PCH;
+	else if (pdev->is_ivybridge)
+		pch_irq_mask = _REGBIT_PCH_GEN7;
+
 	/* merge pch bits */
 	if (reg == _REG_DEIER) {
-		if (ier_enabled & _REGBIT_PCH) {
+		if (ier_enabled & pch_irq_mask) {
 			printk("vGT-IRQ(%d): newly enable PCH\n", state->vgt_id);
 			set_bit(state->vgt_id, (void *)&vgt_pch_enable(pdev));
 		}
 
-		if (ier_disabled & _REGBIT_PCH) {
+		if (ier_disabled & pch_irq_mask) {
 			printk("vGT-IRQ(%d): newly disable PCH\n", state->vgt_id);
 			clear_bit(state->vgt_id, (void *)&vgt_pch_enable(pdev));
 			if (vgt_pch_enable(pdev))
-				ier_disabled &= ~_REGBIT_PCH;
+				ier_disabled &= ~pch_irq_mask;
 		}
 	}
 
@@ -1003,8 +1033,8 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 	}
 
 	/* Then handle emulated events */
-	enabled &= ~(ier_enabled | _REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
-	disabled &= ~(ier_disabled | _REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
+	enabled &= ~(ier_enabled | pch_irq_mask | _REGBIT_MASTER_INTERRUPT);
+	disabled &= ~(ier_disabled | pch_irq_mask | _REGBIT_MASTER_INTERRUPT);
 	if (enabled)
 		vgt_toggle_emulated_bits(state, reg, enabled, true);
 	if (disabled)
