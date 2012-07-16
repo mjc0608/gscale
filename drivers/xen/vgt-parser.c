@@ -155,8 +155,9 @@ static unsigned int constant_buffer_address_offset_disable(struct vgt_cmd_data *
 	return VGT_MMIO_READ(d->vgt->pdev,_REG_RCS_INSTPM) & INSTPM_CONS_BUF_ADDR_OFFSET_DIS;
 }
 
-static int address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
+static void inline address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
 {
+#if 0
 
 	uint32_t val = *addr;
 
@@ -181,6 +182,7 @@ static int address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
 	printk(KERN_WARNING "vgt: address 0x%x in %p out of bound\n", val, addr);
 
 	return -VGT_UNHANDLEABLE;
+#endif
 }
 
 static inline void length_fixup(struct vgt_cmd_data *data, int nr_bits)
@@ -340,20 +342,15 @@ static int vgt_cmd_handler_mi_update_gtt(struct vgt_cmd_data *data)
 
 	/*TODO: remove this assert when PPGTT support is added */
 	ASSERT(data->instruction[0] & USE_GLOBAL_GTT_MASK);
-	printk("mi_update_gtt\n");
+	dprintk("mi_update_gtt\n");
 
-	rc = address_fixup(data,data->instruction + 1);
-	if (rc < 0){
-		/* invalid GTT table address */
-		printk(KERN_ERR "vgt: invalid GTT table address\n");
-		return rc;
-	}
+	address_fixup(data,data->instruction + 1);
 
 	entry_num = data->instruction[0] & ((1U<<8) - 1); /* bit 7:0 */
 	entry = v_aperture(data->vgt->pdev, data->instruction[1]);
 	p_pte = &pte;
 	for (i=0; i<entry_num; i++){
-		printk("vgt: update GTT entry %d\n", i);
+		dprintk("vgt: update GTT entry %d\n", i);
 		/*TODO: optimize by batch g2m translation*/
 		rc = gtt_p2m(data->vgt, entry[i], &entry[i] );
 		if (rc < 0){
@@ -1195,8 +1192,8 @@ out:
 static void show_instruction_info(struct vgt_cmd_data *d)
 {
 	/* FIXME: for unknown command, the following info may be incorrect*/
-	printk(KERN_ERR "ring_id=%d buffer_type=%d instruction=%08x type=0x%x sub_type=0x%x opcode=0x%x sub_opcode=0x%x\n",
-			d->ring_id, d->buffer_type, d->instruction[0], d->type, d->sub_type, d->opcode, d->sub_opcode);
+	printk(KERN_ERR "buffer_type=%d instruction=%08x type=0x%x sub_type=0x%x opcode=0x%x sub_opcode=0x%x\n",
+			d->buffer_type, d->instruction[0], d->type, d->sub_type, d->opcode, d->sub_opcode);
 }
 
 bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
@@ -1270,13 +1267,10 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
-static int error_count=0;
-
-int vgt_scan_ring_buffer(struct vgt_device *vgt, int ring_id)
+static int __vgt_scan_vring(struct vgt_device *vgt, vgt_reg_t head, vgt_reg_t tail, vgt_reg_t base, vgt_reg_t size)
 {
-	vgt_ringbuffer_t	*sring;
-	vgt_reg_t	rb_start, rb_head, rb_tail, ring_size;
-	char* instr, *instr_end, *ring_buttom ;
+	static int error_count=0;
+	char* instr, *instr_end, *va_bottom, *va_base;
 	struct vgt_cmd_data decode_data;
 	struct pgt_device  *pdev;
 	int ret=0;
@@ -1284,33 +1278,19 @@ int vgt_scan_ring_buffer(struct vgt_device *vgt, int ring_id)
 	if (error_count > 10)
 		return 0;
 
-	sring = &vgt->rb[ring_id].sring;
 	pdev = vgt->pdev;
 
-	rb_start = sring->start;
-	if (!vgt->last_scan_head_valid[ring_id]){
-		vgt->last_scan_head[ring_id] = VGT_MMIO_READ(pdev, RB_HEAD(ring_id)) & RB_HEAD_OFF_MASK;
-		vgt->last_scan_head_valid[ring_id] = 1;
-	}
+	va_base = v_aperture(pdev, base);
+	va_bottom = va_base + size;
 
-	rb_head = vgt->last_scan_head[ring_id];
-	rb_tail = sring->tail & RB_TAIL_OFF_MASK;
-	ring_size = _RING_CTL_BUF_SIZE(sring->ctl);
-
-	VGT_CMD_PRINTK("vgt_scan_ring_buffer: rb_start=%x rb_head=%x rb_tail=%x ring_size=%x\n",
-			rb_start, rb_head, rb_tail, ring_size);
-
-	instr = v_aperture(pdev, rb_start + rb_head);
-	instr_end = v_aperture(pdev, rb_start + rb_tail);
-	ring_buttom = v_aperture(pdev, rb_start + ring_size);
+	instr = va_base + head;
+	instr_end = va_base + tail;
 
 	decode_data.buffer_type = RING_BUFFER_INSTRUCTION;
 	decode_data.vgt = vgt;
-	decode_data.ring_id = ring_id;
 	while(instr != instr_end){
 		decode_data.instruction = (uint32_t*)instr;
-		VGT_CMD_PRINTK("ring_id=%d %s instruction=%0x\n",
-				decode_data.ring_id,
+		VGT_CMD_PRINTK("instruction=%0x\n",
 				decode_data.buffer_type == RING_BUFFER_INSTRUCTION ? "RING_BUFFER": "BATCH_BUFFER",
 				decode_data.instruction[0]);
 
@@ -1326,16 +1306,41 @@ int vgt_scan_ring_buffer(struct vgt_device *vgt, int ring_id)
 
 		if (decode_data.buffer_type == RING_BUFFER_INSTRUCTION){
 			/* handle the ring buffer wrap case */
-			ASSERT(instr <= ring_buttom);
+			ASSERT(instr <= va_bottom);
 
-			if (instr == ring_buttom){
-				instr = v_aperture(pdev, rb_start);
+			if (instr == va_bottom){
+				instr = va_base;
 				VGT_CMD_PRINTK("ring buffer wrap\n");
 			}
 		}
 	}
-
-	vgt->last_scan_head[ring_id] = rb_tail;
-
 	return ret;
 }
+
+/*
+ * Scan the guest ring.
+ *   Return 0: success
+ *         <0: Address violation.
+ */
+int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
+{
+	vgt_ringbuffer_t *vring;
+	int ret;
+
+	vring = &vgt->rb[ring_id].vring;
+
+	if ( !(vring->ctl & _RING_CTL_ENABLE) ) {
+		/* Ring is enabled */
+		printk("VGT-Parser.c vring head %x tail %x ctl %x\n",
+			vring->head, vring->tail, vring->ctl);
+		return 0;
+	}
+
+	ret = __vgt_scan_vring (vgt, vgt->last_scan_head[ring_id],
+		vring->tail & RB_TAIL_OFF_MASK,
+		vring->start, _RING_CTL_BUF_SIZE(vring->ctl));
+
+	vgt->last_scan_head[ring_id] = vring->tail;
+	return ret;
+}
+

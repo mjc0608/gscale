@@ -355,8 +355,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	switch (rel_off) {
 	case RB_OFFSET_TAIL:
 		sring->tail = vring->tail;
-//		FIXME: temporarily not enable command parser for debuging purpose
-//		vgt_scan_ring_buffer(vgt, ring_id);
+		vgt_scan_vring(vgt, ring_id);
 		break;
 	case RB_OFFSET_HEAD:
 		//debug
@@ -383,16 +382,9 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 			vgt_active (vgt->pdev, &vgt->list);
 		}
 		if (vring->ctl & _RING_CTL_ENABLE) {
-			/*
-			 * Command scan policy:
-			 * 	1) here: Challenge if that if guest modify
-			 *   head/tail register to a new buffer and come back,
-			 *   we don't know if a cmd is converted or not.
-			 *	2) at submission time: Easier, but not
-			 *   that efficient (GPU have to wait for the completion).
-			 *	Start from 2, TO-REVISIT LATER!!!
-			 */
-//			vgt_scan_ring_buffer(vgt, ring_id);
+			vgt->last_scan_head[ring_id] =
+				vring->head & RB_HEAD_OFF_MASK;
+			vgt_scan_vring(vgt, ring_id);
 		}
 		break;
 	default:

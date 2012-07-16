@@ -904,7 +904,6 @@ struct vgt_device {
 	vgt_state_t	state;		/* MMIO state except ring buffers */
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
 	vgt_reg_t		last_scan_head[MAX_ENGINES];
-	bool			last_scan_head_valid[MAX_ENGINES];
 
 	vgt_i2c_bus_t		vgt_i2c_bus;	/* i2c bus state emulaton for reading EDID */
 	vgt_edid_data_t		*vgt_edids[EDID_NUM];	/* per display EDID information */

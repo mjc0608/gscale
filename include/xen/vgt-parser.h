@@ -70,7 +70,6 @@ struct vgt_cmd_data{
 		RING_BUFFER_INSTRUCTION,
 		BATCH_BUFFER_INSTRUCTION
 	}buffer_type;
-	int ring_id;
 	char* name;
 	unsigned int *instruction;
 	/* next instruction when return from  batch buffer to ring buffer */
@@ -286,7 +285,7 @@ extern int vgt_cmd_parser_init(void);
 extern int vgt_cmd_handler_register(unsigned int type, unsigned int opcode,
 		char* name, int (*handler)(struct vgt_cmd_data *data));
 
-extern int vgt_scan_ring_buffer(struct vgt_device *vgt, int ring_id);
+extern int vgt_scan_vring(struct vgt_device *vgt, int ring_id);
 
 extern bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
