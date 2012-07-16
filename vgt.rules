@@ -22,11 +22,31 @@
 #
 # To reload these rules, or you cannot make the udevd apply the updated rules.
 #
+#
+# bit field definition of the hot_plug trigger value:
+#
+# bit 31 - bit 16	: Reserved;
+# bit 15 - bit 8	: vmid; value of 0xf means all VMs.
+# bit 7 - bit 4		:Reserved;
+# bit 3 - bit 1		: Monitor selection:
+# 		0	-	CRT
+# 		1	-	DP_A
+# 		2	-	DP_B
+# 		3	-	DP_C
+# 		4	-	DP_D
+#		5	-	HDMIB
+#		6	-	HDMIC
+#		7	-	HDMID
+# bit 0 - bit 0		: Direction.
+#		0: pull out;
+#		1: plug in;
+#
 # by axu
 #
 #ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo CRT monitor inserted! >> /tmp/hotplug'"
 #ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo CRT monitor removed! >> /tmp/hotplug'"
 #KERNEL=="control", RUN+="/bin/sh -c 'echo inserted >> /tmp/hotplug'"
-
-ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xf1 > /sys/kernel/vgt/control/hot_plug_event'"
-ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xf0 > /sys/kernel/vgt/control/hot_plug_event'"
+#
+#write 0xf1 for plug in; 0xf0 for pull out.
+ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo 241 > /sys/kernel/vgt/control/hot_plug_event'"
+ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo 240 > /sys/kernel/vgt/control/hot_plug_event'"

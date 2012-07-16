@@ -93,6 +93,15 @@ typedef struct {
 #include "vgt_mmio_gpio.h"
 #endif
 
+typedef enum {
+	GMBUS_NOCYCLE	= 0x0,
+	NIDX_NS_W	= 0x1,
+	IDX_NS_W	= 0x3,
+	GMBUS_STOP	= 0x4,
+	NIDX_STOP	= 0x5,
+	IDX_STOP	= 0x7
+}gmbus_cycle_type_t;
+
 /*
  * States of GMBUS
  *
@@ -123,8 +132,14 @@ typedef struct {
  *	Data for transfer
  */
 typedef struct {
+	unsigned gmbus1;
 	unsigned port;
 	unsigned total_byte_count; /* from GMBUS1 */
+	gmbus_cycle_type_t cycle_type;
+	/* TODO
+	 * would WRITE(GMBUS0, 0) clear "inuse" bit?
+	 * current implementation is to clear it.
+	 */
 	bool inuse;
 	vgt_edid_data_t **pedid;
 }vgt_i2c_gmbus_t;
@@ -274,6 +289,7 @@ typedef enum {
 	VGT_I2C_START,
 	VGT_I2C_SEND,
 	VGT_I2C_RECEIVE,
+	VGT_I2C_WAIT
 }I2C_STATE;
 
 /*

@@ -285,25 +285,28 @@ void vgt_i2c_handle_gmbus_read(vgt_i2c_bus_t *i2c_bus,
 		} else {
 			i2c_bus->gmbus.inuse = true;
 		}
-		/* always in wait stage
-		 * always in hdw_ready state
-		 */
-		value |= _GMBUS_HW_WAIT_PHASE;
+
+		/* always in hdw_ready and wait state */
 		value |= _GMBUS_HW_READY_BIT;
+		value |= _GMBUS_HW_WAIT_PHASE;
 		if (i2c_bus->gmbus.pedid) {
 			value |= _GMBUS_ACTIVE;
+			if (i2c_bus->state == VGT_I2C_WAIT) {
+				value |= _GMBUS_HW_WAIT_PHASE;
+			}
 		}
 
 		if (edid && !(edid->edid_data)) {
 			/* It is not valid EDID reading
 			 * from really existed monitor.
 			 */
-			/* TODO */
 			value |= _GMBUS_SATOER;
 		}
 		*(int *)p_data = value;
 	} else {
 		if (!edid) {
+			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
+				"GMBUS_3 reading without slave setting!\n");
 			*(int *)p_data = 0;
 			return;
 		}
@@ -312,12 +315,24 @@ void vgt_i2c_handle_gmbus_read(vgt_i2c_bus_t *i2c_bus,
 		if (gmbus_emulate) {
 			*(int *)p_data = 0;
 			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-				"GMBUS reading snapshot for EDID!");
+				"GMBUS reading snapshot for EDID!\n");
 			for (i = 0; i < 4; ++ i) {
 				unsigned char buffer =
 					i2c_bus->current_slave->get_byte_from_snap(
 						i2c_bus->current_slave);
 				*(int *)p_data |= (buffer << (i << 3));
+			}
+
+			if (i2c_bus->gmbus.total_byte_count
+				<= edid->current_read) {
+				/* finished reading */
+				if (i2c_bus->gmbus.cycle_type & 0x4) {
+					EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
+				"GMBUS goes to stop stage from data cycle.\n");
+					vgt_init_i2c_bus(i2c_bus);
+				} else {
+					i2c_bus->state = VGT_I2C_WAIT;
+				}
 			}
 		} else {
 			int value = *(int *)p_data;
@@ -337,7 +352,7 @@ void vgt_i2c_handle_gmbus_read(vgt_i2c_bus_t *i2c_bus,
 				value >>= 8;
 			}
 			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-				"GMBUS doing snapshot for EDID!");
+				"GMBUS doing snapshot for EDID!\n");
 			/* There is no other better place to check the end of
 			 * EDID reading...
 			 */
@@ -368,6 +383,19 @@ void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
 		unsigned slave_addr = value & 0xff;
 		I2C_STATE i2c_state = (slave_addr & 0x1) ? VGT_I2C_RECEIVE :
 							   VGT_I2C_SEND;
+		if (((value & (1 << 31)) == 0) &&
+		    (i2c_bus->gmbus.gmbus1 & (1 << 31))) {
+			/* According to PRM Vol3, part 3, Section 2.2.3.2,
+			 * the write to SW_CLR_INT with 1 and 0 will reset
+			 * GMBUS.
+			 */
+			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
+			"GMBUS goes to stop stage by GMBUS reset.\n");
+			vgt_init_i2c_bus(i2c_bus);
+			return;
+		}
+
+		i2c_bus->gmbus.gmbus1 = value;
 		slave_addr >>= 1;
 		total_byte_count = (*(int *)p_data >> _GMBUS1_BYTE_LENGTH_POSI)
 					& 0x1ff;
@@ -379,13 +407,11 @@ void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
 			if (gmbus_emulate) {
 				i2c_bus->edid_slave.edid_data =
 					*i2c_bus->gmbus.pedid;
-				EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-					"GMBUS gets cached EDID data.");
 			} else {
 				i2c_bus->edid_slave.edid_data =
 					(vgt_edid_data_t *) vgt_create_edid();
 				EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-					"GMBUS created new EDID data.");
+					"GMBUS created new EDID data.\n");
 			}
 			i2c_bus->state = i2c_state;
 			i2c_bus->gmbus.total_byte_count = total_byte_count;
@@ -395,10 +421,34 @@ void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
 				slave_addr);
 			dump_stack();
 		}
-		if (value & (0x1 << 27)) {
-			/* stop command */
+
+		i2c_bus->gmbus.cycle_type = ((value >> 25) & 0x7);
+		switch (i2c_bus->gmbus.cycle_type) {
+		case GMBUS_NOCYCLE:
+			/* ignore */
+			break;
+		case NIDX_NS_W:
+			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
+			"GMBUS is set NIDX_NS_W cycle.\n");
+			break;
+		case NIDX_STOP:
+			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
+			"GMBUS is set NIDX_STOP cycle.\n");
+			break;
+		case GMBUS_STOP:
+			/* TODO: assert the wait stage? */
+			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
+			"GMBUS goes to stop stage by stop command.\n");
 			vgt_init_i2c_bus(i2c_bus);
+			break;
+		case IDX_NS_W:
+		case IDX_STOP:
+		default:
+			EDID_MSG(VGT_EDID_WARN, gmbus_emulate,
+			"Not supported CYCLE type written from GMBUS1!\n");
+			break;
 		}
+
 	} else if (offset == _REG_PCH_GMBUS2) {
 		if ((*(int *)p_data) & _GMBUS_INUSE) {
 			i2c_bus->gmbus.inuse = false;

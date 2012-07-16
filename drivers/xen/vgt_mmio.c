@@ -109,10 +109,9 @@ bool gmbus_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	bool rc = true;
-	vgt_edid_data_t	**pedid = vgt->vgt_i2c_bus.gmbus.pedid;
 
 	ASSERT(bytes <= 8 && !(offset & (bytes - 1)));
-	printk("vGT(%d): read gmbus register with offset%x and size %d.\n", vgt->vgt_id, offset, bytes);
+	//printk("vGT(%d): read gmbus register with offset%x and size %d.\n", vgt->vgt_id, offset, bytes);
 
 	vgt_i2c_handle_gmbus_read(&vgt->vgt_i2c_bus, offset, p_data);
 
@@ -124,8 +123,8 @@ bool gmbus_mmio_write(struct vgt_device *vgt, unsigned int offset,
 {
 	bool rc = true;
 	vgt_edid_data_t **pedid = NULL;
-	printk("vGT(%d): write gmbus register with offset %x and size %d, value 0x%x.\n",
-			vgt->vgt_id, offset, bytes, *((int *)p_data));
+	//printk("vGT(%d): write gmbus register with offset %x and size %d, value 0x%x.\n",
+	//		vgt->vgt_id, offset, bytes, *((int *)p_data));
 
 	if (offset == _REG_PCH_GMBUS0) {
 		/* select the port */
@@ -1959,7 +1958,6 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 
 		if (gmbus_port || aux_ch_addr) {
 			if (!*pedid) {
-				printk("EDID_PROBE: Allocate new memory.\n");
 				*pedid = kmalloc(sizeof(vgt_edid_data_t),
 							GFP_KERNEL);
 				if (*pedid == NULL) {
@@ -1992,7 +1990,6 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			while (!((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
 				 & (_GMBUS_SATOER | _GMBUS_HW_WAIT_PHASE)));
 			if (val & _GMBUS_SATOER) {
-				printk("EDID_PROBE: 1 Error happens while reading from GMBUS! val:0x%x\n", val);
 				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
 				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
 				kfree(*pedid);
@@ -2015,7 +2012,6 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				while (!((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
 					 & (_GMBUS_SATOER | _GMBUS_HW_RDY)));
 				if (val & _GMBUS_SATOER) {
-					printk("EDID_PROBE: 2 Error happens while reading from GMBUS! val:0x%x\n", val);
 					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
 					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
 					kfree(*pedid);
@@ -2023,7 +2019,6 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 					break;
 				}
 
-				printk("EDID_PROBE: Reading result from GMBUS.\n");
 				val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS3);
 				for (j = 0; j < 4; ++ j) {
 					(*pedid)->edid_block[length] = (val) & 0xff;
@@ -2056,12 +2051,11 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				0;
 
 			for (length = 0; length < EDID_SIZE; length ++) {
-				printk("EDID_PROBE: Reading result from AUX_CH.\n");
 				value = vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 4);
 				(*pedid)->edid_block[length] = ((value) & 0xff0000) >> 16;
 			}
 		}
-#if 1
+#if 0
 		if (*pedid) {
 			int i;
 			unsigned char *block = (*pedid)->edid_block;
