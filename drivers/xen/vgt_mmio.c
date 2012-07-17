@@ -81,6 +81,15 @@
 #include <xen/vgt-parser.h>
 #include "vgt_reg.h"
 
+static bool bypass_scan = false;
+static int __init bypass_scan_setup(char *str)
+{
+	bypass_scan = true;
+
+	return 1;
+}
+__setup("bypass_scan", bypass_scan_setup);
+
 static inline int tail_to_ring_id(unsigned int tail_off)
 {
 	int i;
@@ -355,7 +364,8 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	switch (rel_off) {
 	case RB_OFFSET_TAIL:
 		sring->tail = vring->tail;
-		vgt_scan_vring(vgt, ring_id);
+		if ( !bypass_scan )
+			vgt_scan_vring(vgt, ring_id);
 		break;
 	case RB_OFFSET_HEAD:
 		//debug
@@ -381,7 +391,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 			printk("vGT: activate vgt (%d) on ring (%d)\n", vgt->vgt_id, ring_id);
 			vgt_active (vgt->pdev, &vgt->list);
 		}
-		if (vring->ctl & _RING_CTL_ENABLE) {
+		if (!bypass_scan && (vring->ctl & _RING_CTL_ENABLE)) {
 			vgt->last_scan_head[ring_id] =
 				vring->head & RB_HEAD_OFF_MASK;
 			vgt_scan_vring(vgt, ring_id);
