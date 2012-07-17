@@ -3009,11 +3009,22 @@ static void vgt_set_device_type(struct pgt_device *pdev)
 		break;
 	case 0x0402:
 	case 0x0412:
+	case 0x0422:
 	case 0x040a:
 	case 0x041a:
+	case 0x042a:
 	case 0x0406:
 	case 0x0416:
+	case 0x0426:
+	case 0x0c06:
 	case 0x0c16:
+	case 0x0c26:
+	case 0x0c02:
+	case 0x0c12:
+	case 0x0c22:
+	case 0x0c0a:
+	case 0x0c1a:
+	case 0x0c2a:
 		pdev->is_haswell = 1;
 		printk("Detected Haswell\n");
 		break;
