@@ -557,6 +557,20 @@ bool transaconf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+/* Pipe Frame Count */
+bool pipe_frmcount_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	return default_passthrough_mmio_read(vgt, offset, p_data, bytes);
+}
+
+/* Pipe Display Scan Line*/
+bool pipe_dsl_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	return default_passthrough_mmio_read(vgt, offset, p_data, bytes);
+}
+
 bool hdcp_status_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -1739,6 +1753,11 @@ bool vgt_initialize_mmio_hooks(struct pgt_device *pdev)
 	vgt_register_mmio_write( _REG_PCH_PP_CONTROL, pch_pp_control_mmio_write);
 	vgt_register_mmio_write( _REG_TRANSACONF, transaconf_mmio_write);
 	vgt_register_mmio_write( _REG_TRANSBCONF, transaconf_mmio_write);
+
+	vgt_register_mmio_read( _REG_PIPEA_FRMCOUNT, pipe_frmcount_mmio_read);
+	vgt_register_mmio_read( _REG_PIPEB_FRMCOUNT, pipe_frmcount_mmio_read);
+	vgt_register_mmio_read( _REG_PIPEADSL, pipe_dsl_mmio_read);
+	vgt_register_mmio_read( _REG_PIPEBDSL, pipe_dsl_mmio_read);
 
 	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_1, hdcp_status_mmio_read);
 	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_2, hdcp_status_mmio_read);

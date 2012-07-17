@@ -798,11 +798,13 @@ union _TRANS_CONFIG
 #define _REG_PIPEACONF		0x70008
 #define _REG_PIPEASTAT		0x70024
 #define _REG_DSPARB			0x70030
+#define _REG_PIPEA_FRMCOUNT 0x70040
 
 /* Pipe B */
 #define _REG_PIPEBDSL		0x71000
 #define _REG_PIPEBCONF		0x71008
 #define _REG_PIPEBSTAT		0x71024
+#define _REG_PIPEB_FRMCOUNT 0x71040
 
 #define _REGBIT_PIPE_ENABLE    (1 << 31)
 #define _REGBIT_PIPE_STAT_ENABLED  (1 << 30)
@@ -2371,6 +2373,8 @@ extern void vgt_clear_edid(struct vgt_device *vgt, int index);
 
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);
 bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes);
+bool default_passthrough_mmio_read(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes);
 
 void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset);
 void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset);

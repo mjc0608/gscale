@@ -734,19 +734,31 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	printk("\n");
 }
 
-static unsigned long vgt_get_reg(struct vgt_device *vgt, unsigned int reg)
+static inline unsigned long vgt_get_passthrough_reg(struct vgt_device *vgt,
+		unsigned int reg)
 {
-	struct pgt_device *pdev = vgt->pdev;
-	/* check whether to update vreg from HW */
-//	if (reg_hw_update(pdev, reg) &&
-	if (reg_hw_access(vgt, reg)) {
-		__sreg(vgt, reg) = VGT_MMIO_READ(pdev, reg);
-		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
-	}
-
+	__sreg(vgt, reg) = VGT_MMIO_READ(vgt->pdev, reg);
+	__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
 	return __vreg(vgt, reg);
 }
 
+static unsigned long vgt_get_reg(struct vgt_device *vgt, unsigned int reg)
+{
+	/* check whether to update vreg from HW */
+//	if (reg_hw_update(pdev, reg) &&
+	if (reg_hw_access(vgt, reg))
+		return vgt_get_passthrough_reg(vgt, reg);
+	else
+		return __vreg(vgt, reg);
+}
+
+static inline unsigned long vgt_get_passthrough_reg_64(struct vgt_device *vgt, unsigned int reg)
+{
+	__sreg64(vgt, reg) = VGT_MMIO_READ_BYTES(vgt->pdev, reg, 8);
+	__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
+	__vreg(vgt, reg + 4) = mmio_h2g_gmadr(vgt, reg + 4, __sreg(vgt, reg + 4));
+	return __vreg64(vgt, reg);
+}
 /*
  * for 64bit reg access, we split into two 32bit accesses since each part may
  * require address fix
@@ -756,16 +768,12 @@ static unsigned long vgt_get_reg(struct vgt_device *vgt, unsigned int reg)
  */
 static unsigned long vgt_get_reg_64(struct vgt_device *vgt, unsigned int reg)
 {
-	struct pgt_device *pdev = vgt->pdev;
 	/* check whether to update vreg from HW */
 //	if (reg_hw_update(pdev, reg) &&
-	if (reg_hw_access(vgt, reg)) {
-		__sreg64(vgt, reg) = VGT_MMIO_READ_BYTES(pdev, reg, 8);
-		__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
-		__vreg(vgt, reg + 4) = mmio_h2g_gmadr(vgt, reg + 4, __sreg(vgt, reg + 4));
-	}
-
-	return __vreg64(vgt, reg);
+	if (reg_hw_access(vgt, reg))
+		return vgt_get_passthrough_reg_64(vgt, reg);
+	else
+		return __vreg64(vgt, reg);
 }
 
 static bool dom0 = true;
@@ -921,6 +929,24 @@ bool default_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		vgt_update_reg(vgt, offset);
 	else
 		vgt_update_reg_64(vgt, offset);
+
+	return true;
+}
+
+bool default_passthrough_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	unsigned long wvalue;
+	reg = offset & ~(bytes - 1);
+
+	if (bytes <= 4) {
+		wvalue = vgt_get_passthrough_reg(vgt, reg);
+	} else {
+		wvalue = vgt_get_passthrough_reg_64(vgt, reg);
+	}
+
+	memcpy(p_data, &wvalue + (offset & (bytes - 1)), bytes);
 
 	return true;
 }
