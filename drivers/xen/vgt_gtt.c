@@ -79,6 +79,10 @@
 #include <xen/vgt-if.h>
 #include "vgt_reg.h"
 
+/* Don't be confused. 'g_pfn' is actually page _address_, instead of page frame
+ * number. And return value is also machine page _address_, but not frame
+ * number.
+ */
 unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
 {
 	struct xen_get_mfn_from_pfn pfn_arg;
@@ -318,7 +322,7 @@ int vgt_unset_wp_page(struct vgt_device *vgt, unsigned long pfn)
 /* handler to map guest page in dom0 kernel space.
  * XXX no unmap for now, assume current PTE pages are always allocated.
  */
-void *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, int gpfn)
+void *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, unsigned long gpfn)
 {
 	unsigned long mfn;
 
@@ -328,7 +332,7 @@ void *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, int gpfn)
 		return NULL;
 	}
 
-	return xen_remap_domain_mfn_range_in_kernel(mfn, 1, vgt->vm_id);
+	return xen_remap_domain_mfn_range_in_kernel(mfn >> PAGE_SHIFT, 1, vgt->vm_id);
 }
 
 
@@ -374,10 +378,10 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 		addr = (u64)(ent[i] & addr_mask) << 20 | (ent[i] & 0xfffff000);
 
 		/* get real physical address for that page */
-		s_addr = g2m_pfn(vgt->vm_id, addr >> PAGE_SHIFT) << PAGE_SHIFT;
+		s_addr = g2m_pfn(vgt->vm_id, addr);
 
 		/* update shadow PTE entry with targe page address */
-		shadow_ent[i] = s_addr | ((s_addr >> 28) & 0xff0);
+		shadow_ent[i] = s_addr | ((s_addr >> 28) & addr_mask);
 		shadow_ent[i] |= ent[i] & ctl_mask;
 		shadow_ent[i] |= _REGBIT_PTE_VALID;
 	}
@@ -445,7 +449,11 @@ bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 			return false;
 		}
 
-		p->shadow_mpfn = g2m_pfn(vgt->vm_id, page_to_pfn(p->pte_page));
+		p->shadow_mpfn = g2m_pfn(vgt->vm_id, page_to_phys(p->pte_page));
+		if (p->shadow_mpfn == INVALID_MFN) {
+			printk(KERN_ERR "Failed to get mpfn for shadow PTE!\n");
+			return false;
+		}
 	}
 	return true;
 }
