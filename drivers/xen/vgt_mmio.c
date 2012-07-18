@@ -570,6 +570,9 @@ static int ring_pp_dir_base_write(struct vgt_device *vgt, int ring_id, u32 off, 
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 	vgt_ring_ppgtt_t *s_info = &vgt->rb[ring_id].sring_ppgtt_info;
 
+	/* convert base which is in form of bit 31-16 in 64bytes cachelines,
+	 * it turns out to be ((((base >> 16) * 64) >> 2) << PAGE_SHIFT), which
+	 * is just base. */
 	v_info->base = base;
 	s_info->base = mmio_g2h_gmadr(vgt, off, v_info->base);
 
