@@ -1769,12 +1769,13 @@ asmlinkage int vprintk_emit(int facility, int level,
 
 		if (stored)
 			printed_len += text_len;
-		else
+		else {
 			printed_len += log_store(facility, level, lflags, 0,
 						 dict, dictlen, text, text_len);
 #ifdef HVM_OUTPUT_HACK
-		outb('\n', 0xe9);
+			outb('\n', 0xe9);
 #endif
+		}
 	}
 
 	logbuf_cpu = UINT_MAX;

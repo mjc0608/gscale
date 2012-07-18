@@ -226,11 +226,11 @@ static void gen7_show_mode_setting (struct pgt_device *pdev)
 	vgt_reg_t reg;
 
 	reg = VGT_MMIO_READ(pdev, _REG_BCS_BLT_MODE);
-	printk("vGT: BLT_MODE 0x%x\n");
+	printk("vGT: BLT_MODE 0x%x\n", reg);
 	reg = VGT_MMIO_READ(pdev, _REG_RCS_GFX_MODE);
-	printk("vGT: GFX_MODE 0x%x\n");
+	printk("vGT: GFX_MODE 0x%x\n", reg);
 	reg = VGT_MMIO_READ(pdev, _REG_VCS_MFX_MODE);
-	printk("vGT: MFX_MODE 0x%x\n");
+	printk("vGT: MFX_MODE 0x%x\n", reg);
 }
 
 /*
