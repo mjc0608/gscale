@@ -392,17 +392,24 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 	int i;
 	u32 pde, shadow_pde;
 	dma_addr_t pte_phy;
+	u32 gtt_base;
 
-	printk(KERN_INFO "vgt_setup_ppgtt: PDE base 0x%x\n", base);
+	printk(KERN_INFO "vgt_setup_ppgtt on vm %d: PDE base 0x%x\n", vgt->vm_id, base);
+
+	gtt_base = base >> PAGE_SHIFT;
 
 	for (i = 0; i < pde_entries; i++) {
-		pde = vgt_read_gtt(vgt->pdev, base + i);
+		/* Just use guest virtual value instead of real machine address */
+		pde = vgt->vgtt[gtt_base + i];
+
 		if (!(pde & _REGBIT_PDE_VALID))
 			continue;
+
 		if ((pde & _REGBIT_PDE_PAGE_32K)) {
 			printk("zhen: 32K page in PDE!\n");
 			continue;
 		}
+		pde &= ~3;
 		pte_phy = (u64)(pde & 0xff0) << 20 | (u64)(pde & 0xfffff000);
 
 		vgt->shadow_pde_table[i].virtual_phyaddr = pte_phy;
@@ -418,7 +425,7 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		shadow_pde |= _REGBIT_PDE_VALID;
 
 		/* write_gtt with new shadow PTE page address */
-		vgt_write_gtt(vgt->pdev, base + i, shadow_pde);
+		vgt_write_gtt(vgt->pdev, gtt_base + i, shadow_pde);
 	}
 	return true;
 }
