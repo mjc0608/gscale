@@ -216,8 +216,11 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 /* Handle write protect fault on virtual PTE page */
 bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes)
 {
+	struct pgt_device *pdev = vgt->pdev;
 	int index, i;
 	u32 *pte;
+	unsigned long h_addr;
+	u32 addr_mask = 0, ctl_mask = 0;
 
 	dprintk("PTE WP handler: offset 0x%x data 0x%x\n", offset, *(unsigned int *)p_data);
 
@@ -239,8 +242,20 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 	/* find entry index, fill in shadow PTE */
 	pte = vgt->shadow_pte_table[i].virt;
 	index = (offset & (PAGE_SIZE - 1)) >> 2;
-	pte[index] = g2m_pfn(vgt->vm_id, *(dma_addr_t *)p_data >> PAGE_SHIFT);
 
+	if (pdev->is_ivybridge) {
+		addr_mask = 0xff0;
+		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7;
+	} else if (pdev->is_haswell) {
+		addr_mask = 0x7f0;
+		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7_5;
+	}
+
+	h_addr = g2m_pfn(vgt->vm_id, *(dma_addr_t *)p_data);
+
+	pte[index] = h_addr | ((h_addr >> 28) & addr_mask);
+	pte[index] |= *(dma_addr_t *)p_data & ctl_mask;
+	pte[index] |= _REGBIT_PTE_VALID;
 	return true;
 }
 
