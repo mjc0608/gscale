@@ -1680,6 +1680,9 @@ static inline unsigned long __REG_READ(unsigned long preg, int bytes)
 #define VGT_MMIO_READ64(pdev, mmio_offset, val)		\
 		__REG_READ(_vgt_mmio_pa(pdev, mmio_offset), 8)
 
+#define VGT_REG_IS_ALIGNED(reg, bytes) (!((reg)&((bytes)-1)))
+#define VGT_REG_ALIGN(reg, bytes) ((reg) & ~((bytes)-1))
+
 #define vgt_restore_vreg(vgt, off)		\
 	VGT_MMIO_WRITE(vgt->pdev, off, __vreg(vgt, off))
 

@@ -980,7 +980,11 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 //	ASSERT (offset + bytes <= vgt->state.regNum *
 //				sizeof(vgt->state.vReg[0]));
 	ASSERT (bytes <= 8);
-	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
+//	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
+	if (!VGT_REG_IS_ALIGNED(offset, bytes)){
+		printk("unaligned reg %x, bytes=%d\n", offset, bytes);
+		offset = VGT_REG_ALIGN(offset, bytes);
+	}
 
 	if (bytes > 4)
 		dprintk("vGT: capture >4 bytes read to %x\n", offset);
