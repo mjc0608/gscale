@@ -1539,7 +1539,9 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 		VGT_MMIO_READ(pdev, RB_CTL(ring_id)));
 
 	if (!(srb->ctl & _RING_CTL_ENABLE)) {
-		printk("vGT: ring (%d) not enabled. exit restore\n", ring_id);
+		printk("vGT/switch-%d: ring (%d) not enabled. exit restore\n",
+			vgt_ctx_switch(pdev), ring_id);
+		VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), 0);
 		return;
 	}
 	disable_ring(pdev, ring_id);
@@ -1552,6 +1554,20 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 
 	enable_ring(pdev, ring_id, srb->ctl);
 
+	/*
+	 * FIXME: One weird issue observed when switching between dom0
+	 * and win8 VM. The video ring #1 is not used by both dom0 and
+	 * win8 (head=tail=0), however sometimes after switching back
+	 * to win8 the video ring may enter a weird state that VCS cmd
+	 * parser continues to parse the whole ring (fulled with ZERO).
+	 * Sometimes it ends for one whole loop when head reaches back
+	 * to 0. Sometimes it may parse indefinitely so that there's
+	 * no way to wait for the ring empty.
+	 *
+	 * Add a posted read works around the issue. In the future we
+	 * can further optimize by not switching unused ring.
+	 */
+	VGT_POST_READ(pdev, RB_HEAD(ring_id));
 	dprintk("shadow 2 phys: [%x, %x]\n", VGT_MMIO_READ(pdev, RB_HEAD(ring_id)),
 		VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 }
