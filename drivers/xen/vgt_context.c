@@ -565,7 +565,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	 * range of the VM. If this doesn't work, we need change the driver!
 	 */
 	if (!(g_value & mask)) {
-		printk("vGT(%d): translate address ZERO for reg (%lx)\n",
+		dprintk("vGT(%d): translate address ZERO for reg (%lx)\n",
 			vgt->vgt_id, reg);
 		g_value = (vgt_guest_visible_gm_base(vgt) & mask) |
 			  (g_value & ~mask);
@@ -643,7 +643,7 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	 * doesn't matter.
 	 */
 	if (!h_gm_is_visible(vgt, h_value & mask) && !h_gm_is_hidden(vgt, h_value & mask)) {
-		printk("!!!vGT: reg (%lx) doesn't contain a valid host address (%x)\n", reg, h_value);
+		dprintk("!!!vGT: reg (%lx) doesn't contain a valid host address (%x)\n", reg, h_value);
 		h_value = (vgt_visible_gm_base(vgt) & mask) | (h_value & ~mask);
 	}
 
@@ -2163,7 +2163,7 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 		if (reg_hw_update(vgt->pdev, reg)) {
 			__sreg(vgt, reg) = VGT_MMIO_READ(vgt->pdev, reg);
 			__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
-			printk("....save mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
+			dprintk("....save mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
 		}
 	}
 }
@@ -3049,11 +3049,6 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 	vgt_set_addr_mask(pdev, _REG_VCS_HWS_PGA, 0xFFFFF000);
 	vgt_set_addr_mask(pdev, _REG_BCS_HWS_PGA, 0xFFFFF000);
 
-	vgt_set_addr_mask(pdev, _REG_RCS_UHPTR, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_VCS_UHPTR, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_BCS_UHPTR, 0xFFFFF000);
-
-
 	vgt_set_addr_mask(pdev, _REG_RCS_BB_PREEMPT_ADDR, 0xFFFFF000);
 	//vgt_set_addr_mask(pdev, _REG_RCS_BB_ADDR_DIFF, 0xFFFFF000);
 	//vgt_set_addr_mask(pdev, _REG_RCS_BB_OFFSET, 0xFFFFF000);
@@ -3113,6 +3108,9 @@ static void vgt_setup_always_virt(struct pgt_device *pdev)
 static void vgt_setup_hw_update_regs(struct pgt_device *pdev)
 {
 	//reg_set_hw_update(pdev, TIMESTAMP);
+	reg_set_hw_update(pdev, _REG_RCS_UHPTR);
+	reg_set_hw_update(pdev, _REG_VCS_UHPTR);
+	reg_set_hw_update(pdev, _REG_BCS_UHPTR);
 }
 
 uint64_t vgt_get_gtt_size(struct pci_bus *bus)
