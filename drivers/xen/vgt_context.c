@@ -2494,6 +2494,8 @@ void vgt_release_instance(struct vgt_device *vgt)
 	int i;
 	struct list_head *pos;
 
+	vgt_destroy_debugfs(vgt);
+
 	list_for_each (pos, &vgt->pdev->rendering_runq_head)
 		if (pos == &vgt->list) {
 			printk("Couldn't release an active vgt instance\n");
@@ -3152,6 +3154,17 @@ int vgt_initialize(struct pci_dev *dev)
 	//vgt_add_state_sysfs(vgt_dom0);
 	vgt_init_sysfs(pdev);
 
+	/* There is anytime only one instance of the workqueue,
+	 * and NON_REENTRANT
+	 */
+	pdev->pgt_wq = alloc_workqueue("vgt_workqueue",
+			WQ_UNBOUND | WQ_NON_REENTRANT,
+			1);
+	if (!pdev->pgt_wq) {
+		printk("vGT: failed to create kthread: vgt_workqueue.\n");
+		goto err;
+	}
+
 	printk("vgt_initialize succeeds.\n");
 	return 0;
 err:
@@ -3179,6 +3192,12 @@ void vgt_destroy()
 		list_for_each (pos, &pdev->rendering_runq_head)
 			vgt_deactive(pdev, pos);
 	};
+
+	/* Destruct pgt_wq */
+	destroy_workqueue(pdev->pgt_wq);
+
+	/* Destruct all vgt_debugfs */
+	vgt_release_debugfs();
 
 	intel_gtt_clear_range(0, aperture_sz(pdev) - GTT_PAGE_SIZE);
 	for (i = 0; i < aperture_pages(pdev); i++)
@@ -3213,6 +3232,3 @@ void vgt_destroy()
 }
 
 
-/*
- * TODO: PIO BAR.
- */

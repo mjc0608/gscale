@@ -156,7 +156,7 @@ typedef struct {
 #define __vreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.vReg + off))
 #define __sreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.sReg + off))
 #define vgt_vreg(vgt, off)	((vgt_reg_t *)((char *)vgt->state.vReg + off))
-#define vgt_sreg(vgt, off)	((vgt_reg_t *)((char *)vgt_>state.sReg + off))
+#define vgt_sreg(vgt, off)	((vgt_reg_t *)((char *)vgt->state.sReg + off))
 
 #define RB_DWORDS_TO_SAVE	32
 typedef	uint32_t	rb_dword;
@@ -792,6 +792,8 @@ enum vgt_pipe {
 	I915_MAX_PIPES
 };
 
+extern enum vgt_pipe surf_used_pipe;
+
 #define EDID_NUM	8
 typedef enum {
 	EDID_VGA = 0,
@@ -855,6 +857,8 @@ struct vgt_intel_device_info {
 
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
+extern void vgt_destroy_debugfs(struct vgt_device *vgt);
+extern void vgt_release_debugfs();
 extern int vgt_initialize(struct pci_dev *dev);
 extern bool vgt_register_mmio_handler(int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write);
@@ -930,6 +934,8 @@ struct vgt_device {
 	bool		ballooning;		/* VM supports ballooning */
 	void*		opregion_va;
 	uint32_t	opregion_pa;
+
+	struct work_struct fb_debugfs_work;
 };
 
 extern struct vgt_device *vgt_dom0;
@@ -1046,6 +1052,14 @@ struct pgt_device {
 	 * protection upon virtual regs
 	 */
 	DECLARE_BITMAP(port_detect_status, VGT_PORT_MAX);
+
+	/* Add workqueue to handle non-critical tasks
+	 * vgt_thread may be dedicated used for rendering context
+	 * switch. When subimit task that require access vreg/sreg/hwreg
+	 * , you need firstly get the lock (locks may be fine-grained later)
+	 * */
+	struct workqueue_struct *pgt_wq;
+
 };
 
 extern struct list_head pgt_devices;

@@ -989,6 +989,34 @@ bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	bool rc;
+	struct pgt_device *pdev = vgt->pdev;
+	struct work_struct *work = &vgt->fb_debugfs_work;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0)
+
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
+	if (rc == false)
+		return rc;
+
+	ASSERT(work);
+	if (offset == _REG_DSPASURF)
+		surf_used_pipe = PIPE_A;
+	else if (offset == _REG_DSPBSURF)
+		surf_used_pipe = PIPE_B;
+	else /* PIPE_C ? */
+		BUG();
+
+	if (0 == queue_work(pdev->pgt_wq, &vgt->fb_debugfs_work))
+		printk("vGT: failed to submit aready attached work!\n");
+
+	return true;
+}
+
 bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -1436,6 +1464,8 @@ bool vgt_initialize_mmio_hooks()
 	vgt_register_mmio_read( _REG_HDCP_PCH_BOOT_AUTH_STATUS_REG ,
 			hdcp_pch_boot_auth_mmio_read);
 
+	vgt_register_mmio_write(_REG_DSPASURF, dspsurf_mmio_write);
+	vgt_register_mmio_write(_REG_DSPBSURF, dspsurf_mmio_write);
 	vgt_register_mmio_write(_REG_PIPEACONF, pipe_conf_mmio_write);
 	vgt_register_mmio_write(_REG_PIPEBCONF, pipe_conf_mmio_write);
 	vgt_register_mmio_write(_REG_FDI_RXA_IIR, fdi_rx_iir_mmio_write);
