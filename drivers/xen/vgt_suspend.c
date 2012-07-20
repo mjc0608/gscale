@@ -944,12 +944,6 @@ int vgt_save_state(struct vgt_device *vgt)
 		gen6_disable_rps(dev);
     */
 
-	/* Cache mode state */
-    vgt_save_mmio_reg(_REG_CACHE_MODE_0);
-
-	/* Memory Arbitration state */
-    vgt_save_mmio_reg(_REG_MI_ARB_STATE);
-
 	/* Scratch space */
     for (i = 0; i < 16; i++) {
         vgt_save_mmio_reg(_REG_SWF00 + (i << 2));
@@ -1057,12 +1051,6 @@ int vgt_restore_state(struct vgt_device *vgt)
 
     /* TODO: lock we need ? */
 	//mutex_lock(&dev->struct_mutex);
-
-	/* Cache mode state */
-    vgt_write_mmio_reg(_REG_CACHE_MODE_0, __vreg(vgt, _REG_CACHE_MODE_0) | 0xffff0000);
-
-	/* Memory arbitration state */
-    vgt_write_mmio_reg(_REG_MI_ARB_STATE, __vreg(vgt, _REG_MI_ARB_STATE) | 0xffff0000);
 
     /* FIXME: mmio ??? */
 	for (i = 0; i < 16; i++) {
