@@ -1038,6 +1038,20 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	return true;
 }
 
+/*
+ * FIXME: now video ring switch has weird issue. The cmd
+ * parser may enter endless loop even when head/tail is
+ * zero. earlier posting read doesn't solve the issue.
+ * so disable it for now.
+ */
+static int enable_video_switch = 0;
+static int __init video_switch_setup(char *str)
+{
+	enable_video_switch = 1;
+	return 1;
+}
+__setup("enable_video_switch", video_switch_setup);
+
 bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 {
 	if ( is_ring_enabled(pdev, ring_id) && !is_ring_empty(pdev, ring_id) )
@@ -1114,11 +1128,15 @@ bool is_rendering_engines_empty(struct pgt_device *pdev, int *ring_id)
 	 * TODO: timeout for 3 engines are not synchronous. Need suspend
 	 * command parser later
 	 */
-	for (i=0; i < MAX_ENGINES; i++)
+	for (i=0; i < MAX_ENGINES; i++) {
+		if (!enable_video_switch && i == RING_BUFFER_VCS)
+			continue;
+
 		if ( !ring_wait_for_empty(pdev, i, false) ) {
 			*ring_id = i;
 			return false;
 		}
+	}
 	return true;
 }
 
@@ -1212,6 +1230,9 @@ static void vgt_resume_ringbuffers(struct vgt_device *vgt)
 	int i;
 
 	for (i = 0; i < MAX_ENGINES; i++) {
+		if (!enable_video_switch && i == RING_BUFFER_VCS)
+			continue;
+
 		if (!(vgt->rb[i].sring.ctl & _RING_CTL_ENABLE)) {
 			printk("vGT: ring (%d) not enabled. exit resume\n", i);
 			continue;
@@ -2221,6 +2242,9 @@ bool vgt_save_context (struct vgt_device *vgt)
 
 		sring_2_vring(vgt, i, &rb->sring, &rb->vring);
 
+		if (!enable_video_switch && i == RING_BUFFER_VCS)
+			continue;
+
 		/* for stateless engine, no need to save/restore context */
 		if (rb->stateless)
 			continue;
@@ -2287,6 +2311,9 @@ bool vgt_restore_context (struct vgt_device *vgt)
 	for (i=0; i < MAX_ENGINES; i++) {
 		rb = &vgt->rb[i];
 
+		if (!enable_video_switch && i == RING_BUFFER_VCS)
+			continue;
+
 		if (rb->stateless)
 			continue;
 
@@ -2334,6 +2361,9 @@ bool vgt_restore_context (struct vgt_device *vgt)
 
 	/* Restore ring registers */
 	for (i=0; i < MAX_ENGINES; i++) {
+		if (!enable_video_switch && i == RING_BUFFER_VCS)
+			continue;
+
 		rb = &vgt->rb[i];
 		/* vring->sring */
 		//vring_2_sring(vgt, rb);
