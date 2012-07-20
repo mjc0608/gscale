@@ -1158,9 +1158,13 @@ static int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 		bar_s = * (uint32_t*) cfg_space;
 	}
 
-	memmap.first_gfn = bar_s >> PAGE_SHIFT;
+	memmap.first_gfn = (bar_s + vgt_aperture_offset(vgt)) >> PAGE_SHIFT;
 	memmap.first_mfn = vgt_aperture_base(vgt) >> PAGE_SHIFT;
-	memmap.nr_mfns = vgt->state.bar_size[1] >> PAGE_SHIFT ;
+	if (!vgt->ballooning)
+		memmap.nr_mfns = vgt->state.bar_size[1] >> PAGE_SHIFT;
+	else
+		memmap.nr_mfns = vgt_aperture_sz(vgt) >> PAGE_SHIFT;
+
 	memmap.map = map;
 	memmap.domid = vgt->vm_id;
 
