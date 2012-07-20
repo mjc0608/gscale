@@ -199,21 +199,6 @@ static void show_debug(struct pgt_device *pdev, int ring_id)
 	printk("....INSTDONE_2*: 0x%x\n", VGT_MMIO_READ(pdev, 0x207C + 0x10000*ring_id));
 }
 
-#define ENABLED_STR(val, bit)		\
-	((val & bit) ? "enabled" : "disabled")
-
-static void gen7_show_mode_setting (struct pgt_device *pdev)
-{
-	vgt_reg_t reg;
-
-	reg = VGT_MMIO_READ(pdev, _REG_BCS_BLT_MODE);
-	printk("vGT: BLT_MODE 0x%x\n", reg);
-	reg = VGT_MMIO_READ(pdev, _REG_RCS_GFX_MODE);
-	printk("vGT: GFX_MODE 0x%x\n", reg);
-	reg = VGT_MMIO_READ(pdev, _REG_VCS_MFX_MODE);
-	printk("vGT: MFX_MODE 0x%x\n", reg);
-}
-
 /*
  * Show some global register settings, if we care about bits
  * in those registers.
@@ -223,43 +208,35 @@ static void gen7_show_mode_setting (struct pgt_device *pdev)
  */
 static void show_mode_settings(struct pgt_device *pdev)
 {
-	vgt_reg_t reg;
+	vgt_reg_t val;
+	struct vgt_device *vgt1 = default_device.device[1];
 
-	if (pdev->is_ivybridge)
-		return gen7_show_mode_setting(pdev);
+	if (current_render_owner(pdev))
+		printk("Current render owner: %d\n", current_render_owner(pdev)->vgt_id);
 
-	reg = VGT_MMIO_READ(pdev, _REG_GFX_MODE);
-	printk("vGT: GFX_MODE: (%x)\n", reg);
-	printk("....(%x)Flush TLB invalidation mode: %s\n",
-		_REGBIT_FLUSH_TLB_INVALIDATION_MODE,
-		ENABLED_STR(reg, _REGBIT_FLUSH_TLB_INVALIDATION_MODE));
-	printk("....(%x)Replay mode: %x\n",
-		_REGBIT_REPLAY_MODE, reg & _REGBIT_REPLAY_MODE);
-	printk("....(%x)PPGTT: %s\n", _REGBIT_PPGTT_ENABLE,
-		ENABLED_STR(reg, _REGBIT_PPGTT_ENABLE));
-
-	reg = VGT_MMIO_READ(pdev, _REG_MI_MODE);
-	printk("VGT: MI_MODE: (%x)\n", reg);
-	printk("....(%x)Async Flip Performance mode: %s\n",
-		_REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE,
-		ENABLED_STR(reg, _REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE));
-	printk("....(%x)Flush performance mode: %s\n",
-		_REGBIT_MI_FLUSH_PERFORMANCE_MODE,
-		ENABLED_STR(reg, _REGBIT_MI_FLUSH_PERFORMANCE_MODE));
-	printk("....(%x)MI_FLUSH: %s\n",
-		_REGBIT_MI_FLUSH,
-		ENABLED_STR(reg, _REGBIT_MI_FLUSH));
-	printk("....MI_FLUSH enable may be problematic on some "
-	       "    some platforms, which should be abandoned\n"
-	       "    On SNB it's parsed regardless of this bit\n");
-	printk("....(%x)Invalidate UHPTR: %s\n",
-		_REGBIT_MI_INVALIDATE_UHPTR,
-		ENABLED_STR(reg, _REGBIT_MI_INVALIDATE_UHPTR));
-
-	reg = VGT_MMIO_READ(pdev, _REG_ARB_MODE);
-	printk("VGT: ARB_MODE: (%x)\n", reg);
-	printk("....address swizzling: %s\n",
-		(reg & _REGBIT_ADDRESS_SWIZZLING) ? "bit 6 used" : "no");
+#define SHOW_MODE(reg)		\
+	do{				\
+		val = VGT_MMIO_READ(pdev, reg);	\
+		printk("vGT: "#reg"(%x): p(%x), 0(%x), 1(%x)\n",	\
+			reg, val, __sreg(vgt_dom0, reg), vgt1 ? __sreg(vgt1, reg) : 0);	\
+	} while (0);
+	SHOW_MODE(_REG_RCS_MI_MODE);
+	SHOW_MODE(_REG_VCS_MI_MODE);
+	SHOW_MODE(_REG_BCS_MI_MODE);
+	SHOW_MODE(_REG_GFX_MODE);
+	SHOW_MODE(_REG_ARB_MODE);
+	SHOW_MODE(_REG_GT_MODE);
+	SHOW_MODE(_REG_RCS_INSTPM);
+	SHOW_MODE(_REG_VCS_INSTPM);
+	SHOW_MODE(_REG_BCS_INSTPM);
+	SHOW_MODE(_REG_CACHE_MODE_0);
+	SHOW_MODE(_REG_CACHE_MODE_1);
+	SHOW_MODE(_REG_TILECTL);
+	if (pdev->is_ivybridge) {
+		SHOW_MODE(_REG_RCS_GFX_MODE_IVB);
+		SHOW_MODE(_REG_BCS_BLT_MODE_IVB);
+		SHOW_MODE(_REG_VCS_MFX_MODE_IVB);
+	}
 }
 
 #if 0
@@ -960,6 +937,44 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 }
 
 /*
+ * TODO: most mode ctl registers are render specific. In such case
+ * we only need to ensure the mask bits set correctly when doing the
+ * save/restore. On the other hand, need study later whether some
+ * ctl registers may have wider impact e.g. on both render and
+ * display. That would be tricky.
+ *
+ * Also, there may have more such registers in newer generations.
+ */
+vgt_reg_t vgt_mode_ctl_regs[] = {
+	_REG_GFX_MODE,
+	_REG_ARB_MODE,
+
+	_REG_RCS_MI_MODE,
+	_REG_VCS_MI_MODE,
+	_REG_BCS_MI_MODE,
+
+	_REG_RCS_INSTPM,
+	_REG_VCS_INSTPM,
+	_REG_BCS_INSTPM,
+
+	_REG_GT_MODE,
+	_REG_CACHE_MODE_0,
+	_REG_CACHE_MODE_1,
+};
+
+vgt_reg_t vgt_mode_mask_regs[16] = {0};
+
+/* FIXME: need a better way to handle this generation difference */
+vgt_reg_t vgt_gen7_mode_ctl_regs[] = {
+	_REG_BCS_MI_MODE,
+	_REG_BCS_BLT_MODE_IVB,
+	_REG_RCS_MI_MODE,
+	_REG_RCS_GFX_MODE_IVB,
+	_REG_VCS_MI_MODE,
+	_REG_VCS_MFX_MODE_IVB,
+};
+
+/*
  * Emulate the VGT MMIO register write ops.
  * Return : true/false
  * */
@@ -970,6 +985,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	struct mmio_hash_table *mht;
 	unsigned int offset;
 	unsigned long flags;
+	vgt_reg_t old_vreg=0, old_sreg=0;
 
 	/* XXX PPGTT PTE WP comes here too. */
 	if (pdev->enable_ppgtt) {
@@ -1001,6 +1017,11 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 
 	spin_lock_irqsave(&pdev->lock, flags);
 
+	if (offset < VGT_MMIO_REG_NUM && reg_mode_ctl(pdev, offset)) {
+		old_vreg = __vreg(vgt, offset);
+		old_sreg = __sreg(vgt, offset);
+	}
+
 	pdev->dev_func.force_wake(pdev);
 
 	mht = lookup_mtable(offset);
@@ -1010,30 +1031,40 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		default_mmio_write(vgt, offset, p_data, bytes);
 	}
 
-	if (pdev->is_ivybridge) {
-		switch(offset) {
-		case _REG_BCS_MI_MODE:
-		case _REG_BCS_BLT_MODE:
-		case _REG_RCS_MI_MODE:
-		case _REG_RCS_GFX_MODE:
-		case _REG_VCS_MI_MODE:
-		case _REG_VCS_MFX_MODE:
-			printk("vGT: write to global registers (%x)\n", offset);
-			enforce_mode_setting(vgt->pdev);
-			show_mode_settings(vgt->pdev);
-		}
-	} else if (pdev->is_sandybridge) {
-		if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE) {
-			printk("vGT: write to global registers (%x)\n", offset);
-			enforce_mode_setting(vgt->pdev);
-			show_mode_settings(vgt->pdev);
-		}
-	}
-
 	if (offset == _REG_DSPASURF)
 		dprintk("vGT(%d): write to surface base (%x) with (%x), pReg(%x)\n",
 			vgt->vgt_id, offset, __vreg(vgt, offset),
 			VGT_MMIO_READ(pdev, offset));
+
+	/* higher 16bits of mode ctl regs are mask bits for change */
+	if (offset < VGT_MMIO_REG_NUM && reg_mode_ctl(pdev, offset)) {
+		u32 mask = __vreg(vgt, offset) >> 16;
+		int j;
+
+		for (j = 0; j < ARRAY_NUM(vgt_mode_ctl_regs); j++) {
+			if (vgt_mode_ctl_regs[j] == offset)
+				break;
+		}
+		printk("old mode (%x): %x/%x, mask(%x)\n", offset,
+			__vreg(vgt, offset), __sreg(vgt, offset), vgt_mode_mask_regs[j]);
+		/*
+		 * share the global mask among VMs, since having one VM touch a bit
+		 * not changed by another VM should be still saved/restored later
+		 */
+		if (j != ARRAY_NUM(vgt_mode_ctl_regs))
+			vgt_mode_mask_regs[j] |= mask << 16;
+		__vreg(vgt, offset) = (old_vreg & ~mask) | (__vreg(vgt, offset) & mask);
+		__sreg(vgt, offset) = (old_sreg & ~mask) | (__sreg(vgt, offset) & mask);
+		printk("new mode (%x): %x/%x, mask(%x)\n", offset,
+			__vreg(vgt, offset), __sreg(vgt, offset), vgt_mode_mask_regs[j]);
+		//enforce_mode_setting(vgt->pdev);
+		show_mode_settings(vgt->pdev);
+	}
+
+	if (offset == _REG_RCS_UHPTR)
+		printk("vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
+
+
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
@@ -1560,7 +1591,7 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 		VGT_MMIO_READ(pdev, RB_CTL(ring_id)));
 
 	if (!(srb->ctl & _RING_CTL_ENABLE)) {
-		printk("vGT/switch-%d: ring (%d) not enabled. exit restore\n",
+		printk("vGT/switch-%lld: ring (%d) not enabled. exit restore\n",
 			vgt_ctx_switch(pdev), ring_id);
 		VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), 0);
 		return;
@@ -1904,6 +1935,24 @@ bool default_submit_context_command (struct vgt_device *vgt,
 
 /* FIXME: need audit all render resources carefully */
 vgt_reg_t vgt_render_regs[] = {
+	/* mode ctl regs. sync with vgt_mode_ctl_regs */
+	_REG_GFX_MODE,
+	_REG_ARB_MODE,
+
+	_REG_RCS_MI_MODE,
+	_REG_VCS_MI_MODE,
+	_REG_BCS_MI_MODE,
+
+	_REG_RCS_INSTPM,
+	_REG_VCS_INSTPM,
+	_REG_BCS_INSTPM,
+
+	_REG_GT_MODE,
+	_REG_CACHE_MODE_0,
+	_REG_CACHE_MODE_1,
+
+	/* other regs */
+
 	_REG_RCS_HWSTAM,
 	_REG_BCS_HWSTAM,
 	_REG_VCS_HWSTAM,
@@ -1912,10 +1961,6 @@ vgt_reg_t vgt_render_regs[] = {
 	_REG_BCS_HWS_PGA,
 	_REG_VCS_HWS_PGA,
 
-	_REG_RCS_INSTPM,
-	_REG_BCS_INSTPM,
-	_REG_VCS_INSTPM,
-
 	_REG_RCS_EXCC,
 	_REG_BCS_EXCC,
 	_REG_VCS_EXCC,
@@ -1923,6 +1968,8 @@ vgt_reg_t vgt_render_regs[] = {
 	_REG_RCS_UHPTR,
 	_REG_BCS_UHPTR,
 	_REG_VCS_UHPTR,
+
+	_REG_TILECTL,
 };
 
 static void vgt_setup_render_regs(struct pgt_device *pdev)
@@ -1934,6 +1981,10 @@ static void vgt_setup_render_regs(struct pgt_device *pdev)
 		reg_set_pt(pdev, vgt_render_regs[i]);
 	}
 
+	/*
+	 * FIXME: this should be whitelisted in vgt_render_regs, or else
+	 * give pt permission w/o save/restore is wrong
+	 */
 	/* RCS */
 	for (i = 0x2000; i <= 0x2FFF; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_RENDER);
@@ -1952,6 +2003,14 @@ static void vgt_setup_render_regs(struct pgt_device *pdev)
 		reg_set_pt(pdev, i);
 	}
 
+	if (pdev->is_ivybridge) {
+		for (i = 0; i < ARRAY_NUM(vgt_gen7_mode_ctl_regs); i++) {
+			reg_set_mode_ctl(pdev, vgt_gen7_mode_ctl_regs[i]);
+		}
+	} else {
+		for (i = 0; i < ARRAY_NUM(vgt_mode_ctl_regs); i++)
+			reg_set_mode_ctl(pdev, vgt_mode_ctl_regs[i]);
+	}
 }
 
 /* TODO: lots of to fill */
@@ -2045,6 +2104,11 @@ static void vgt_setup_display_regs(struct pgt_device *pdev)
 
 	/* ============================== */
 	/* !!!below need double confirm in the future */
+	reg_set_owner(pdev, _REG_DISP_ARB_CTL, VGT_OT_DISPLAY);
+	reg_set_pt(pdev, _REG_DISP_ARB_CTL);
+
+	reg_set_owner(pdev, _REG_DISP_ARB_CTL2, VGT_OT_DISPLAY);
+	reg_set_pt(pdev, _REG_DISP_ARB_CTL2);
 
 	/* display watermark */
 	for (i = 0x45100; i <= 0x45130; i += REG_SIZE) {
@@ -2140,36 +2204,6 @@ static void vgt_setup_mgmt_regs(struct pgt_device *pdev)
 		reg_set_owner(pdev, vgt_mgmt_regs[i], VGT_OT_MGMT);
 }
 
-vgt_reg_t vgt_global_regs[] = {
-	_REG_MI_MODE,
-	_REG_GFX_MODE,
-	_REG_GT_MODE,
-	_REG_ARB_MODE,
-};
-
-vgt_reg_t vgt_gen7_global_regs[] = {
-	_REG_BCS_MI_MODE,
-	_REG_BCS_BLT_MODE,
-	_REG_RCS_MI_MODE,
-	_REG_RCS_GFX_MODE,
-	_REG_VCS_MI_MODE,
-	_REG_VCS_MFX_MODE,
-};
-
-/* global registers may need special handlers instead. study case by case later */
-static void vgt_setup_global_regs(struct pgt_device *pdev)
-{
-	int i;
-
-	if (pdev->is_sandybridge) {
-		for (i = 0; i < ARRAY_NUM(vgt_global_regs); i++)
-			reg_set_owner(pdev, vgt_global_regs[i], VGT_OT_GLOBAL);
-	} else if (pdev->is_ivybridge) {
-		for (i = 0; i < ARRAY_NUM(vgt_gen7_global_regs); i++)
-			reg_set_owner(pdev, vgt_gen7_global_regs[i], VGT_OT_GLOBAL);
-	}
-}
-
 void vgt_rendering_save_mmio(struct vgt_device *vgt)
 {
 	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
@@ -2182,6 +2216,8 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 	for (i=0; i<num; i++) {
 		int reg = vgt_render_regs[i];
 		//if (reg_hw_update(vgt->pdev, reg)) {
+		/* FIXME: only hw update reg needs save */
+		if (!reg_mode_ctl(vgt->pdev, reg))
 		{
 			__sreg(vgt, reg) = VGT_MMIO_READ(vgt->pdev, reg);
 			__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
@@ -2198,14 +2234,26 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 {
 	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
 	int num = ARRAY_NUM(vgt_render_regs);
-	int i;
+	int i, j;
+	struct pgt_device *pdev = vgt->pdev;
 
 	sreg = vgt->state.sReg;
 	vreg = vgt->state.vReg;
 
 	for (i=0; i<num; i++) {
 		int reg = vgt_render_regs[i];
-		dprintk("....restore mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
+		vgt_reg_t val = __sreg(vgt, reg);
+		if (reg_mode_ctl(pdev, reg)) {
+			for (j = 0; j < ARRAY_NUM(vgt_mode_ctl_regs); j++) {
+				if (vgt_mode_ctl_regs[j] == reg) {
+					val |= vgt_mode_mask_regs[j];
+					break;
+				}
+			}
+			if (j == ARRAY_NUM(vgt_mode_ctl_regs))
+				val |= 0xFFFF0000;
+		}
+
 		/*
 		 * FIXME: there's regs only with some bits updated by HW. Need
 		 * OR vm's update with hw's bits?
@@ -2216,7 +2264,8 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 			__sreg(vgt, _REG_RCS_UHPTR) &= ~1;
 			__vreg(vgt, _REG_RCS_UHPTR) &= ~1;
 		}
-		VGT_MMIO_WRITE(vgt->pdev, reg, __sreg(vgt, reg));
+		VGT_MMIO_WRITE(vgt->pdev, reg, val);
+		dprintk("....restore mmio (%x) with (%x)\n", reg, val);
 	}
 }
 
@@ -3241,7 +3290,6 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	vgt_setup_display_regs(pdev);
 	vgt_setup_pm_regs(pdev);
 	vgt_setup_mgmt_regs(pdev);
-	vgt_setup_global_regs(pdev);
 
 	/* then setup always virtualized reg */
 	vgt_setup_always_virt(pdev);
@@ -3448,7 +3496,6 @@ int vgt_initialize(struct pci_dev *dev)
 	current_display_owner(pdev) = vgt_dom0;
 	current_pm_owner(pdev) = vgt_dom0;
 	current_mgmt_owner(pdev) = vgt_dom0;
-	current_global_owner(pdev) = vgt_dom0;
 	pdev->ctx_check = 0;
 	pdev->ctx_switch = 0;
 	pdev->magic = 0;

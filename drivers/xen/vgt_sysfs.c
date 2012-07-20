@@ -250,7 +250,6 @@ static ssize_t vgt_reg_owner_show(struct kobject *kobj, struct kobj_attribute *a
 	return sprintf(buf,"Reg(%08x) ownership info: \n"
 			"Type #:              [%03d]\n"
 			"INVALID:             [%-3s]\n"
-			"GLOBAL:              [%-3s]\n"
 			"RCS:                 [%-3s]\n"
 			"BCS:                 [%-3s]\n"
 			"VCS:                 [%-3s]\n"
@@ -262,7 +261,6 @@ static ssize_t vgt_reg_owner_show(struct kobject *kobj, struct kobj_attribute *a
 			reg,
 			type,
 			(type == VGT_OT_INVALID) ? "yes" : "no",
-			(type == VGT_OT_GLOBAL) ? "yes" : "no",
 			(type == VGT_OT_RCS) ? "yes" : "no",
 			(type == VGT_OT_BCS) ? "yes" : "no",
 			(type == VGT_OT_VCS) ? "yes" : "no",

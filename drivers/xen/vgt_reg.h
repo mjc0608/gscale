@@ -296,28 +296,34 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define CCID_VALID		0x1
 #define CCID_TIMEOUT_LIMIT	150
 
-#define _REG_MI_MODE	0x209C
+#define _REG_RCS_MI_MODE	0x209C
 #define		_REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE	(1 << 14)
 #define		_REGBIT_MI_FLUSH_PERFORMANCE_MODE	(1 << 13)
 //#define		_REGBIT_MI_FLUSH			(3 << 11)
 #define		_REGBIT_MI_FLUSH			(1 << 12)
 #define		_REGBIT_MI_INVALIDATE_UHPTR		(1 << 11)
+#define	_REG_VCS_MI_MODE	0x1209C
+#define _REG_BCS_MI_MODE	0x2209C
 #define _REG_GFX_MODE	0x2520
 #define		_REGBIT_FLUSH_TLB_INVALIDATION_MODE	(1 << 13)
 #define		_REGBIT_REPLAY_MODE			(1 << 11)
 #define		_REGBIT_PPGTT_ENABLE			(1 << 9)
-#define _REG_GFX_MODE_IVB	0x229C
 #define _REG_ARB_MODE	0x4030
 #define		_REGBIT_ADDRESS_SWIZZLING		(3 << 4)
 #define _REG_GT_MODE	0x20D0
 
+#define _REG_GAC_MODE		0x120A0
+#define _REG_GAB_MODE		0x220A0
+
+#define _REG_RCS_INSTPM		0x20C0
+#define _REG_VCS_INSTPM		0x120C0
+#define _REG_BCS_INSTPM		0x220C0
+#define INSTPM_CONS_BUF_ADDR_OFFSET_DIS (1<<6)
+
 /* IVB+ */
-#define _REG_BCS_MI_MODE	0x2209C
-#define _REG_BCS_BLT_MODE	0x2229C
-#define _REG_RCS_MI_MODE	0x0209C
-#define _REG_RCS_GFX_MODE	0x0229C
-#define _REG_VCS_MI_MODE	0x1209C
-#define _REG_VCS_MFX_MODE	0x1229C
+#define _REG_BCS_BLT_MODE_IVB	0x2229C
+#define _REG_RCS_GFX_MODE_IVB	0x0229C
+#define _REG_VCS_MFX_MODE_IVB	0x1229C
 
 /* PPGTT entry */
 #define _REGBIT_PDE_VALID	(1<<0)
@@ -339,11 +345,6 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_VCS_HWS_PGA	0x4180
 #define _REG_BCS_HWS_PGA	0x24080
 #define _REG_IVB_BCS_HWS_PGA	0x4280
-
-#define _REG_RCS_INSTPM		0x20C0
-#define _REG_VCS_INSTPM		0x120C0
-#define _REG_BCS_INSTPM		0x220C0
-#define INSTPM_CONS_BUF_ADDR_OFFSET_DIS (1<<6)
 
 #define _REG_RCS_EXCC		0x2028
 #define _REG_VCS_EXCC		0x12028
@@ -605,6 +606,8 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_BCLRPAT_B	0x61020
 
 #define _REG_DISP_ARB_CTL	0x45000
+#define _REG_DISP_ARB_CTL2	0x45004
+#define _REG_TILECTL 		0x101000
 
 /* PCH */
 #define _REG_PCH_DREF_CONTROL        0xc6200
@@ -799,6 +802,7 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_IMR      0x020a8
 
 #define _REG_CACHE_MODE_0	0x02120 /* 915+ only */
+#define _REG_CACHE_MODE_1	0x02124
 #define _REG_MI_ARB_STATE	0x020e4 /* 915+ only */
 
 /* VBIOS flags */
@@ -1003,7 +1007,6 @@ struct vgt_device {
 extern struct vgt_device *vgt_dom0;
 enum vgt_owner_type {
 	VGT_OT_INVALID = 0,
-	VGT_OT_GLOBAL,			// global registers controlled by dom0 or vGT only
 	VGT_OT_RCS,                  // the owner directly operating render command buffers
 	VGT_OT_BCS,                 // the owner directly operating blitter command buffers
 	VGT_OT_VCS,                   // the owner directly operating video command buffers
@@ -1024,10 +1027,12 @@ enum vgt_owner_type {
 #define VGT_REG_HW_UPDATE	(1 << 6)
 /* Always virtualized even at boot time */
 #define VGT_REG_ALWAYS_VIRT	(1 << 7)
+/* Mode ctl registers with high 16 bits as the mask bits */
+#define VGT_REG_MODE_CTL	(1 << 8)
 /* index into the address-fix table. Maximum 256 entries now */
-#define VGT_REG_INDEX_SHIFT	8
-#define VGT_REG_INDEX_MASK	(0xFF << VGT_REG_INDEX_SHIFT)
-typedef u16 reg_info_t;
+#define VGT_REG_INDEX_SHIFT	16
+#define VGT_REG_INDEX_MASK	(0xFFFF << VGT_REG_INDEX_SHIFT)
+typedef u32 reg_info_t;
 
 #define VGT_ADDR_FIX_NUM	256
 typedef vgt_reg_t vgt_addr_mask_t;
@@ -1154,12 +1159,10 @@ extern struct list_head pgt_devices;
 #define current_display_owner(d)	(vgt_get_owner(d, VGT_OT_DISPLAY))
 #define current_pm_owner(d)		(vgt_get_owner(d, VGT_OT_PM))
 #define current_mgmt_owner(d)		(vgt_get_owner(d, VGT_OT_MGMT))
-#define current_global_owner(d)		(vgt_get_owner(d, VGT_OT_GLOBAL))
 #define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
 #define is_current_display_owner(vgt)	(vgt && vgt == current_display_owner(vgt->pdev))
 #define is_current_pm_owner(vgt)	(vgt && vgt == current_pm_owner(vgt->pdev))
 #define is_current_mgmt_owner(vgt)	(vgt && vgt == current_mgmt_owner(vgt->pdev))
-#define is_current_global_owner(vgt)	(vgt && vgt == current_global_owner(vgt->pdev))
 #define previous_render_owner(d)	(vgt_get_previous_owner(d, VGT_OT_RENDER))
 #define previous_display_owner(d)	(vgt_get_previous_owner(d, VGT_OT_DISPLAY))
 #define previous_pm_owner(d)		(vgt_get_previous_owner(d, VGT_OT_PM))
@@ -1172,6 +1175,7 @@ extern struct list_head pgt_devices;
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
 #define reg_hw_update(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_UPDATE)
 #define reg_always_virt(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ALWAYS_VIRT)
+#define reg_mode_ctl(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_MODE_CTL)
 #define reg_addr_index(pdev, reg)	\
 	((pdev->reg_info[REG_INDEX(reg)] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
 
@@ -1196,6 +1200,11 @@ static inline void reg_set_addr_fix(struct pgt_device *pdev,
 static inline void reg_set_always_virt(struct pgt_device *pdev, vgt_reg_t reg)
 {
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ALWAYS_VIRT;
+}
+
+static inline void reg_set_mode_ctl(struct pgt_device *pdev, vgt_reg_t reg)
+{
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_MODE_CTL;
 }
 
 extern vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];

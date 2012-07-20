@@ -1710,11 +1710,11 @@ bool vgt_initialize_mmio_hooks(struct pgt_device *pdev)
 				vcs_pp_dir_base_read, vcs_pp_dir_base_write);
 		/* XXX cache register? */
 		/* PPGTT enable register */
-		vgt_register_mmio_handler(_REG_RCS_GFX_MODE, 4,
+		vgt_register_mmio_handler(_REG_RCS_GFX_MODE_IVB, 4,
 				rcs_gfx_mode_read, rcs_gfx_mode_write);
-		vgt_register_mmio_handler(_REG_BCS_BLT_MODE, 4,
+		vgt_register_mmio_handler(_REG_BCS_BLT_MODE_IVB, 4,
 				bcs_blt_mode_read, bcs_blt_mode_write);
-		vgt_register_mmio_handler(_REG_VCS_MFX_MODE, 4,
+		vgt_register_mmio_handler(_REG_VCS_MFX_MODE_IVB, 4,
 				vcs_mfx_mode_read, vcs_mfx_mode_write);
 	}
 
