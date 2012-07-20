@@ -2181,7 +2181,8 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 
 	for (i=0; i<num; i++) {
 		int reg = vgt_render_regs[i];
-		if (reg_hw_update(vgt->pdev, reg)) {
+		//if (reg_hw_update(vgt->pdev, reg)) {
+		{
 			__sreg(vgt, reg) = VGT_MMIO_READ(vgt->pdev, reg);
 			__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
 			dprintk("....save mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
@@ -2209,8 +2210,13 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 		 * FIXME: there's regs only with some bits updated by HW. Need
 		 * OR vm's update with hw's bits?
 		 */
-		if (!reg_hw_update(vgt->pdev, reg))
-			VGT_MMIO_WRITE(vgt->pdev, reg, __sreg(vgt, reg));
+		//if (!reg_hw_update(vgt->pdev, reg))
+		if (__sreg(vgt, _REG_RCS_UHPTR) & 1) {
+			printk("!!!!!UHPTR is valid after resuming. Clear the valid bit\n");
+			__sreg(vgt, _REG_RCS_UHPTR) &= ~1;
+			__vreg(vgt, _REG_RCS_UHPTR) &= ~1;
+		}
+		VGT_MMIO_WRITE(vgt->pdev, reg, __sreg(vgt, reg));
 	}
 }
 
