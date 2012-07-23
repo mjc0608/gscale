@@ -2675,6 +2675,9 @@ void vgt_release_instance(struct vgt_device *vgt)
 		}
 	}
 
+	if (vgt->pdev->enable_ppgtt)
+		vgt_destroy_shadow_ppgtt(vgt);
+
 	kfree(vgt->vgtt);
 	kfree(vgt->state.vReg);
 	kfree(vgt->state.sReg);

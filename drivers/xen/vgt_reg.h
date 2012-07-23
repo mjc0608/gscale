@@ -2354,6 +2354,7 @@ extern struct mmio_hash_table *vgt_hash_lookup_mtable(struct vgt_device *vgt, in
 
 extern bool vgt_init_shadow_ppgtt(struct vgt_device *vgt);
 extern bool vgt_setup_ppgtt(struct vgt_device *vgt);
+extern void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt);
 /*
  * Configuration register definition for BDF: 0:0:0.
  */

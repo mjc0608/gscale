@@ -472,3 +472,14 @@ bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 	}
 	return true;
 }
+
+void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt)
+{
+	int i;
+	vgt_ppgtt_pte_t *p;
+
+	for (i = 0; i < 1024; i++) {
+		p = &vgt->shadow_pte_table[i];
+		__free_page(p->pte_page);
+	}
+}
