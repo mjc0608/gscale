@@ -1391,6 +1391,16 @@ int vgt_thread(void *priv)
 			vgt_signal_uevent(pdev);
 		}
 
+		if (test_and_clear_bit(VGT_REQUEST_PPGTT_INIT, (void *)&pdev->request)) {
+			int i;
+			for (i = 0; i < VGT_MAX_VMS; i++) {
+				if (pdev->device[i] && pdev->device[i]->need_ppgtt_setup) {
+					vgt_setup_ppgtt(pdev->device[i]);
+					pdev->device[i]->need_ppgtt_setup = false;
+				}
+			}
+		}
+
 		/* context switch timeout hasn't expired */
 		if (wait)
 			continue;
@@ -2606,6 +2616,8 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		vgt_hvm_io_init(vgt);
 		if (vgt_hvm_enable(vgt) != 0)
 			return NULL;
+		if (pdev->enable_ppgtt)
+			vgt_init_shadow_ppgtt(vgt);
 	}
 
 	if (vgt->vm_id && vgt_ops->boot_time) {

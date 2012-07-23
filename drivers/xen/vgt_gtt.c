@@ -342,13 +342,10 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 	u32 addr_mask = 0, ctl_mask = 0;
 	struct pgt_device *pdev = vgt->pdev;
 
-	p->pte_page = alloc_page(GFP_KERNEL);
 	if (!p->pte_page) {
-		printk(KERN_ERR "Allocate shadow PTE page failed!\n");
-		return -1; /* XXX */
+		printk(KERN_ERR "Uninitialized shadow PTE page at index %d?\n", idx);
+		return -1;
 	}
-	/* XXX */
-	p->shadow_mpfn = g2m_pfn(vgt->vm_id, page_to_pfn(p->pte_page));
 	vgt->shadow_pde_table[idx].shadow_pte_phyaddr = p->shadow_mpfn << PAGE_SHIFT;
 
 	p->virt = shadow_ent = page_address(p->pte_page);
@@ -422,6 +419,26 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 
 		/* write_gtt with new shadow PTE page address */
 		vgt_write_gtt(vgt->pdev, base + i, shadow_pde);
+	}
+	return true;
+}
+
+bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
+{
+	int i;
+	vgt_ppgtt_pte_t *p;
+
+	dprintk("vgt_init_shadow_ppgtt for vm %d\n", vgt->vm_id);
+
+	for (i = 0; i < 1024; i++) {
+		p = &vgt->shadow_pte_table[i];
+		p->pte_page = alloc_page(GFP_KERNEL);
+		if (!p->pte_page) {
+			printk(KERN_ERR "Init shadow PTE page failed!\n");
+			return false;
+		}
+
+		p->shadow_mpfn = g2m_pfn(vgt->vm_id, page_to_pfn(p->pte_page));
 	}
 	return true;
 }

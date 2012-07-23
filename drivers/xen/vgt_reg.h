@@ -987,6 +987,7 @@ struct vgt_device {
 	/* PPGTT info: currently not per-ring but assume three rings share same
 	 * table.
 	 */
+	bool need_ppgtt_setup;
 	struct mmio_hash_table	*wp_table[MHASH_SIZE];	/* hash for WP pages */
 	vgt_ppgtt_pde_t	shadow_pde_table[1024];	 /* current max PDE entries should be 512 for 2G mapping */
 	vgt_ppgtt_pte_t shadow_pte_table[1024];
@@ -1220,7 +1221,9 @@ static inline void reg_set_owner(struct pgt_device *pdev,
 
 /* request types to wake up main thread */
 #define VGT_REQUEST_IRQ		0	/* a new irq pending from device */
-#define VGT_REQUEST_UEVENT  1
+#define VGT_REQUEST_UEVENT	1
+#define VGT_REQUEST_PPGTT_INIT  2	/* shadow ppgtt init request */
+
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {
 	set_bit(flag, (void *)&pdev->request);
@@ -2349,6 +2352,7 @@ extern void vgt_hash_remove_entry(struct vgt_device *vgt, int table, int key);
 extern void vgt_hash_free_mtable(struct vgt_device *vgt, int table);
 extern struct mmio_hash_table *vgt_hash_lookup_mtable(struct vgt_device *vgt, int table, int item);
 
+extern bool vgt_init_shadow_ppgtt(struct vgt_device *vgt);
 extern bool vgt_setup_ppgtt(struct vgt_device *vgt);
 /*
  * Configuration register definition for BDF: 0:0:0.
