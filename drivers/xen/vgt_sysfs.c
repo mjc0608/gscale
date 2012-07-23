@@ -86,7 +86,7 @@ static unsigned int query_reg;
 static void vgt_kobj_release(struct kobject *kobj)
 {
 	pr_debug("kobject: (%p): %s\n", kobj, __func__);
-    /* FIXME: we do not deallocate our kobject */
+	/* FIXME: we do not deallocate our kobject */
 	//kfree(kobj);
 }
 
@@ -284,7 +284,6 @@ static struct attribute *vgt_ctrl_attrs[] = {
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 
-
 /* copied code from here */
 static ssize_t kobj_attr_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf)
@@ -321,25 +320,25 @@ const struct sysfs_ops vgt_kobj_sysfs_ops = {
 #define kobj_to_vgt(kobj) container_of((kobj), struct vgt_device, kobj)
 static ssize_t gm_sz_show(struct kobject *kobj, struct kobj_attribute *attr,char *buf)
 {
-    struct vgt_device *vgt = kobj_to_vgt(kobj);
+	struct vgt_device *vgt = kobj_to_vgt(kobj);
 	return sprintf(buf, "%016llx\n", vgt->gm_sz);
 }
 
 static ssize_t aperture_sz_show(struct kobject *kobj, struct kobj_attribute *attr,char *buf)
 {
-    struct vgt_device *vgt = kobj_to_vgt(kobj);
+	struct vgt_device *vgt = kobj_to_vgt(kobj);
 	return sprintf(buf, "%016llx\n", vgt->aperture_sz);
 }
 
 static ssize_t aperture_base_show(struct kobject *kobj, struct kobj_attribute *attr,char *buf)
 {
-    struct vgt_device *vgt = kobj_to_vgt(kobj);
+	struct vgt_device *vgt = kobj_to_vgt(kobj);
 	return sprintf(buf, "%016llx\n", vgt->aperture_base);
 }
 
 static ssize_t aperture_base_va_show(struct kobject *kobj, struct kobj_attribute *attr,char *buf)
 {
-    struct vgt_device *vgt = kobj_to_vgt(kobj);
+	struct vgt_device *vgt = kobj_to_vgt(kobj);
 	return sprintf(buf, "%p\n", vgt->aperture_base_va);
 }
 
@@ -408,42 +407,42 @@ int vgt_add_state_sysfs(int vm_id)
 	 * not known ahead of time.
 	 */
 
-    ASSERT(vgt_ctrl_kobj);
+	ASSERT(vgt_ctrl_kobj);
 
-    /* check if such vmid has been used */
-    if (vmid_2_vgt_device(vm_id))
-        return -EINVAL;
+	/* check if such vmid has been used */
+	if (vmid_2_vgt_device(vm_id))
+		return -EINVAL;
 
-    vgt = create_vgt_instance(vgt_kobj_priv, vm_id);
-    if (vgt == NULL)
-        return -1;
+	vgt = create_vgt_instance(vgt_kobj_priv, vm_id);
+	if (vgt == NULL)
+		return -1;
 
-    /* init kobject */
+	/* init kobject */
 	kobject_init(&vgt->kobj, &vgt_instance_ktype);
 
-    /* set it before calling the kobject core */
-    vgt->kobj.kset = vgt_kset;
+	/* set it before calling the kobject core */
+	vgt->kobj.kset = vgt_kset;
 
-    /* add kobject, NULL parent indicates using kset as parent */
-    retval = kobject_add(&vgt->kobj, NULL, "vm%u", vgt->vm_id);
-    if (retval) {
-        printk(KERN_WARNING "%s: vgt kobject add error: %d\n",
-                __func__, retval);
-        kobject_put(&vgt->kobj);
-    }
+	/* add kobject, NULL parent indicates using kset as parent */
+	retval = kobject_add(&vgt->kobj, NULL, "vm%u", vgt->vm_id);
+	if (retval) {
+		printk(KERN_WARNING "%s: vgt kobject add error: %d\n",
+				     __func__, retval);
+		kobject_put(&vgt->kobj);
+	}
 
 	return retval;
 }
 
 void vgt_del_state_sysfs(int vmid)
 {
-    struct vgt_device *vgt;
-    vgt = vmid_2_vgt_device(vmid);
-    if (!vgt)
-        return;
+	struct vgt_device *vgt;
+	vgt = vmid_2_vgt_device(vmid);
+	if (!vgt)
+		return;
 
-    kobject_put(&vgt->kobj);
-    vgt_release_instance(vgt);
+	kobject_put(&vgt->kobj);
+	vgt_release_instance(vgt);
 }
 
 

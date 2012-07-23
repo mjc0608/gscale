@@ -194,20 +194,35 @@ static void show_debug(struct pgt_device *pdev, int ring_id)
 {
 	vgt_reg_t reg;
 	printk("debug registers(ring-%d, reg maked with <*> may not apply to every ring):\n", ring_id);
-	printk("....EIR: %x\n", VGT_MMIO_READ(pdev, _REG_RCS_EIR));
-	printk("....ESR: %x\n", VGT_MMIO_READ(pdev, _REG_RCS_ESR));
-	printk("....blit EIR: %x\n", VGT_MMIO_READ(pdev, _REG_BCS_EIR));
-	printk("....blit ESR: %x\n", VGT_MMIO_READ(pdev, _REG_BCS_ESR));
-	printk("....IPEHR(last executed inst): %x\n", VGT_MMIO_READ(pdev, 0x2068 + 0x10000*ring_id));
+	printk("....EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_EIR));
+	printk("....ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_ESR));
+	printk("....blit EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_EIR));
+	printk("....blit ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_ESR));
+	printk("....IPEHR(last executed inst): 0x%x\n", VGT_MMIO_READ(pdev, 0x2068 + 0x10000*ring_id));
 	reg = VGT_MMIO_READ(pdev, 0x2070 + 0x10000*ring_id);
-	printk("....INSTPS* (parser state): %x :\n", reg);
-	printk("....ACTHD(active header): %x\n", VGT_MMIO_READ(pdev, 0x2074 + 0x10000*ring_id));
-	printk("....DMA_FADD_P(current fetch DMA): %x\n", VGT_MMIO_READ(pdev, 0x2078 + 0x10000*ring_id));
-	printk("....CSCMDOP* (instruction DWORD): %x\n", VGT_MMIO_READ(pdev, 0x220C + 0x10000*ring_id));
-	printk("....CSCMDVLD* (command buffer valid): %x\n", VGT_MMIO_READ(pdev, 0x2210 + 0x10000*ring_id));
+	printk("....INSTPS* (parser state): 0x%x :\n", reg);
+	printk("....ACTHD(active header): 0x%x\n", VGT_MMIO_READ(pdev, 0x2074 + 0x10000*ring_id));
+	printk("....DMA_FADD_P(current fetch DMA): 0x%x\n", VGT_MMIO_READ(pdev, 0x2078 + 0x10000*ring_id));
+	printk("....CSCMDOP* (instruction DWORD): 0x%x\n", VGT_MMIO_READ(pdev, 0x220C + 0x10000*ring_id));
+	printk("....CSCMDVLD* (command buffer valid): 0x%x\n", VGT_MMIO_READ(pdev, 0x2210 + 0x10000*ring_id));
 	printk("(informative)\n");
-	printk("....INSTDONE_1(FYI)*: %x\n", VGT_MMIO_READ(pdev, 0x206C + 0x10000*ring_id));
-	printk("....INSTDONE_2*: %x\n", VGT_MMIO_READ(pdev, 0x207C + 0x10000*ring_id));
+	printk("....INSTDONE_1(FYI)*: 0x%x\n", VGT_MMIO_READ(pdev, 0x206C + 0x10000*ring_id));
+	printk("....INSTDONE_2*: 0x%x\n", VGT_MMIO_READ(pdev, 0x207C + 0x10000*ring_id));
+}
+
+#define ENABLED_STR(val, bit)		\
+	((val & bit) ? "enabled" : "disabled")
+
+static void gen7_show_mode_setting (struct pgt_device *pdev)
+{
+	vgt_reg_t reg;
+
+	reg = VGT_MMIO_READ(pdev, _REG_BCS_BLT_MODE);
+	printk("vGT: BLT_MODE 0x%x\n");
+	reg = VGT_MMIO_READ(pdev, _REG_RCS_GFX_MODE);
+	printk("vGT: GFX_MODE 0x%x\n");
+	reg = VGT_MMIO_READ(pdev, _REG_VCS_MFX_MODE);
+	printk("vGT: MFX_MODE 0x%x\n");
 }
 
 /*
@@ -221,8 +236,9 @@ static void show_mode_settings(struct pgt_device *pdev)
 {
 	vgt_reg_t reg;
 
-#define ENABLED_STR(val, bit)		\
-	((val & bit) ? "enabled" : "disabled")
+	if (pdev->is_ivybridge)
+		return gen7_show_mode_setting(pdev);
+
 	reg = VGT_MMIO_READ(pdev, _REG_GFX_MODE);
 	printk("vGT: GFX_MODE: (%x)\n", reg);
 	printk("....(%x)Flush TLB invalidation mode: %s\n",
@@ -230,8 +246,8 @@ static void show_mode_settings(struct pgt_device *pdev)
 		ENABLED_STR(reg, _REGBIT_FLUSH_TLB_INVALIDATION_MODE));
 	printk("....(%x)Replay mode: %x\n",
 		_REGBIT_REPLAY_MODE, reg & _REGBIT_REPLAY_MODE);
-	printk("....(%x)PPGTT: %s\n", _REGBIT_PPGTT,
-		ENABLED_STR(reg, _REGBIT_PPGTT));
+	printk("....(%x)PPGTT: %s\n", _REGBIT_PPGTT_ENABLE,
+		ENABLED_STR(reg, _REGBIT_PPGTT_ENABLE));
 
 	reg = VGT_MMIO_READ(pdev, _REG_MI_MODE);
 	printk("VGT: MI_MODE: (%x)\n", reg);
@@ -475,8 +491,8 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	if (reg >= _REG_FENCE_0_LOW && reg <= _REG_FENCE_15_HIGH)
 		ASSERT(0);
 
-	dprintk("vGT: address fix g->h for reg (%lx)(%x)\n", reg, g_value);
 	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
+	dprintk("vGT: address fix g->h for reg (0x%lx) value (0x%x) mask (0x%x)\n", reg, g_value, mask);
 	/*
 	 * NOTE: address ZERO is special, and sometimes the driver may hard
 	 * code address ZERO, e.g. in curbase setting (when the cursor becomes
@@ -919,10 +935,24 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		default_mmio_write(vgt, offset, p_data, bytes);
 	}
 
-	if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE) {
-		printk("vGT: write to global registers (%x)\n", offset);
-		enforce_mode_setting(vgt->pdev);
-		show_mode_settings(vgt->pdev);
+	if (pdev->is_ivybridge) {
+		switch(offset) {
+		case _REG_BCS_MI_MODE:
+		case _REG_BCS_BLT_MODE:
+		case _REG_RCS_MI_MODE:
+		case _REG_RCS_GFX_MODE:
+		case _REG_VCS_MI_MODE:
+		case _REG_VCS_MFX_MODE:
+			printk("vGT: write to global registers (%x)\n", offset);
+			enforce_mode_setting(vgt->pdev);
+			show_mode_settings(vgt->pdev);
+		}
+	} else if (pdev->is_sandybridge) {
+		if (offset == _REG_GFX_MODE || offset == _REG_MI_MODE || offset == _REG_ARB_MODE) {
+			printk("vGT: write to global registers (%x)\n", offset);
+			enforce_mode_setting(vgt->pdev);
+			show_mode_settings(vgt->pdev);
+		}
 	}
 
 	if (offset == _REG_DSPASURF)
@@ -2020,13 +2050,27 @@ vgt_reg_t vgt_global_regs[] = {
 	_REG_ARB_MODE,
 };
 
+vgt_reg_t vgt_gen7_global_regs[] = {
+	_REG_BCS_MI_MODE,
+	_REG_BCS_BLT_MODE,
+	_REG_RCS_MI_MODE,
+	_REG_RCS_GFX_MODE,
+	_REG_VCS_MI_MODE,
+	_REG_VCS_MFX_MODE,
+};
+
 /* global registers may need special handlers instead. study case by case later */
 static void vgt_setup_global_regs(struct pgt_device *pdev)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_NUM(vgt_global_regs); i++)
-		reg_set_owner(pdev, vgt_global_regs[i], VGT_OT_GLOBAL);
+	if (pdev->is_sandybridge) {
+		for (i = 0; i < ARRAY_NUM(vgt_global_regs); i++)
+			reg_set_owner(pdev, vgt_global_regs[i], VGT_OT_GLOBAL);
+	} else if (pdev->is_ivybridge) {
+		for (i = 0; i < ARRAY_NUM(vgt_gen7_global_regs); i++)
+			reg_set_owner(pdev, vgt_gen7_global_regs[i], VGT_OT_GLOBAL);
+	}
 }
 
 void vgt_rendering_save_mmio(struct vgt_device *vgt)
@@ -2690,7 +2734,7 @@ dprintk("VGT: Initial_phys_states\n");
 
 	bar0 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
 	bar1 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR1];
-	dprintk("bar0: %llx, Bar1: %llx\n", bar0, bar1);
+	dprintk("bar0: 0x%llx, Bar1: 0x%llx\n", bar0, bar1);
 
 	ASSERT ((bar0 & 7) == 4);
 	/* memory, 64 bits bar0 */
@@ -2699,7 +2743,7 @@ dprintk("VGT: Initial_phys_states\n");
 	ASSERT ((bar1 & 7) == 4);
 	/* memory, 64 bits bar */
 	pdev->gmadr_base = bar1 & ~0xf;
-	printk("gttmmio: %llx, gmadr:%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
+	printk("gttmmio: 0x%llx, gmadr: 0x%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
 
 	/* TODO: no need for this mapping since hypercall is used */
 	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, 2 * VGT_MMIO_SPACE_SZ);
@@ -2707,7 +2751,7 @@ dprintk("VGT: Initial_phys_states\n");
 		printk("Insufficient memory for ioremap1\n");
 		return false;
 	}
-	printk("gttmmio_base_va: %llx\n", (uint64_t)pdev->gttmmio_base_va);
+	printk("gttmmio_base_va: 0x%llx\n", (uint64_t)pdev->gttmmio_base_va);
 
 #if 1		// TODO: runtime sanity check warning...
 	//pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
@@ -2717,7 +2761,7 @@ dprintk("VGT: Initial_phys_states\n");
 		printk("Insufficient memory for ioremap2\n");
 		return false;
 	}
-	printk("gmadr_va: %llx\n", (uint64_t)pdev->gmadr_va);
+	printk("gmadr_va: 0x%llx\n", (uint64_t)pdev->gmadr_va);
 #endif
 
 #if 0
@@ -2983,7 +3027,7 @@ static int setup_gtt(struct pgt_device *pdev)
 
 	dma_addr |= (dma_addr >> 28) & 0xff0;
 	dma_addr |= 0x1;	/* UC, valid */
-	printk("....dummy page (%llx, %llx)\n", page_to_phys(dummy_page), dma_addr);
+	printk("....dummy page (0x%llx, 0x%llx)\n", page_to_phys(dummy_page), dma_addr);
 	dummy_addr = dma_addr;
 
 	/* for debug purpose */
@@ -3075,9 +3119,12 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 	int possible_ap, possible_gm, possible;
 	int i;
 	uint64_t dom0_start = phys_aperture_base(pdev);
+	uint64_t dom0_gm_start;
 
 	printk("vGT: total aperture (%x), total GM space (%llx)\n",
 		phys_aperture_sz(pdev), gm_sz(pdev));
+
+>>>>>>> 41069e1... vgt: Add IVB global register dump and code cleanups
 #ifndef DOM0_NON_IDENTICAL
 	pdev->max_vms = 1;		/* dom0 only */
 #else
@@ -3103,6 +3150,12 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 		pdev->max_vms = possible;
 	}
 
+	printk("vGT: total aperture %ldKB, total GM space %ldKB\n",
+		aperture_sz(pdev)/1024, gm_sz(pdev)/1024);
+	printk("vGT: reserved aperture %ldKB, dom0 aperture size %ldKB\n",
+		rsvd_aperture_sz(pdev)/1024, dom0_aperture_sz(pdev)/1024);
+	printk("vGT: avail aperture %ldKB, avail gm size %ldKB\n",
+		avail_ap/1024, avail_gm/1024);
 	printk("vGT: support %d VMs:\n", pdev->max_vms);
 
 	/* TODO: instead of using min size, calculate an optimal size for requested VMs */
@@ -3110,16 +3163,17 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 	vm_gm_sz(pdev) = VGT_MIN_GM_SZ;
 	for (i = 0; i < pdev->max_vms - 1; i++) {
 		printk("....VM#%d:\n", i);
-		printk("........aperture: [%llx, %llx]\n",
+		printk("........aperture: [0x%llx, 0x%llx]\n",
 			get_vm_aperture_base(pdev, i),
 			get_vm_aperture_end(pdev, i));
-		printk("........gm: [%llx, %llx], [%llx, %llx]\n",
+		printk("........gm: [0x%llx, 0x%llx], [0x%llx, 0x%llx]\n",
 			get_vm_visible_gm_base(pdev, i),
 			get_vm_visible_gm_end(pdev, i),
 			get_vm_hidden_gm_base(pdev, i),
 			get_vm_hidden_gm_end(pdev, i));
 
 		dom0_start = get_vm_aperture_end(pdev, i) + 1;
+		dom0_gm_start = get_vm_visible_gm_end(pdev, i) + 1;
 	}
 
 	ASSERT(dom0_start + dom0_aperture_sz(pdev) +
@@ -3127,14 +3181,16 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 		phys_aperture_base(pdev) + phys_aperture_sz(pdev));
 
 	dom0_aperture_base(pdev) = dom0_start;
-	printk("....dom0 aperture: [%llx, %llx]\n",
+	printk("....dom0 aperture: [0x%llx, 0x%llx]\n",
 			dom0_aperture_base(pdev),
 			dom0_aperture_end(pdev));
+	printk("....dom0 gm: 0x%llx\n", dom0_gm_start);
 
 	rsvd_aperture_base(pdev) = dom0_aperture_end(pdev) + 1;
-	printk("....reserved aperture: [%llx, %llx]\n",
+	printk("....reserved aperture: [0x%llx, 0x%llx]\n",
 			rsvd_aperture_base(pdev),
-			rsvd_aperture_end(pdev) );
+			rsvd_aperture_end(pdev));
+	printk("....reserved gm: 0x%llx\n", dom0_gm_start + dom0_aperture_end(pdev) - dom0_aperture_base(pdev) + 1);
 
 	/* serve as a simple linear allocator */
 	pdev->rsvd_aperture_pos = 0;
@@ -3155,24 +3211,24 @@ int vgt_initialize(struct pci_dev *dev)
 
 	memset (mtable, 0, sizeof(mtable));
 
-	if ( !vgt_initialize_pgt_device(dev, pdev) )
+	if (!vgt_initialize_pgt_device(dev, pdev))
 		goto err;
-	if ( !vgt_initialize_mmio_hooks() )
+	if (!vgt_initialize_mmio_hooks())
 		goto err;
-	if ( !initial_phys_states(pdev) )
+	if (!initial_phys_states(pdev))
 		goto err;
 
 	vgt_calculate_max_vms(pdev);
 
 	vgt_init_device_func(pdev);
 
-	if ( vgt_irq_init(pdev) != 0)
+	if (vgt_irq_init(pdev) != 0)
 		goto err;
 
 	/* setup the scratch page for the context switch */
 	pdev->scratch_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
 		pdev->rsvd_aperture_pos);
-	printk("scratch page is allocated at gm(%llx)\n", pdev->scratch_page);
+	printk("scratch page is allocated at gm(0x%llx)\n", pdev->scratch_page);
 	/* reserve the 1st trunk for vGT's general usage */
 	pdev->rsvd_aperture_pos += VGT_APERTURE_PER_INSTANCE_SZ;
 
@@ -3249,9 +3305,9 @@ int vgt_initialize(struct pci_dev *dev)
 	printk("vgt_initialize succeeds.\n");
 	return 0;
 err:
-    printk("vgt_initialize failed.\n");
-    vgt_destroy();
-    return -1;
+	printk("vgt_initialize failed.\n");
+	vgt_destroy();
+	return -1;
 }
 
 void vgt_destroy()

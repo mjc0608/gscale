@@ -351,7 +351,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	vgt_reg_t	oval;
 
 	ASSERT(bytes <= 4);
-//	printk("vGT:ring_mmio_write (%x) with val (%x)\n", off, *((u32 *)p_data));
+	printk("vGT:ring_mmio_write (0x%x) with val (0x%x)\n", off, *((u32 *)p_data));
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 	ASSERT(!(rel_off & (bytes - 1)));
 

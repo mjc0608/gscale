@@ -68,7 +68,7 @@
 
 #define SANDY_BRIDGE
 #define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); BUG();}} while (0);
-#define ASSERT_NUM(x,y) do { if (!(x)) {printk("Assert at %s line %d para %llx\n", __FILE__, __LINE__, (u64)y); BUG();}} while (0);
+#define ASSERT_NUM(x,y) do { if (!(x)) {printk("Assert at %s line %d para 0x%llx\n", __FILE__, __LINE__, (u64)y); BUG();}} while (0);
 
 //#define VGT_DEBUG
 #ifdef VGT_DEBUG
@@ -134,7 +134,7 @@ typedef struct {
     vgt_reg_t	*vReg;		/* guest view of the register state */
     vgt_reg_t	*sReg;		/* Shadow (used by hardware) state of the register */
     uint8_t	cfg_space[VGT_CFG_SPACE_SZ];
-	bool	bar_mapped[VGT_BAR_NUM];
+    bool	bar_mapped[VGT_BAR_NUM];
     uint64_t	gt_mmio_base;	/* bar0/GTTMMIO  */
     uint64_t	aperture_base;	/* bar1: guest aperture base */
 //    uint64_t	gt_gmadr_base;	/* bar1/GMADR */
@@ -278,11 +278,19 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_GFX_MODE	0x2520
 #define		_REGBIT_FLUSH_TLB_INVALIDATION_MODE	(1 << 13)
 #define		_REGBIT_REPLAY_MODE			(1 << 11)
-#define		_REGBIT_PPGTT				(1 << 9)
+#define		_REGBIT_PPGTT_ENABLE			(1 << 9)
 #define _REG_GFX_MODE_IVB	0x229C
 #define _REG_ARB_MODE	0x4030
 #define		_REGBIT_ADDRESS_SWIZZLING		(3 << 4)
 #define _REG_GT_MODE	0x20D0
+
+/* IVB+ */
+#define _REG_BCS_MI_MODE	0x2209C
+#define _REG_BCS_BLT_MODE	0x2229C
+#define _REG_RCS_MI_MODE	0x0209C
+#define _REG_RCS_GFX_MODE	0x0229C
+#define _REG_VCS_MI_MODE	0x1209C
+#define _REG_VCS_MFX_MODE	0x1229C
 
 #define _REG_RCS_IMR		0x20A8
 #define _REG_VCS_IMR		0x120A8
@@ -1022,7 +1030,7 @@ struct pgt_device {
 	vgt_reg_t initial_mmio_state[VGT_MMIO_REG_NUM];	/* copy from physical at start */
 	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */
 	uint32_t bar_size[VGT_BAR_NUM];
-	uint64_t total_gm_sz;	/* size of available GM space */
+	uint64_t total_gm_sz;	/* size of available GM space, e.g 2M GTT is 2GB */
 
 	uint64_t gttmmio_base;	/* base of GTT and MMIO */
 	void *gttmmio_base_va;	/* virtual base of mmio */
@@ -1038,10 +1046,10 @@ struct pgt_device {
 	uint64_t dom0_aperture_base;
 	uint64_t vm_aperture_sz;
 	uint64_t vm_gm_sz;
-	uint64_t	rsvd_aperture_pos;	/* position of the next free reserved page */
-	uint64_t  	scratch_page;		/* page used for data written from GPU */
-	uint64_t    ctx_switch_rb_page; /* page used as ring buffer for context switch */
-	uint64_t	dummy_area;
+	uint64_t rsvd_aperture_pos;	/* position of the next free reserved page */
+	uint64_t scratch_page;		/* page used for data written from GPU */
+	uint64_t ctx_switch_rb_page;	/* page used as ring buffer for context switch */
+	uint64_t dummy_area;
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
@@ -1117,6 +1125,7 @@ extern struct list_head pgt_devices;
 #define reg_always_virt(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ALWAYS_VIRT)
 #define reg_addr_index(pdev, reg)	\
 	((pdev->reg_info[REG_INDEX(reg)] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
+
 static inline void reg_set_pt(struct pgt_device *pdev, vgt_reg_t reg)
 {
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_PT;
