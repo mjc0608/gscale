@@ -59,8 +59,6 @@
 #include <linux/linkage.h>
 #include <linux/module.h>
 #include <linux/slab.h>
-#include <xen/interface/memory.h>
-#include <asm/xen/hypercall.h>
 #include <xen/vgt.h>
 #include <xen/vgt-parser.h>
 #include "vgt_reg.h"
@@ -283,57 +281,6 @@ static int vgt_cmd_handler_mi_load_register_imm(struct vgt_cmd_data *data)
 }
 
 #define USE_GLOBAL_GTT_MASK (1U << 22)
-unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
-{
-	struct xen_get_mfn_from_pfn pfn_arg;
-	int rc;
-	unsigned long pfn_list[1];
-
-	pfn_list[0] = g_pfn;
-
-	set_xen_guest_handle(pfn_arg.pfn_list, pfn_list);
-	pfn_arg.nr_pfns = 1;
-	pfn_arg.domid = vm_id;
-
-	rc = HYPERVISOR_memory_op(XENMEM_get_mfn_from_pfn, &pfn_arg);
-	if(rc < 0){
-		printk(KERN_ERR "failed to get mfn for gpfn(0x%lx)\n, errno=%d\n", g_pfn,rc);
-		return INVALID_MFN;
-	}
-
-	return pfn_list[0];
-}
-/*
- * IN:  p_gtt_val - guest GTT entry
- * OUT: m_gtt_val - translated machine GTT entry from guest GTT entry
- *					on success, it will be written with correct value
- *					otherwise, it will not be written
- */
-int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val)
-{
-	gtt_pte_t pte, *p_pte;
-	unsigned long g_pfn, mfn;
-
-	p_pte = &pte;
-	gtt_pte_make(p_pte, p_gtt_val);
-
-	if (!gtt_pte_valid(p_pte)){
-		*m_gtt_val = p_gtt_val;
-		return 0;
-	}
-
-	g_pfn = gtt_pte_get_pfn(p_pte);
-	mfn = g2m_pfn(vgt->vm_id, g_pfn);
-	if (mfn == INVALID_MFN){
-		printk(KERN_ERR "Invalid gtt entry 0x%x\n", p_gtt_val);
-		return -EINVAL;
-	}
-	gtt_pte_set_pfn(p_pte, mfn);
-
-	*m_gtt_val = gtt_pte_get_val(p_pte);
-
-	return 0;
-}
 
 static int vgt_cmd_handler_mi_update_gtt(struct vgt_cmd_data *data)
 {
@@ -1195,77 +1142,6 @@ static void show_instruction_info(struct vgt_cmd_data *d)
 	/* FIXME: for unknown command, the following info may be incorrect*/
 	printk(KERN_ERR "buffer_type=%d instruction=%08x type=0x%x sub_type=0x%x opcode=0x%x sub_opcode=0x%x\n",
 			d->buffer_type, d->instruction[0], d->type, d->sub_type, d->opcode, d->sub_opcode);
-}
-
-bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
-	void *p_data, unsigned int bytes)
-{
-	uint32_t g_gtt_index;
-
-	ASSERT(bytes == 4);
-
-	off -= VGT_MMIO_SPACE_SZ;
-	if (off >= vgt->vgtt_sz) {
-		dprintk("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
-		return false;
-	}
-
-	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
-	*(uint32_t*)p_data = vgt->vgtt[g_gtt_index];
-	return true;
-}
-
-#define GTT_INDEX_MB(x) ((SIZE_1MB*(x)) >> GTT_PAGE_SHIFT)
-
-bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
-	void *p_data, unsigned int bytes)
-{
-	uint32_t g_gtt_val, h_gtt_val, g_gtt_index, h_gtt_index;
-	int rc;
-	uint64_t g_addr;
-
-	ASSERT(bytes == 4);
-
-	off -= VGT_MMIO_SPACE_SZ;
-	if (off >= vgt->vgtt_sz) {
-		dprintk("vGT(%d): captured out of range GTT write on off %x\n", vgt->vgt_id, off);
-		return false;
-	}
-
-	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
-	g_gtt_val = *(uint32_t*)p_data;
-	vgt->vgtt[g_gtt_index] = g_gtt_val;
-
-	g_addr = g_gtt_index << GTT_PAGE_SHIFT;
-	/* the VM may configure the whole GM space when ballooning is used */
-	if (!g_gm_is_visible(vgt, g_addr) && !g_gm_is_hidden(vgt, g_addr)) {
-		static int count = 0;
-
-		/* print info every 32MB */
-		if (!(count % 8192))
-			dprintk("vGT(%d): capture ballooned write for %d times (%x)\n",
-				vgt->vgt_id, count, off);
-
-		count++;
-		/* in this case still return true since the impact is on vgtt only */
-		return true;
-	}
-
-	rc = gtt_p2m(vgt, g_gtt_val, &h_gtt_val);
-	if (rc < 0){
-		printk("vGT(%d): failed to translate g_gtt_val(%x)\n", vgt->vgt_id, g_gtt_val);
-		return false;
-	}
-
-	h_gtt_index = g2h_gtt_index(vgt, g_gtt_index);
-	vgt_write_gtt( vgt->pdev, h_gtt_index, h_gtt_val );
-#ifdef DOM0_DUAL_MAP
-	if ( (h_gtt_index >= GTT_INDEX_MB(128)) && (h_gtt_index < GTT_INDEX_MB(192)) ){
-		vgt_write_gtt( vgt->pdev, h_gtt_index - GTT_INDEX_MB(128), h_gtt_val );
-	}
-#endif
-
-	return true;
 }
 
 static int __vgt_scan_vring(struct vgt_device *vgt, vgt_reg_t head, vgt_reg_t tail, vgt_reg_t base, vgt_reg_t size)

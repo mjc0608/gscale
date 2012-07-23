@@ -2320,6 +2320,18 @@ bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_dat
 void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset);
 void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset);
 
+extern bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes);
+
+extern bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes);
+
+extern int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val);
+
+extern unsigned long g2m_pfn(int vm_id, unsigned long g_pfn);
+
+#define INVALID_MFN  (~0UL)
+
 /* new hash function */
 extern void vgt_hash_register_entry(struct vgt_device *vgt, int table, struct mmio_hash_table *mht);
 extern void vgt_hash_remove_entry(struct vgt_device *vgt, int table, int key);

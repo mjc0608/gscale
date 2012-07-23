@@ -287,18 +287,6 @@ extern int vgt_cmd_handler_register(unsigned int type, unsigned int opcode,
 
 extern int vgt_scan_vring(struct vgt_device *vgt, int ring_id);
 
-extern bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
-	void *p_data, unsigned int bytes);
-
-extern bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
-	void *p_data, unsigned int bytes);
-
-int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val);
-
-extern unsigned long g2m_pfn(int vm_id, unsigned long g_pfn);
-
-#define INVALID_MFN  (~0UL)
-
 extern void vgt_addr_fix_save(uint32_t* addr, uint32_t data);
 
 extern void vgt_addr_fix_restore(void);
