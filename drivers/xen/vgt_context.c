@@ -2833,13 +2833,11 @@ static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 
 	vgt_set_addr_mask(pdev, _REG_RCS_FBC_RT_BASE_ADDR, 0xFFFFF000);
 
-#if 0
-	/* not conduct address fix for PPGTT BASE */
-	vgt_set_addr_mask(pdev, _REG_RCS_PP_DIR_BASE_READ, 0xFFFF0000);
-	vgt_set_addr_mask(pdev, _REG_RCS_PP_DIR_BASE_WRITE, 0xFFFF0000);
-	vgt_set_addr_mask(pdev, _REG_VCS_PP_DIR_BASE, 0xFFFF0000);
-	vgt_set_addr_mask(pdev, _REG_BCS_PP_DIR_BASE, 0xFFFF0000);
-#endif
+	if (pdev->enable_ppgtt) {
+		vgt_set_addr_mask(pdev, _REG_RCS_PP_DIR_BASE_IVB, 0xFFFF0000);
+		vgt_set_addr_mask(pdev, _REG_VCS_PP_DIR_BASE, 0xFFFF0000);
+		vgt_set_addr_mask(pdev, _REG_BCS_PP_DIR_BASE, 0xFFFF0000);
+	}
 
 	vgt_set_addr_mask(pdev, _REG_CURABASE, 0xFFFFF000);
 	vgt_set_addr_mask(pdev, _REG_CURBBASE, 0xFFFFF000);
@@ -2949,6 +2947,10 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	pdev->pbus = dev->bus;
 
 	vgt_set_device_type(pdev);
+
+	/* check PPGTT enabling. now always enable on IVB. */
+	if (pdev->is_ivybridge)
+		pdev->enable_ppgtt = 1;
 
 	INIT_LIST_HEAD(&pdev->rendering_runq_head);
 	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
@@ -3221,7 +3223,7 @@ int vgt_initialize(struct pci_dev *dev)
 
 	if (!vgt_initialize_pgt_device(dev, pdev))
 		goto err;
-	if (!vgt_initialize_mmio_hooks())
+	if (!vgt_initialize_mmio_hooks(pdev))
 		goto err;
 	if (!initial_phys_states(pdev))
 		goto err;

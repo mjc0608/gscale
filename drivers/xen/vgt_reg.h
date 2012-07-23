@@ -146,6 +146,12 @@ typedef struct {
     uint8_t saveCR[37];
 } vgt_state_t;
 
+typedef struct {
+	vgt_reg_t base;
+	vgt_reg_t cache_ctl;
+	vgt_reg_t mode;
+} vgt_ring_ppgtt_t;
+
 #define __vreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.vReg + off))
 #define __vreg8(vgt, off) (*(char *)((char *)vgt->state.vReg + off))
 #define __sreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.sReg + off))
@@ -167,6 +173,11 @@ typedef struct {
 	uint64_t	context_save_area;
 	bool	initialized;	/* whether it includes an valid context */
 	bool	stateless;	/* whether the engine requires special context switch */
+	/* ppgtt info */
+	vgt_ring_ppgtt_t	vring_ppgtt_info; /* guest view */
+	vgt_ring_ppgtt_t	sring_ppgtt_info; /* shadow info */
+	u8 has_ppgtt_base_set : 1;	/* Is PP dir base set? */
+	u8 has_ppgtt_mode_enabled : 1;  /* Is ring's mode reg PPGTT enable set? */
 } vgt_state_ring_t;
 
 struct vgt_device;
@@ -330,11 +341,14 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_RCS_FBC_RT_BASE_ADDR	0x2128
 #define _REG_IVB_RCS_FBC_RT_BASE_ADDR	0X7020
 
-#define _REG_IVB_RCS_PP_DIR_BASE	0x2228
 #define _REG_RCS_PP_DIR_BASE_READ	0x2518
 #define _REG_RCS_PP_DIR_BASE_WRITE	0x2228
-#define _REG_VCS_PP_DIR_BASE		0x12228
+#define _REG_RCS_PP_DIR_BASE_IVB	0x2228
+#define _REG_RCS_PP_DCLV		0x2220
 #define _REG_BCS_PP_DIR_BASE		0x22228
+#define _REG_BCS_PP_DCLV		0x22220
+#define _REG_VCS_PP_DIR_BASE		0x12228
+#define _REG_VCS_PP_DCLV		0x12220
 
 #define _REG_FENCE_0_LOW	0x100000
 #define _REG_FENCE_0_HIGH	0x100004
@@ -865,6 +879,8 @@ struct vgt_intel_device_info {
 #define MSAC_APERTURE_SIZE_256M			(1 << 1)
 #define MSAC_APERTURE_SIZE_512M			(3 << 1)
 
+struct pgt_device;
+
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
 extern void vgt_destroy_debugfs(struct vgt_device *vgt);
@@ -892,7 +908,7 @@ static inline bool vgt_register_mmio_read(int reg,
 	return vgt_register_mmio_single(reg, read, NULL);
 }
 
-extern bool vgt_initialize_mmio_hooks(void);
+extern bool vgt_initialize_mmio_hooks(struct pgt_device *);
 extern int vgt_hvm_info_init(struct vgt_device *vgt);
 extern int vgt_hvm_io_init(struct vgt_device *vgt);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
@@ -1001,8 +1017,6 @@ enum vgt_port_type {
 };
 
 /* device specific hooks */
-struct pgt_device;
-
 struct vgt_device_funcs {
 	void (*force_wake)(struct pgt_device *);
 };
@@ -1080,6 +1094,7 @@ struct pgt_device {
 	u8 is_sandybridge : 1;
 	u8 is_ivybridge : 1;
 	u8 is_haswell : 1;
+	u8 enable_ppgtt : 1;
 
 	struct vgt_device_funcs dev_func;
 };
@@ -2276,6 +2291,8 @@ bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_dat
 
 void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset);
 void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset);
+
+extern bool vgt_setup_ppgtt(struct vgt_device *vgt);
 /*
  * Configuration register definition for BDF: 0:0:0.
  */

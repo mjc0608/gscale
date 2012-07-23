@@ -538,6 +538,212 @@ bool hdcp_pch_boot_auth_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+/* XXX assume all rings use same PPGTT table, so try to initialize once
+ * all bases are set.
+ */
+void vgt_try_setup_ppgtt(struct vgt_device *vgt)
+{
+	int ring;
+	u32 base;
+
+	for (ring = 0; ring < 3; ring++) {
+		if (!vgt->rb[ring].has_ppgtt_base_set)
+			return;
+	}
+
+	base = vgt->rb[0].vring_ppgtt_info.base;
+	for (ring = 1; ring < 3; ring++) {
+		if (vgt->rb[ring].vring_ppgtt_info.base != base) {
+			dprintk("zhen: different PPGTT base is set!\n");
+			vgt->pdev->enable_ppgtt = 0;
+			return;
+		}
+	}
+
+	dprintk("zhen: all rings are set PPGTT base and use single table!\n");
+	vgt_setup_ppgtt(vgt);
+}
+
+static int ring_pp_dir_base_write(struct vgt_device *vgt, int ring_id, u32 off, u32 base)
+{
+	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
+	vgt_ring_ppgtt_t *s_info = &vgt->rb[ring_id].sring_ppgtt_info;
+
+	v_info->base = base;
+	s_info->base = mmio_g2h_gmadr(vgt, off, v_info->base);
+
+	if (reg_hw_access(vgt, off))
+		VGT_MMIO_WRITE(vgt->pdev, off, s_info->base);
+
+	vgt->rb[ring_id].has_ppgtt_base_set = 1;
+
+	vgt_try_setup_ppgtt(vgt);
+
+	return 0;
+}
+
+bool rcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
+			  void *p_data, unsigned int bytes)
+{
+	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_RCS].vring_ppgtt_info;
+	vgt_ring_ppgtt_t *s_info = &vgt->rb[RING_BUFFER_RCS].sring_ppgtt_info;
+
+	ASSERT(bytes == 4);
+
+	*(u32 *)p_data = v_info->base;
+	return true;
+}
+
+bool rcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
+			   void *p_data, unsigned int bytes)
+{
+	u32 base = *(u32 *)p_data;
+
+	ASSERT(bytes == 4);
+
+	ring_pp_dir_base_write(vgt, RING_BUFFER_RCS, off, base);
+	return true;
+}
+
+bool bcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
+			  void *p_data, unsigned int bytes)
+{
+	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_BCS].vring_ppgtt_info;
+	vgt_ring_ppgtt_t *s_info = &vgt->rb[RING_BUFFER_BCS].sring_ppgtt_info;
+
+	ASSERT(bytes == 4);
+
+	*(u32 *)p_data = v_info->base;
+	return true;
+}
+
+bool bcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
+			   void *p_data, unsigned int bytes)
+{
+	u32 base = *(u32 *)p_data;
+
+	ASSERT(bytes == 4);
+
+	ring_pp_dir_base_write(vgt, RING_BUFFER_BCS, off, base);
+	return true;
+}
+
+bool vcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
+			  void *p_data, unsigned int bytes)
+{
+	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VCS].vring_ppgtt_info;
+	vgt_ring_ppgtt_t *s_info = &vgt->rb[RING_BUFFER_VCS].sring_ppgtt_info;
+
+	ASSERT(bytes == 4);
+
+	*(u32 *)p_data = v_info->base;
+	return true;
+}
+
+bool vcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
+			   void *p_data, unsigned int bytes)
+{
+	u32 base = *(u32 *)p_data;
+
+	ASSERT(bytes == 4);
+
+	ring_pp_dir_base_write(vgt, RING_BUFFER_VCS, off, base);
+	return true;
+}
+
+bool rcs_gfx_mode_read(struct vgt_device *vgt, unsigned int off,
+		       void *p_data, unsigned int bytes)
+{
+	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_RCS].vring_ppgtt_info;
+
+	ASSERT(bytes == 4);
+
+	*(u32 *)p_data = v_info->mode;
+	return true;
+}
+
+bool bcs_blt_mode_read(struct vgt_device *vgt, unsigned int off,
+		       void *p_data, unsigned int bytes)
+{
+	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_BCS].vring_ppgtt_info;
+
+	ASSERT(bytes == 4);
+
+	*(u32 *)p_data = v_info->mode;
+	return true;
+}
+
+bool vcs_mfx_mode_read(struct vgt_device *vgt, unsigned int off,
+		       void *p_data, unsigned int bytes)
+{
+	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VCS].vring_ppgtt_info;
+
+	ASSERT(bytes == 4);
+
+	*(u32 *)p_data = v_info->mode;
+	return true;
+}
+
+int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
+{
+	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
+	vgt_ring_ppgtt_t *s_info = &vgt->rb[ring_id].sring_ppgtt_info;
+
+	v_info->mode = mode;
+	s_info->mode = mode;
+
+	if (reg_hw_access(vgt, off))
+		VGT_MMIO_WRITE(vgt->pdev, off, s_info->mode);
+
+	/* sanity check */
+	if ((mode & _REGBIT_PPGTT_ENABLE) && (mode & (_REGBIT_PPGTT_ENABLE << 16))) {
+		printk("PPGTT enabling\n");
+		/* XXX the order of mode enable for PPGTT and PPGTT dir base
+		 * setting is not strictly defined, e.g linux driver first
+		 * enables PPGTT bit in mode reg, then write PP dir base...
+		 */
+		vgt->rb[ring_id].has_ppgtt_mode_enabled = 1;
+	}
+
+	return 0;
+}
+
+bool rcs_gfx_mode_write(struct vgt_device *vgt, unsigned int off,
+			void *p_data, unsigned int bytes)
+{
+	u32 mode = *(u32 *)p_data;
+
+	ASSERT(bytes == 4);
+
+	ring_ppgtt_mode(vgt, RING_BUFFER_RCS, off, mode);
+
+	return true;
+}
+
+bool bcs_blt_mode_write(struct vgt_device *vgt, unsigned int off,
+			void *p_data, unsigned int bytes)
+{
+	u32 mode = *(u32 *)p_data;
+
+	ASSERT(bytes == 4);
+
+	ring_ppgtt_mode(vgt, RING_BUFFER_BCS, off, mode);
+
+	return true;
+}
+
+bool vcs_mfx_mode_write(struct vgt_device *vgt, unsigned int off,
+			void *p_data, unsigned int bytes)
+{
+	u32 mode = *(u32 *)p_data;
+
+	ASSERT(bytes == 4);
+
+	ring_ppgtt_mode(vgt, RING_BUFFER_VCS, off, mode);
+
+	return true;
+}
+
 /* FIXME: add EDID virtualization in the future
  */
 bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
@@ -1394,9 +1600,9 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 	return rc;
 }
 
-bool vgt_initialize_mmio_hooks()
+bool vgt_initialize_mmio_hooks(struct pgt_device *pdev)
 {
-    int i;
+	int i;
 
 	printk("mmio hooks initialized\n");
 	/* ring registers */
@@ -1477,6 +1683,24 @@ bool vgt_initialize_mmio_hooks()
 	vgt_register_mmio_write(_REG_FDI_TXB_CTL, update_fdi_rx_iir_status);
 	vgt_register_mmio_write(_REG_FDI_RXA_IMR, update_fdi_rx_iir_status);
 	vgt_register_mmio_write(_REG_FDI_RXB_IMR, update_fdi_rx_iir_status);
+
+	if (pdev->enable_ppgtt) {
+		/* trap PPGTT base register */
+		vgt_register_mmio_handler(_REG_RCS_PP_DIR_BASE_IVB, 4,
+				rcs_pp_dir_base_read, rcs_pp_dir_base_write);
+		vgt_register_mmio_handler(_REG_BCS_PP_DIR_BASE, 4,
+				bcs_pp_dir_base_read, bcs_pp_dir_base_write);
+		vgt_register_mmio_handler(_REG_VCS_PP_DIR_BASE, 4,
+				vcs_pp_dir_base_read, vcs_pp_dir_base_write);
+		/* XXX cache register? */
+		/* PPGTT enable register */
+		vgt_register_mmio_handler(_REG_RCS_GFX_MODE, 4,
+				rcs_gfx_mode_read, rcs_gfx_mode_write);
+		vgt_register_mmio_handler(_REG_BCS_BLT_MODE, 4,
+				bcs_blt_mode_read, bcs_blt_mode_write);
+		vgt_register_mmio_handler(_REG_VCS_MFX_MODE, 4,
+				vcs_mfx_mode_read, vcs_mfx_mode_write);
+	}
 
 	return true;
 }
