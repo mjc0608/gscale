@@ -196,6 +196,8 @@ struct mmio_hash_table	{
 #define		mhash(x)	hash_32(x & ~3, MHASH_SIZE_SHIFT);
 //#define mhash(x)	(((x >> 2) & ~(x>>8) & ~(x>>14) ) & (MHASH_SIZE-1))
 
+#define VGT_HASH_MMIO		0
+#define VGT_HASH_WP_PAGE	1
 
 /*
  * Ring ID definition.
@@ -962,6 +964,11 @@ struct vgt_device {
 	uint32_t	opregion_pa;
 
 	struct work_struct fb_debugfs_work;
+
+	/* PPGTT info: currently not per-ring but assume three rings share same
+	 * table.
+	 */
+	struct mmio_hash_table	*wp_table[MHASH_SIZE];	/* hash for WP pages */
 };
 
 extern struct vgt_device *vgt_dom0;
@@ -2291,6 +2298,12 @@ bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_dat
 
 void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset);
 void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset);
+
+/* new hash function */
+extern void vgt_hash_register_entry(struct vgt_device *vgt, int table, struct mmio_hash_table *mht);
+extern void vgt_hash_remove_entry(struct vgt_device *vgt, int table, int key);
+extern void vgt_hash_free_mtable(struct vgt_device *vgt, int table);
+extern struct mmio_hash_table *vgt_hash_lookup_mtable(struct vgt_device *vgt, int table, int item);
 
 extern bool vgt_setup_ppgtt(struct vgt_device *vgt);
 /*
