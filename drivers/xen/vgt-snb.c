@@ -295,17 +295,17 @@ static struct vgt_irq_info gen7_de_irq_info = {
 	.table_size = VGT_IRQ_BITWIDTH,
 	.propogate_virtual_event = vgt_propogate_virtual_event,
 	.table = {
-		{IRQ_PIPE_A_VBLANK,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 0
+		{IRQ_PIPE_A_VBLANK,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 0
 		{IRQ_PIPE_A_VSYNC,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 1
 		{IRQ_PIPE_A_LINE_COMPARE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 2
 		{IRQ_PRIMARY_A_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 3
 		{IRQ_SPRITE_A_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 4
-		{IRQ_PIPE_B_VBLANK,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 5
+		{IRQ_PIPE_B_VBLANK,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 5
 		{IRQ_PIPE_B_VSYNC,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 6
 		{IRQ_PIPE_B_LINE_COMPARE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 7
 		{IRQ_PRIMARY_B_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 8
 		{IRQ_SPRITE_B_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 9
-		{IRQ_PIPE_C_VBLANK,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 10
+		{IRQ_PIPE_C_VBLANK,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 10
 		{IRQ_PIPE_C_VSYNC,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 11
 		{IRQ_PIPE_C_LINE_COMPARE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 12
 		{IRQ_PRIMARY_C_FLIP_DONE,	vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 13
@@ -319,14 +319,14 @@ static struct vgt_irq_info gen7_de_irq_info = {
 		{IRQ_RESERVED,			NULL,				NULL},				/* bit 21 reserved */
 		{IRQ_RESERVED,			NULL,				NULL},				/* bit 22 reserved */
 		{IRQ_RESERVED,			NULL,				NULL},				/* bit 23 reserved */
-		{IRQ_DPST_PHASE_IN,	vgt_handle_phase_in,		NULL},				// bit 24
-		{IRQ_DPST_HISTOGRAM,	vgt_handle_histogram,		NULL},				// bit 25
+		{IRQ_DPST_PHASE_IN,		vgt_handle_phase_in,		NULL},				// bit 24
+		{IRQ_DPST_HISTOGRAM,		vgt_handle_histogram,		NULL},				// bit 25
 		{IRQ_AUX_CHANNEL_A,		vgt_handle_aux_channel,		NULL},				// bit 26
-		{IRQ_DP_A_HOTPLUG,		vgt_handle_hotplug,		NULL},				// bit 27
-		{IRQ_PCH_IRQ,	NULL,				NULL},				// bit 28
+		{IRQ_DP_A_HOTPLUG,		vgt_handle_dp_a_hotplug,	NULL},				// bit 27
+		{IRQ_PCH_IRQ,			NULL,				NULL},				// bit 28
 		{IRQ_GSE,			vgt_default_event_handler,	NULL},				// bit 29
 		{IRQ_ERROR_INTERRUPT_COMBINED,	NULL,				NULL},				// bit 30
-		{IRQ_RESERVED,		NULL,				NULL},				// bit 31
+		{IRQ_RESERVED,			NULL,				NULL},				// bit 31
 	},
 };
 
