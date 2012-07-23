@@ -460,6 +460,11 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _DP_AUX_CH_CTL_PRECHARGE_2US_SHIFT	16
 #define _REG_FORCEWAKE		0xA18C
 #define _REG_FORCEWAKE_ACK	0x130090
+#define _REG_MUL_FORCEWAKE	0xA188
+#define _REG_MUL_FORCEWAKE_ACK  0x130040
+#define _REG_ECOBUS		0xA180
+#define _REGBIT_MUL_FORCEWAKE_ENABLE	(1<<5)
+
 #define _REG_GT_THREAD_STATUS  0x13805C
 #define _REG_GT_CORE_STATUS  0x138060
 #define _REG_RC_STATE_CTRL_1    0xA090
@@ -990,6 +995,13 @@ enum vgt_port_type {
 	VGT_PORT_MAX
 };
 
+/* device specific hooks */
+struct pgt_device;
+
+struct vgt_device_funcs {
+	void (*force_wake)(struct pgt_device *);
+};
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list;
@@ -1063,6 +1075,8 @@ struct pgt_device {
 	u8 is_sandybridge : 1;
 	u8 is_ivybridge : 1;
 	u8 is_haswell : 1;
+
+	struct vgt_device_funcs dev_func;
 };
 
 extern struct list_head pgt_devices;
