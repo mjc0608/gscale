@@ -174,6 +174,14 @@ static int __init small_per_vm_resource_setup(char *str)
 }
 __setup("small_per_vm_resource", small_per_vm_resource_setup);
 
+bool vgt_debug;
+static int __init vgt_debug_setup(char *str)
+{
+	vgt_debug = true;
+	return 1;
+}
+__setup("vgt_debug", vgt_debug_setup);
+
 static struct pgt_device default_device = {
 	.bus = 0,
 	.devfn = 0x10,		/* BDF: 0:2:0 */

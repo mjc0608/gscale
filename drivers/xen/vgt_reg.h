@@ -70,13 +70,10 @@
 #define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); BUG();}} while (0);
 #define ASSERT_NUM(x,y) do { if (!(x)) {printk("Assert at %s line %d para 0x%llx\n", __FILE__, __LINE__, (u64)y); BUG();}} while (0);
 
-//#define VGT_DEBUG
-#ifdef VGT_DEBUG
+extern bool vgt_debug;
+
 #define dprintk(fmt, a...)	\
-	printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a)
-#else
-#define dprintk(fmt, a...)
-#endif
+	do { if (vgt_debug) printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a); } while (0)
 
 #define snb_device(dev)	1
 #define ivb_device(dev)	0
