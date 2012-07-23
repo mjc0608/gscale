@@ -1060,6 +1060,9 @@ struct pgt_device {
 	 * */
 	struct workqueue_struct *pgt_wq;
 
+	u8 is_sandybridge : 1;
+	u8 is_ivybridge : 1;
+	u8 is_haswell : 1;
 };
 
 extern struct list_head pgt_devices;

@@ -2845,10 +2845,44 @@ uint64_t vgt_get_gtt_size(struct pci_bus *bus)
 	return 0;
 }
 
+static void vgt_set_device_type(struct pgt_device *pdev)
+{
+	switch (pdev->pdev->device) {
+	case 0x0102:
+	case 0x0112:
+	case 0x0122:
+	case 0x0106:
+	case 0x0116:
+	case 0x0126:
+	case 0x010A:
+		pdev->is_sandybridge = 1;
+		break;
+	case 0x0156:
+	case 0x0166:
+	case 0x0152:
+	case 0x0162:
+	case 0x015a:
+	case 0x016a:
+		pdev->is_ivybridge = 1;
+		break;
+	case 0x0402:
+	case 0x0412:
+	case 0x040a:
+	case 0x041a:
+	case 0x0406:
+	case 0x0416:
+	case 0x0c16:
+		pdev->is_haswell = 1;
+		break;
+	}
+}
+
 static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
 {
 	pdev->pdev = dev;
 	pdev->pbus = dev->bus;
+
+	vgt_set_device_type(pdev);
 
 	INIT_LIST_HEAD(&pdev->rendering_runq_head);
 	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
