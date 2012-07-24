@@ -229,7 +229,7 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 	/* find shadow PTE */
 	/* XXX search PDE table for PTE table index */
 	for (i = 0; i < 1024; i++) {
-		if (vgt->shadow_pde_table[i].virtual_phyaddr == (offset & PAGE_MASK)) {
+		if ((vgt->shadow_pde_table[i].virtual_phyaddr & PAGE_MASK) == (offset & PAGE_MASK)) {
 			printk(KERN_INFO "zhen: Found PTE page at 0x%lx (%d)\n", offset & PAGE_MASK, i);
 			break;
 		}
