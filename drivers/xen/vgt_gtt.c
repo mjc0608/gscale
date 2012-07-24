@@ -437,7 +437,7 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		vgt_ppgtt_shadow_pte_init(vgt, i, pte_phy);
 
 		/* WP original PTE page */
-		vgt_set_wp_page(vgt, pte_phy);
+		vgt_set_wp_page(vgt, pte_phy >> PAGE_SHIFT);
 
 		shadow_pde = vgt->shadow_pde_table[i].shadow_pte_phyaddr;
 		shadow_pde |= (vgt->shadow_pde_table[i].shadow_pte_phyaddr >> 28) & 0xff0;
