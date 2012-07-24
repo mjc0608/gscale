@@ -381,13 +381,12 @@ struct mmio_hash_table *vgt_hash_lookup_mtable(struct vgt_device *vgt, int table
 		if (item >= gtt_mmio_handler.mmio_base)
 			return &gtt_mmio_handler;
 		mht = mtable[index];
+		item &= ~3;
 		break;
 	case VGT_HASH_WP_PAGE:
 		mht = vgt->wp_table[index];
 		break;
 	}
-
-	item &= ~3;
 
 	while (mht) {
 		if (mht->mmio_base == item)
@@ -425,7 +424,8 @@ void vgt_hash_register_entry(struct vgt_device *vgt, int table, struct mmio_hash
 {
 	int index = mhash(mht->mmio_base);
 
-	ASSERT ((mht->mmio_base & 3) == 0);
+	if (table == VGT_HASH_MMIO)
+		ASSERT ((mht->mmio_base & 3) == 0);
 	vgt_hash_add_mtable(vgt, table, index, mht);
 }
 
@@ -985,10 +985,10 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 
 	/* XXX PPGTT PTE WP comes here too. */
 	if (pdev->enable_ppgtt) {
-		mht = vgt_hash_lookup_mtable(vgt, VGT_HASH_WP_PAGE, pa);
+		mht = vgt_hash_lookup_mtable(vgt, VGT_HASH_WP_PAGE, pa >> PAGE_SHIFT);
 		if (mht && mht->write) {
 			/* XXX lock? */
-			mht->write(vgt, offset, p_data, bytes);
+			mht->write(vgt, pa, p_data, bytes);
 			return true;
 		}
 	}

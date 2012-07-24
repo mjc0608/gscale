@@ -265,6 +265,7 @@ int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
 {
 	xen_hvm_vgt_wp_pages_t req;
 	int i, rc = 0;
+	unsigned long *p = pages;
 
 	if (nr > MAX_WP_BATCH_PAGES)
 		return -1;
@@ -288,7 +289,7 @@ int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
 			mht = kmalloc(sizeof(struct mmio_hash_table), GFP_KERNEL);
 			if (!mht)
 				break; /* XXX */
-			mht->mmio_base = *pages++;
+			mht->mmio_base = *p++;
 			mht->write = vgt_ppgtt_handle_pte_wp;
 			vgt_hash_register_entry(vgt, VGT_HASH_WP_PAGE, mht);
 		}
@@ -306,6 +307,7 @@ int vgt_unset_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
 {
 	xen_hvm_vgt_wp_pages_t req;
 	int i, rc = 0;
+	unsigned long *p = pages;
 
 	if (nr > MAX_WP_BATCH_PAGES)
 		return -1;
@@ -323,7 +325,7 @@ int vgt_unset_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
 		printk(KERN_ERR "Unset WP pages failed!\n");
 	else {
 		for (i = 0; i < nr; i++)
-			vgt_hash_remove_entry(vgt, VGT_HASH_WP_PAGE, *pages++);
+			vgt_hash_remove_entry(vgt, VGT_HASH_WP_PAGE, *p++);
 	}
 
 	return rc;
