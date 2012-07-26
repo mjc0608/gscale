@@ -219,10 +219,10 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 	struct pgt_device *pdev = vgt->pdev;
 	int index, i;
 	u32 *pte;
-	unsigned long h_addr;
+	unsigned long g_addr = 0, h_addr = 0;
 	u32 addr_mask = 0, ctl_mask = 0;
 
-	dprintk("PTE WP handler: offset 0x%x data 0x%x\n", offset, *(unsigned int *)p_data);
+	dprintk("PTE WP handler: offset 0x%x data 0x%lx bytes %d\n", offset, *(unsigned long *)p_data, bytes);
 
 	/* need to know: fault pfn, write fault address, write fault data */
 
@@ -230,7 +230,7 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 	/* XXX search PDE table for PTE table index */
 	for (i = 0; i < 1024; i++) {
 		if ((vgt->shadow_pde_table[i].virtual_phyaddr & PAGE_MASK) == (offset & PAGE_MASK)) {
-			printk(KERN_INFO "zhen: Found PTE page at 0x%lx (%d)\n", offset & PAGE_MASK, i);
+			dprintk(KERN_INFO "zhen: Found PTE page at 0x%lx (%d)\n", offset & PAGE_MASK, i);
 			break;
 		}
 	}
@@ -238,6 +238,8 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 		printk(KERN_ERR "Failed to find PTE page at 0x%x\n", offset);
 		return false;
 	}
+
+	g_addr = *(unsigned long*)p_data;
 
 	/* find entry index, fill in shadow PTE */
 	pte = vgt->shadow_pte_table[i].virt;
@@ -251,11 +253,18 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7_5;
 	}
 
-	h_addr = g2m_pfn(vgt->vm_id, *(dma_addr_t *)p_data);
+	h_addr = g2m_pfn(vgt->vm_id, g_addr);
+	if (h_addr == INVALID_MFN) {
+		printk(KERN_ERR "Failed to convert WP page at 0x%lx\n", g_addr);
+		return false;
+	}
 
 	pte[index] = h_addr | ((h_addr >> 28) & addr_mask);
-	pte[index] |= *(dma_addr_t *)p_data & ctl_mask;
+	pte[index] |= g_addr & ctl_mask;
 	pte[index] |= _REGBIT_PTE_VALID;
+
+	dprintk("WP: PDE[%d], PTE[%d], entry 0x%x, g_addr 0x%lx, h_addr 0x%lx\n", i, index, pte[index], g_addr, h_addr);
+
 	return true;
 }
 
