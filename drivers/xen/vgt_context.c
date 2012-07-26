@@ -661,7 +661,6 @@ static unsigned long vgt_get_reg_64(struct vgt_device *vgt, unsigned int reg)
 	return __vreg64(vgt, reg);
 }
 
-static vgt_reg_t dom0_surf = 0;
 static bool dom0 = true;
 static struct vgt_device *vgt_dom1 = NULL;
 static struct hrtimer vgt_timer;
@@ -2128,7 +2127,7 @@ bool vgt_save_context (struct vgt_device *vgt)
 			rb->initialized = true;
 
 		if (old_tail != rb->sring.tail)
-			printk("!!!!!!!!!(save ring-%d, %d switch) tail moved from %x to %x\n",
+			printk("!!!!!!!!!(save ring-%d, %llx switch) tail moved from %x to %x\n",
 				i, vgt_ctx_switch(pdev), rb->sring.tail, old_tail);
 
 		dprintk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
@@ -2192,7 +2191,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 			goto err;
 
 		if (old_tail != rb->sring.tail)
-			printk("!!!!!!!!!(restore ring-%d, %lx switch) tail moved from %x to %x\n",
+			printk("!!!!!!!!!(restore ring-%d, %llx switch) tail moved from %x to %x\n",
 				i, vgt_ctx_switch(pdev), rb->sring.tail, old_tail);
 	}
 
@@ -3068,7 +3067,6 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 //int vgt_add_state_sysfs(struct vgt_device *vgt);
 int vgt_initialize(struct pci_dev *dev)
 {
-	int i;
 	struct pgt_device *pdev = &default_device;
 	struct task_struct *p_thread;
 
