@@ -1194,18 +1194,18 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 }
 
 /* definitions for physical aperture/GM space */
-#define aperture_sz(pdev)		(pdev->bar_size[1])
-#define aperture_pages(pdev)		(aperture_sz(pdev) >> GTT_PAGE_SHIFT)
-#define aperture_base(pdev)		(pdev->gmadr_base)
-#define aperture_vbase(pdev)		(pdev->gmadr_va)
+#define phys_aperture_sz(pdev)		(pdev->bar_size[1])
+#define phys_aperture_pages(pdev)	(phys_aperture_sz(pdev) >> GTT_PAGE_SHIFT)
+#define phys_aperture_base(pdev)	(pdev->gmadr_base)
+#define phys_aperture_vbase(pdev)	(pdev->gmadr_va)
 
 #define gm_sz(pdev)			(pdev->total_gm_sz)
 #define gm_base(pdev)			(0ULL)
 #define gm_pages(pdev)			(gm_sz(pdev) >> GTT_PAGE_SHIFT)
-#define hidden_gm_base(pdev)		(aperture_sz(pdev))
+#define hidden_gm_base(pdev)		(phys_aperture_sz(pdev))
 
-#define aperture_2_gm(pdev, addr)	(addr - aperture_base(pdev))
-#define v_aperture(pdev, addr)		(aperture_vbase(pdev) + (addr))
+#define aperture_2_gm(pdev, addr)	(addr - phys_aperture_base(pdev))
+#define v_aperture(pdev, addr)		(phys_aperture_vbase(pdev) + (addr))
 
 #define rsvd_aperture_sz(pdev)		(pdev->rsvd_aperture_sz)
 #define rsvd_aperture_base(pdev)	(pdev->rsvd_aperture_base)
@@ -1244,7 +1244,7 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
  */
 static inline uint64_t get_vm_aperture_base(struct pgt_device *pdev, int i)
 {
-	return aperture_base(pdev) + i * vm_aperture_sz(pdev);
+	return phys_aperture_base(pdev) + i * vm_aperture_sz(pdev);
 }
 
 static inline uint64_t get_vm_aperture_end(struct pgt_device *pdev, int i)

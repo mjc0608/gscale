@@ -272,7 +272,7 @@ static void fb_debugfs_work_func(struct work_struct *work)
 
 	ASSERT(pipe != PIPE_C);
 
-	surf_base = aperture_vbase(pdev) + ((__sreg(vgt, _REG_SURF_BASE(pipe))) & PAGE_MASK);
+	surf_base = phys_aperture_vbase(pdev) + ((__sreg(vgt, _REG_SURF_BASE(pipe))) & PAGE_MASK);
 	surf_sz = __sreg(vgt, _REG_SURF_SZ(pipe));
 
 	if (!surf_base)
@@ -324,8 +324,8 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	dsp_surf_size[vgt_id][PIPE_A] = __sreg(vgt, _REG_DSPASIZE);
 	dsp_surf_size[vgt_id][PIPE_B] = __sreg(vgt, _REG_DSPBSIZE);
 
-	dsp_surf_base[vgt_id][PIPE_A] = aperture_vbase(pdev) + ((__sreg(vgt, _REG_DSPASURF)) & PAGE_MASK);
-	dsp_surf_base[vgt_id][PIPE_A] = aperture_vbase(pdev) + ((__sreg(vgt, _REG_DSPBSURF)) & PAGE_MASK);
+	dsp_surf_base[vgt_id][PIPE_A] = phys_aperture_vbase(pdev) + ((__sreg(vgt, _REG_DSPASURF)) & PAGE_MASK);
+	dsp_surf_base[vgt_id][PIPE_A] = phys_aperture_vbase(pdev) + ((__sreg(vgt, _REG_DSPBSURF)) & PAGE_MASK);
 
 	printk("vGT(%d): Display surface A va(%p) size(%d)\n", vgt_id, dsp_surf_base[vgt_id][PIPE_A], dsp_surf_size[vgt_id][PIPE_A]);
 	printk("vGT(%d): Display surface B va(%p) size(%d)\n", vgt_id, dsp_surf_base[vgt_id][PIPE_B], dsp_surf_size[vgt_id][PIPE_B]);

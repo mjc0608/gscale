@@ -268,7 +268,7 @@ static void show_context(struct vgt_device *vgt, uint64_t context, bool clobber)
 	int i;
 
 	/* GM is not trapped. So safe to access it directly */
-	ptr = (uint64_t)aperture_vbase(pdev) + context;
+	ptr = (uint64_t)phys_aperture_vbase(pdev) + context;
 	printk("===================\n");
 	printk("Context (%llx, %llx): %s\n", context, ptr, clobber ? "clobbered" : "");
 
@@ -501,9 +501,9 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 		dprintk("index (%x)(%x), value (%x)(%x)\n", g_index, h_index,
 			vgt_read_gtt(pdev, g_index),
 			vgt_read_gtt(pdev, h_index));
-		dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x0));
-		dprintk("content at 0x%x: %lx\n", g_value & mask, *(unsigned long *)((char *)aperture_vbase(pdev) + (g_value & mask)));
-		dprintk("content at 0x%x: %lx\n", h_value & mask, *(unsigned long *)((char *)aperture_vbase(pdev) + (h_value & mask)));
+		dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
+		dprintk("content at 0x%x: %lx\n", g_value & mask, *(unsigned long *)((char *)phys_aperture_vbase(pdev) + (g_value & mask)));
+		dprintk("content at 0x%x: %lx\n", h_value & mask, *(unsigned long *)((char *)phys_aperture_vbase(pdev) + (h_value & mask)));
 		dprintk("DSPATILEOFF: %x, DSPLINOFF: %x, SIZE: %x\n",
 			VGT_MMIO_READ(pdev, _REG_DSPATILEOFF), VGT_MMIO_READ(pdev, _REG_DSPALINOFF),
 			VGT_MMIO_READ(pdev, 0x70190));
@@ -529,9 +529,9 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 			VGT_MMIO_READ(pdev, _REG_DSPATILEOFF), VGT_MMIO_READ(pdev, _REG_DSPALINOFF));
 		dprintk("_REG_DSPACNTR: %x, _REG_DSPASURFLIVE: %x\n",
 			VGT_MMIO_READ(pdev, _REG_DSPACNTR), VGT_MMIO_READ(pdev, _REG_DSPASURFLIVE));
-		dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x0));
-		dprintk("content at 0x%x: %lx\n", g_value & mask, *(unsigned long *)((char *)aperture_vbase(pdev) + (g_value & mask)));
-		dprintk("content at 0x%x: %lx\n", h_value & mask, *(unsigned long *)((char *)aperture_vbase(pdev) + (h_value & mask)));
+		dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
+		dprintk("content at 0x%x: %lx\n", g_value & mask, *(unsigned long *)((char *)phys_aperture_vbase(pdev) + (g_value & mask)));
+		dprintk("content at 0x%x: %lx\n", h_value & mask, *(unsigned long *)((char *)phys_aperture_vbase(pdev) + (h_value & mask)));
 	}
 #endif
 	return (h_value & mask) | (g_value & ~mask);
@@ -577,21 +577,21 @@ static void show_seqno(struct pgt_device *pdev)
 	vgt_reg_t addr;
 
 	addr = VGT_MMIO_READ(pdev, _REG_RCS_HWS_PGA);
-	p_contents = aperture_vbase(pdev) + addr;
+	p_contents = phys_aperture_vbase(pdev) + addr;
 	printk("RCS HWS PGA: %x,%x,%x isr: %x, index: %x, seqno: %d\n",
 		addr, __vreg(vgt_dom0, _REG_RCS_HWS_PGA),
 		__sreg(vgt_dom0, _REG_RCS_HWS_PGA), *(u32*)(p_contents),
 		*(u32*)(p_contents + 0x20 * 4), *(u32*)(p_contents + 0x21 * 4));
 
 	addr = VGT_MMIO_READ(pdev, _REG_VCS_HWS_PGA);
-	p_contents = aperture_vbase(pdev) + addr;
+	p_contents = phys_aperture_vbase(pdev) + addr;
 	printk("RCS HWS PGA: %x,%x,%x isr: %x, index: %x, seqno: %d\n",
 		addr, __vreg(vgt_dom0, _REG_VCS_HWS_PGA),
 		__sreg(vgt_dom0, _REG_VCS_HWS_PGA), *(u32*)(p_contents),
 		*(u32*)(p_contents + 0x20 * 4), *(u32*)(p_contents + 0x21 * 4));
 
 	addr = VGT_MMIO_READ(pdev, _REG_BCS_HWS_PGA);
-	p_contents = aperture_vbase(pdev) + addr;
+	p_contents = phys_aperture_vbase(pdev) + addr;
 	printk("RCS HWS PGA: %x,%x,%x isr: %x, index: %x, seqno: %d\n",
 		addr, __vreg(vgt_dom0, _REG_BCS_HWS_PGA),
 		__sreg(vgt_dom0, _REG_BCS_HWS_PGA), *(u32*)(p_contents),
@@ -614,7 +614,7 @@ static void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 		p_head, p_tail, p_start);
 
 	p_head &= RB_HEAD_OFF_MASK;
-	p_contents = aperture_vbase(pdev) + p_start + p_head;
+	p_contents = phys_aperture_vbase(pdev) + p_start + p_head;
 	printk("p_contents(%lx)\n", (unsigned long)p_contents);
 	/* FIXME: consider wrap */
 	for (i = -(bytes/4); i < bytes/4; i++) {
@@ -735,8 +735,8 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 		VGT_MMIO_WRITE(pdev, reg, __sreg(vgt, reg));
 #if 0
 		if (reg == _REG_DSPASURF && vgt->vgt_id != 0 ) {
-			memcpy(aperture_vbase(pdev) + __sreg(vgt, reg),
-				aperture_vbase(pdev) + __sreg(vgt, reg) + 0x8000000,
+			memcpy(phys_aperture_vbase(pdev) + __sreg(vgt, reg),
+				phys_aperture_vbase(pdev) + __sreg(vgt, reg) + 0x8000000,
 				SIZE_1MB);
 		}
 #endif
@@ -926,7 +926,7 @@ bool is_context_switch_done(struct pgt_device *pdev, int ring_id)
 {
 	u32 *ptr;
 
-	ptr = (u32 *)(aperture_vbase(pdev) + vgt_data_ctx_magic(pdev));
+	ptr = (u32 *)(phys_aperture_vbase(pdev) + vgt_data_ctx_magic(pdev));
 	if (*ptr != pdev->magic)
 		return false;
 
@@ -1598,7 +1598,7 @@ static inline void save_ring_buffer(struct vgt_device *vgt, int ring_id)
 {
 	dprintk("<vgt-%d>save ring buffer\n", vgt->vgt_id);
 	ring_save_commands (&vgt->rb[ring_id],
-			aperture_vbase(vgt->pdev),
+			phys_aperture_vbase(vgt->pdev),
 			(char*)vgt->rb[ring_id].save_buffer,
 			sizeof(vgt->rb[ring_id].save_buffer));
 }
@@ -1607,7 +1607,7 @@ static void restore_ring_buffer(struct vgt_device *vgt, int ring_id)
 {
 	dprintk("<vgt-%d>restore ring buffer\n", vgt->vgt_id);
 	ring_load_commands (&vgt->rb[ring_id],
-			aperture_vbase(vgt->pdev),
+			phys_aperture_vbase(vgt->pdev),
 			(char *)vgt->rb[ring_id].save_buffer,
 			sizeof(vgt->rb[ring_id].save_buffer));
 }
@@ -1698,14 +1698,14 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 		VGT_MMIO_READ(pdev, RB_TAIL(ring_id)));
 
 	dprintk("old magic number: %d\n",
-		*(u32 *)(aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
+		*(u32 *)(phys_aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
 
 	if (!use_old_ctx_switch) {
 		char *p_aperture;
 
 		disable_ring(pdev, ring_id);
 
-		p_aperture = aperture_vbase(pdev) + pdev->ctx_switch_rb_page;
+		p_aperture = phys_aperture_vbase(pdev) + pdev->ctx_switch_rb_page;
 		memcpy(p_aperture, cmds, bytes);
 
 		VGT_MMIO_WRITE(pdev, RB_START(ring_id), pdev->ctx_switch_rb_page);
@@ -1726,7 +1726,7 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 		// save 32 dwords of the ring
 		save_ring_buffer (vgt, ring_id);
 
-		ring_load_commands (rb, aperture_vbase(pdev), (char*)cmds, bytes);
+		ring_load_commands (rb, phys_aperture_vbase(pdev), (char*)cmds, bytes);
 		VGT_MMIO_WRITE(pdev, RB_TAIL(ring_id), rb->phys_tail);		/* TODO: Lock in future */
 	}
 	//mdelay(1);
@@ -1742,7 +1742,7 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 		restore_ring_buffer (vgt, ring_id);
 
 	dprintk("new magic number: %d\n",
-		*(u32 *)(aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
+		*(u32 *)(phys_aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
 
 	/* still confirm the CCID for safety. May remove in the future */
 	ccid = VGT_MMIO_READ (pdev, _REG_CCID);
@@ -2192,7 +2192,7 @@ bool vgt_restore_context (struct vgt_device *vgt)
 			goto err;
 
 		if (old_tail != rb->sring.tail)
-			printk("!!!!!!!!!(restore ring-%d, %d switch) tail moved from %x to %x\n",
+			printk("!!!!!!!!!(restore ring-%d, %lx switch) tail moved from %x to %x\n",
 				i, vgt_ctx_switch(pdev), rb->sring.tail, old_tail);
 	}
 
@@ -2327,7 +2327,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	vgt->ballooning = true;
 
 	/* present aperture to the guest at the same host address */
-	vgt->state.aperture_base = aperture_base(pdev);
+	vgt->state.aperture_base = phys_aperture_base(pdev);
 
 	/* init aperture/gm ranges allocated to this vgt */
 	if (vgt->vgt_id == 0) {
@@ -2346,7 +2346,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	}
 
 	vgt->aperture_offset = aperture_2_gm(pdev, vgt->aperture_base);
-	vgt->aperture_base_va = aperture_vbase(pdev) +
+	vgt->aperture_base_va = phys_aperture_vbase(pdev) +
 		vgt->aperture_offset;
 
 	if (vgt->ballooning)
@@ -2392,7 +2392,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	cfg_space = &vgt->state.cfg_space[0];
 	memcpy (cfg_space, pdev->initial_cfg_space, VGT_CFG_SPACE_SZ);
 	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
-	vgt_pci_bar_write_32(vgt, VGT_REG_CFG_SPACE_BAR1, aperture_base(pdev) );
+	vgt_pci_bar_write_32(vgt, VGT_REG_CFG_SPACE_BAR1, phys_aperture_base(pdev) );
 
 	printk("Aperture: [%llx, %llx] guest [%llx, %llx] va(%llx)\n",
 		vgt_aperture_base(vgt),
@@ -2913,9 +2913,9 @@ static int setup_gtt(struct pgt_device *pdev)
 	for (i = 0; i < gm_pages(pdev); i++)
 		vgt_write_gtt(pdev, i, dma_addr);
 
-	dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x0));
-	dprintk("content at 0x64000: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x64000));
-	dprintk("content at 0x8064000: %lx\n", *(unsigned long *)((char *)aperture_vbase(pdev) + 0x8064000));
+	dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
+	dprintk("content at 0x64000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x64000));
+	dprintk("content at 0x8064000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x8064000));
 
 	check_gtt(pdev);
 	printk("vGT: allocate vGT aperture\n");
@@ -2994,10 +2994,10 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 	uint64_t avail_ap, avail_gm;
 	int possible_ap, possible_gm, possible;
 	int i;
-	uint64_t dom0_start = aperture_base(pdev);
+	uint64_t dom0_start = phys_aperture_base(pdev);
 
 	printk("vGT: total aperture (%x), total GM space (%llx)\n",
-		aperture_sz(pdev), gm_sz(pdev));
+		phys_aperture_sz(pdev), gm_sz(pdev));
 #ifndef DOM0_NON_IDENTICAL
 	pdev->max_vms = 1;		/* dom0 only */
 #else
@@ -3007,7 +3007,7 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 	rsvd_aperture_sz(pdev) = VGT_RSVD_APERTURE_SZ;
 	dom0_aperture_sz(pdev) = VGT_DOM0_APERTURE_SZ;
 
-	avail_ap = aperture_sz(pdev) - rsvd_aperture_sz(pdev) -
+	avail_ap = phys_aperture_sz(pdev) - rsvd_aperture_sz(pdev) -
 			dom0_aperture_sz(pdev);
 	possible_ap = avail_ap / VGT_MIN_APERTURE_SZ;
 
@@ -3044,7 +3044,7 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 
 	ASSERT(dom0_start + dom0_aperture_sz(pdev) +
 		rsvd_aperture_sz(pdev) <=
-		aperture_base(pdev) + aperture_sz(pdev));
+		phys_aperture_base(pdev) + phys_aperture_sz(pdev));
 
 	dom0_aperture_base(pdev) = dom0_start;
 	printk("....dom0 aperture: [%llx, %llx]\n",
@@ -3199,8 +3199,8 @@ void vgt_destroy()
 	/* Destruct all vgt_debugfs */
 	vgt_release_debugfs();
 
-	intel_gtt_clear_range(0, aperture_sz(pdev) - GTT_PAGE_SIZE);
-	for (i = 0; i < aperture_pages(pdev); i++)
+	intel_gtt_clear_range(0, phys_aperture_sz(pdev) - GTT_PAGE_SIZE);
+	for (i = 0; i < phys_aperture_pages(pdev); i++)
 		if (pages[i]) {
 			put_page(pages[i]);
 			__free_page(pages[i]);
