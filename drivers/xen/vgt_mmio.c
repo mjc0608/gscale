@@ -63,6 +63,7 @@
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/pci.h>
+#include <linux/delay.h>
 
 #include <asm/xen/hypercall.h>
 #include <asm/xen/hypervisor.h>
@@ -1928,6 +1929,20 @@ static unsigned int vgt_aux_ch_transaction(struct pgt_device *pdev,
 	return VGT_MMIO_READ(pdev, aux_ctrl_addr + 4);
 }
 
+#define EDID_REPEAT_UNTIL(cond, repeat_num, interval, time_out)		\
+do {									\
+	int i;								\
+	time_out = 1;							\
+	for(i = 0; i < (repeat_num); ++ i) {				\
+		if(cond) {						\
+			time_out = 0;					\
+			break;						\
+		} else {						\
+			msleep(interval);				\
+		}							\
+	}								\
+} while(0);
+
 void vgt_probe_edid(struct pgt_device *pdev, int index)
 {
 	int i;
@@ -2013,6 +2028,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		if (gmbus_port) {
 			int length;
 			int val;
+			int timeout;
 			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, gmbus_port);
 			// write addr and offset
 			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS3, 0);
@@ -2023,9 +2039,11 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 					(EDID_ADDR << _GMBUS_SLAVE_ADDR_SHIFT) |
 					_GMBUS_SLAVE_WRITE);
 			VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
-			while (!((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
-				 & (_GMBUS_SATOER | _GMBUS_HW_WAIT_PHASE)));
-			if (val & _GMBUS_SATOER) {
+
+			EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+				 & (_GMBUS_SATOER | _GMBUS_HW_WAIT_PHASE)), 5, 10, timeout);
+
+			if (timeout || (val & _GMBUS_SATOER)) {
 				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
 				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
 				kfree(*pedid);
@@ -2045,9 +2063,9 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			length = 0;
 			do {
 				int j = 0;
-				while (!((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
-					 & (_GMBUS_SATOER | _GMBUS_HW_RDY)));
-				if (val & _GMBUS_SATOER) {
+				EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+					 & (_GMBUS_SATOER | _GMBUS_HW_RDY)), 5, 10, timeout);
+				if (timeout || (val & _GMBUS_SATOER)) {
 					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
 					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
 					kfree(*pedid);
@@ -2064,7 +2082,11 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			} while (length < EDID_SIZE);
 
 			/* finish reading. Check the hw state and disable gmbus. */
-			while (((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2)) & _GMBUS_ACTIVE) != 0);
+			EDID_REPEAT_UNTIL((((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+						& _GMBUS_ACTIVE) == 0), 5, 10, timeout);
+			if (timeout) {
+				printk("vGT: timeout while waiting for gmbus to be inactive. Will force close.\n");
+			}
 			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
 		}
 
@@ -2091,7 +2113,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				(*pedid)->edid_block[length] = ((value) & 0xff0000) >> 16;
 			}
 		}
-#if 0
+
 		if (*pedid) {
 			int i;
 			unsigned char *block = (*pedid)->edid_block;
@@ -2108,7 +2130,6 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				}
 			}
 		}
-#endif
 	}
 }
 
@@ -2150,14 +2171,14 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 			}
 			memcpy(vgt->vgt_edids[i], edid,
 				sizeof(vgt_edid_data_t));
-#if 1
+
 			{
 			int j;
 			unsigned char *block = vgt->vgt_edids[i]->edid_block;
 			printk("EDID_PROPAGATE: EDID[%d] is:\n", i);
 			for (j = 0; j < EDID_SIZE; ++ j) {
 				if ((block[j] >= 'a' && block[j] <= 'z') ||
-				(block[j] >= 'A' && block[j] <= 'Z')) {
+					(block[j] >= 'A' && block[j] <= 'Z')) {
 					printk ("%c ", block[j]);
 				} else {
 					printk ("0x%x ", block[j]);
@@ -2167,7 +2188,6 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 				}
 			}
 			}
-#endif
 		}
 	}
 }
