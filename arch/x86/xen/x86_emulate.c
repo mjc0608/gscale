@@ -896,8 +896,8 @@ static int ioport_access_check(
     struct x86_emulate_ctxt *ctxt,
     const struct x86_emulate_ops *ops)
 {
-    unsigned long iobmp;
-    struct segment_register tr;
+    //unsigned long iobmp;
+    //struct segment_register tr;
     int rc = X86EMUL_OKAY;
 
     if ( !(ctxt->regs->eflags & EFLG_VM) && mode_iopl() )
@@ -933,9 +933,11 @@ static int ioport_access_check(
  done:
     return rc;
 
+#if 0
  raise_exception:
     fail_if(ops->inject_hw_exception == NULL);
     return ops->inject_hw_exception(EXC_GP, 0, ctxt) ? : X86EMUL_EXCEPTION;
+#endif
 }
 
 static int

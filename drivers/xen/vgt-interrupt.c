@@ -1304,7 +1304,7 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 	bool physical, struct vgt_device *vgt)
 {
     vgt_reg_t sde_isr;
-	struct pgt_device *pdev = vgt->pdev;
+	//struct pgt_device *pdev = vgt->pdev;
 
 	/* send out udev events when handling physical interruts */
 	if (physical == true) {

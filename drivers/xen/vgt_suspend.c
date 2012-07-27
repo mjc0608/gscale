@@ -48,6 +48,7 @@
 u32 __vgt_driver_cap = VGT_DRIVER_MODESET;
 //#define vgt_driver_check_feature(feature)   (__vgt_driver_cap & (feature))
 
+#if 0
 bool static vgt_driver_check_feature(struct vgt_device *vgt, int feature)
 {
     vgt_reg_t sreg;
@@ -65,6 +66,7 @@ bool static vgt_driver_check_feature(struct vgt_device *vgt, int feature)
 
     return retval;
 }
+#endif
 
 /* FIXME: snb_devinfo copied from  */
 /* static const struct intel_device_info intel_sandybridge_d_info = {
@@ -254,7 +256,7 @@ static void vgt_restore_palette(struct vgt_device *vgt, enum vgt_pipe pipe)
 static void vgt_restore_modeset_reg(struct vgt_device *vgt)
 {
     struct pgt_device *pdev = vgt->pdev;
-    int reg_index;
+    //int reg_index;
 
     /* FIXME: unconditionlly restore all modeset regs */
 #if 0
@@ -652,7 +654,7 @@ static void vgt_save_palette(struct vgt_device *vgt, enum vgt_pipe pipe)
 static void vgt_save_modeset_reg(struct vgt_device *vgt)
 {
     struct pgt_device *pdev = vgt->pdev;
-    int i;
+    //int i;
 
     /* FIXME: unconditionally all modeset regs */
 #if 0
@@ -986,7 +988,7 @@ int vgt_restore_state(struct vgt_device *vgt)
 {
     struct pgt_device *pdev = vgt->pdev;
     int i;
-    char *cfg_space;
+    //char *cfg_space;
 
 	//pci_write_config_byte(dev->pdev, LBB, dev_priv->saveLBB);
     /* FIXME: no need to restore pci configure */
@@ -1028,7 +1030,7 @@ int vgt_restore_state(struct vgt_device *vgt)
     vgt_restore_sreg(_REG_DSPASURF);
     vgt_restore_sreg(_REG_DSPATILEOFF);
     vgt_restore_sreg(_REG_DSPALINOFF);
-    VGT_MMIO_READ(vgt->pdev, _REG_DSPACNTR);
+    (void)VGT_MMIO_READ(vgt->pdev, _REG_DSPACNTR);
     printk("vGT: restoring DSPAXXX done!\n");
 
     printk("vGT: restoring DSPBXXX ...\n");
@@ -1037,7 +1039,7 @@ int vgt_restore_state(struct vgt_device *vgt)
     vgt_restore_sreg(_REG_DSPBSURF);
     vgt_restore_sreg(_REG_DSPBTILEOFF);
     vgt_restore_sreg(_REG_DSPBLINOFF);
-    VGT_MMIO_READ(vgt->pdev, _REG_DSPACNTR);
+    (void)VGT_MMIO_READ(vgt->pdev, _REG_DSPACNTR);
     printk("vGT: restoring DSPBXXX done!\n");
 
     /* FIXME: snb is ironlake ??? */

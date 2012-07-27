@@ -45,13 +45,11 @@ static struct vgt_device *dom0_vgt=NULL;
  */
 void xen_vgt_dom0_ready(struct vgt_device *vgt)
 {
-    bool ret = -1;
+	dom0_vgt = vgt;
+	printk("Eddie: xen_vgt_dom0_ready %p\n", vgt);
 
-    dom0_vgt = vgt;
-printk("Eddie: xen_vgt_dom0_ready %p\n", vgt);
-
-    if (!vgt_ops->initialized)
-	vgt_ops->initialized = 1;
+	if (!vgt_ops->initialized)
+		vgt_ops->initialized = 1;
 }
 
 #define ASSERT(x)						\
@@ -265,7 +263,6 @@ int vgt_cfg_write_emul(
         struct x86_emulate_ctxt *ctxt)
 {
     int rc = X86EMUL_OKAY;
-    int dom_id = 0;
 
     dprintk("VGT: vgt_cfg_write_emul %x %x %lx at %llx\n",
 	    port, bytes, val, ctxt->regs->rip);
@@ -312,7 +309,6 @@ static int vgt_cfg_read_emul(
 {
     unsigned long data;
     int rc = X86EMUL_OKAY;
-    int dom_id = 0;
 
     if ((port & ~3)== 0xcf8) {
         memcpy(val, (uint8_t*)&vgt_cf8 + (port & 3), bytes);
@@ -648,7 +644,6 @@ static int emulate_read(
         struct x86_emulate_ctxt *ctxt)
 {
 	unsigned long r_pa;
-	int dom_id = 0;
 
 	dprintk("VGT: read seg %x off %lx data %p bytes %d gip = %llx\n",
 		seg, offset, p_data, bytes, ctxt->regs->rip);
@@ -704,7 +699,6 @@ static int emulate_write(
         struct x86_emulate_ctxt *ctxt)
 {
 	unsigned long w_pa, data;
-	int dom_id = 0;
 
 	ASSERT (seg == x86_seg_ds ); 	// TO FIX
 	dprintk("VGT: write seg %x off %lx data %p bytes %d gip = %llx\n",

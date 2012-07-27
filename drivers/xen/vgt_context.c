@@ -257,6 +257,7 @@ static void show_mode_settings(struct pgt_device *pdev)
 		(reg & _REGBIT_ADDRESS_SWIZZLING) ? "bit 6 used" : "no");
 }
 
+#if 0
 /*
  * Show the content of a saved render context
  */
@@ -290,6 +291,7 @@ static void show_context(struct vgt_device *vgt, uint64_t context, bool clobber)
 	printk("\n");
 	printk("===================\n");
 }
+#endif
 
 /*
  * Global mode setting that vGT needs to ensure
@@ -570,6 +572,7 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	return (g_value & mask) | (h_value & ~mask);
 }
 
+#if 0
 /* show Linux specific seqno fields for all ringbuffers */
 static void show_seqno(struct pgt_device *pdev)
 {
@@ -597,6 +600,7 @@ static void show_seqno(struct pgt_device *pdev)
 		__sreg(vgt_dom0, _REG_BCS_HWS_PGA), *(u32*)(p_contents),
 		*(u32*)(p_contents + 0x20 * 4), *(u32*)(p_contents + 0x21 * 4));
 }
+#endif
 
 /*
  * Given a ring buffer, print out the current data [-bytes, bytes]
@@ -1019,7 +1023,7 @@ void vgt_switch_display_owner(struct vgt_device *prev,
 void do_vgt_display_switch(struct pgt_device *pdev)
 {
 	unsigned long flags;
-    struct vgt_device *cur, *pre;
+    //struct vgt_device *cur, *pre;
 	printk(KERN_WARNING"xuanhua: vGT: display switched\n");
 	printk(KERN_WARNING"xuanhua: vGT: current display owner: %p; next display owner: %p\n",
 			current_display_owner(pdev), next_display_owner);
@@ -1611,6 +1615,7 @@ static void restore_ring_buffer(struct vgt_device *vgt, int ring_id)
 			sizeof(vgt->rb[ring_id].save_buffer));
 }
 
+#if 0
 static void disable_power_management(struct vgt_device *vgt)
 {
 	/* Save the power state and froce wakeup. */
@@ -1625,6 +1630,7 @@ static void restore_power_management(struct vgt_device *vgt)
 	VGT_MMIO_WRITE(vgt->pdev, _REG_FORCEWAKE, vgt->saved_wakeup);
 	VGT_POST_READ(vgt->pdev, _REG_FORCEWAKE);	/* why this ? */
 }
+#endif
 
 /*
  * TODO:

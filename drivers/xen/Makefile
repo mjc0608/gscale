@@ -17,6 +17,11 @@ dom0-$(CONFIG_ACPI) += acpi.o $(xen-pad-y)
 xen-pad-$(CONFIG_X86) += xen-acpi-pad.o
 dom0-$(CONFIG_X86) += pcpu.o
 obj-$(CONFIG_XEN_DOM0)			+= $(dom0-y)
+
+VGT_SOURCE := vgt.o vgt_context.o vgt_mmio.o vgt-interrupt.o vgt-snb.o \
+	vgt-parser.o vgt_sysfs.o vgt_suspend.o vgt_debugfs.o vgt_edid.o    \
+	#vgt_mmio_gpio.o
+
 obj-$(CONFIG_BLOCK)			+= biomerge.o
 obj-$(CONFIG_XEN_BALLOON)		+= xen-balloon.o
 obj-$(CONFIG_XEN_SELFBALLOONING)	+= xen-selfballoon.o
@@ -37,17 +42,11 @@ obj-$(CONFIG_XEN_ACPI_HOTPLUG_CPU)	+= xen-acpi-cpuhotplug.o
 obj-$(CONFIG_XEN_ACPI_PROCESSOR)	+= xen-acpi-processor.o
 obj-$(CONFIG_XEN_EFI)			+= efi.o
 obj-$(CONFIG_XEN_SCSI_BACKEND)		+= xen-scsiback.o
-obj-$(CONFIG_XEN_VGT_I915)		+= vgt.o
-obj-$(CONFIG_XEN_VGT_I915)		+= vgt_context.o
-obj-$(CONFIG_XEN_VGT_I915)		+= vgt_mmio.o
-obj-$(CONFIG_XEN_VGT_I915)		+= vgt-interrupt.o vgt-snb.o
-obj-$(CONFIG_XEN_VGT_I915)		+= vgt-parser.o
-obj-$(CONFIG_XEN_VGT_I915)		+= vgt_sysfs.o
-obj-$(CONFIG_XEN_VGT_I915)		+= vgt_suspend.o
-obj-$(CONFIG_XEN_VGT_I915)		+= vgt_debugfs.o
-obj-$(CONFIG_XEN_VGT_I915)		+= vgt_edid.o
-#obj-$(CONFIG_XEN_VGT_I915)		+= vgt_mmio_gpio.o
 
+ccflags-$(CONFIG_XEN_VGT_I915)	+= -Wall -Werror
+
+obj-$(CONFIG_XEN_VGT_I915)		+= $(VGT_SOURCE)
+ 
 xen-evtchn-y				:= evtchn.o
 xen-gntdev-y				:= gntdev.o
 xen-gntalloc-y				:= gntalloc.o

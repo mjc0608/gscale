@@ -1290,7 +1290,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, vgt_reg_t head, vgt_reg_t ta
 	decode_data.vgt = vgt;
 	while(instr != instr_end){
 		decode_data.instruction = (uint32_t*)instr;
-		VGT_CMD_PRINTK("instruction=%0x\n",
+		VGT_CMD_PRINTK("vGT: %s: instruction=%0x\n",
 				decode_data.buffer_type == RING_BUFFER_INSTRUCTION ? "RING_BUFFER": "BATCH_BUFFER",
 				decode_data.instruction[0]);
 

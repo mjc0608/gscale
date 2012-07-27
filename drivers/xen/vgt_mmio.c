@@ -993,7 +993,6 @@ bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
-	unsigned int reg;
 	bool rc;
 	struct pgt_device *pdev = vgt->pdev;
 	struct work_struct *work = &vgt->fb_debugfs_work;
@@ -2038,7 +2037,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 					(1 << _GMBUS_BYTE_COUNT_SHIFT) |
 					(EDID_ADDR << _GMBUS_SLAVE_ADDR_SHIFT) |
 					_GMBUS_SLAVE_WRITE);
-			VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
+			(void)VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
 
 			EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
 				 & (_GMBUS_SATOER | _GMBUS_HW_WAIT_PHASE)), 5, 10, timeout);
@@ -2058,7 +2057,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 					(EDID_SIZE << _GMBUS_BYTE_COUNT_SHIFT) |
 					(EDID_ADDR << _GMBUS_SLAVE_ADDR_SHIFT) |
 					_GMBUS_SLAVE_READ);
-			VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
+			(void)VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
 
 			length = 0;
 			do {

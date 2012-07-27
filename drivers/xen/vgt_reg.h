@@ -858,7 +858,7 @@ struct vgt_intel_device_info {
 extern int vgt_thread(void *priv);
 extern void vgt_destroy(void);
 extern void vgt_destroy_debugfs(struct vgt_device *vgt);
-extern void vgt_release_debugfs();
+extern void vgt_release_debugfs(void);
 extern int vgt_initialize(struct pci_dev *dev);
 extern bool vgt_register_mmio_handler(int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write);
