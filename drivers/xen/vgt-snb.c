@@ -346,6 +346,8 @@ static struct vgt_irq_info* vgt_snb_get_irq_info_from_event(struct pgt_device *d
 		return &snb_pm_irq_info;
 	else
 		return NULL;
+	/* can't reach */
+	return NULL;
 }
 
 static struct vgt_irq_info* vgt_snb_get_irq_info_from_owner(struct pgt_device *dev, enum vgt_owner_type owner)
@@ -380,6 +382,8 @@ static inline struct vgt_irq_info* vgt_snb_get_irq_info_from_reg(struct pgt_devi
 		return &snb_pm_irq_info;
 	else
 		return NULL;
+	/* can't reach */
+	return NULL;
 }
 
 /*

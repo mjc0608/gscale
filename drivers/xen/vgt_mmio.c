@@ -592,7 +592,6 @@ bool rcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 			  void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_RCS].vring_ppgtt_info;
-	vgt_ring_ppgtt_t *s_info = &vgt->rb[RING_BUFFER_RCS].sring_ppgtt_info;
 
 	ASSERT(bytes == 4);
 
@@ -619,7 +618,6 @@ bool bcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 			  void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_BCS].vring_ppgtt_info;
-	vgt_ring_ppgtt_t *s_info = &vgt->rb[RING_BUFFER_BCS].sring_ppgtt_info;
 
 	ASSERT(bytes == 4);
 
@@ -644,7 +642,6 @@ bool vcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 			  void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VCS].vring_ppgtt_info;
-	vgt_ring_ppgtt_t *s_info = &vgt->rb[RING_BUFFER_VCS].sring_ppgtt_info;
 
 	ASSERT(bytes == 4);
 
@@ -1817,7 +1814,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
         if (!req->data_is_ptr) {
             ASSERT (req->count == 1);
 
-            dprintk("HVM_MMIO_read: target register (%lx).\n", req->addr);
+            dprintk("HVM_MMIO_read: target register (%lx).\n", (unsigned long)req->addr);
             vgt_emulate_read(vgt,
                         req->addr,
                         &req->data,
@@ -1828,7 +1825,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 	    ASSERT (req->addr + sign * req->count * req->size <
                             base + vgt->state.bar_size[0]);
             dprintk("HVM_MMIO_read: rep %d target memory %lx, slow!\n",
-                         req->count, req->addr);
+                         req->count, (unsigned long)req->addr);
             for (i=0; i<req->count; i++) {
                 tmp = 0;
                 vgt_emulate_read(vgt,
@@ -1848,7 +1845,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
         if (!req->data_is_ptr) {
             ASSERT (req->count == 1);
 
-            dprintk("HVM_MMIO_write: target register (%lx).\n", req->addr);
+            dprintk("HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
             vgt_emulate_write(vgt,
                         req->addr,
                         &req->data,
@@ -1859,7 +1856,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 	    ASSERT (req->addr + sign * req->count * req->size <
                             base + vgt->state.bar_size[0]);
             dprintk("HVM_MMIO_write: rep %d target memory %lx, slow!\n",
-                         req->count, req->addr);
+                         req->count, (unsigned long)req->addr);
 
             for (i=0; i<req->count; i++) {
                 tmp = 0;

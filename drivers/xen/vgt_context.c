@@ -431,8 +431,11 @@ void vgt_hash_register_entry(struct vgt_device *vgt, int table, struct mmio_hash
 
 void vgt_hash_remove_entry(struct vgt_device *vgt, int table, int key)
 {
-	int index = mhash(key);
-	struct mmio_hash_table *mht = NULL, *p;
+	int index;
+	struct mmio_hash_table *mht, *p;
+
+	index = mhash(key);
+	mht = NULL;
 
 	switch(table) {
 	case VGT_HASH_MMIO:
@@ -456,10 +459,12 @@ void vgt_hash_remove_entry(struct vgt_device *vgt, int table, int key)
 	}
 }
 
+#if 0
 static void _add_mtable(int index, struct mmio_hash_table *mht)
 {
 	vgt_hash_add_mtable(NULL, VGT_HASH_MMIO, index, mht);
 }
+#endif
 
 static struct mmio_hash_table *lookup_mtable(int mmio_base)
 {
@@ -873,8 +878,8 @@ static void vgt_gen6_mul_force_wake(struct pgt_device *pdev)
 	while (count < 50 && (VGT_MMIO_READ(pdev, _REG_MUL_FORCEWAKE_ACK) & 1))
 		count++;
 
-	VGT_MMIO_WRITE(pdev, _REG_MUL_FORCEWAKE, 1 | (1 << 16));
-	VGT_MMIO_READ(pdev, _REG_MUL_FORCEWAKE);
+	VGT_MMIO_WRITE(pdev, _REG_MUL_FORCEWAKE, (1 | (1 << 16)));
+	(void)VGT_MMIO_READ(pdev, _REG_MUL_FORCEWAKE);
 
 	count = 0;
 
@@ -3114,6 +3119,7 @@ static bool vgt_init_device_func (struct pgt_device *pdev)
 		printk("vGT: Use MT force wake!\n");
 		pdev->dev_func.force_wake = vgt_gen6_mul_force_wake;
 	}
+	return true;
 }
 
 /* FIXME: allocate instead of static */
@@ -3234,12 +3240,11 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 	int possible_ap, possible_gm, possible;
 	int i;
 	uint64_t dom0_start = phys_aperture_base(pdev);
-	uint64_t dom0_gm_start;
+	uint64_t dom0_gm_start = 0;
 
 	printk("vGT: total aperture (%x), total GM space (%llx)\n",
 		phys_aperture_sz(pdev), gm_sz(pdev));
 
->>>>>>> 41069e1... vgt: Add IVB global register dump and code cleanups
 #ifndef DOM0_NON_IDENTICAL
 	pdev->max_vms = 1;		/* dom0 only */
 #else
@@ -3265,12 +3270,12 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 		pdev->max_vms = possible;
 	}
 
-	printk("vGT: total aperture %ldKB, total GM space %ldKB\n",
-		aperture_sz(pdev)/1024, gm_sz(pdev)/1024);
-	printk("vGT: reserved aperture %ldKB, dom0 aperture size %ldKB\n",
-		rsvd_aperture_sz(pdev)/1024, dom0_aperture_sz(pdev)/1024);
-	printk("vGT: avail aperture %ldKB, avail gm size %ldKB\n",
-		avail_ap/1024, avail_gm/1024);
+	printk("vGT: total aperture %luKB, total GM space %luKB\n",
+		(unsigned long)phys_aperture_sz(pdev)/1024, (unsigned long)gm_sz(pdev)/1024);
+	printk("vGT: reserved aperture %luKB, dom0 aperture size %luKB\n",
+		(unsigned long)rsvd_aperture_sz(pdev)/1024, (unsigned long)dom0_aperture_sz(pdev)/1024);
+	printk("vGT: avail aperture %luKB, avail gm size %luKB\n",
+		(unsigned long)avail_ap/1024, (unsigned long)avail_gm/1024);
 	printk("vGT: support %d VMs:\n", pdev->max_vms);
 
 	/* TODO: instead of using min size, calculate an optimal size for requested VMs */

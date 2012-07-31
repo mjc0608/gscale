@@ -239,7 +239,7 @@ static void vgt_restore_palette(struct vgt_device *vgt, enum vgt_pipe pipe)
 {
     int i;
     struct pgt_device *pdev = vgt->pdev;
-    unsigned long reg = (pipe == PIPE_A ? _REG_PALETTE_A : _REG_PALETTE_B);
+    vgt_reg_t reg = (pipe == PIPE_A ? _REG_PALETTE_A : _REG_PALETTE_B);
 
     if (!vgt_pipe_enabled(vgt, pipe))
         return;

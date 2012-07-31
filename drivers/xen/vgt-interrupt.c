@@ -1061,7 +1061,7 @@ bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 
 	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
 
-	dprintk("vGT-IRQ: capture IIR write on reg (%s) with val (%lx)\n",
+	dprintk("vGT-IRQ: capture IIR write on reg (%s) with val (%x)\n",
 		ops->get_reg_name(vgt->pdev, reg), iir);
 
 
