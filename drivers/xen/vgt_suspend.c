@@ -508,6 +508,7 @@ static void vgt_restore_display(struct vgt_device *vgt)
     /* TODO: snb does not support fbc */
     //if (VGT_I915_HAS_FBC(vgt)) { ... }
 
+#if 0
 	/* VGA state */
     if (VGT_HAS_PCH_SPLIT(vgt))
         vgt_restore_mmio_reg(_REG_CPU_VGACNTRL);
@@ -520,7 +521,8 @@ static void vgt_restore_display(struct vgt_device *vgt)
     VGT_POST_READ(pdev, _REG_VGA_PD);
     udelay(150);
 
-    vgt_restore_vga(vgt);
+    //vgt_restore_vga(vgt);
+#endif
 }
 
 /* FIXME: No need to operate on i2c ? */
