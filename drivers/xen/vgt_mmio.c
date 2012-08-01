@@ -275,13 +275,11 @@ bool fence_mmio_read(struct vgt_device *vgt, unsigned int off,
 	int id;
 	ASSERT(bytes <= 8 && !(off & (bytes - 1)));
 	id = (off - _REG_FENCE_0_LOW) >> 3;
-	ASSERT (id < 16);
 
-	if ( id >= __vreg(vgt, vgt_info_off(avail_rs.fence_num)) ) {
+	if (id >= vgt->fence_sz) {
 		printk("vGT(%d) , read fence register %x,"
 			" %x out of assignment %x.\n", vgt->vgt_id,
-			off, id,
-			__vreg(vgt, vgt_info_off(avail_rs.fence_num)));
+			off, id, vgt->fence_sz);
 	}
 	memcpy (p_data, (char *)vgt->state.vReg + off, bytes);
 	return true;
@@ -293,13 +291,11 @@ bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 	int id;
 	ASSERT(bytes <= 8 && !(off & (bytes - 1)));
 	id = (off - _REG_FENCE_0_LOW) >> 3;
-	ASSERT (id < 16);
 
-	if ( id >= __vreg(vgt, vgt_info_off(avail_rs.fence_num)) ) {
+	if (id >= vgt->fence_sz) {
 		printk("vGT (%d) , write fence register %x,"
 			" %x out of assignment %x.\n", vgt->vgt_id,
-			off, id,
-			__vreg(vgt, vgt_info_off(avail_rs.fence_num)));
+			off, id, vgt->fence_sz);
 	}
 	else {
 		memcpy ((char *)vgt->state.vReg + off, p_data, bytes);

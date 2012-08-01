@@ -103,15 +103,21 @@ typedef struct {
 #define sleep_ns(x)	{long y=1UL*x/2; while (y-- > 0) ;}
 #define sleep_us(x)	{long y=500UL*x; while (y-- > 0) ;}
 
+#define SIZE_1KB			(1024UL)
 #define SIZE_1MB			(1024UL*1024UL)
 
 /* Maximum VMs supported by vGT. Actual number is device specific */
 #define VGT_MAX_VMS			3
 #define VGT_RSVD_APERTURE_SZ		(64*SIZE_1MB)	/* reserve 64MB for vGT itself */
-#define VGT_DOM0_APERTURE_SZ		(64*SIZE_1MB)	/* 64MB for dom0 */
-#define VGT_MIN_APERTURE_SZ		(64*SIZE_1MB)		/* minimum 64MB for other VMs */
-/* only 1G/2G is supported on SNB. Need a way to enlighten the driver */
-#define VGT_MIN_GM_SZ			(512*SIZE_1MB)	/* the power of 2 */
+
+#ifdef SANDY_BRIDGE
+#define VGT_MAX_GM_SIZE			(2*SIZE_1MB*SIZE_1KB)
+#define VGT_GM_BITMAP_BITS		(VGT_MAX_GM_SIZE/SIZE_1MB)
+#define VGT_MAX_NUM_FENCES		16
+#define VGT_FENCE_BITMAP_BITS	VGT_MAX_NUM_FENCES
+#else
+#error VGT_MAX_NUM_FENCES and VGT_MAX_GM_SIZE: not defined!
+#endif
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
 #define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 256 KB for now */
@@ -965,7 +971,8 @@ struct vgt_device {
 	uint64_t 	gm_sz;
 	uint64_t	aperture_offset;	/* address fix for visible GM */
 	uint64_t	hidden_gm_offset;	/* address fix for invisible GM */
-	int		fence_base;
+	int			fence_base;
+	int			fence_sz;
 
 	uint64_t   vgtt_sz; /* virtual GTT size in byte */
 	uint32_t   *vgtt; /* virtual GTT table for guest to read */
@@ -1079,13 +1086,14 @@ struct pgt_device {
 
 	vgt_edid_data_t		*pdev_edids[EDID_NUM];	/* per display EDID information */
 
-	int max_vms;		/* maximum supported VMs */
+	 /* 1 bit corresponds to 1MB in the GM space */
+	DECLARE_BITMAP(gm_bitmap, VGT_GM_BITMAP_BITS);
+
+	/* 1 bit corresponds to 1 fence register */
+	DECLARE_BITMAP(fence_bitmap, VGT_FENCE_BITMAP_BITS);
+
 	uint64_t rsvd_aperture_sz;
 	uint64_t rsvd_aperture_base;
-	uint64_t dom0_aperture_sz;
-	uint64_t dom0_aperture_base;
-	uint64_t vm_aperture_sz;
-	uint64_t vm_gm_sz;
 	uint64_t rsvd_aperture_pos;	/* position of the next free reserved page */
 	uint64_t scratch_page;		/* page used for data written from GPU */
 	uint64_t ctx_switch_rb_page;	/* page used as ring buffer for context switch */
@@ -1276,23 +1284,17 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 #define aperture_2_gm(pdev, addr)	(addr - phys_aperture_base(pdev))
 #define v_aperture(pdev, addr)		(phys_aperture_vbase(pdev) + (addr))
 
-#define rsvd_aperture_sz(pdev)		(pdev->rsvd_aperture_sz)
-#define rsvd_aperture_base(pdev)	(pdev->rsvd_aperture_base)
-#define rsvd_aperture_end(pdev)		\
-	(rsvd_aperture_base(pdev) + rsvd_aperture_sz(pdev) - 1)
-#define rsvd_aperture_pages(pdev)	(rsvd_aperture_sz(pdev) >> GTT_PAGE_SHIFT)
-
-#define dom0_aperture_sz(pdev)		(pdev->dom0_aperture_sz)
-#define dom0_aperture_base(pdev)	(pdev->dom0_aperture_base)
-#define dom0_aperture_end(pdev)		\
-	(dom0_aperture_base(pdev) + dom0_aperture_sz(pdev) - 1)
-
 #define vm_aperture_sz(pdev)		(pdev->vm_aperture_sz)
 #define vm_gm_sz(pdev)			(pdev->vm_gm_sz)
 #define vm_gm_hidden_sz(pdev)		(vm_gm_sz(pdev) - vm_aperture_sz(pdev))
 
 /*
  * Aperture/GM virtualization
+ *
+ * NOTE: the below description says dom0's aperture starts at a non-zero place,
+ * this is only true if you enable the dom0's kernel parameter
+ * dom0_aperture_starts_at_128MB: now by default dom0's aperture starts at 0 of
+ * the GM space since dom0 is the first vm to request for GM space.
  *
  * GM is split into two parts: the 1st part visible to CPU through an aperture
  * window mapping, and the 2nd part only accessible from GPU. The virtualization
@@ -1311,35 +1313,6 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
  * VM1 GM space   |     |/          /
  * (start from 0) |/////|//////////|
  */
-static inline uint64_t get_vm_aperture_base(struct pgt_device *pdev, int i)
-{
-	return phys_aperture_base(pdev) + i * vm_aperture_sz(pdev);
-}
-
-static inline uint64_t get_vm_aperture_end(struct pgt_device *pdev, int i)
-{
-	return get_vm_aperture_base(pdev, i) + vm_aperture_sz(pdev) - 1;
-}
-
-static inline uint64_t get_vm_visible_gm_base(struct pgt_device *pdev, int i)
-{
-	return gm_base(pdev) + i * vm_aperture_sz(pdev);
-}
-
-static inline uint64_t get_vm_visible_gm_end(struct pgt_device *pdev, int i)
-{
-	return get_vm_visible_gm_base(pdev, i) + vm_aperture_sz(pdev) - 1;
-}
-
-static inline uint64_t get_vm_hidden_gm_base(struct pgt_device *pdev, int i)
-{
-	return hidden_gm_base(pdev) + i * vm_gm_hidden_sz(pdev);
-}
-
-static inline uint64_t get_vm_hidden_gm_end(struct pgt_device *pdev, int i)
-{
-	return get_vm_hidden_gm_base(pdev, i) + vm_gm_hidden_sz(pdev) - 1;
-}
 
 /* definitions for vgt's aperture/gm space */
 #define vgt_aperture_base(vgt)		(vgt->aperture_base)
@@ -1360,7 +1333,6 @@ static inline uint64_t get_vm_hidden_gm_end(struct pgt_device *pdev, int i)
 	(gm_base(vgt->pdev) + vgt_hidden_gm_offset(vgt))
 #define vgt_hidden_gm_end(vgt)		\
 	(vgt_hidden_gm_base(vgt) + vgt_hidden_gm_sz(vgt) - 1)
-#define vgt_visible_fence_sz(vgt)	4	/* TO revist: make it configurable */
 
 /*
  * the view of the aperture/gm space from the VM's p.o.v

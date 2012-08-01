@@ -2405,28 +2405,124 @@ static int create_state_instance(struct vgt_device *vgt)
 	return 0;
 }
 
+static int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	unsigned long *gm_bitmap = pdev->gm_bitmap;
+	unsigned long *fence_bitmap = pdev->fence_bitmap;
+	unsigned long guard = hidden_gm_base(vgt->pdev)/SIZE_1MB;
+	unsigned long gm_bitmap_total_bits = VGT_GM_BITMAP_BITS;
+	unsigned long aperture_search_start = 0;
+	unsigned long visable_gm_start, hidden_gm_start = guard;
+	unsigned long fence_base;
+
+	ASSERT(vgt->aperture_base == 0); /* not allocated yet*/
+	ASSERT(vp.aperture_sz > 0 && vp.aperture_sz <= vp.gm_sz);
+	ASSERT(vp.fence_sz > 0);
+
+	visable_gm_start = bitmap_find_next_zero_area(gm_bitmap, guard,
+				aperture_search_start, vp.aperture_sz, 0);
+	if (visable_gm_start >= guard)
+		return -ENOMEM;
+
+	if (vp.gm_sz > vp.aperture_sz) {
+		hidden_gm_start = bitmap_find_next_zero_area(gm_bitmap,
+				gm_bitmap_total_bits, guard, vp.gm_sz - vp.aperture_sz, 0);
+		if (hidden_gm_start >= gm_bitmap_total_bits)
+			return -ENOMEM;
+	}
+	fence_base = bitmap_find_next_zero_area(fence_bitmap,
+				VGT_FENCE_BITMAP_BITS, 0, vp.fence_sz, 0);
+	if (fence_base >= VGT_MAX_NUM_FENCES)
+		return -ENOMEM;
+
+	vgt->aperture_base = phys_aperture_base(vgt->pdev) +
+			(visable_gm_start * SIZE_1MB);
+	vgt->aperture_sz = vp.aperture_sz * SIZE_1MB;
+	vgt->gm_sz = vp.gm_sz * SIZE_1MB;
+	vgt->hidden_gm_offset = hidden_gm_start * SIZE_1MB;
+	vgt->fence_base = fence_base;
+	vgt->fence_sz = vp.fence_sz;
+
+	/* mark the related areas as BUSY. */
+	bitmap_set(gm_bitmap, visable_gm_start, vp.aperture_sz);
+	if (vp.gm_sz > vp.aperture_sz)
+		bitmap_set(gm_bitmap, hidden_gm_start, vp.gm_sz - vp.aperture_sz);
+	bitmap_set(fence_bitmap, fence_base, vp.fence_sz);
+	return 0;
+}
+
+static void free_vm_aperture_gm_and_fence(struct vgt_device *vgt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	unsigned long *gm_bitmap = pdev->gm_bitmap;
+	unsigned long *fence_bitmap = pdev->fence_bitmap;
+	unsigned long visable_gm_start =
+		aperture_2_gm(vgt->pdev, vgt->aperture_base)/SIZE_1MB;
+	unsigned long hidden_gm_start;
+
+	ASSERT(vgt->aperture_sz > 0 && vgt->aperture_sz <= vgt->gm_sz);
+
+	/* mark the related areas as available */
+	bitmap_clear(gm_bitmap, visable_gm_start, vgt->aperture_sz/SIZE_1MB);
+	if (vgt->gm_sz > vgt->aperture_sz) {
+		hidden_gm_start =
+			(vgt->hidden_gm_offset - hidden_gm_base(vgt->pdev))/SIZE_1MB;
+		bitmap_clear(gm_bitmap, hidden_gm_start,
+			(vgt->gm_sz - vgt->aperture_sz)/SIZE_1MB);
+	}
+	bitmap_clear(fence_bitmap, vgt->fence_base,  vgt->fence_sz);
+}
+
+static void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev)
+{
+	unsigned long *gm_bitmap = pdev->gm_bitmap;
+
+	printk("vGT: total aperture: 0x%x bytes, total GM space: 0x%llx bytes\n",
+		phys_aperture_sz(pdev), gm_sz(pdev));
+
+	ASSERT(phys_aperture_sz(pdev) % SIZE_1MB == 0);
+	ASSERT(gm_sz(pdev) % SIZE_1MB == 0);
+	ASSERT(phys_aperture_sz(pdev) <= gm_sz(pdev) && gm_sz(pdev) <= VGT_MAX_GM_SIZE);
+
+	pdev->rsvd_aperture_sz = VGT_RSVD_APERTURE_SZ;
+	pdev->rsvd_aperture_base = phys_aperture_base(pdev) + hidden_gm_base(pdev) -
+								pdev->rsvd_aperture_sz;
+
+	// mark the rsvd aperture as not-available.
+	bitmap_set(gm_bitmap, aperture_2_gm(pdev, pdev->rsvd_aperture_base)/SIZE_1MB,
+				pdev->rsvd_aperture_sz/SIZE_1MB);
+
+	printk("vGT: reserved aperture: [0x%llx, 0x%llx)\n",
+			pdev->rsvd_aperture_base,
+			pdev->rsvd_aperture_base + pdev->rsvd_aperture_sz);
+
+	/* serve as a simple linear allocator */
+	pdev->rsvd_aperture_pos = 0;
+}
+
 /*
  * priv: VCPU ?
  */
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp)
 {
-	int i, num;
+	int i;
 	struct vgt_device *vgt;
 	vgt_state_ring_t	*rb;
 	char *cfg_space;
-	static int free_fence_base = 0;
 	int rc = -ENOMEM;
 
-	printk("create_vgt_instance\n");
+	printk("vGT: %s: vm_id=%d, aperture_sz=%dMB, gm_sz=%dMB, fence_sz=%d\n",
+		__func__, vp.vm_id, vp.aperture_sz, vp.gm_sz, vp.fence_sz);
+
 	vgt = kzalloc (sizeof(*vgt), GFP_KERNEL);
 	if (vgt == NULL) {
 		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
 		return rc;
 	}
 
-	if ((vgt->vgt_id = rc = allocate_vgt_id()) < 0 ) {
+	if ((rc = vgt->vgt_id = allocate_vgt_id()) < 0 )
 		goto err;
-	}
 
 	vgt->vm_id = vp.vm_id;
 	vgt->pdev = pdev;
@@ -2444,19 +2540,9 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt->state.aperture_base = phys_aperture_base(pdev);
 
 	/* init aperture/gm ranges allocated to this vgt */
-	if (vgt->vgt_id == 0) {
-		vgt->aperture_base = dom0_aperture_base(pdev);
-		vgt->aperture_sz = dom0_aperture_sz(pdev);
-		vgt->gm_sz = dom0_aperture_sz(pdev);
-		vgt->hidden_gm_offset = hidden_gm_base(pdev);	/* dom0 has no hidden part */
-	} else {
-		/*
-		 * TODO: Use sysfs for dynamic configuration.
-		 */
-		vgt->aperture_base = get_vm_aperture_base(pdev, vgt->vgt_id - 1);
-		vgt->aperture_sz = vm_aperture_sz(pdev);
-		vgt->gm_sz = vm_gm_sz(pdev);
-		vgt->hidden_gm_offset = get_vm_hidden_gm_base(pdev, vgt->vgt_id - 1);
+	if ((rc = allocate_vm_aperture_gm_and_fence(vgt, vp)) < 0) {
+		printk("vGT: %s: no enough available aperture/gm/fence!\n", __func__);
+		goto err;
 	}
 
 	vgt->aperture_offset = aperture_2_gm(pdev, vgt->aperture_base);
@@ -2467,16 +2553,16 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		vgt->vgtt_sz = (gm_sz(pdev) >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
 	else
 		vgt->vgtt_sz = (vgt->gm_sz >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
-	printk("Virtual GTT size: 0x%lx\n", (long)vgt->vgtt_sz);
+	printk("vGT:   Virtual GTT size: 0x%lx\n", (long)vgt->vgtt_sz);
 	vgt->vgtt = kzalloc(vgt->vgtt_sz, GFP_KERNEL);
 	if (!vgt->vgtt) {
 		printk("vGT: failed to allocate virtual GTT table\n");
 		goto err;
 	}
 
-	vgt->rsvd_aperture_base = rsvd_aperture_base(pdev) + pdev->rsvd_aperture_pos;
+	vgt->rsvd_aperture_base = pdev->rsvd_aperture_base + pdev->rsvd_aperture_pos;
 	pdev->rsvd_aperture_pos += VGT_APERTURE_PER_INSTANCE_SZ;
-	printk("rsvd_aperture_base: %llx\n", vgt->rsvd_aperture_base);
+	printk("vGT:   rsvd_aperture_base: 0x%llx\n", vgt->rsvd_aperture_base);
 
 	for (i=0; i< MAX_ENGINES; i++) {
 		rb = &vgt->rb[i];
@@ -2504,7 +2590,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
 	vgt_pci_bar_write_32(vgt, VGT_REG_CFG_SPACE_BAR1, phys_aperture_base(pdev) );
 
-	printk("vGT: aperture: [0x%llx, 0x%llx] guest [0x%llx, 0x%llx] "
+	printk("vGT:   aperture: [0x%llx, 0x%llx] guest [0x%llx, 0x%llx] "
 		"va(0x%llx)\n",
 		vgt_aperture_base(vgt),
 		vgt_aperture_end(vgt),
@@ -2512,8 +2598,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		vgt_guest_aperture_end(vgt),
 		(uint64_t)vgt->aperture_base_va);
 
-	printk("vGT: GM: [0x%llx, 0x%llx], [0x%llx, 0x%llx], guest[0x%llx, 0x%llx]"
-		", [0x%llx, 0x%llx]\n",
+	printk("vGT:   GM: [0x%llx, 0x%llx], [0x%llx, 0x%llx], "
+		"guest[0x%llx, 0x%llx], [0x%llx, 0x%llx]\n",
 		vgt_visible_gm_base(vgt),
 		vgt_visible_gm_end(vgt),
 		vgt_hidden_gm_base(vgt),
@@ -2548,11 +2634,15 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		__vreg(vgt, vgt_info_off(avail_rs.high_gmadr.my_base)) = vgt_hidden_gm_base(vgt);
 		__vreg(vgt, vgt_info_off(avail_rs.high_gmadr.my_size)) = vgt_hidden_gm_sz(vgt);
 
-		vgt->fence_base = free_fence_base;
-		num = vgt_visible_fence_sz(vgt);
-		free_fence_base += num;
-		ASSERT (free_fence_base <= 16);	/* SNB only has 16 fence registers */
-		__vreg(vgt, vgt_info_off(avail_rs.fence_num)) = num;
+		__vreg(vgt, vgt_info_off(avail_rs.fence_num)) = vgt->fence_sz;
+		printk("vGT: filling VGT_PVINFO_PAGE for dom%d:\n"
+			"   visable_gm_base=0x%llx, size=0x%llx\n"
+			"   hidden_gm_base=0x%llx, size=0x%llx\n"
+			"   fence_base=%d, num=%d\n",
+			vgt->vm_id,
+			vgt_visible_gm_base(vgt), vgt_aperture_sz(vgt),
+			vgt_hidden_gm_base(vgt), vgt_hidden_gm_sz(vgt),
+			vgt->fence_base, vgt->fence_sz);
 	}
 
 	pdev->device[vgt->vgt_id] = vgt;
@@ -2594,6 +2684,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	*ptr_vgt = vgt;
 	return 0;
 err:
+	if ( vgt->aperture_base > 0)
+		free_vm_aperture_gm_and_fence(vgt);
 	kfree(vgt->vgtt);
 	kfree(vgt->state.vReg);
 	kfree(vgt->state.sReg);
@@ -2635,6 +2727,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	if (vgt->pdev->enable_ppgtt)
 		vgt_destroy_shadow_ppgtt(vgt);
 
+	free_vm_aperture_gm_and_fence(vgt);
 	kfree(vgt->vgtt);
 	kfree(vgt->state.vReg);
 	kfree(vgt->state.sReg);
@@ -3117,7 +3210,7 @@ static int setup_gtt(struct pgt_device *pdev)
 	check_gtt(pdev);
 	printk("vGT: allocate vGT aperture\n");
 	/* Fill GTT range owned by vGT driver */
-	index = GTT_INDEX(pdev, aperture_2_gm(pdev, rsvd_aperture_base(pdev)));
+	index = GTT_INDEX(pdev, aperture_2_gm(pdev, pdev->rsvd_aperture_base));
 	for (i = 0; i < VGT_APERTURE_PAGES; i++) {
 		/* need a DMA flag? */
 		page = alloc_page(GFP_KERNEL | __GFP_ZERO);
@@ -3162,84 +3255,6 @@ err_out:
 	return ret;
 }
 
-void vgt_calculate_max_vms(struct pgt_device *pdev)
-{
-	uint64_t avail_ap, avail_gm;
-	int possible_ap, possible_gm, possible;
-	int i;
-	uint64_t dom0_start = phys_aperture_base(pdev);
-	uint64_t dom0_gm_start = 0;
-
-	printk("vGT: total aperture (%x), total GM space (%llx)\n",
-		phys_aperture_sz(pdev), gm_sz(pdev));
-
-	pdev->max_vms = VGT_MAX_VMS;
-
-	rsvd_aperture_sz(pdev) = VGT_RSVD_APERTURE_SZ;
-	dom0_aperture_sz(pdev) = VGT_DOM0_APERTURE_SZ;
-
-	avail_ap = phys_aperture_sz(pdev) - rsvd_aperture_sz(pdev) -
-			dom0_aperture_sz(pdev);
-	possible_ap = avail_ap / VGT_MIN_APERTURE_SZ;
-
-	avail_gm = gm_sz(pdev) - rsvd_aperture_sz(pdev) -
-			dom0_aperture_sz(pdev);
-	possible_gm = avail_gm / VGT_MIN_GM_SZ;
-
-	possible = (possible_ap < possible_gm) ? possible_ap : possible_gm;
-	possible++;	/* count on dom0 */
-	if (possible < pdev->max_vms) {
-		printk("vGT: request to support %d VMs, but only %d VMs can be allowed\n",
-			VGT_MAX_VMS, possible);
-		pdev->max_vms = possible;
-	}
-
-	printk("vGT: total aperture %luKB, total GM space %luKB\n",
-		(unsigned long)phys_aperture_sz(pdev)/1024, (unsigned long)gm_sz(pdev)/1024);
-	printk("vGT: reserved aperture %luKB, dom0 aperture size %luKB\n",
-		(unsigned long)rsvd_aperture_sz(pdev)/1024, (unsigned long)dom0_aperture_sz(pdev)/1024);
-	printk("vGT: avail aperture %luKB, avail gm size %luKB\n",
-		(unsigned long)avail_ap/1024, (unsigned long)avail_gm/1024);
-	printk("vGT: support %d VMs:\n", pdev->max_vms);
-
-	/* TODO: instead of using min size, calculate an optimal size for requested VMs */
-	vm_aperture_sz(pdev) = VGT_MIN_APERTURE_SZ;
-	vm_gm_sz(pdev) = VGT_MIN_GM_SZ;
-	for (i = 0; i < pdev->max_vms - 1; i++) {
-		printk("....VM#%d:\n", i);
-		printk("........aperture: [0x%llx, 0x%llx]\n",
-			get_vm_aperture_base(pdev, i),
-			get_vm_aperture_end(pdev, i));
-		printk("........gm: [0x%llx, 0x%llx], [0x%llx, 0x%llx]\n",
-			get_vm_visible_gm_base(pdev, i),
-			get_vm_visible_gm_end(pdev, i),
-			get_vm_hidden_gm_base(pdev, i),
-			get_vm_hidden_gm_end(pdev, i));
-
-		dom0_start = get_vm_aperture_end(pdev, i) + 1;
-		dom0_gm_start = get_vm_visible_gm_end(pdev, i) + 1;
-	}
-
-	ASSERT(dom0_start + dom0_aperture_sz(pdev) +
-		rsvd_aperture_sz(pdev) <=
-		phys_aperture_base(pdev) + phys_aperture_sz(pdev));
-
-	dom0_aperture_base(pdev) = dom0_start;
-	printk("....dom0 aperture: [0x%llx, 0x%llx]\n",
-			dom0_aperture_base(pdev),
-			dom0_aperture_end(pdev));
-	printk("....dom0 gm: 0x%llx\n", dom0_gm_start);
-
-	rsvd_aperture_base(pdev) = dom0_aperture_end(pdev) + 1;
-	printk("....reserved aperture: [0x%llx, 0x%llx]\n",
-			rsvd_aperture_base(pdev),
-			rsvd_aperture_end(pdev));
-	printk("....reserved gm: 0x%llx\n", dom0_gm_start + dom0_aperture_end(pdev) - dom0_aperture_base(pdev) + 1);
-
-	/* serve as a simple linear allocator */
-	pdev->rsvd_aperture_pos = 0;
-}
-
 /*
  * Initialize the vgt driver.
  *  return 0: success
@@ -3263,7 +3278,7 @@ int vgt_initialize(struct pci_dev *dev)
 	if (!initial_phys_states(pdev))
 		goto err;
 
-	vgt_calculate_max_vms(pdev);
+	initialize_gm_fence_allocation_bitmaps(pdev);
 
 	vgt_init_device_func(pdev);
 
@@ -3288,6 +3303,9 @@ int vgt_initialize(struct pci_dev *dev)
 
 	/* create domain 0 instance */
 	vp.vm_id = 0;
+	vp.aperture_sz = 64;
+	vp.gm_sz = 64;
+	vp.fence_sz = 4;
 	if (create_vgt_instance(pdev, &vgt_dom0, vp) < 0)
 		goto err;
 
