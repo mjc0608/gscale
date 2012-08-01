@@ -3456,7 +3456,8 @@ void vgt_destroy()
 	/* Destruct all vgt_debugfs */
 	vgt_release_debugfs();
 
-	intel_gtt_clear_range(0, phys_aperture_sz(pdev) - GTT_PAGE_SIZE);
+	intel_gtt_clear_range(0,
+		(phys_aperture_sz(pdev) - GTT_PAGE_SIZE)/PAGE_SIZE);
 	for (i = 0; i < phys_aperture_pages(pdev); i++)
 		if (pages[i]) {
 			put_page(pages[i]);
