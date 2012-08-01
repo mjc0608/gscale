@@ -155,22 +155,6 @@ static int __init vgt_primary_setup(char *str)
 }
 __setup("vgt_primary", vgt_primary_setup);
 
-// By default this temporary option is off, meaning a big per-vm resource
-// config, i.e.,  VGT_MIN_APERTURE_SZ=128MB and vgt_visible_fence_sz=8.
-// By passing "small_per_vm_resource" to the dom0 kernel, we use a smaller
-// config: i.e., VGT_MIN_APERTURE_SZ=64MB and vgt_visible_fence_sz=4.
-// To create 2 Linux HVM guests, we have to enable this option.
-//
-// Dexuan is implementing a more flexible solution that allows us to specify
-// the guest config parameters in HVM config file.
-static bool small_per_vm_resource = false;
-static int __init small_per_vm_resource_setup(char *str)
-{
-	small_per_vm_resource = true;
-	return 1;
-}
-__setup("small_per_vm_resource", small_per_vm_resource_setup);
-
 bool vgt_debug;
 static int __init vgt_debug_setup(char *str)
 {

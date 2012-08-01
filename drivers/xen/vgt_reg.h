@@ -109,7 +109,7 @@ typedef struct {
 #define VGT_MAX_VMS			3
 #define VGT_RSVD_APERTURE_SZ		(64*SIZE_1MB)	/* reserve 64MB for vGT itself */
 #define VGT_DOM0_APERTURE_SZ		(64*SIZE_1MB)	/* 64MB for dom0 */
-#define VGT_MIN_APERTURE_SZ		(small_per_vm_resource ? 64*SIZE_1MB : 128*SIZE_1MB)
+#define VGT_MIN_APERTURE_SZ		(64*SIZE_1MB)		/* minimum 64MB for other VMs */
 /* only 1G/2G is supported on SNB. Need a way to enlighten the driver */
 #define VGT_MIN_GM_SZ			(512*SIZE_1MB)	/* the power of 2 */
 
@@ -1360,7 +1360,7 @@ static inline uint64_t get_vm_hidden_gm_end(struct pgt_device *pdev, int i)
 	(gm_base(vgt->pdev) + vgt_hidden_gm_offset(vgt))
 #define vgt_hidden_gm_end(vgt)		\
 	(vgt_hidden_gm_base(vgt) + vgt_hidden_gm_sz(vgt) - 1)
-#define vgt_visible_fence_sz(vgt)	(small_per_vm_resource ? 4 : 8)
+#define vgt_visible_fence_sz(vgt)	4	/* TO revist: make it configurable */
 
 /*
  * the view of the aperture/gm space from the VM's p.o.v
