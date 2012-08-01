@@ -2405,6 +2405,67 @@ static int create_state_instance(struct vgt_device *vgt)
 	return 0;
 }
 
+static int dom0_aperture_sz = 64;	//in MB.
+static int dom0_gm_sz = 64;			//in MB. Dom0 has no hidden gm.
+
+static int __init dom0_aperture_sz_setup(char *str)
+{
+	int t;
+	if (sscanf(str, "%d", &t) == 1 && t > 0 && t <= 256)
+		dom0_aperture_sz = t;
+	else {
+		printk("vGT: dom0_aperture_sz: invalid value ignored.\n");
+	}
+
+	if (dom0_gm_sz < dom0_aperture_sz)
+		dom0_gm_sz = dom0_aperture_sz;
+	return 1;
+}
+__setup("dom0_aperture_sz=", dom0_aperture_sz_setup);
+
+static int __init dom0_gm_sz_setup(char *str)
+{
+	int t;
+	if (sscanf(str, "%d", &t) == 1 && t > 0 && t <= 2048)
+		dom0_gm_sz = t;
+	else {
+		printk("vGT: dom0_gm_sz: invalid value ignored.\n");
+	}
+
+	if (dom0_gm_sz < dom0_aperture_sz)
+		dom0_gm_sz = dom0_aperture_sz;
+	return 1;
+}
+__setup("dom0_gm_sz=", dom0_gm_sz_setup);
+
+static int dom0_fence_sz = 4;
+static int __init dom0_fence_sz_setup(char *str)
+{
+	int t;
+	if (sscanf(str, "%d", &t) == 1 && t > 0 && t <= 16)
+		dom0_fence_sz = t;
+	else {
+		printk("vGT: dom0_fence_sz: invalid value ignored.\n");
+	}
+
+	return 1;
+}
+__setup("dom0_fence_sz=", dom0_fence_sz_setup);
+
+/* Before using the bitmap to manage the allocation of GM space dynamically
+ * (hence Dom0's aperture starts at 0 of GM space, we used static fixed
+ * allocation and Dom0's aperture starts at 128MB of GM space.
+ * If you want to switch to the old 128MB location anyway, enable this kernel
+ * parameter.
+ */
+static int dom0_aperture_starts_at_128MB;
+static int __init dom0_aperture_starts_at_128MB_setup(char *str)
+{
+	dom0_aperture_starts_at_128MB = 1;
+	return 1;
+}
+__setup("dom0_aperture_starts_at_128MB", dom0_aperture_starts_at_128MB_setup);
+
 static int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -2419,6 +2480,13 @@ static int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_
 	ASSERT(vgt->aperture_base == 0); /* not allocated yet*/
 	ASSERT(vp.aperture_sz > 0 && vp.aperture_sz <= vp.gm_sz);
 	ASSERT(vp.fence_sz > 0);
+
+	if (vgt->vm_id == 0) {
+		if (dom0_aperture_starts_at_128MB)
+			aperture_search_start = 128;
+		printk("vGT: dom0 aperture starts at %ldMB.\n",
+			aperture_search_start);
+	}
 
 	visable_gm_start = bitmap_find_next_zero_area(gm_bitmap, guard,
 				aperture_search_start, vp.aperture_sz, 0);
@@ -3303,9 +3371,9 @@ int vgt_initialize(struct pci_dev *dev)
 
 	/* create domain 0 instance */
 	vp.vm_id = 0;
-	vp.aperture_sz = 64;
-	vp.gm_sz = 64;
-	vp.fence_sz = 4;
+	vp.aperture_sz = dom0_aperture_sz;
+	vp.gm_sz = dom0_gm_sz;
+	vp.fence_sz = dom0_fence_sz;
 	if (create_vgt_instance(pdev, &vgt_dom0, vp) < 0)
 		goto err;
 
