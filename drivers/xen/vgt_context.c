@@ -75,9 +75,6 @@
 #include "vgt_reg.h"
 #include <xen/vgt-if.h>
 
-/* uncomment this macro so that dom0's aperture/GM starts from non-zero */
-#define DOM0_NON_IDENTICAL
-
 /*
  * a temporary trick:
  *
@@ -3210,30 +3207,6 @@ err_out:
 	return ret;
 }
 
-/*
- * This interface is abandoned now, since with ballooning we
- * can have the guest to map the aperture starting from zero.
- * For dom0 it implicates that i915 can map the whole aperture
- * space
- * for other VM we manipulate the p2m table so that ballooned
- * spaces are not mapped to the physical.
- *
- * that means original DOM0_NON_IDENTICAL doesn't work any more
- * without the ballooning support. This should be fine since
- * dom0 should always support it.
- */
-unsigned long int vgt_dom0_aper_offset(void)
-{
-	/*FIXME: remove the hard code 128M */
-#ifdef DOM0_NON_IDENTICAL
-	return SIZE_1MB * 128;
-#else
-	return 0;
-#endif
-}
-
-EXPORT_SYMBOL(vgt_dom0_aper_offset);
-
 void vgt_calculate_max_vms(struct pgt_device *pdev)
 {
 	uint64_t avail_ap, avail_gm;
@@ -3245,11 +3218,7 @@ void vgt_calculate_max_vms(struct pgt_device *pdev)
 	printk("vGT: total aperture (%x), total GM space (%llx)\n",
 		phys_aperture_sz(pdev), gm_sz(pdev));
 
-#ifndef DOM0_NON_IDENTICAL
-	pdev->max_vms = 1;		/* dom0 only */
-#else
 	pdev->max_vms = VGT_MAX_VMS;
-#endif
 
 	rsvd_aperture_sz(pdev) = VGT_RSVD_APERTURE_SZ;
 	dom0_aperture_sz(pdev) = VGT_DOM0_APERTURE_SZ;

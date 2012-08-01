@@ -1877,13 +1877,14 @@ void vgt_irq_exit(struct pgt_device *dev)
 	kfree(vgt_event_owner_table(dev));
 }
 
-int vgt_vstate_irq_init(struct vgt_device *vstate)
+int vgt_vstate_irq_init(struct vgt_device *vgt)
 {
 	struct vgt_emul_timer *dpy_timer;
 	struct vgt_irq_virt_state *irq_vstate;
 
 	irq_vstate = kzalloc(sizeof(struct vgt_irq_virt_state), GFP_KERNEL);
-	ASSERT(irq_vstate);
+	if(irq_vstate == NULL)
+		return -ENOMEM;
 
 	dpy_timer = &irq_vstate->dpy_timer;
 
@@ -1891,10 +1892,10 @@ int vgt_vstate_irq_init(struct vgt_device *vstate)
 	dpy_timer->timer.function = vgt_dpy_timer_fn;
 	dpy_timer->period = VGT_DPY_EMUL_PERIOD;
 
-	irq_vstate->vgt = vstate;
-	vstate->irq_vstate = irq_vstate;
+	irq_vstate->vgt = vgt;
+	vgt->irq_vstate = irq_vstate;
 	/* Assume basic domain information has been retrieved already */
-	printk("vGT: interrupt initialization for domain (%d) completes\n", vstate->vm_id);
+	printk("vGT: interrupt initialization for domain (%d) completes\n", vgt->vm_id);
 	return 0;
 }
 
