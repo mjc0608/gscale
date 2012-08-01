@@ -114,7 +114,7 @@ typedef struct {
 #define VGT_MIN_GM_SZ			(512*SIZE_1MB)	/* the power of 2 */
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
-#define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 64 KB for now */
+#define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 256 KB for now */
 #define VGT_APERTURE_PER_INSTANCE_SZ		(4*SIZE_1MB)	/* 4MB per instance (?) */
 extern unsigned long vgt_id_alloc_bitmap;
 #define VGT_ID_ALLOC_BITMAP		((1UL << VGT_MAX_VMS) - 1)
@@ -2319,7 +2319,7 @@ void vgt_reg_watchdog_handler(struct vgt_device *state,
 	uint32_t reg, uint32_t val, bool write, ...);
 extern char *vgt_irq_name[IRQ_MAX];
 
-struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id);
+int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, int vm_id);
 void vgt_release_instance(struct vgt_device *vgt);
 int vgt_init_sysfs(struct pgt_device *pdev);
 extern void vgt_set_display_pointer(int vm_id);

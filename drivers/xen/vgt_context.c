@@ -532,17 +532,19 @@ int allocate_vgt_id(void)
 
 	do {
 		bit_index = ffz (vgt_id_alloc_bitmap);
-		ASSERT (bit_index < VGT_MAX_VMS);
-		if (bit_index >= VGT_MAX_VMS)
-			return -1;
-	}
-	while ( test_and_set_bit(bit_index, &vgt_id_alloc_bitmap) != 0);
+		if (bit_index >= VGT_MAX_VMS) {
+			printk("vGT: allocate_vgt_id() failed\n");
+			return -ENOSPC;
+		}
+	} while (test_and_set_bit(bit_index, &vgt_id_alloc_bitmap) != 0);
 
 	return bit_index;
 }
 
 void free_vgt_id(int vgt_id)
 {
+	ASSERT(vgt_id >= 0 && vgt_id < VGT_MAX_VMS);
+	ASSERT(vgt_id_alloc_bitmap & (1UL << vgt_id));
 	clear_bit(vgt_id, &vgt_id_alloc_bitmap);
 }
 
@@ -2394,12 +2396,12 @@ static void state_sreg_init(struct vgt_device *vgt)
  * 	     1: success
  *
  */
-static bool create_state_instance(struct vgt_device *vgt)
+static int create_state_instance(struct vgt_device *vgt)
 {
 	vgt_state_t	*state;
 	int i;
 
-dprintk("create_state_instance\n");
+	dprintk("create_state_instance\n");
 	state = &vgt->state;
 	state->vReg = kmalloc (state->regNum * REG_SIZE, GFP_KERNEL);
 	state->sReg = kmalloc (state->regNum * REG_SIZE, GFP_KERNEL);
@@ -2411,49 +2413,45 @@ dprintk("create_state_instance\n");
 		if ( state->sReg )
 			kfree (state->sReg);
 		state->sReg = state->vReg = NULL;
-		return false;
+		return -ENOMEM;
 	}
 
 	for (i = 0; i < VGT_BAR_NUM; i++)
 		state->bar_mapped[i] = 0;
-	return true;
+	return 0;
 }
 
 /*
  * priv: VCPU ?
  */
-struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
+int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, int vm_id)
 {
-	int i, vgt_id, num;
+	int i, num;
 	struct vgt_device *vgt;
 	vgt_state_ring_t	*rb;
 	char *cfg_space;
 	static int free_fence_base = 0;
+	int rc = -ENOMEM;
 
 	printk("create_vgt_instance\n");
-	vgt = kmalloc (sizeof(*vgt), GFP_KERNEL);
+	vgt = kzalloc (sizeof(*vgt), GFP_KERNEL);
 	if (vgt == NULL) {
 		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
-		return NULL;
+		return rc;
 	}
-	memset(vgt, 0, sizeof(*vgt));
-	/* TODO: check format of aperture size */
-	vgt_id = allocate_vgt_id();
-	if (vgt_id < 0) {
-		kfree (vgt);
-		return NULL;
+
+	if ((vgt->vgt_id = rc = allocate_vgt_id()) < 0 ) {
+		goto err;
 	}
-	vgt->vgt_id = vgt_id;
+
 	vgt->vm_id = vm_id;
+	vgt->pdev = pdev;
 
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
 
-	if ( !create_state_instance(vgt) ) {
-		free_vgt_id(vgt_id);
-		kfree (vgt);
-		return NULL;
-	}
+	if ((rc = create_state_instance(vgt)) < 0)
+		goto err;
 
 	/* TODO: hard code ballooning now. We can support non-ballooning too in the future */
 	vgt->ballooning = true;
@@ -2489,11 +2487,7 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	vgt->vgtt = kzalloc(vgt->vgtt_sz, GFP_KERNEL);
 	if (!vgt->vgtt) {
 		printk("vGT: failed to allocate virtual GTT table\n");
-		kfree(vgt->state.vReg);
-		kfree(vgt->state.sReg);
-		free_vgt_id(vgt_id);
-		kfree (vgt);
-		return NULL;
+		goto err;
 	}
 
 	vgt->rsvd_aperture_base = rsvd_aperture_base(pdev) + pdev->rsvd_aperture_pos;
@@ -2526,14 +2520,16 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
 	vgt_pci_bar_write_32(vgt, VGT_REG_CFG_SPACE_BAR1, phys_aperture_base(pdev) );
 
-	printk("Aperture: [%llx, %llx] guest [%llx, %llx] va(%llx)\n",
+	printk("vGT: aperture: [0x%llx, 0x%llx] guest [0x%llx, 0x%llx] "
+		"va(0x%llx)\n",
 		vgt_aperture_base(vgt),
 		vgt_aperture_end(vgt),
 		vgt_guest_aperture_base(vgt),
 		vgt_guest_aperture_end(vgt),
 		(uint64_t)vgt->aperture_base_va);
 
-	printk("GM: [%llx, %llx], [%llx, %llx], guest[%llx, %llx], [%llx, %llx]\n",
+	printk("vGT: GM: [0x%llx, 0x%llx], [0x%llx, 0x%llx], guest[0x%llx, 0x%llx]"
+		", [0x%llx, 0x%llx]\n",
 		vgt_visible_gm_base(vgt),
 		vgt_visible_gm_end(vgt),
 		vgt_hidden_gm_base(vgt),
@@ -2550,19 +2546,11 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 		cfg_space[VGT_REG_CFG_CLASS_PROG_IF] = VGT_PCI_CLASS_VGA_OTHER;
 	}
 
-	vgt->pdev = pdev;
 	state_sreg_init (vgt);
 	state_vreg_init(vgt);
 
-	if (vgt_vstate_irq_init(vgt) != 0) {
-		printk("vGT: failed to initialize vstate irq!\n");
-		kfree(vgt->vgtt);
-		kfree(vgt->state.vReg);
-		kfree(vgt->state.sReg);
-		free_vgt_id(vgt_id);
-		kfree(vgt);
-		return NULL;
-	}
+	if ((rc = vgt_vstate_irq_init(vgt)) < 0)
+		goto err;
 
 	/* setup the ballooning information */
 	if (vgt->ballooning) {
@@ -2586,13 +2574,12 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	pdev->device[vgt->vgt_id] = vgt;
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
 
-	/* TODO: do clean up if vgt_hvm_init() failed */
 	if (vgt->vm_id != 0){
 		/* HVM specific init */
-		vgt_hvm_info_init(vgt);
-		vgt_hvm_io_init(vgt);
-		if (vgt_hvm_enable(vgt) != 0)
-			return NULL;
+		if ((rc = vgt_hvm_info_init(vgt)) < 0 ||
+			(rc = vgt_hvm_io_init(vgt)) < 0 ||
+			(rc = vgt_hvm_enable(vgt)) < 0)
+			goto err;
 		if (pdev->enable_ppgtt)
 			vgt_init_shadow_ppgtt(vgt);
 	}
@@ -2611,16 +2598,25 @@ struct vgt_device *create_vgt_instance(struct pgt_device *pdev, int vm_id)
 	}
 
 	/* create debugfs interface */
-	vgt_init_debugfs();
+	(void)vgt_init_debugfs();
 	/* create debugfs per vgt */
-	vgt_create_debugfs(vgt);
+	(void)vgt_create_debugfs(vgt);
 	/* initialize i2c states */
 	vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
 	/* assign aux_ch vregs for aux_ch virtualization */
 	vgt_init_aux_ch_vregs(&vgt->vgt_i2c_bus, vgt->state.vReg);
 	vgt_propagate_edid(vgt, -1);
 
-	return vgt;
+	*ptr_vgt = vgt;
+	return 0;
+err:
+	kfree(vgt->vgtt);
+	kfree(vgt->state.vReg);
+	kfree(vgt->state.sReg);
+	if (vgt->vgt_id >= 0)
+		free_vgt_id(vgt->vgt_id);
+	kfree(vgt);
+	return rc;
 }
 
 void vgt_release_instance(struct vgt_device *vgt)
@@ -3095,7 +3091,7 @@ static bool vgt_init_device_func (struct pgt_device *pdev)
 }
 
 /* FIXME: allocate instead of static */
-#define VGT_APERTURE_PAGES	VGT_RSVD_APERTURE_SZ >> GTT_PAGE_SHIFT
+#define VGT_APERTURE_PAGES	(VGT_RSVD_APERTURE_SZ >> GTT_PAGE_SHIFT)
 static struct page *pages[VGT_APERTURE_PAGES];
 struct page *dummy_page;
 dma_addr_t dummy_addr;
@@ -3306,9 +3302,9 @@ int vgt_initialize(struct pci_dev *dev)
 	vgt_probe_edid(pdev, -1);
 
 	/* create domain 0 instance */
-	vgt_dom0 = create_vgt_instance(pdev, 0);   /* TODO: */
-	if (vgt_dom0 == NULL)
+	if (create_vgt_instance(pdev, &vgt_dom0, 0) < 0)
 		goto err;
+
 	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
 	vgt_super_owner = vgt_dom0;
 	dprintk("create dom0 instance succeeds\n");
@@ -3374,7 +3370,7 @@ err:
 	return -1;
 }
 
-void vgt_destroy()
+void vgt_destroy(void)
 {
 	struct list_head *pos, *next;
 	struct vgt_device *vgt;

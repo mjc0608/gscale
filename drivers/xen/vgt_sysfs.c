@@ -413,9 +413,8 @@ int vgt_add_state_sysfs(int vm_id)
 	if (vmid_2_vgt_device(vm_id))
 		return -EINVAL;
 
-	vgt = create_vgt_instance(vgt_kobj_priv, vm_id);
-	if (vgt == NULL)
-		return -1;
+	if ((retval = create_vgt_instance(vgt_kobj_priv, &vgt, vm_id)) < 0)
+		return retval;
 
 	/* init kobject */
 	kobject_init(&vgt->kobj, &vgt_instance_ktype);

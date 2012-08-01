@@ -2015,8 +2015,7 @@ static void vgt_hvm_opregion_init(struct vgt_device *vgt)
 int vgt_hvm_io_init(struct vgt_device *vgt)
 {
 	vgt_hvm_opregion_init(vgt);
-	vgt_hvm_map_opregion(vgt, 1);
-	return 0;
+	return vgt_hvm_map_opregion(vgt, 1);
 }
 
 int vgt_hvm_info_init(struct vgt_device *vgt)
