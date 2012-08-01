@@ -1239,42 +1239,17 @@ static void vgt_resume_ringbuffers(struct vgt_device *vgt)
  */
 static void check_gtt(struct pgt_device *pdev)
 {
-	printk("GMADR: 0x00000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x00000000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x00000000)));
-	printk("GMADR: 0x02000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x02000000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x02000000)));
-	printk("GMADR: 0x04000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x04000000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x04000000)));
-	printk("GMADR: 0x08000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x08000000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x08000000)));
-	printk("GMADR: 0x0C000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x0C000000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x0C000000)));
-	printk("GMADR: 0x0FFFF000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x0FFFF000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x0FFFF000)));
-	printk("GMADR: 0x10000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x10000000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x10000000)));
-	printk("GMADR: 0x10000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x10000000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x10000000)));
-	printk("GMADR: 0x20000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x20000000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x20000000)));
-	printk("GMADR: 0x40000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x20000000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x40000000)));
-	printk("GMADR: 0x60000000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x60000000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x60000000)));
-	printk("GMADR: 0x7ffff000, GTT INDEX: %x, GTT VALUE: %x\n",
-		GTT_INDEX(pdev, 0x7ffff000),
-		vgt_read_gtt(pdev, GTT_INDEX(pdev, 0x7ffff000)));
+	static unsigned int addr[] = {
+	0x00000000, 0x02000000, 0x04000000, 0x08000000,
+	0x0C000000, 0x0FFFF000, 0x10000000, 0x20000000,
+	0x40000000, 0x60000000, 0x7FFFF000 };
+
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(addr); i++)
+		printk("GMADR: 0x08%x, GTT INDEX: %x, GTT VALUE: %x\n",
+			addr[i], GTT_INDEX(pdev, addr[i]),
+			vgt_read_gtt(pdev, GTT_INDEX(pdev, addr[i])));
 }
 
 static int start_period = 10; /* in unit of second */
