@@ -99,23 +99,36 @@ static ssize_t vgt_create_instance_show(struct kobject *kobj, struct kobj_attrib
 }
 #endif
 
-int vgt_add_state_sysfs(int vm_id);
-void vgt_del_state_sysfs(int vmid);
+static int vgt_add_state_sysfs(vgt_params_t vp);
+static int vgt_del_state_sysfs(vgt_params_t vp);
 static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attribute *attr,
 			 const char *buf, size_t count)
 {
-    int vmid;
+	vgt_params_t vp;
+	int param_cnt;
+	char param_str[64];
+	int rc;
 
-    /* TODO: scanned value not checked */
-    sscanf(buf, "%du", &vmid);
-    if (vmid == 0)
-        return count;
+	/* We expect the param_str should be vmid,a,b,c (where the guest
+	* wants a MB aperture and b MB gm, and c fence registers) or -vmid
+	* (where we want to release the vgt instance).
+	*/
+	(void)sscanf(buf, "%63s", param_str);
+	param_cnt = sscanf(param_str, "%d,%d,%d,%d", &vp.vm_id, &vp.aperture_sz,
+		&vp.gm_sz, &vp.fence_sz);
 
-    if (vmid > 0)
-        vgt_add_state_sysfs(vmid);
-    else
-        vgt_del_state_sysfs(-vmid);
-    return count;
+	if (param_cnt == 1) {
+		if (vp.vm_id >= 0)
+			return -EINVAL;
+	} else if (param_cnt == 4) {
+		if (!(vp.vm_id > 0 && vp.aperture_sz > 0 &&
+			vp.aperture_sz <= vp.gm_sz && vp.fence_sz > 0))
+			return -EINVAL;
+	} else
+		return -EINVAL;
+
+	rc = (vp.vm_id > 0) ? vgt_add_state_sysfs(vp) : vgt_del_state_sysfs(vp);
+	return rc < 0 ? rc : count;
 }
 
 static ssize_t vgt_display_owner_show(struct kobject *kobj, struct kobj_attribute *attr,
@@ -395,7 +408,7 @@ static struct kobj_type vgt_ctrl_ktype = {
 };
 
 
-int vgt_add_state_sysfs(int vm_id)
+static int vgt_add_state_sysfs(vgt_params_t vp)
 {
 	int retval;
 	struct vgt_device *vgt;
@@ -410,10 +423,10 @@ int vgt_add_state_sysfs(int vm_id)
 	ASSERT(vgt_ctrl_kobj);
 
 	/* check if such vmid has been used */
-	if (vmid_2_vgt_device(vm_id))
+	if (vmid_2_vgt_device(vp.vm_id))
 		return -EINVAL;
 
-	if ((retval = create_vgt_instance(vgt_kobj_priv, &vgt, vm_id)) < 0)
+	if ((retval = create_vgt_instance(vgt_kobj_priv, &vgt, vp)) < 0)
 		return retval;
 
 	/* init kobject */
@@ -433,15 +446,19 @@ int vgt_add_state_sysfs(int vm_id)
 	return retval;
 }
 
-void vgt_del_state_sysfs(int vmid)
+//TODO: what if the ioemu doesn't destroy the vgt instance? e.g, ioemu crash?
+static int vgt_del_state_sysfs(vgt_params_t vp)
 {
 	struct vgt_device *vgt;
-	vgt = vmid_2_vgt_device(vmid);
+
+	vp.vm_id = -vp.vm_id;
+	vgt = vmid_2_vgt_device(vp.vm_id);
 	if (!vgt)
-		return;
+		return -ENODEV;
 
 	kobject_put(&vgt->kobj);
 	vgt_release_instance(vgt);
+	return 0;
 }
 
 

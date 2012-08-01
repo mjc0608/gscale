@@ -2408,7 +2408,7 @@ static int create_state_instance(struct vgt_device *vgt)
 /*
  * priv: VCPU ?
  */
-int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, int vm_id)
+int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp)
 {
 	int i, num;
 	struct vgt_device *vgt;
@@ -2428,7 +2428,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, in
 		goto err;
 	}
 
-	vgt->vm_id = vm_id;
+	vgt->vm_id = vp.vm_id;
 	vgt->pdev = pdev;
 
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
@@ -3250,6 +3250,7 @@ int vgt_initialize(struct pci_dev *dev)
 {
 	struct pgt_device *pdev = &default_device;
 	struct task_struct *p_thread;
+	vgt_params_t vp;
 
 	spin_lock_init(&pdev->lock);
 
@@ -3286,7 +3287,8 @@ int vgt_initialize(struct pci_dev *dev)
 	vgt_probe_edid(pdev, -1);
 
 	/* create domain 0 instance */
-	if (create_vgt_instance(pdev, &vgt_dom0, 0) < 0)
+	vp.vm_id = 0;
+	if (create_vgt_instance(pdev, &vgt_dom0, vp) < 0)
 		goto err;
 
 	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;

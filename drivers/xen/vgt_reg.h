@@ -2319,7 +2319,14 @@ void vgt_reg_watchdog_handler(struct vgt_device *state,
 	uint32_t reg, uint32_t val, bool write, ...);
 extern char *vgt_irq_name[IRQ_MAX];
 
-int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, int vm_id);
+typedef struct {
+	int vm_id;
+	int aperture_sz; /* in MB */
+	int gm_sz;       /* in MB */
+	int fence_sz;
+} vgt_params_t;
+
+int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp);
 void vgt_release_instance(struct vgt_device *vgt);
 int vgt_init_sysfs(struct pgt_device *pdev);
 extern void vgt_set_display_pointer(int vm_id);
