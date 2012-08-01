@@ -1141,10 +1141,16 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		default_mmio_write(vgt, offset, p_data, bytes);
 	}
 
-	if (offset == _REG_DSPASURF)
+	if (offset == _REG_DSPASURF || offset == _REG_DSPBSURF) {
 		dprintk("vGT(%d): write to surface base (%x) with (%x), pReg(%x)\n",
 			vgt->vgt_id, offset, __vreg(vgt, offset),
 			VGT_MMIO_READ(pdev, offset));
+		/* update live reg as vm may wait on the update */
+		if (!reg_hw_access(vgt, offset)) {
+			__vreg(vgt, offset + 0x10) = __vreg(vgt, offset);
+			__sreg(vgt, offset + 0x10) = __sreg(vgt, offset);
+		}
+	}
 
 	/* higher 16bits of mode ctl regs are mask bits for change */
 	if (offset < VGT_MMIO_REG_NUM && reg_mode_ctl(pdev, offset)) {
@@ -3373,6 +3379,13 @@ static void vgt_setup_hw_update_regs(struct pgt_device *pdev)
 	reg_set_hw_update(pdev, _REG_RCS_UHPTR);
 	reg_set_hw_update(pdev, _REG_VCS_UHPTR);
 	reg_set_hw_update(pdev, _REG_BCS_UHPTR);
+
+	reg_set_hw_update(pdev, _REG_CURASURFLIVE);
+	reg_set_hw_update(pdev, _REG_CURBSURFLIVE);
+	reg_set_hw_update(pdev, _REG_DSPASURFLIVE);
+	reg_set_hw_update(pdev, _REG_DSPBSURFLIVE);
+	reg_set_hw_update(pdev, _REG_DVSASURFLIVE);
+	reg_set_hw_update(pdev, _REG_DVSBSURFLIVE);
 }
 
 uint64_t vgt_get_gtt_size(struct pci_bus *bus)
