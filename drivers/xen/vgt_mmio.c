@@ -82,7 +82,7 @@
 #include <xen/vgt-parser.h>
 #include "vgt_reg.h"
 
-static bool bypass_scan = false;
+static bool bypass_scan = true;
 static int __init bypass_scan_setup(char *str)
 {
 	bypass_scan = true;
