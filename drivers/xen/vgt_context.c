@@ -722,6 +722,8 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	vgt_reg_t p_tail, p_head, p_start;
 	char *p_contents;
 	int i;
+	struct vgt_device *vgt = current_render_owner(pdev);
+	u32* cur;
 
 	p_tail = VGT_MMIO_READ(pdev, RB_TAIL(ring_id));
 	p_head = VGT_MMIO_READ(pdev, RB_HEAD(ring_id));
@@ -744,6 +746,28 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 			printk("(*)");
 	}
 	printk("\n");
+
+	cur = (u32*)p_contents - 2;
+	if (*cur == 0x18800000 && vgt) {
+		u32 val, h_val;
+		u64 mfn;
+		int rc;
+		extern int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val);
+
+		cur++;
+		printk("Hang in batch buffer (%x)\n", *cur);
+		val = vgt->vgtt[GTT_INDEX(pdev, *cur)];
+		printk("vGTT: %x\n", val);
+		rc = gtt_p2m(vgt, val, &h_val);
+		if (rc < 0) {
+			printk("failed to translate\n");
+		} else {
+			mfn = gtt_pte_get_pfn((gtt_pte_t *)&h_val);
+			printk("MACH: %x %llx\n", h_val, mfn);
+		}
+		printk("Actual pGTT: %x\n",
+			vgt_read_gtt(pdev, GTT_INDEX(pdev, *cur)));
+	}
 }
 
 static inline unsigned long vgt_get_passthrough_reg(struct vgt_device *vgt,
