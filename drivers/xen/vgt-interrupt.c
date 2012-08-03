@@ -1133,7 +1133,9 @@ static enum hrtimer_restart vgt_dpy_timer_fn(struct hrtimer *data)
 	struct vgt_emul_timer *dpy_timer = container_of(data, struct vgt_emul_timer, timer);
 	struct vgt_irq_virt_state *virq = container_of(dpy_timer, struct vgt_irq_virt_state, dpy_timer);
 	struct vgt_device *vstate = virq->vgt;
+	struct pgt_device *pdev = vstate->pdev;
 
+	spin_lock(&pdev->lock);
 	/* carry all display status events in one timer */
 	if (test_bit(IRQ_PIPE_A_VSYNC, vgt_state_emulated_events(vstate)))
 		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_VSYNC);
@@ -1166,6 +1168,7 @@ static enum hrtimer_restart vgt_dpy_timer_fn(struct hrtimer *data)
 
 	if (vgt_has_irq_pending(vstate))
 		vgt_inject_virtual_interrupt(vstate);
+	spin_unlock(&pdev->lock);
 	hrtimer_add_expires_ns(&dpy_timer->timer, dpy_timer->period);
 	return HRTIMER_RESTART;
 }
