@@ -1340,6 +1340,8 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 	return false;
 }
 
+extern int vgt_ctx_switch;
+extern void vgt_toggle_ctx_switch(bool enable);
 /* definitions for physical aperture/GM space */
 #define phys_aperture_sz(pdev)		(pdev->bar_size[1])
 #define phys_aperture_pages(pdev)	(phys_aperture_sz(pdev) >> GTT_PAGE_SHIFT)

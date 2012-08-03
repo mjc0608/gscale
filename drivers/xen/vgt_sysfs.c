@@ -178,6 +178,26 @@ static ssize_t vgt_display_pointer_show(struct kobject *kobj, struct kobj_attrib
 	return vgt_get_display_pointer(buf);
 }
 
+static ssize_t vgt_ctx_switch_store(struct kobject *kobj, struct kobj_attribute *attr,
+            const char *buf, size_t count)
+{
+	int val;
+	bool enabled;
+
+	/* TODO: scanned value not checked */
+	sscanf(buf, "%du", &val);
+	enabled = !!val;
+	vgt_toggle_ctx_switch(enabled);
+	return count;
+}
+
+static ssize_t vgt_ctx_switch_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	return sprintf(buf, "VGT context switch: %s\n",
+		       vgt_ctx_switch ? "enabled" : "disabled");
+}
+
 static ssize_t vgt_hot_plug_reader(struct kobject *kobj,
 				struct kobj_attribute *attr, char *buf)
 {
@@ -286,12 +306,16 @@ static struct kobj_attribute hot_plug_event_attrs =
 static struct kobj_attribute reg_owner_attrs =
 	__ATTR(reg_owner, 0660, vgt_reg_owner_show, vgt_reg_owner_store);
 
+static struct kobj_attribute ctx_switch_attrs =
+	__ATTR(ctx_switch, 0666, vgt_ctx_switch_show, vgt_ctx_switch_store);
+
 static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
 	&display_owner_ctrl_attrs.attr,
 	&display_pointer_attrs.attr,
 	&hot_plug_event_attrs.attr,
 	&reg_owner_attrs.attr,
+	&ctx_switch_attrs.attr,
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 

@@ -1386,13 +1386,25 @@ static int __init mode_setup(char *str)
 }
 __setup("vgt_fastmode", mode_setup);
 
-static int vgt_ctx_switch = 1;
+int vgt_ctx_switch = 1;
 static int __init ctx_switch_setup(char *str)
 {
 	vgt_ctx_switch = 1;
 	return 1;
 }
 __setup("vgt_ctx_switch", ctx_switch_setup);
+
+void vgt_toggle_ctx_switch(bool enable)
+{
+	/*
+	 * No need to hold lock as this will be observed
+	 * in the next check in kthread.
+	 */
+	if (enable)
+		vgt_ctx_switch = 1;
+	else
+		vgt_ctx_switch = 0;
+}
 
 static int period = HZ/5;	/* default slow mode in 200ms */
 
