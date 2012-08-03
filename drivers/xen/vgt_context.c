@@ -295,6 +295,28 @@ static void show_context(struct vgt_device *vgt, uint64_t context, bool clobber)
 }
 #endif
 
+static void update_context(struct vgt_device *vgt, uint64_t context)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	uint64_t ptr;
+	u32 *vptr;
+
+	ptr = (uint64_t)phys_aperture_vbase(pdev) + context;
+	vptr = (u32 *)ptr;
+	/*
+	 * FIXME: hardcode mode values from debug.
+	 */
+	if (vgt->vgt_id) {
+		*(vptr + 0x4A) = 0xFFFF6900;
+		*(vptr + 0x4D) = 0xFFFF0000;
+		*(vptr + 0x4F) = 0xFFFF4040;
+	} else {
+		*(vptr + 0x4A) = 0xFFFF6800;
+		*(vptr + 0x4D) = 0xFFFF0080;
+		*(vptr + 0x4F) = 0xFFFF0040;
+	}
+}
+
 /*
  * Global mode setting that vGT needs to ensure
  *
@@ -683,7 +705,7 @@ static void show_seqno(struct pgt_device *pdev)
 /*
  * Given a ring buffer, print out the current data [-bytes, bytes]
  */
-static void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
+void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 {
 	vgt_reg_t p_tail, p_head, p_start;
 	char *p_contents;
@@ -2467,6 +2489,8 @@ bool vgt_restore_context (struct vgt_device *vgt)
 				printk("vGT: unsupported engine (%d) switch \n", i);
 				break;
 		}
+		/* some mode control registers can be only restored through this command */
+		update_context(vgt, rb->context_save_area);
 		rc = (*submit_context_command[i]) (vgt, i, cmds_restore_context,
 			sizeof(cmds_restore_context));
 
