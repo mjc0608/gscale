@@ -1147,6 +1147,7 @@ static enum hrtimer_restart vgt_dpy_timer_fn(struct hrtimer *data)
 		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_EVEN_FIELD);
 	if (test_bit(IRQ_PIPE_A_VBLANK, vgt_state_emulated_events(vstate)))
 		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_VBLANK);
+#if 0
 	if (test_bit(IRQ_PIPE_B_VSYNC, vgt_state_emulated_events(vstate)))
 		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_VSYNC);
 	if (test_bit(IRQ_PIPE_B_LINE_COMPARE, vgt_state_emulated_events(vstate)))
@@ -1157,6 +1158,7 @@ static enum hrtimer_restart vgt_dpy_timer_fn(struct hrtimer *data)
 		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_EVEN_FIELD);
 	if (test_bit(IRQ_PIPE_B_VBLANK, vgt_state_emulated_events(vstate)))
 		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_VBLANK);
+#endif
 	if (test_bit(IRQ_PRIMARY_A_FLIP_DONE, vgt_state_emulated_events(vstate)))
 		vgt_propogate_emulated_event(vstate, IRQ_PRIMARY_A_FLIP_DONE);
 	if (test_bit(IRQ_PRIMARY_B_FLIP_DONE, vgt_state_emulated_events(vstate)))
