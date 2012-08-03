@@ -71,6 +71,7 @@
 #define ASSERT_NUM(x,y) do { if (!(x)) {printk("Assert at %s line %d para 0x%llx\n", __FILE__, __LINE__, (u64)y); BUG();}} while (0);
 
 extern bool vgt_debug;
+extern bool novgt;
 
 #define dprintk(fmt, a...)	\
 	do { if (vgt_debug) printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a); } while (0)

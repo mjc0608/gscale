@@ -163,6 +163,14 @@ static int __init vgt_debug_setup(char *str)
 }
 __setup("vgt_debug", vgt_debug_setup);
 
+bool novgt = false;
+static int __init vgt_novgt_setup(char *str)
+{
+	novgt = true;
+	return 1;
+}
+__setup("novgt", vgt_novgt_setup);
+
 static struct pgt_device default_device = {
 	.bus = 0,
 	.devfn = 0x10,		/* BDF: 0:2:0 */
@@ -3432,6 +3440,9 @@ int vgt_initialize(struct pci_dev *dev)
 	struct pgt_device *pdev = &default_device;
 	struct task_struct *p_thread;
 	vgt_params_t vp;
+
+	if (novgt)
+		return 0;
 
 	spin_lock_init(&pdev->lock);
 
