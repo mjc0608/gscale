@@ -110,6 +110,18 @@ unsigned int ring_mmio_base [MAX_ENGINES] = {
 #endif
 };
 
+unsigned int ring_psmi[MAX_ENGINES] = {
+	_REG_RCS_PSMI,
+	_REG_VCS_PSMI,
+	_REG_BCS_PSMI,
+};
+
+unsigned int ring_mi_mode[MAX_ENGINES] = {
+	_REG_RCS_MI_MODE,
+	_REG_VCS_MI_MODE,
+	_REG_BCS_MI_MODE,
+};
+
 submit_context_command_t submit_context_command[MAX_ENGINES] = {
 	rcs_submit_context_command,
 	default_submit_context_command,
@@ -682,6 +694,9 @@ static void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	p_start = VGT_MMIO_READ(pdev, RB_START(ring_id));
 	printk("ring buffer(%d): head (%x) tail(%x), start(%x)\n", ring_id,
 		p_head, p_tail, p_start);
+	printk("psmi idle:(%d), mi_mode idle:(%d)\n",
+		VGT_MMIO_READ(pdev, ring_psmi[ring_id]) & _REGBIT_PSMI_IDLE_INDICATOR,
+		VGT_MMIO_READ(pdev, ring_mi_mode[ring_id]) & _REGBIT_MI_RINGS_IDLE);
 
 	p_head &= RB_HEAD_OFF_MASK;
 	p_contents = phys_aperture_vbase(pdev) + p_start + p_head;
@@ -1096,6 +1111,12 @@ bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 	if ( is_ring_enabled(pdev, ring_id) && !is_ring_empty(pdev, ring_id) )
 		return false;
 
+	if (!(VGT_MMIO_READ(pdev, ring_psmi[ring_id]) & _REGBIT_PSMI_IDLE_INDICATOR))
+		return false;
+
+	if (!(VGT_MMIO_READ(pdev, ring_mi_mode[ring_id]) & _REGBIT_MI_RINGS_IDLE))
+		return false;
+
 	return true;
 }
 
@@ -1115,7 +1136,7 @@ bool is_context_switch_done(struct pgt_device *pdev, int ring_id)
  * TODO: Empty of RB doesn't mean the commands are retired. May need a STORE_IMM
  * after MI_FLUSH, but that needs our own hardware satus page.
  */
-static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, bool ctx_switch)
+static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, bool ctx_switch, char *str)
 {
 	static u64 max = 200;
 	u64 count = 0;
@@ -1130,8 +1151,7 @@ static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, bool ctx_s
 		count++;
 		if (!(count % 10000000)) {
 			printk("vGT(%s): wait %lld seconds for ring(%d)\n",
-				ctx_switch ? "ctx-switch" : "wait-empty",
-				count / 1000000, ring_id);
+				str, count / 1000000, ring_id);
 
 			printk("vGT-cur(%d): head(%x), tail(%x), start(%x)\n",
 				current_render_owner(pdev)->vgt_id,
@@ -1171,7 +1191,7 @@ bool is_rendering_engines_empty(struct pgt_device *pdev, int *ring_id)
 		if (!enable_video_switch && i == RING_BUFFER_VCS)
 			continue;
 
-		if ( !ring_wait_for_empty(pdev, i, false) ) {
+		if ( !ring_wait_for_empty(pdev, i, false, "wait-empty") ) {
 			*ring_id = i;
 			return false;
 		}
@@ -1570,6 +1590,23 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 	VGT_MMIO_WRITE(pdev, RB_HEAD(ring_id), srb->head);
 }
 
+static inline void stop_ring(struct pgt_device *pdev, int ring_id)
+{
+	/* wait for ring idle */
+	VGT_MMIO_WRITE(pdev, ring_mi_mode[ring_id],
+		       _REGBIT_MI_STOP_RINGS | (_REGBIT_MI_STOP_RINGS << 16));
+	ring_wait_for_empty(pdev, ring_id, false, "stop-ring");
+}
+
+static inline void resume_ring(struct pgt_device *pdev, int ring_id)
+{
+	/* make sure ring resumed */
+	VGT_MMIO_WRITE(pdev, ring_mi_mode[ring_id],
+		       _REGBIT_MI_STOP_RINGS << 16);
+	if (VGT_MMIO_READ(pdev, ring_mi_mode[ring_id]) & _REGBIT_MI_STOP_RINGS)
+		printk("!!!!!!!!!failed to clear stop ring bit\n");
+}
+
 /*
  * write to head is undefined when ring is enabled.
  *
@@ -1577,6 +1614,8 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
  */
 static inline void disable_ring(struct pgt_device *pdev, int ring_id)
 {
+	stop_ring(pdev, ring_id);
+	/* disable the ring */
 	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), 0);
 	/* by ktian1. no source for this trick */
 	VGT_POST_READ(pdev, RB_CTL(ring_id));
@@ -1587,6 +1626,23 @@ static inline void enable_ring(struct pgt_device *pdev, int ring_id, vgt_reg_t v
 	ASSERT(val & _RING_CTL_ENABLE);
 	VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), val);
 	VGT_POST_READ(pdev, RB_CTL(ring_id));
+	resume_ring(pdev, ring_id);
+}
+
+void stop_rings(struct pgt_device *pdev)
+{
+	int i;
+
+	for (i = 0; i < MAX_ENGINES; i++)
+		stop_ring(pdev, i);
+}
+
+void resume_rings(struct pgt_device *pdev)
+{
+	int i;
+
+	for (i = 0; i < MAX_ENGINES; i++)
+		resume_ring(pdev, i);
 }
 
 /*
@@ -1604,6 +1660,7 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 		VGT_MMIO_WRITE(pdev, RB_CTL(ring_id), 0);
 		return;
 	}
+
 	disable_ring(pdev, ring_id);
 
 	VGT_MMIO_WRITE(pdev, RB_START(ring_id), srb->start);
@@ -1911,7 +1968,7 @@ bool rcs_submit_context_command (struct vgt_device *vgt,
 	}
 	//mdelay(1);
 
-	if (!ring_wait_for_empty(pdev, ring_id, true)) {
+	if (!ring_wait_for_empty(pdev, ring_id, true, "ctx-switch")) {
 		printk("vGT: context switch commands unfinished\n");
 		show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
 		return false;
@@ -2420,8 +2477,6 @@ bool vgt_restore_context (struct vgt_device *vgt)
 				i, vgt_ctx_switch(pdev), rb->sring.tail, old_tail);
 	}
 
-	vgt_rendering_restore_mmio(vgt);
-
 	/* Restore ring registers */
 	for (i=0; i < MAX_ENGINES; i++) {
 		if (!enable_video_switch && i == RING_BUFFER_VCS)
@@ -2432,6 +2487,12 @@ bool vgt_restore_context (struct vgt_device *vgt)
 		//vring_2_sring(vgt, rb);
 		ring_shadow_2_phys (pdev, i, &rb->sring);
 	}
+
+	stop_rings(pdev);
+
+	vgt_rendering_restore_mmio(vgt);
+
+	resume_rings(pdev);
 
 	/* Restore the PM */
 	//restore_power_management(vgt);

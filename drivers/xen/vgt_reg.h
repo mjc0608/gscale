@@ -303,6 +303,8 @@ bool default_submit_context_command (struct vgt_device *vgt,
 //#define		_REGBIT_MI_FLUSH			(3 << 11)
 #define		_REGBIT_MI_FLUSH			(1 << 12)
 #define		_REGBIT_MI_INVALIDATE_UHPTR		(1 << 11)
+#define		_REGBIT_MI_RINGS_IDLE			(1 << 9)
+#define		_REGBIT_MI_STOP_RINGS			(1 << 8)
 #define	_REG_VCS_MI_MODE	0x1209C
 #define _REG_BCS_MI_MODE	0x2209C
 #define _REG_GFX_MODE	0x2520
@@ -333,6 +335,11 @@ bool default_submit_context_command (struct vgt_device *vgt,
 /* control bits except address and valid bit */
 #define _REGBIT_PTE_CTL_MASK_GEN7	0xe	/* SNB/IVB */
 #define _REGBIT_PTE_CTL_MASK_GEN7_5	0x80e	/* HSW */
+
+#define _REG_RCS_PSMI		0x2050
+#define _REG_VCS_PSMI		0x12050
+#define _REG_BCS_PSMI		0x22050
+#define 	_REGBIT_PSMI_IDLE_INDICATOR	(1 << 3)
 
 #define _REG_RCS_IMR		0x20A8
 #define _REG_VCS_IMR		0x120A8
