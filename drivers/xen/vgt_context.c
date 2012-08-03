@@ -273,7 +273,7 @@ static void show_context(struct vgt_device *vgt, uint64_t context, bool clobber)
 	/* GM is not trapped. So safe to access it directly */
 	ptr = (uint64_t)phys_aperture_vbase(pdev) + context;
 	printk("===================\n");
-	printk("Context (%llx, %llx): %s\n", context, ptr, clobber ? "clobbered" : "");
+	printk("Context-vgt%d (%llx, %llx): %s\n", vgt->vgt_id, context, ptr, clobber ? "clobbered" : "");
 
 	vptr = (u32 *)ptr;
 	if (clobber) {
@@ -2001,10 +2001,12 @@ bool default_submit_context_command (struct vgt_device *vgt,
 /* FIXME: need audit all render resources carefully */
 vgt_reg_t vgt_render_regs[] = {
 	/* mode ctl regs. sync with vgt_mode_ctl_regs */
-	_REG_GFX_MODE,
 	_REG_ARB_MODE,
 
+	_REG_CACHE_MODE_0,
 	_REG_RCS_MI_MODE,
+	_REG_GFX_MODE,
+
 	_REG_VCS_MI_MODE,
 	_REG_BCS_MI_MODE,
 
@@ -2013,7 +2015,6 @@ vgt_reg_t vgt_render_regs[] = {
 	_REG_BCS_INSTPM,
 
 	_REG_GT_MODE,
-	_REG_CACHE_MODE_0,
 	_REG_CACHE_MODE_1,
 
 	/* other regs */
