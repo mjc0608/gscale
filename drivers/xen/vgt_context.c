@@ -296,7 +296,7 @@ static void show_mode_settings(struct pgt_device *pdev)
 	SHOW_MODE(_REG_VCS_MI_MODE);
 	SHOW_MODE(_REG_BCS_MI_MODE);
 
-	if (pdev->is_ivybridge) {
+	if (pdev->is_ivybridge || pdev->is_haswell) {
 		SHOW_MODE(_REG_RCS_GFX_MODE_IVB);
 		SHOW_MODE(_REG_BCS_BLT_MODE_IVB);
 		SHOW_MODE(_REG_VCS_MFX_MODE_IVB);
@@ -2149,7 +2149,7 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 
 	if (pdev->is_sandybridge)
 		__vgt_rendering_save(vgt, ARRAY_NUM(vgt_render_regs), &vgt_render_regs[0]);
-	else if (pdev->is_ivybridge)
+	else if (pdev->is_ivybridge || pdev->is_haswell)
 		__vgt_rendering_save(vgt, ARRAY_NUM(vgt_gen7_render_regs), &vgt_gen7_render_regs[0]);
 }
 
@@ -2194,7 +2194,7 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 
 	if (pdev->is_sandybridge)
 		__vgt_rendering_restore(vgt, ARRAY_NUM(vgt_render_regs), &vgt_render_regs[0]);
-	else if (pdev->is_ivybridge)
+	else if (pdev->is_ivybridge || pdev->is_haswell)
 		__vgt_rendering_restore(vgt, ARRAY_NUM(vgt_gen7_render_regs), &vgt_gen7_render_regs[0]);
 }
 
@@ -3255,6 +3255,7 @@ static int setup_gtt(struct pgt_device *pdev)
 		/* need a DMA flag? */
 		page = alloc_page(GFP_KERNEL | __GFP_ZERO);
 		if (!page) {
+			dprintk("vGT: Failed to create page for setup_gtt!\n");
 			ret = -ENOMEM;
 			goto err_out;
 		}
@@ -3316,6 +3317,7 @@ int vgt_initialize(struct pci_dev *dev)
 
 	if (!vgt_initialize_pgt_device(dev, pdev))
 		goto err;
+
 	/* initialize EDID data */
 	vgt_probe_edid(pdev, -1);
 

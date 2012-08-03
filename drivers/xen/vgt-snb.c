@@ -306,7 +306,7 @@ static struct vgt_irq_info* vgt_snb_get_irq_info_from_event(struct pgt_device *d
 	else if (VGT_DPY_EVENT(event)) {
 		if (dev->is_sandybridge)
 			return &snb_dpy_irq_info;
-		else if (dev->is_ivybridge)
+		else if (dev->is_ivybridge || dev->is_haswell)
 			return &gen7_de_irq_info;
 	}
 	else if (VGT_PCH_EVENT(event))
@@ -327,7 +327,7 @@ static struct vgt_irq_info* vgt_snb_get_irq_info_from_owner(struct pgt_device *d
 	if (owner == VGT_OT_DISPLAY || owner == VGT_OT_MGMT) {
 		if (dev->is_sandybridge)
 			return &snb_dpy_irq_info;
-		else if (dev->is_ivybridge)
+		else if (dev->is_ivybridge || dev->is_haswell)
 			return &gen7_de_irq_info;
 	}
 	if (owner == VGT_OT_PM)
@@ -342,7 +342,7 @@ static inline struct vgt_irq_info* vgt_snb_get_irq_info_from_reg(struct pgt_devi
 	else if (reg >= _REG_DEISR && reg < _REG_DEIER + 4) {
 		if (dev->is_sandybridge)
 			return &snb_dpy_irq_info;
-		else if (dev->is_ivybridge)
+		else if (dev->is_ivybridge || dev->is_haswell)
 			return &gen7_de_irq_info;
 	}
 	else if (reg >= _REG_SDEISR && reg < _REG_SDEIER + 4)
@@ -433,7 +433,7 @@ static void vgt_snb_handle_virtual_interrupt(struct pgt_device *dev, enum vgt_ow
 		dprintk("vGT-IRQ-SNB: handle virtual de_iir(%x)\n", vgt_de_iir(dev));
 		if (dev->is_sandybridge)
 			vgt_irq_handle_event(dev, &vgt_de_iir(dev), &snb_dpy_irq_info, false, type);
-		else if (dev->is_ivybridge)
+		else if (dev->is_ivybridge || dev->is_haswell)
 			vgt_irq_handle_event(dev, &vgt_de_iir(dev), &gen7_de_irq_info, false, type);
 	}
 
@@ -443,7 +443,7 @@ static void vgt_snb_handle_virtual_interrupt(struct pgt_device *dev, enum vgt_ow
 			if (dev->is_sandybridge)
 				vgt_propogate_virtual_event(dev->device[i],
 							    _REGSHIFT_PCH, &snb_dpy_irq_info);
-			else if (dev->is_ivybridge)
+			else if (dev->is_ivybridge || dev->is_haswell)
 				vgt_propogate_virtual_event(dev->device[i],
 							    _REGSHIFT_PCH_GEN7, &gen7_de_irq_info);
 			vgt_clear_pch_irq_pending(dev->device[i]);
@@ -479,7 +479,7 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 			pch_irq = 1;
 		tmp_de_iir = de_iir & ~_REGBIT_PCH;
 		vgt_irq_handle_event(dev, &tmp_de_iir, &snb_dpy_irq_info, true, VGT_OT_NONE);
-	} else if (dev->is_ivybridge) {
+	} else if (dev->is_ivybridge || dev->is_haswell) {
 		if (de_iir & _REGBIT_PCH_GEN7)
 			pch_irq = 1;
 		tmp_de_iir = de_iir & ~_REGBIT_PCH_GEN7;
@@ -579,7 +579,7 @@ static void vgt_snb_irq_init(struct pgt_device *dev)
 
 	if (dev->is_sandybridge)
 		info = &snb_dpy_irq_info;
-	else if (dev->is_ivybridge)
+	else if (dev->is_ivybridge || dev->is_haswell)
 		info = &gen7_de_irq_info;
 
 	for (i = 0; i < info->table_size; i++) {

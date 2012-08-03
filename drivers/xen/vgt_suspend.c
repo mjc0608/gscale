@@ -96,7 +96,7 @@ static struct vgt_intel_device_info snb_devinfo = {
 /* FIXME: should be a member with pgt device */
 struct vgt_intel_device_info *vgt_devinfo = &snb_devinfo;
 
-#define VGT_HAS_PCH_SPLIT(pdev) ( (vgt_devinfo->gen == 5) || (vgt_devinfo->gen ==6) || (vgt_devinfo->is_ivybridge == 1))
+#define VGT_HAS_PCH_SPLIT(pdev) ( (vgt_devinfo->gen == 5) || (vgt_devinfo->gen ==6) || (vgt_devinfo->is_ivybridge == 1) || (vgt_devinfo->is_haswell == 1))
 #define VGT_SUPPORT_INTEGRATED_DP(pdev) ((vgt_devinfo->is_g4x) || (vgt_devinfo->gen == 5))
 #define VGT_I915_HAS_FBC(pdev) (vgt_devinfo->has_fbc)
 #define VGT_GEN(pdev) (vgt_devinfo->gen)

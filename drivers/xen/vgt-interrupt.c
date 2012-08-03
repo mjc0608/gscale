@@ -777,7 +777,7 @@ static void vgt_toggle_emulated_bits(struct vgt_device *vgt,
 	if (((reg == _REG_DEIER) || (reg == _REG_DEIMR))) {
 		if (pdev->is_sandybridge)
 			bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
-		else if (pdev->is_ivybridge)
+		else if (pdev->is_ivybridge || pdev->is_haswell)
 			bits &= ~(_REGBIT_PCH_GEN7 | _REGBIT_MASTER_INTERRUPT);
 	}
 
@@ -810,7 +810,7 @@ static uint32_t vgt_keep_owner_bits(struct vgt_device *vgt,
 			if (bits & _REGBIT_PCH)
 				val |= _REGBIT_PCH;
 			bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
-		} else if (pdev->is_ivybridge) {
+		} else if (pdev->is_ivybridge || pdev->is_haswell) {
 			if (bits & _REGBIT_PCH_GEN7)
 				val |= _REGBIT_PCH_GEN7;
 			bits &= ~(_REGBIT_PCH_GEN7 | _REGBIT_MASTER_INTERRUPT);
@@ -882,7 +882,7 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 
 	if (pdev->is_sandybridge)
 		pch_irq_mask = _REGBIT_PCH;
-	else if (pdev->is_ivybridge)
+	else if (pdev->is_ivybridge || pdev->is_haswell)
 		pch_irq_mask = _REGBIT_PCH_GEN7;
 
 	/* merge pch bits */
@@ -1001,7 +1001,7 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 
 	if (pdev->is_sandybridge)
 		pch_irq_mask = _REGBIT_PCH;
-	else if (pdev->is_ivybridge)
+	else if (pdev->is_ivybridge || pdev->is_haswell)
 		pch_irq_mask = _REGBIT_PCH_GEN7;
 
 	/* merge pch bits */
@@ -1888,7 +1888,7 @@ int vgt_irq_init(struct pgt_device *dev)
 	spin_lock_init(&(dev->irq_hstate->lock));
 
 	/* FIXME IVB: check any difference */
-	if (dev->is_sandybridge || dev->is_ivybridge)
+	if (dev->is_sandybridge || dev->is_ivybridge || dev->is_haswell)
 		dev->irq_hstate->ops = &snb_irq_ops;
 	else {
 		dprintk("vGT: no irq ops found!\n");
