@@ -385,6 +385,48 @@ void vgt_signal_uevent(struct pgt_device *dev)
 
 static void vgt_run_emul(struct vgt_device *vstate,
 		enum vgt_event_type event, int bit, bool enable);
+
+void vgt_show_irq_state(struct vgt_device *vgt)
+{
+	enum vgt_event_type event;
+	struct pgt_device *pdev = vgt->pdev;
+
+	printk("--------------------\n");
+	printk("irq statistics for vgt-%d\n", vgt->vgt_id);
+	printk("total injected irqs: %lld(gtiir:%lld, deiir:%lld)\n",
+		vgt_irq_cnt(vgt), vgt_gtiir_cnt(vgt), vgt_deiir_cnt(vgt));
+	for (event = VGT_FIRST_EVENT; event <= VGT_LAST_EVENT; event++) {
+		if (vgt_event_cnt(vgt, event))
+			printk("%d: %8lld (%s)\n", event,
+				vgt_event_cnt(vgt, event),
+				vgt_irq_name[event]);
+	}
+
+	printk("....vreg (deier: %x, deiir: %x, deimr: %x, deisr: %x)\n",
+			__vreg(vgt, _REG_DEIER),
+			__vreg(vgt, _REG_DEIIR),
+			__vreg(vgt, _REG_DEIMR),
+			__vreg(vgt, _REG_DEISR));
+	printk("....physical (deier: %x, deiir: %x, deimr: %x, deisr: %x)\n",
+			VGT_MMIO_READ(pdev, _REG_DEIER),
+			VGT_MMIO_READ(pdev, _REG_DEIIR),
+			VGT_MMIO_READ(pdev, _REG_DEIMR),
+			VGT_MMIO_READ(pdev, _REG_DEISR));
+	printk("....vreg (gtier: %x, gtiir: %x, gtimr: %x, gtisr: %x)\n",
+			__vreg(vgt, _REG_GTIER),
+			__vreg(vgt, _REG_GTIIR),
+			__vreg(vgt, _REG_GTIMR),
+			__vreg(vgt, _REG_GTISR));
+	printk("....physical (gtier: %x, gtiir: %x, gtimr: %x, gtisr: %x)\n",
+			VGT_MMIO_READ(pdev, _REG_GTIER),
+			VGT_MMIO_READ(pdev, _REG_GTIIR),
+			VGT_MMIO_READ(pdev, _REG_GTIMR),
+			VGT_MMIO_READ(pdev, _REG_GTISR));
+	printk("....pch unmask(%llx)\n", vgt_pch_unmask(pdev));
+	printk("....pch enable(%llx)\n", vgt_pch_enable(pdev));
+	printk("....master enable(%llx)\n", vgt_master_enable(pdev));
+}
+
 /* =============Configurations (statc/dynamic)================ */
 
 #if 0
@@ -571,6 +613,7 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 			dprintk("vGT: set bit (%d) for (%s) for VM (%d)\n",
 				bit, info->name, vstate->vgt_id);
 		vgt_set_irq_pending(vstate);
+		vgt_event_cnt(vstate, info->table[bit].event)++;
 	} else {
 		if (vstate->vgt_id) {
 			dprintk("vGT: propogate bit (%d) for (%s) for VM (%d) w/o injection\n",
@@ -679,6 +722,7 @@ static int vgt_inject_virtual_interrupt(struct vgt_device *vstate)
 	vgt_clear_irq_pending(vstate);
 #endif
 
+	vgt_irq_cnt(vstate)++;
 	return 0;
 }
 
@@ -1069,6 +1113,10 @@ bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 		__vreg(vgt, reg), __vreg(vgt, reg) & (~iir));
 	/* write to clear IIR */
 	__vreg(vgt, reg) &= ~iir;
+	if (reg == _REG_DEIIR)
+		vgt_deiir_cnt(vgt)++;
+	if (reg == _REG_GTIIR)
+		vgt_gtiir_cnt(vgt)++;
 
 	return true;
 }

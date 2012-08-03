@@ -160,8 +160,7 @@ struct vgt_intel_device_info *vgt_devinfo = &snb_devinfo;
         BUG();                  \
     } while(0)
 
-
-
+#if 0
 static void vgt_restore_vga(struct vgt_device *vgt)
 {
 	int i;
@@ -222,6 +221,7 @@ static void vgt_restore_vga(struct vgt_device *vgt)
 	/* VGA color palette registers */
     vgt_restore_mmio_reg_8(_REG_VGA_DACMASK);
 }
+#endif
 
 static bool vgt_pipe_enabled(struct vgt_device *vgt, enum vgt_pipe pipe)
 {

@@ -2032,6 +2032,8 @@ enum vgt_event_type {
 #define VGT_LAST_PCH_EVENT	IRQ_AUDIO_POWER_STATE_CHANGE_D
 #define VGT_PCH_EVENT(e)	(e >= VGT_FIRST_PCH_EVENT && e <= VGT_LAST_PCH_EVENT)
 
+#define VGT_FIRST_EVENT		VGT_FIRST_RCS_EVENT
+#define VGT_LAST_EVENT		IRQ_RESERVED
 #define	VGT_IRQ_BITWIDTH	32
 
 struct vgt_irq_info_entry;
@@ -2173,6 +2175,10 @@ struct vgt_irq_virt_state {
 	struct vgt_watchdog_timer watchdog_timer;
 	bool irq_pending;
 	bool pch_irq_pending;
+	u64 irq_cnt;
+	u64 deiir_cnt;
+	u64 gtiir_cnt;
+	u64 event_cnt[IRQ_MAX];
 };
 
 #define vgt_event_owner_table(d)	(d->irq_hstate->event_owner_table)
@@ -2199,6 +2205,10 @@ struct vgt_irq_virt_state {
 #define vgt_state_emulated_events(s)		(s->irq_vstate->emulated_events)
 #define vgt_state_enabled_events(s)	(s->irq_vstate->enabled_events)
 #define vgt_dpy_timer(s)		(s->irq_vstate->dpy_timer)
+#define vgt_event_cnt(s, e)		(s->irq_vstate->event_cnt[e])
+#define vgt_irq_cnt(s)			(s->irq_vstate->irq_cnt)
+#define vgt_gtiir_cnt(s)			(s->irq_vstate->deiir_cnt)
+#define vgt_deiir_cnt(s)			(s->irq_vstate->gtiir_cnt)
 
 #define vgt_event_owner_is_core(d, e)	\
 	(vgt_core_event_handlers(d) && (vgt_core_event_handlers(d))[e])
@@ -2297,6 +2307,7 @@ void vgt_irq_exit(struct pgt_device *pgt);
 void vgt_irq_save_context(struct vgt_device *vstate, enum vgt_owner_type owner);
 void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owner);
 
+void vgt_show_irq_state(struct vgt_device *vgt);
 void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
 	int bit, struct vgt_irq_info *info);
 void vgt_propogate_virtual_event(struct vgt_device *vstate,

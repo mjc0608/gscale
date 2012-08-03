@@ -193,6 +193,7 @@ static struct pgt_device default_device = {
 vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];
 int ai_index;
 
+static struct vgt_device *vgt_dom1 = NULL;
 /*
  * Print debug registers for CP
  *
@@ -202,8 +203,17 @@ int ai_index;
 void show_debug(struct pgt_device *pdev, int ring_id)
 {
 	vgt_reg_t reg;
-	printk("debug registers(ring-%d, reg maked with <*> may not apply to every ring):\n", ring_id);
+	if (ring_id == 0 && vgt_dom1) {
+		vgt_show_irq_state(vgt_dom0);
+		vgt_show_irq_state(vgt_dom1);
+		printk("DERRMR: %x\n", VGT_MMIO_READ(pdev, 0x44050));
+		printk("VBLANK_A: %x\n", VGT_MMIO_READ(pdev, _REG_VBLANK_A));
+		printk("VBLANK_B: %x\n", VGT_MMIO_READ(pdev, _REG_VBLANK_B));
+	}
+
+	printk("debug registers(ring-%d),reg maked with <*> may not apply to every ring):\n", ring_id);
 	printk("....EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_EIR));
++	printk("....EMR: %x\n", VGT_MMIO_READ(pdev, _REG_RCS_EMR));
 	printk("....ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_ESR));
 	printk("....blit EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_EIR));
 	printk("....blit ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_ESR));
@@ -212,6 +222,7 @@ void show_debug(struct pgt_device *pdev, int ring_id)
 	reg = VGT_MMIO_READ(pdev, 0x2070 + 0x10000*ring_id);
 	printk("....INSTPS* (parser state): 0x%x :\n", reg);
 	printk("....ACTHD(active header): 0x%x\n", VGT_MMIO_READ(pdev, 0x2074 + 0x10000*ring_id));
+	printk("....UHPTR(pending header): %x\n", VGT_MMIO_READ(pdev, _REG_RCS_UHPTR));
 	printk("....DMA_FADD_P(current fetch DMA): 0x%x\n", VGT_MMIO_READ(pdev, 0x2078 + 0x10000*ring_id));
 	printk("....CSCMDOP* (instruction DWORD): 0x%x\n", VGT_MMIO_READ(pdev, 0x220C + 0x10000*ring_id));
 	printk("....CSCMDVLD* (command buffer valid): 0x%x\n", VGT_MMIO_READ(pdev, 0x2210 + 0x10000*ring_id));
@@ -778,7 +789,6 @@ static unsigned long vgt_get_reg_64(struct vgt_device *vgt, unsigned int reg)
 }
 
 static bool dom0 = true;
-static struct vgt_device *vgt_dom1 = NULL;
 static struct hrtimer vgt_timer;
 static enum hrtimer_restart vgt_timer_fn(struct hrtimer *data)
 {
@@ -2987,6 +2997,9 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt_init_aux_ch_vregs(&vgt->vgt_i2c_bus, vgt->state.vReg);
 	vgt_propagate_edid(vgt, -1);
 
+	/* HACK for debug purpose */
+	if (vgt->vgt_id == 1)
+		vgt_dom1 = vgt;
 	*ptr_vgt = vgt;
 	return 0;
 err:
