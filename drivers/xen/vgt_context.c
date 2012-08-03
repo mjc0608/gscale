@@ -199,7 +199,7 @@ int ai_index;
  * Hope to introduce a sysfs interface to dump this information on demand
  * in the future
  */
-static void show_debug(struct pgt_device *pdev, int ring_id)
+void show_debug(struct pgt_device *pdev, int ring_id)
 {
 	vgt_reg_t reg;
 	printk("debug registers(ring-%d, reg maked with <*> may not apply to every ring):\n", ring_id);
@@ -207,6 +207,7 @@ static void show_debug(struct pgt_device *pdev, int ring_id)
 	printk("....ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_ESR));
 	printk("....blit EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_EIR));
 	printk("....blit ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_ESR));
+	printk("....IPEIR(last executed inst): %x\n", VGT_MMIO_READ(pdev, 0x2064 + 0x10000*ring_id));
 	printk("....IPEHR(last executed inst): 0x%x\n", VGT_MMIO_READ(pdev, 0x2068 + 0x10000*ring_id));
 	reg = VGT_MMIO_READ(pdev, 0x2070 + 0x10000*ring_id);
 	printk("....INSTPS* (parser state): 0x%x :\n", reg);

@@ -67,8 +67,12 @@
 #include "vgt_edid.h"
 
 #define SANDY_BRIDGE
-#define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); BUG();}} while (0);
-#define ASSERT_NUM(x,y) do { if (!(x)) {printk("Assert at %s line %d para 0x%llx\n", __FILE__, __LINE__, (u64)y); BUG();}} while (0);
+struct pgt_device;
+extern struct vgt_device *dom0_vgt;
+extern void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes);
+extern void show_debug(struct pgt_device *pdev, int ring_id);
+#define ASSERT(x)   do { if (!(x)) {printk("Assert at %s line %d\n", __FILE__, __LINE__); show_ringbuffer(vgt_dom0->pdev, 0, 64); BUG();}} while (0);
+#define ASSERT_NUM(x,y) do { if (!(x)) {printk("Assert at %s line %d para 0x%llx\n", __FILE__, __LINE__, (u64)y); show_ringbuffer(vgt_dom0->pdev, 0, 64); BUG();}} while (0);
 
 extern bool vgt_debug;
 extern bool novgt;

@@ -502,6 +502,7 @@ bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		 void *p_data, unsigned int bytes)
 {
 	uint32_t data;
+	int i;
 
 	ASSERT(bytes <=4);
 
@@ -525,6 +526,11 @@ bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	}
 	/* TODO: add appropriate action */
 	/* so far, we just simply ignore it and VM treat it as success */
+
+	for (i = 0; i < MAX_ENGINES; i++) {
+		show_debug(vgt->pdev, i);
+		show_ringbuffer(vgt->pdev, i, 16 * sizeof(vgt_reg_t));
+	}
 	return true;
 }
 
