@@ -520,6 +520,12 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define _REG_ECOBUS		0xA180
 #define _REGBIT_MUL_FORCEWAKE_ENABLE	(1<<5)
 
+#define _REG_GEN6_GDRST	0x941c
+#define  _REGBIT_GEN6_GRDOM_FULL		(1 << 0)
+#define  _REGBIT_GEN6_GRDOM_RENDER		(1 << 1)
+#define  _REGBIT_GEN6_GRDOM_MEDIA		(1 << 2)
+#define  _REGBIT_GEN6_GRDOM_BLT			(1 << 3)
+
 #define _REG_GT_THREAD_STATUS  0x13805C
 #define _REG_GT_CORE_STATUS  0x138060
 #define _REG_RC_STATE_CTRL_1    0xA090

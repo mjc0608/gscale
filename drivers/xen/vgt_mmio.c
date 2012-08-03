@@ -498,6 +498,36 @@ bool rc_state_ctrl_2_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		 void *p_data, unsigned int bytes)
+{
+	uint32_t data;
+
+	ASSERT(bytes <=4);
+
+	data = 0;
+	memcpy(&data, p_data, bytes);
+
+	if (data & _REGBIT_GEN6_GRDOM_FULL){
+		printk("VM%d request Full GPU Reset\n", vgt->vm_id);
+	}
+
+	if (data & _REGBIT_GEN6_GRDOM_RENDER){
+		printk("VM%d request GPU Render Reset\n", vgt->vm_id);
+	}
+
+	if (data & _REGBIT_GEN6_GRDOM_MEDIA){
+		printk("VM%d request GPU Media Reset\n", vgt->vm_id);
+	}
+
+	if (data & _REGBIT_GEN6_GRDOM_BLT){
+		printk("VM%d request GPU BLT Reset\n", vgt->vm_id);
+	}
+	/* TODO: add appropriate action */
+	/* so far, we just simply ignore it and VM treat it as success */
+	return true;
+}
+
 bool pch_pp_control_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -1749,6 +1779,8 @@ bool vgt_initialize_mmio_hooks(struct pgt_device *pdev)
 	vgt_register_mmio_write( _REG_RC_STATE_CTRL_1, rc_state_ctrl_1_mmio_write);
 
 	vgt_register_mmio_write( _REG_RC_STATE_CTRL_2, rc_state_ctrl_2_mmio_write);
+
+	vgt_register_mmio_write( _REG_GEN6_GDRST, gen6_gdrst_mmio_write);
 
 	vgt_register_mmio_write( _REG_PCH_PP_CONTROL, pch_pp_control_mmio_write);
 	vgt_register_mmio_write( _REG_TRANSACONF, transaconf_mmio_write);
