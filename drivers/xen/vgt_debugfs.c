@@ -283,7 +283,7 @@ static void fb_debugfs_work_func(struct work_struct *work)
 	 * mode, the size is 5763072 (4096 * 1407) */
 	if (surf_sz == 0) {
 		surf_sz = 4 * 1024 * 1024;
-		printk("vGT(%d): debugfs read 0 from _REG_DSPASIZE, use default surface size(0x%x)\n", vgt_id, surf_sz);
+		dprintk("vGT(%d): debugfs read 0 from _REG_DSPASIZE, use default surface size(0x%x)\n", vgt_id, surf_sz);
 	}
 
 	if (surf_base != dsp_surf_base[vgt_id][pipe]) {
@@ -304,7 +304,7 @@ static void fb_debugfs_work_func(struct work_struct *work)
 				0444,
 				d_per_vgt[vgt_id],
 				p);
-		printk("vGT(%d): create debugfs file: %s [base(%p), size(%d)]\n",
+		dprintk("vGT(%d): create debugfs file: %s [base(%p), size(%d)]\n",
 				vgt_id,
 				vgt_fb_name(pipe),
 				surf_base,

@@ -1342,7 +1342,7 @@ bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		BUG();
 
 	if (0 == queue_work(pdev->pgt_wq, &vgt->fb_debugfs_work))
-		printk("vGT: failed to submit aready attached work!\n");
+		dprintk("vGT: failed to submit aready attached work!\n");
 
 	return true;
 }
