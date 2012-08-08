@@ -1068,10 +1068,12 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 			if (ier_enabled & 0x88)
 				dprintk("XXX: enable vblank/vsync (%x)\n", ier_enabled);
 		}
-		if (vgt_master_enable(pdev))
-			val |= _REGBIT_MASTER_INTERRUPT;
-		else
-			val &= ~_REGBIT_MASTER_INTERRUPT;
+		if (reg == _REG_DEIER) {
+			if (vgt_master_enable(pdev))
+				val |= _REGBIT_MASTER_INTERRUPT;
+			else
+				val &= ~_REGBIT_MASTER_INTERRUPT;
+		}
 		VGT_MMIO_WRITE(pdev, reg, val);
 		VGT_POST_READ(pdev, reg);
 	}
