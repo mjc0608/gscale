@@ -1805,8 +1805,8 @@ bool vgt_initialize_mmio_hooks(struct pgt_device *pdev)
 	vgt_register_mmio_read( _REG_HDCP_PCH_BOOT_AUTH_STATUS_REG ,
 			hdcp_pch_boot_auth_mmio_read);
 
-	vgt_register_mmio_write(_REG_DSPASURF, dspsurf_mmio_write);
-	vgt_register_mmio_write(_REG_DSPBSURF, dspsurf_mmio_write);
+	//vgt_register_mmio_write(_REG_DSPASURF, dspsurf_mmio_write);
+	//vgt_register_mmio_write(_REG_DSPBSURF, dspsurf_mmio_write);
 	vgt_register_mmio_write(_REG_PIPEACONF, pipe_conf_mmio_write);
 	vgt_register_mmio_write(_REG_PIPEBCONF, pipe_conf_mmio_write);
 	vgt_register_mmio_write(_REG_FDI_RXA_IIR, fdi_rx_iir_mmio_write);
