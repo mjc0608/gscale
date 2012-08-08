@@ -501,24 +501,30 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 	if (!gt_iir && !de_iir && !pm_iir)
 		return IRQ_NONE;
 
-	dprintk("vGT-IRQ-SNB: handle gt_iir(%x)\n", gt_iir);
-	vgt_irq_handle_event(dev, &gt_iir, &snb_render_irq_info, true, VGT_OT_INVALID);
-
-	dprintk("vGT-IRQ-SNB: handle de_iir(%x), tmp_de_iir(%x)\n", de_iir, tmp_de_iir);
-	if (dev->is_sandybridge) {
-		if (de_iir & _REGBIT_PCH)
-			pch_irq = 1;
-		tmp_de_iir = de_iir & ~_REGBIT_PCH;
-		vgt_irq_handle_event(dev, &tmp_de_iir, &snb_dpy_irq_info, true, VGT_OT_INVALID);
-	} else if (dev->is_ivybridge) {
-		if (de_iir & _REGBIT_PCH_GEN7)
-			pch_irq = 1;
-		tmp_de_iir = de_iir & ~_REGBIT_PCH_GEN7;
-		vgt_irq_handle_event(dev, &tmp_de_iir, &gen7_de_irq_info, true, VGT_OT_INVALID);
+	if (gt_iir) {
+		dprintk("vGT-IRQ-SNB: handle gt_iir(%x)\n", gt_iir);
+		vgt_irq_handle_event(dev, &gt_iir, &snb_render_irq_info, true, VGT_OT_INVALID);
 	}
 
-	dprintk("vGT-IRQ-SNB: handle pm_iir(%x)\n", pm_iir);
-	vgt_irq_handle_event(dev, &pm_iir, &snb_pm_irq_info, true, VGT_OT_INVALID);
+	if (de_iir) {
+		if (dev->is_sandybridge) {
+			if (de_iir & _REGBIT_PCH)
+				pch_irq = 1;
+			tmp_de_iir = de_iir & ~_REGBIT_PCH;
+			vgt_irq_handle_event(dev, &tmp_de_iir, &snb_dpy_irq_info, true, VGT_OT_INVALID);
+		} else if (dev->is_ivybridge) {
+			if (de_iir & _REGBIT_PCH_GEN7)
+				pch_irq = 1;
+			tmp_de_iir = de_iir & ~_REGBIT_PCH_GEN7;
+			vgt_irq_handle_event(dev, &tmp_de_iir, &gen7_de_irq_info, true, VGT_OT_INVALID);
+		}
+		dprintk("vGT-IRQ-SNB: handle de_iir(%x), tmp_de_iir(%x)\n", de_iir, tmp_de_iir);
+	}
+
+	if (pm_iir) {
+		vgt_irq_handle_event(dev, &pm_iir, &snb_pm_irq_info, true, VGT_OT_INVALID);
+		dprintk("vGT-IRQ-SNB: handle pm_iir(%x)\n", pm_iir);
+	}
 
 	if (pch_irq) {
 		sde_iir = VGT_MMIO_READ(dev, _REG_SDEIIR);
