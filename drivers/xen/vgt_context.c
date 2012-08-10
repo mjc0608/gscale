@@ -1204,8 +1204,16 @@ bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 	if ( is_ring_enabled(pdev, ring_id) && !is_ring_empty(pdev, ring_id) )
 		return false;
 
+	/*
+	 * FIXME: it turns out that psmi idle status bit check may not be
+	 * always true when both dom0/Linux VM runs glxgears in parallel. Not
+	 * sure the reason yet. So disable this check for now, but need revise
+	 * in the future
+	 */
+#if 0
 	if (!(VGT_MMIO_READ(pdev, ring_psmi[ring_id]) & _REGBIT_PSMI_IDLE_INDICATOR))
 		return false;
+#endif
 
 	if (!(VGT_MMIO_READ(pdev, ring_mi_mode[ring_id]) & _REGBIT_MI_RINGS_IDLE))
 		return false;
