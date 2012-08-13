@@ -1652,6 +1652,11 @@ int vgt_thread(void *priv)
 					break;
 				}
 
+				if (prev->exit_req_from_render_switch) {
+					vgt_deactive(prev->pdev, &prev->list);
+					complete(&prev->exit_from_render_switch);
+				}
+
 				previous_render_owner(pdev) = current_render_owner(pdev);
 				current_render_owner(pdev) = next;
 				vgt_irq_restore_context(next, VGT_OT_RENDER);
@@ -2881,6 +2886,9 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt->vm_id = vp.vm_id;
 	vgt->pdev = pdev;
 
+	vgt->exit_req_from_render_switch = 0;
+	init_completion(&vgt->exit_from_render_switch);
+
 	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
 
@@ -3055,15 +3063,30 @@ err:
 void vgt_release_instance(struct vgt_device *vgt)
 {
 	int i;
+	unsigned long flags;
+	bool in_rendering_rq = false;
 	struct list_head *pos;
 
 	vgt_destroy_debugfs(vgt);
 
+	/* switch the display owner to Dom0 if needed */
+	if (current_display_owner(vgt->pdev) != vgt_dom0) {
+		next_display_owner = vgt_dom0;
+		do_vgt_display_switch(&default_device);
+	}
+
+	spin_lock_irqsave(&vgt->pdev->lock, flags);
 	list_for_each (pos, &vgt->pdev->rendering_runq_head)
 		if (pos == &vgt->list) {
-			printk("Couldn't release an active vgt instance\n");
-			return ;
+			in_rendering_rq = true;
+			vgt->exit_req_from_render_switch = 1;
+			break;
 		}
+	spin_unlock_irqrestore(&vgt->pdev->lock, flags);
+
+	if (in_rendering_rq)
+		wait_for_completion(&vgt->exit_from_render_switch);
+
 	/* The vgt may be still in executing. */
 	while ( is_current_render_owner(vgt) )
 		schedule();
@@ -3090,6 +3113,8 @@ void vgt_release_instance(struct vgt_device *vgt)
 	kfree(vgt->state.sReg);
 	free_vgt_id(vgt->vgt_id);
 	kfree(vgt);
+	printk("vGT: vgt_release_instance done for dom%d: vgt_id=%d\n",
+		vgt->vm_id, vgt->vgt_id);
 }
 
 static uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)

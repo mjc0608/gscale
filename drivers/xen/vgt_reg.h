@@ -1067,6 +1067,12 @@ struct vgt_device {
 	struct mmio_hash_table	*wp_table[MHASH_SIZE];	/* hash for WP pages */
 	vgt_ppgtt_pde_t	shadow_pde_table[1024];	 /* current max PDE entries should be 512 for 2G mapping */
 	vgt_ppgtt_pte_t shadow_pte_table[1024];
+
+	/* When it's set, vgt_thread shouldn't do render-switch for this VM */
+	unsigned int exit_req_from_render_switch;
+
+	/* The VM destroy logic must wait on this if the VM is the render owner */
+	struct completion exit_from_render_switch;
 };
 
 extern struct vgt_device *vgt_dom0;
