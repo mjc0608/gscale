@@ -3721,6 +3721,7 @@ int vgt_initialize(struct pci_dev *dev)
 	//vgt_add_state_sysfs(vgt_dom0);
 	vgt_init_sysfs(pdev);
 
+#ifdef VGT_DEBUGFS_DUMP_FB
 	/* There is anytime only one instance of the workqueue,
 	 * and NON_REENTRANT
 	 */
@@ -3731,6 +3732,7 @@ int vgt_initialize(struct pci_dev *dev)
 		printk("vGT: failed to create kthread: vgt_workqueue.\n");
 		goto err;
 	}
+#endif
 
 	printk("vgt_initialize succeeds.\n");
 	return 0;
@@ -3760,8 +3762,10 @@ void vgt_destroy(void)
 			vgt_deactive(pdev, pos);
 	};
 
+#ifdef VGT_DEBUGFS_DUMP_FB
 	/* Destruct pgt_wq */
 	destroy_workqueue(pdev->pgt_wq);
+#endif
 
 	/* Destruct all vgt_debugfs */
 	vgt_release_debugfs();

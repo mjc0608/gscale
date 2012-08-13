@@ -250,12 +250,12 @@ struct dentry *vgt_init_debugfs(void)
     return d_vgt_debug;
 }
 
+#ifdef VGT_DEBUGFS_DUMP_FB
 /* When surface A/B base address or size changed use this function
  * to update fb debugfs, and since the update for surface base
  * indicate the completion of fb update so only reconstruct debugfs
  * when detect such changes. FIXME: only support surface A right now
  */
-#define VGT_MAX_PIPE	3
 #define _REG_SURF_BASE(p)	((p) == PIPE_A ? _REG_DSPASURF : _REG_DSPBSURF)
 #define _REG_SURF_SZ(p)	((p) == PIPE_A ? _REG_DSPASIZE : _REG_DSPBSIZE)
 #define _VGT_DEBUGFS_FB(p) ((p) == PIPE_A ? VGT_DEBUGFS_SURFA_FB : VGT_DEBUGFS_SURFB_FB)
@@ -311,6 +311,7 @@ static void fb_debugfs_work_func(struct work_struct *work)
 				surf_sz);
 	}
 }
+#endif
 
 int vgt_create_debugfs(struct vgt_device *vgt)
 {
@@ -319,7 +320,9 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	int vgt_id = vgt->vgt_id;
 	struct pgt_device *pdev = vgt->pdev;
 
+#ifdef VGT_DEBUGFS_DUMP_FB
 	INIT_WORK(&vgt->fb_debugfs_work, fb_debugfs_work_func);
+#endif
 
 	dsp_surf_size[vgt_id][PIPE_A] = __sreg(vgt, _REG_DSPASIZE);
 	dsp_surf_size[vgt_id][PIPE_B] = __sreg(vgt, _REG_DSPBSIZE);
@@ -391,6 +394,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		printk("vGT(%d): create debugfs node: fb of surface B\n", vgt_id);
 #endif
 
+#ifdef VGT_DEBUGFS_DUMP_FB
 	p = &vgt_debugfs_data[vgt_id][VGT_DEBUGFS_SURFA_FB];
 	p->array = (u32*)dsp_surf_base[vgt_id][PIPE_A];
 	p->elements = 1024*1024/4;
@@ -398,6 +402,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 			0444,
 			d_per_vgt[vgt_id],
 			p);
+#endif
 
 	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_SURFA_FB])
 		printk(KERN_ERR "vGT(%d): failed to create debugfs node: fb of surface A\n", vgt_id);

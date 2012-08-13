@@ -2431,4 +2431,11 @@ extern void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt);
  */
 #define _REG_GMCH_CONTRL	0x50
 
+/* Debugfs: if you want to enable dumping framebuffer,
+ * you should define VGT_DEBUGFS_DUMP_FB, since Windows
+ * can update surface base frequently, for performance
+ * concern by default we disable dumping framebuffer.
+ */
+#undef VGT_DEBUGFS_DUMP_FB
+
 #endif	/* _VGT_REG_H_ */
