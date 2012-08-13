@@ -1869,7 +1869,7 @@ static int hvm_get_parameter_by_dom(domid_t domid, int idx, uint64_t *value)
 	return r;
 }
 
-static shared_iopage_t *map_hvm_iopage(struct vgt_device *vgt)
+static struct vm_struct *map_hvm_iopage(struct vgt_device *vgt)
 {
 	uint64_t ioreq_pfn;
 	int rc;
@@ -2149,12 +2149,13 @@ int vgt_hvm_info_init(struct vgt_device *vgt)
 
 	vgt->hvm_info = info;
 
-	info->iopage = map_hvm_iopage(vgt);
-	if (info->iopage == NULL){
+	info->iopage_vma = map_hvm_iopage(vgt);
+	if (info->iopage_vma == NULL) {
 		printk(KERN_ERR "Failed to map HVM I/O page for VM%d\n", vgt->vm_id);
 		rc = -EFAULT;
 		goto err;
 	}
+	info->iopage = info->iopage_vma->addr;
 
 	info->nr_vcpu = xen_get_nr_vcpu(vgt->vm_id);
 	ASSERT(info->nr_vcpu > 0);
@@ -2196,8 +2197,6 @@ void vgt_hvm_info_deinit(struct vgt_device *vgt)
 	if (info == NULL)
 		return;
 
-	/*TODO: unmap io page */
-
 	if (!info->nr_vcpu || info->evtchn_irq == NULL)
 		goto out1;
 
@@ -2205,6 +2204,9 @@ void vgt_hvm_info_deinit(struct vgt_device *vgt)
 		if( info->evtchn_irq[vcpu] >= 0)
 			unbind_from_irqhandler(info->evtchn_irq[vcpu], vgt);
 	}
+
+	if (info->iopage_vma != NULL)
+		xen_unmap_domain_mfn_range_in_kernel(info->iopage_vma, 1, vgt->vm_id);
 
 	kfree(info->evtchn_irq);
 

@@ -351,6 +351,7 @@ int vgt_unset_wp_page(struct vgt_device *vgt, unsigned long pfn)
 void *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, unsigned long gpfn)
 {
 	unsigned long mfn;
+	struct vm_struct *area;
 
 	mfn = g2m_pfn(vgt->vm_id, gpfn);
 	if (mfn == INVALID_MFN) {
@@ -358,7 +359,8 @@ void *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, unsigned long gpfn)
 		return NULL;
 	}
 
-	return xen_remap_domain_mfn_range_in_kernel(mfn >> PAGE_SHIFT, 1, vgt->vm_id);
+	area = xen_remap_domain_mfn_range_in_kernel(mfn >> PAGE_SHIFT, 1, vgt->vm_id);
+	return (area == NULL) ? NULL : area->addr;
 }
 
 

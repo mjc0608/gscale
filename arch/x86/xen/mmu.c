@@ -2663,9 +2663,8 @@ int xen_unmap_domain_mfn_range(struct vm_area_struct *vma,
 }
 EXPORT_SYMBOL_GPL(xen_unmap_domain_mfn_range);
 
-void* xen_remap_domain_mfn_range_in_kernel(unsigned long mfn, int nr,
-		unsigned domid)
-
+struct vm_struct * xen_remap_domain_mfn_range_in_kernel(unsigned long mfn,
+		int nr, unsigned domid)
 {
 	struct vm_struct *area;
 	struct remap_data rmd;
@@ -2693,24 +2692,50 @@ void* xen_remap_domain_mfn_range_in_kernel(unsigned long mfn, int nr,
 		rmd.mmu_update = mmu_update;
 		err = apply_to_page_range(&init_mm, addr, range,
 					  remap_area_mfn_pte_fn, &rmd);
-		if (err)
-		{
-			area->addr = NULL;
-			goto out;
-		}
-
-		if (HYPERVISOR_mmu_update(mmu_update, batch, NULL, domid) < 0){
-			area->addr = NULL;
-			goto out;
-		}
+		if (err || HYPERVISOR_mmu_update(mmu_update, batch, NULL, domid) < 0)
+			goto err;
 
 		nr -= batch;
 		addr += range;
 	}
 
-out:
-
 	flush_tlb_all();
-	return area->addr;
+	return area;
+err:
+	printk("vGT: xen_remap_domain_mfn_range_in_kernel: failed!!!\n");
+	free_vm_area(area);
+	flush_tlb_all();
+	return NULL;
 }
 EXPORT_SYMBOL_GPL(xen_remap_domain_mfn_range_in_kernel);
+
+void xen_unmap_domain_mfn_range_in_kernel(struct vm_struct *area, int nr,
+		unsigned domid)
+{
+	struct remap_data rmd;
+	struct mmu_update mmu_update[REMAP_BATCH_SIZE];
+	int batch;
+	unsigned long range, addr = (unsigned long)area->addr;
+	int err;
+
+#define INVALID_MFN (~0UL)
+	rmd.mfn = INVALID_MFN;
+	rmd.prot = PAGE_NONE;
+
+	while (nr) {
+		batch = min(REMAP_BATCH_SIZE, nr);
+		range = (unsigned long)batch << PAGE_SHIFT;
+
+		rmd.mmu_update = mmu_update;
+		err = apply_to_page_range(&init_mm, addr, range,
+					  remap_area_mfn_pte_fn, &rmd);
+		BUG_ON(err);
+		BUG_ON(HYPERVISOR_mmu_update(mmu_update, batch, NULL, domid) < 0);
+
+		nr -= batch;
+		addr += range;
+	}
+
+	free_vm_area(area);
+}
+EXPORT_SYMBOL_GPL(xen_unmap_domain_mfn_range_in_kernel);

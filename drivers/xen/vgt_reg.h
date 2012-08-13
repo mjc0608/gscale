@@ -1016,6 +1016,9 @@ struct vgt_irq_virt_state;
 
 struct vgt_hvm_info{
 	shared_iopage_t *iopage;
+	/* iopage_vma->addr is just iopage. We need iopage_vma on VM destroy */
+	struct vm_struct *iopage_vma;
+
 	int nr_vcpu;
 	int* evtchn_irq; /* the event channle irqs to handle HVM io request
 				 index is vcpu id */
