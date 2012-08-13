@@ -1161,7 +1161,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 			if (vgt_mode_ctl_regs[j] == offset)
 				break;
 		}
-		printk("old mode (%x): %x/%x, mask(%x)\n", offset,
+		dprintk("old mode (%x): %x/%x, mask(%x)\n", offset,
 			__vreg(vgt, offset), __sreg(vgt, offset), vgt_mode_mask_regs[j]);
 		/*
 		 * share the global mask among VMs, since having one VM touch a bit
@@ -1171,10 +1171,10 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 			vgt_mode_mask_regs[j] |= mask << 16;
 		__vreg(vgt, offset) = (old_vreg & ~mask) | (__vreg(vgt, offset) & mask);
 		__sreg(vgt, offset) = (old_sreg & ~mask) | (__sreg(vgt, offset) & mask);
-		printk("new mode (%x): %x/%x, mask(%x)\n", offset,
+		dprintk("new mode (%x): %x/%x, mask(%x)\n", offset,
 			__vreg(vgt, offset), __sreg(vgt, offset), vgt_mode_mask_regs[j]);
 		//enforce_mode_setting(vgt->pdev);
-		show_mode_settings(vgt->pdev);
+		//show_mode_settings(vgt->pdev);
 	}
 
 	if (offset == _REG_RCS_UHPTR)
