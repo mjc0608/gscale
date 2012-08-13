@@ -748,7 +748,7 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	printk("\n");
 
 	cur = (u32*)p_contents - 2;
-	if (*cur == 0x18800000 && vgt) {
+	if ((*cur & 0xfffff000) == 0x18800000 && vgt) {
 		u32 val, h_val;
 		u64 mfn;
 		int rc;
