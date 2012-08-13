@@ -146,8 +146,8 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 {
     int vmid;
     struct vgt_device *next_vgt;
-    /* TODO: scanned value not checked */
-    sscanf(buf, "%du", &vmid);
+    if (sscanf(buf, "%d", &vmid) != 1)
+		return -EINVAL;
 
     /* FIXME: to avoid nested spin_lock_irq issue, use spin_lock_irqsave instead of spin_lock_irq*/
     //spin_lock_irqsave(&vgt_kobj_priv->lock, flags);
@@ -155,6 +155,9 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
     if (next_vgt) {
         next_display_owner = next_vgt;
 		do_vgt_display_switch(vgt_kobj_priv);
+	} else {
+		printk("vGT: can not find the vgt instance of dom%d!\n", vmid);
+		return -ENODEV;
 	}
     //spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
 
