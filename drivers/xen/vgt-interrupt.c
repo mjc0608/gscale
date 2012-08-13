@@ -1952,9 +1952,9 @@ int vgt_vstate_irq_init(struct vgt_device *vgt)
 	return 0;
 }
 
-void vgt_vstate_irq_exit(struct vgt_device *vstate)
+void vgt_vstate_irq_exit(struct vgt_device *vgt)
 {
-	// leave it empty for now
+	hrtimer_cancel(&vgt_dpy_timer(vgt).timer);
 }
 
 void vgt_install_irq(struct pci_dev *pdev)
