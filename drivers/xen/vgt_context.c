@@ -2816,18 +2816,15 @@ static void free_vm_aperture_gm_and_fence(struct vgt_device *vgt)
 	unsigned long *fence_bitmap = pdev->fence_bitmap;
 	unsigned long visable_gm_start =
 		aperture_2_gm(vgt->pdev, vgt->aperture_base)/SIZE_1MB;
-	unsigned long hidden_gm_start;
+	unsigned long hidden_gm_start = vgt->hidden_gm_offset/SIZE_1MB;
 
 	ASSERT(vgt->aperture_sz > 0 && vgt->aperture_sz <= vgt->gm_sz);
 
 	/* mark the related areas as available */
 	bitmap_clear(gm_bitmap, visable_gm_start, vgt->aperture_sz/SIZE_1MB);
-	if (vgt->gm_sz > vgt->aperture_sz) {
-		hidden_gm_start =
-			(vgt->hidden_gm_offset - hidden_gm_base(vgt->pdev))/SIZE_1MB;
+	if (vgt->gm_sz > vgt->aperture_sz)
 		bitmap_clear(gm_bitmap, hidden_gm_start,
 			(vgt->gm_sz - vgt->aperture_sz)/SIZE_1MB);
-	}
 	bitmap_clear(fence_bitmap, vgt->fence_base,  vgt->fence_sz);
 }
 
