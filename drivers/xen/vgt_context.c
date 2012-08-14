@@ -3021,7 +3021,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 			vgt_init_shadow_ppgtt(vgt);
 	}
 
-	if (vgt->vm_id && vgt_ops->boot_time) {
+	if (vgt->vm_id) {
 		vgt_ops->boot_time = 0;
 		vgt_super_owner = NULL;
 
@@ -3076,21 +3076,23 @@ void vgt_release_instance(struct vgt_device *vgt)
 		do_vgt_display_switch(&default_device);
 	}
 
-	spin_lock_irqsave(&vgt->pdev->lock, flags);
-	list_for_each (pos, &vgt->pdev->rendering_runq_head)
-		if (pos == &vgt->list) {
-			in_rendering_rq = true;
-			vgt->exit_req_from_render_switch = 1;
-			break;
-		}
-	spin_unlock_irqrestore(&vgt->pdev->lock, flags);
+	if (vgt_ctx_switch) {
+		spin_lock_irqsave(&vgt->pdev->lock, flags);
+		list_for_each (pos, &vgt->pdev->rendering_runq_head)
+			if (pos == &vgt->list) {
+				in_rendering_rq = true;
+				vgt->exit_req_from_render_switch = 1;
+				break;
+			}
+		spin_unlock_irqrestore(&vgt->pdev->lock, flags);
 
-	if (in_rendering_rq)
-		wait_for_completion(&vgt->exit_from_render_switch);
+		if (in_rendering_rq)
+			wait_for_completion(&vgt->exit_from_render_switch);
 
-	/* The vgt may be still in executing. */
-	while ( is_current_render_owner(vgt) )
-		schedule();
+		/* The vgt may be still in executing. */
+		while ( is_current_render_owner(vgt) )
+			schedule();
+	}
 
 	vgt_hvm_info_deinit(vgt);
 	vgt->pdev->device[vgt->vgt_id] = NULL;
