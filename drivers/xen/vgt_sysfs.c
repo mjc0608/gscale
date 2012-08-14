@@ -310,7 +310,7 @@ static struct kobj_attribute reg_owner_attrs =
 	__ATTR(reg_owner, 0660, vgt_reg_owner_show, vgt_reg_owner_store);
 
 static struct kobj_attribute ctx_switch_attrs =
-	__ATTR(ctx_switch, 0666, vgt_ctx_switch_show, vgt_ctx_switch_store);
+	__ATTR(ctx_switch, 0660, vgt_ctx_switch_show, vgt_ctx_switch_store);
 
 static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
@@ -356,6 +356,13 @@ const struct sysfs_ops vgt_kobj_sysfs_ops = {
 /* copied code end */
 
 #define kobj_to_vgt(kobj) container_of((kobj), struct vgt_device, kobj)
+
+static ssize_t vgt_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    struct vgt_device *vgt = kobj_to_vgt(kobj);
+    return sprintf(buf, "%x\n", vgt->vgt_id);
+}
+
 static ssize_t gm_sz_show(struct kobject *kobj, struct kobj_attribute *attr,char *buf)
 {
 	struct vgt_device *vgt = kobj_to_vgt(kobj);
@@ -380,7 +387,8 @@ static ssize_t aperture_base_va_show(struct kobject *kobj, struct kobj_attribute
 	return sprintf(buf, "%p\n", vgt->aperture_base_va);
 }
 
-
+static struct kobj_attribute vgt_id_attribute =
+    __ATTR_RO(vgt_id);
 
 static struct kobj_attribute gm_sz_attribute =
     __ATTR_RO(gm_sz);
@@ -394,12 +402,12 @@ static struct kobj_attribute aperture_base_attribute =
 static struct kobj_attribute aperture_base_va_attribute =
     __ATTR_RO(aperture_base_va);
 
-
 /*
  * Create a group of attributes so that we can create and destroy them all
  * at once.
  */
 static struct attribute *vgt_instance_attrs[] = {
+	&vgt_id_attribute.attr,
 	&gm_sz_attribute.attr,
 	&aperture_sz_attribute.attr,
 	&aperture_base_attribute.attr,
