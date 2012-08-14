@@ -3080,7 +3080,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	for (i = 0; i < EDID_NUM; ++ i) {
 		if (vgt->vgt_edids[i]) {
-			kfree(vgt->pdev->pdev_edids[i]);
+			kfree(vgt->vgt_edids[i]);
 		}
 	}
 
