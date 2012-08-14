@@ -2216,8 +2216,8 @@ struct vgt_irq_virt_state {
 #define vgt_dpy_timer(s)		(s->irq_vstate->dpy_timer)
 #define vgt_event_cnt(s, e)		(s->irq_vstate->event_cnt[e])
 #define vgt_irq_cnt(s)			(s->irq_vstate->irq_cnt)
-#define vgt_gtiir_cnt(s)			(s->irq_vstate->deiir_cnt)
-#define vgt_deiir_cnt(s)			(s->irq_vstate->gtiir_cnt)
+#define vgt_gtiir_cnt(s)			(s->irq_vstate->gtiir_cnt)
+#define vgt_deiir_cnt(s)			(s->irq_vstate->deiir_cnt)
 
 #define vgt_event_owner_is_core(d, e)	\
 	(vgt_core_event_handlers(d) && (vgt_core_event_handlers(d))[e])
