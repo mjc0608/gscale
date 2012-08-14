@@ -73,6 +73,7 @@
 #include <xen/vgt.h>
 #include <xen/vgt-parser.h>
 #include "vgt_reg.h"
+#include "vgt_devtable.h"
 #include <xen/vgt-if.h>
 
 /*
@@ -3439,48 +3440,15 @@ uint64_t vgt_get_gtt_size(struct pci_bus *bus)
 
 static void vgt_set_device_type(struct pgt_device *pdev)
 {
-	switch (pdev->pdev->device) {
-	case 0x0102:
-	case 0x0112:
-	case 0x0122:
-	case 0x0106:
-	case 0x0116:
-	case 0x0126:
-	case 0x010A:
-		pdev->is_sandybridge = 1;
+	pdev->is_sandybridge = _is_sandybridge(pdev->pdev->device);
+	if ( pdev->is_sandybridge )
 		printk("Detected Sandybridge\n");
-		break;
-	case 0x0156:
-	case 0x0166:
-	case 0x0152:
-	case 0x0162:
-	case 0x015a:
-	case 0x016a:
-		pdev->is_ivybridge = 1;
+	pdev->is_ivybridge = _is_ivybridge(pdev->pdev->device);
+	if ( pdev->is_ivybridge )
 		printk("Detected Ivybridge\n");
-		break;
-	case 0x0402:
-	case 0x0412:
-	case 0x0422:
-	case 0x040a:
-	case 0x041a:
-	case 0x042a:
-	case 0x0406:
-	case 0x0416:
-	case 0x0426:
-	case 0x0c06:
-	case 0x0c16:
-	case 0x0c26:
-	case 0x0c02:
-	case 0x0c12:
-	case 0x0c22:
-	case 0x0c0a:
-	case 0x0c1a:
-	case 0x0c2a:
-		pdev->is_haswell = 1;
+	pdev->is_haswell = _is_haswell(pdev->pdev->device);
+	if ( pdev->is_haswell )
 		printk("Detected Haswell\n");
-		break;
-	}
 }
 
 static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
