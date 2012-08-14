@@ -190,8 +190,6 @@ static int i915_balloon_space (
 						  DRM_MM_CREATE_DEFAULT);
 }
 
-#define VGT_IF_VERSION	0x10000		/* 1.0 */
-
 static void i915_deballoon(struct drm_i915_private *dev_priv)
 {
 	int	i;
