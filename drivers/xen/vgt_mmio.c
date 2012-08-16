@@ -468,6 +468,37 @@ bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+bool mul_force_wake_ack_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	*(u32 *)p_data = __vreg(vgt, _REG_MUL_FORCEWAKE_ACK);
+	return true;
+}
+
+bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	uint32_t data;
+
+	if (bytes > 4){
+		printk("invalid force wake data\n");
+		return false;
+	}
+
+	data = (*(uint32_t*) p_data) & 1 ;
+
+	dprintk("VM%d write register FORCE_WAKE_MT with %x\n", vgt->vm_id, data);
+
+	__vreg(vgt, _REG_MUL_FORCEWAKE_ACK) = data;
+	__vreg(vgt, _REG_MUL_FORCEWAKE) = data;
+	if (data == 1)
+		set_vRC_to_C0(vgt);
+	else
+		set_vRC_to_C6(vgt);
+
+	return true;
+}
+
 bool rc_state_ctrl_1_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -2625,7 +2656,9 @@ _REG_ALWAYS_VIRT(_REG_FORCEWAKE, 4, NULL, force_wake_write),
 _REG_ALWAYS_VIRT(_REG_FORCEWAKE_ACK, 4, NULL, NULL),
 _REG_ALWAYS_VIRT(_REG_GT_CORE_STATUS, 4, NULL, NULL),
 _REG_ALWAYS_VIRT(_REG_GT_THREAD_STATUS, 4, NULL, NULL),
-_REG_ALWAYS_VIRT(_REG_MUL_FORCEWAKE, 4, NULL, NULL),
+_REG_ALWAYS_VIRT(_REG_MUL_FORCEWAKE, 4, NULL, mul_force_wake_write),
+_REG_ALWAYS_VIRT(_REG_MUL_FORCEWAKE_ACK, 4, mul_force_wake_ack_read, NULL),
+_REG_PM(_REG_ECOBUS, 4, NULL, NULL),
 _REG_ALWAYS_VIRT(_REG_RC_STATE_CTRL_1, 4, NULL, rc_state_ctrl_1_mmio_write),
 _REG_ALWAYS_VIRT(_REG_RC_STATE_CTRL_2, 4, NULL, rc_state_ctrl_1_mmio_write),
 
