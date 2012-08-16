@@ -912,36 +912,6 @@ static void vgt_update_reg_64(struct vgt_device *vgt, unsigned int reg)
 			VGT_MMIO_WRITE_BYTES(pdev, reg, __sreg64(vgt, reg), 8);
 }
 
-static void vgt_gen6_force_wake(struct pgt_device *pdev)
-{
-	int count = 0;
-
-	if (VGT_MMIO_READ(pdev, _REG_FORCEWAKE) == 0) {
-		VGT_MMIO_WRITE(pdev, _REG_FORCEWAKE, 1);
-		while (count < 50 && !(VGT_MMIO_READ(pdev, _REG_FORCEWAKE_ACK) & 1))
-			count++;
-		printk("vGT: 1st forcewake set to %d(%x)\n",
-			VGT_MMIO_READ(pdev, _REG_FORCEWAKE),
-			VGT_MMIO_READ(pdev, _REG_FORCEWAKE_ACK));
-	}
-}
-
-static void vgt_gen6_mul_force_wake(struct pgt_device *pdev)
-{
-	int count = 0;
-
-	while (count < 50 && (VGT_MMIO_READ(pdev, _REG_MUL_FORCEWAKE_ACK) & 1))
-		count++;
-
-	VGT_MMIO_WRITE(pdev, _REG_MUL_FORCEWAKE, (1 | (1 << 16)));
-	(void)VGT_MMIO_READ(pdev, _REG_MUL_FORCEWAKE);
-
-	count = 0;
-
-	while (count < 50 && !(VGT_MMIO_READ(pdev, _REG_MUL_FORCEWAKE_ACK) & 1))
-		count++;
-}
-
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -1034,8 +1004,6 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 		dprintk("vGT: capture >4 bytes read to %x\n", offset);
 
 	spin_lock_irqsave(&pdev->lock, flags);
-
-	pdev->dev_func.force_wake(pdev);
 
 	mht = lookup_mtable(offset);
 	if ( mht && mht->read )
@@ -1145,8 +1113,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		old_vreg = __vreg(vgt, offset);
 		old_sreg = __sreg(vgt, offset);
 	}
-
-	pdev->dev_func.force_wake(pdev);
 
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
@@ -1537,8 +1503,6 @@ int vgt_thread(void *priv)
 			printk("vGT: %lldth checks, %lld switches\n",
 				vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
 		vgt_ctx_check(pdev)++;
-
-		pdev->dev_func.force_wake(pdev);
 
 		if (list_empty(&pdev->rendering_runq_head)) {
 			/* Idle now, and no pending activity */
@@ -3071,34 +3035,6 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	return true;
 }
 
-/* Setup device specific handler for different functions. */
-static bool vgt_init_device_func (struct pgt_device *pdev)
-{
-	/* force wake handler */
-	pdev->dev_func.force_wake = vgt_gen6_force_wake;
-
-	if (pdev->is_ivybridge || pdev->is_haswell) {
-		/* FIXME To check if enable multithread force wake, we have to
-		 * probe ECOBUS (0xa180) bit5. But it looks current hyper call MMIO
-		 * read and pdev->initial_mmio_state both return 0, which is different
-		 * from native value (e.g 0x84100020). I don't know why...
-		 *
-		 * Always use MT force wake now.
-		 */
-#if 0
-		u32 temp;
-		vgt_gen6_mul_force_wake(pdev);
-		temp = VGT_MMIO_READ(pdev, _REG_ECOBUS);
-		if (temp & _REGBIT_MUL_FORCEWAKE_ENABLE) {
-			/* enable multithread force wake */
-		}
-#endif
-		printk("vGT: Use MT force wake!\n");
-		pdev->dev_func.force_wake = vgt_gen6_mul_force_wake;
-	}
-	return true;
-}
-
 /* FIXME: allocate instead of static */
 #define VGT_APERTURE_PAGES	(VGT_RSVD_APERTURE_SZ >> GTT_PAGE_SHIFT)
 static struct page *pages[VGT_APERTURE_PAGES];
@@ -3214,8 +3150,6 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 
 	initialize_gm_fence_allocation_bitmaps(pdev);
-
-	vgt_init_device_func(pdev);
 
 	if (vgt_irq_init(pdev) != 0)
 		goto err;

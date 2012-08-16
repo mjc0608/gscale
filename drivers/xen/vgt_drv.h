@@ -452,11 +452,6 @@ int init_vgt_port_struct(struct vgt_device *vgt,
 		enum vgt_plane plane,
 		enum vgt_output_type otype);
 
-/* device specific hooks */
-struct vgt_device_funcs {
-	void (*force_wake)(struct pgt_device *);
-};
-
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list;
@@ -538,8 +533,6 @@ struct pgt_device {
 	u8 is_ivybridge : 1;
 	u8 is_haswell : 1;
 	u8 enable_ppgtt : 1;
-
-	struct vgt_device_funcs dev_func;
 
 	vgt_aux_entry_t vgt_aux_table[VGT_AUX_TABLE_NUM];
 	int at_index;
