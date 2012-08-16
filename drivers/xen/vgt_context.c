@@ -2937,6 +2937,10 @@ dprintk("VGT: Initial_phys_states\n");
 
 #else
 	for (i = 0; i < VGT_MMIO_REG_NUM; i++) {
+		/* XXX We need to skip some reserved space, or known forbidden
+		 * space for access, otherwise it may cause hang */
+		if (i >= (0x5180 >> 2) && i < (0x6000 >> 2))
+			continue;
 		pdev->initial_mmio_state[i] = *((vgt_reg_t *)pdev->gttmmio_base_va + i);
 	}
 #endif
