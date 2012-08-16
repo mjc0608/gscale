@@ -93,6 +93,18 @@ enum vgt_debugfs_entry_t
 	VGT_DEBUGFS_ENTRY_MAX
 };
 
+static debug_statistics_t  stat_info [] = {
+	{ "gtt_mmio_rcnt", &gtt_mmio_rcnt },
+	{ "gtt_mmio_wcnt", &gtt_mmio_wcnt },
+	{ "gtt_mmio_wcycles", &gtt_mmio_wcycles },
+	{ "gtt_mmio_rcycles", &gtt_mmio_rcycles },
+	{ "mmio_rcnt", &mmio_rcnt },
+	{ "mmio_wcnt", &mmio_wcnt },
+	{ "mmio_wcycles", &mmio_wcycles },
+	{ "mmio_rcycles", &mmio_rcycles },
+	{ "", NULL}
+};
+
 static struct dentry *d_vgt_debug;
 static struct dentry *d_per_vgt[VGT_MAX_VMS];
 static struct dentry *d_debugfs_entry[VGT_MAX_VMS][VGT_DEBUGFS_ENTRY_MAX];
@@ -240,12 +252,26 @@ static struct dentry *vgt_debugfs_create_blob(const char *name, mode_t mode,
 /* FIXME: how about the second graphics card */
 struct dentry *vgt_init_debugfs(void)
 {
+	struct dentry *temp_d;
+	int   i;
+
     if (!d_vgt_debug) {
         d_vgt_debug = debugfs_create_dir("vgt", NULL);
 
         if (!d_vgt_debug)
             pr_warning("Could not create 'vgt' debugfs directory\n");
     }
+
+    if ( d_vgt_debug )
+	for ( i = 0; stat_info[i].stat != NULL; i++ ) {
+		temp_d = debugfs_create_u64(stat_info[i].node_name,
+			0444,
+			d_vgt_debug,
+			stat_info[i].stat);
+		if (!temp_d)
+			printk(KERN_ERR "Failed to create debugfs node %s\n",
+				stat_info[i].node_name);
+	}
 
     return d_vgt_debug;
 }

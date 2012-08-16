@@ -1920,16 +1920,24 @@ void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
                port, bytes, *val);
 }
 
+u64 mmio_rcnt=0;
+u64 mmio_wcnt=0;
+u64 mmio_rcycles=0;
+u64 mmio_wcycles=0;
+
 void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 {
     int i, sign;
     char *cfg_space = &vgt->state.cfg_space[0];
     uint64_t  base = * (uint64_t *) (cfg_space + VGT_REG_CFG_SPACE_BAR0);
     uint64_t  tmp;
+    cycles_t t0, t1;
 
     sign = req->df ? -1 : 1;
 
     if (req->dir == IOREQ_READ) {
+	t0 = get_cycles();
+	mmio_rcnt++;
         /* MMIO READ */
         if (!req->data_is_ptr) {
             ASSERT (req->count == 1);
@@ -1960,8 +1968,13 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
                  */
             }
         }
+	t1 = get_cycles();
+	t1 -= t0;
+	mmio_rcycles += (u64) t1;
     }
     else {   /* MMIO Write */
+	t0 = get_cycles();
+	mmio_wcnt++;
         if (!req->data_is_ptr) {
             ASSERT (req->count == 1);
 
@@ -1993,6 +2006,9 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
             }
 
         }
+	t1 = get_cycles();
+	t1 -= t0;
+	mmio_wcycles += (u64) t1;
     }
 }
 

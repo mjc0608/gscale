@@ -2447,4 +2447,17 @@ extern void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt);
  */
 #undef VGT_DEBUGFS_DUMP_FB
 
+typedef struct {
+    char *node_name;
+    u64 *stat;
+} debug_statistics_t;
+
+extern u64 gtt_mmio_rcnt;
+extern u64 gtt_mmio_wcnt;
+extern u64 gtt_mmio_wcycles;
+extern u64 gtt_mmio_rcycles;
+extern u64 mmio_rcnt;
+extern u64 mmio_wcnt;
+extern u64 mmio_wcycles;
+extern u64 mmio_rcycles;
 #endif	/* _VGT_REG_H_ */

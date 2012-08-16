@@ -78,6 +78,10 @@
 #include <xen/vgt.h>
 #include <xen/vgt-if.h>
 #include "vgt_reg.h"
+u64 gtt_mmio_rcnt=0;
+u64 gtt_mmio_wcnt=0;
+u64 gtt_mmio_wcycles=0;
+u64 gtt_mmio_rcycles=0;
 
 /* Don't be confused. 'g_pfn' is actually page _address_, instead of page frame
  * number. And return value is also machine page _address_, but not frame
@@ -140,9 +144,12 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t g_gtt_index;
+        cycles_t t0, t1;
 
 	ASSERT(bytes == 4);
 
+	t0 = get_cycles();
+	gtt_mmio_rcnt++;
 	off -= VGT_MMIO_SPACE_SZ;
 	if (off >= vgt->vgtt_sz) {
 		dprintk("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
@@ -151,6 +158,9 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 
 	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
 	*(uint32_t*)p_data = vgt->vgtt[g_gtt_index];
+	t1 = get_cycles();
+	t1 -= t0;
+	gtt_mmio_rcycles += (u64) t1;
 	return true;
 }
 
@@ -162,14 +172,13 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	uint32_t g_gtt_val, h_gtt_val, g_gtt_index, h_gtt_index;
 	int rc;
 	uint64_t g_addr;
+        cycles_t t0, t1;
 
 	ASSERT(bytes == 4);
 
+	t0 = get_cycles();
+	gtt_mmio_wcnt++;
 	off -= VGT_MMIO_SPACE_SZ;
-	if (off >= vgt->vgtt_sz) {
-		dprintk("vGT(%d): captured out of range GTT write on off %x\n", vgt->vgt_id, off);
-		return false;
-	}
 
 	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
 	g_gtt_val = *(uint32_t*)p_data;
@@ -187,7 +196,7 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 		count++;
 		/* in this case still return true since the impact is on vgtt only */
-		return true;
+		goto out;
 	}
 
 	rc = gtt_p2m(vgt, g_gtt_val, &h_gtt_val);
@@ -203,6 +212,10 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 		vgt_write_gtt( vgt->pdev, h_gtt_index - GTT_INDEX_MB(128), h_gtt_val );
 	}
 #endif
+out:
+	t1 = get_cycles();
+	t1 -= t0;
+	gtt_mmio_wcycles += (u64) t1;
 
 	return true;
 }
