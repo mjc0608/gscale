@@ -241,13 +241,13 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 
 	/* find shadow PTE */
 	/* XXX search PDE table for PTE table index */
-	for (i = 0; i < 1024; i++) {
+	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
 		if ((vgt->shadow_pde_table[i].virtual_phyaddr & PAGE_MASK) == (offset & PAGE_MASK)) {
 			dprintk(KERN_INFO "zhen: Found PTE page at 0x%lx (%d)\n", offset & PAGE_MASK, i);
 			break;
 		}
 	}
-	if (i == 1024) {
+	if (i == VGT_PPGTT_PDE_ENTRIES) {
 		printk(KERN_ERR "Failed to find PTE page at 0x%x\n", offset);
 		return false;
 	}
@@ -433,7 +433,6 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 bool vgt_setup_ppgtt(struct vgt_device *vgt)
 {
 	u32 base = vgt->rb[0].sring_ppgtt_info.base;
-	int pde_entries = 512;	/* XXX current assume 512 entries for 2G mapping */
 	int i;
 	u32 pde, shadow_pde;
 	dma_addr_t pte_phy;
@@ -443,7 +442,7 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 
 	gtt_base = base >> PAGE_SHIFT;
 
-	for (i = 0; i < pde_entries; i++) {
+	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
 		/* Just use guest virtual value instead of real machine address */
 		pde = vgt->vgtt[gtt_base + i];
 
