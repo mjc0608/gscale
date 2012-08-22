@@ -61,6 +61,7 @@
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/slab.h>
+#include <linux/highmem.h>
 
 #include <asm/xen/hypercall.h>
 #include <asm/xen/hypervisor.h>
@@ -255,7 +256,7 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 	g_addr = *(unsigned long*)p_data;
 
 	/* find entry index, fill in shadow PTE */
-	pte = vgt->shadow_pte_table[i].virt;
+
 	index = (offset & (PAGE_SIZE - 1)) >> 2;
 
 	if (pdev->is_ivybridge) {
@@ -272,9 +273,12 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 		return false;
 	}
 
+	pte = kmap_atomic(vgt->shadow_pte_table[i].pte_page);
 	pte[index] = h_addr | ((h_addr >> 28) & addr_mask);
 	pte[index] |= g_addr & ctl_mask;
 	pte[index] |= _REGBIT_PTE_VALID;
+	clflush((u8 *)pte + index * 4);
+	kunmap_atomic(pte);
 
 	dprintk("WP: PDE[%d], PTE[%d], entry 0x%x, g_addr 0x%lx, h_addr 0x%lx\n", i, index, pte[index], g_addr, h_addr);
 
@@ -361,7 +365,7 @@ int vgt_unset_wp_page(struct vgt_device *vgt, unsigned long pfn)
 /* handler to map guest page in dom0 kernel space.
  * XXX no unmap for now, assume current PTE pages are always allocated.
  */
-void *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, unsigned long gpfn)
+struct vm_struct *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, unsigned long gpfn)
 {
 	unsigned long mfn;
 	struct vm_struct *area;
@@ -373,7 +377,7 @@ void *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, unsigned long gpfn)
 	}
 
 	area = xen_remap_domain_mfn_range_in_kernel(mfn >> PAGE_SHIFT, 1, vgt->vm_id);
-	return (area == NULL) ? NULL : area->addr;
+	return (area == NULL) ? NULL : area;
 }
 
 
@@ -393,14 +397,13 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 	}
 	vgt->shadow_pde_table[idx].shadow_pte_phyaddr = p->shadow_mpfn << PAGE_SHIFT;
 
-	p->virt = shadow_ent = page_address(p->pte_page);
-
 	/* access VM's pte page */
-	ent = vgt_ppgtt_map_guest_pte_page(vgt, virt_pte);
-	if (ent == NULL) {
+	p->guest_pte_vm = vgt_ppgtt_map_guest_pte_page(vgt, virt_pte);
+	if (p->guest_pte_vm == NULL) {
 		printk(KERN_ERR "Failed to map guest PTE page!\n");
 		return -1;
 	}
+	ent = p->guest_pte_vm->addr;
 
 	if (pdev->is_ivybridge) {
 		addr_mask = 0xff0;
@@ -409,6 +412,8 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 		addr_mask = 0x7f0;
 		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7_5;
 	}
+
+	shadow_ent = kmap_atomic(p->pte_page);
 
 	/* for each PTE entry */
 	for (i = 0; i < 1024; i++) {
@@ -426,6 +431,7 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 		shadow_ent[i] |= ent[i] & ctl_mask;
 		shadow_ent[i] |= _REGBIT_PTE_VALID;
 	}
+	kunmap_atomic(shadow_ent);
 	/* XXX unmap guest VM page? */
 	return 0;
 }
@@ -505,6 +511,7 @@ void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt)
 
 	for (i = 0; i < 1024; i++) {
 		p = &vgt->shadow_pte_table[i];
+		xen_unmap_domain_mfn_range_in_kernel(p->guest_pte_vm, 1, vgt->vm_id);
 		__free_page(p->pte_page);
 	}
 }

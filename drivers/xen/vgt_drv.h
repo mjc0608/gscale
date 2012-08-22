@@ -159,9 +159,9 @@ typedef struct {
 } vgt_ring_ppgtt_t;
 
 typedef struct {
-	void		*virt;
 	unsigned long	shadow_mpfn;
 	struct page	*pte_page;
+	struct vm_struct *guest_pte_vm;
 } vgt_ppgtt_pte_t;
 
 typedef struct {
