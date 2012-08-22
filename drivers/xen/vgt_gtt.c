@@ -519,6 +519,9 @@ void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt)
 	int i;
 	vgt_ppgtt_pte_t *p;
 
+	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++)
+		vgt_unset_wp_page(vgt, vgt->shadow_pde_table[i].virtual_phyaddr >> PAGE_SHIFT);
+
 	for (i = 0; i < 1024; i++) {
 		p = &vgt->shadow_pte_table[i];
 		xen_unmap_domain_mfn_range_in_kernel(p->guest_pte_vm, 1, vgt->vm_id);
