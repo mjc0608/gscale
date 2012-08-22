@@ -243,12 +243,7 @@ static int __init dom0_aperture_starts_at_128MB_setup(char *str)
 }
 __setup("dom0_aperture_starts_at_128MB", dom0_aperture_starts_at_128MB_setup);
 
-int vgt_ctx_switch = 1;
-
-/* FIXME: move to pdev */
-/* contains mask info for regs requiring addr fix */
-vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];
-int ai_index;
+static int vgt_ctx_switch = 1;
 
 static struct vgt_device *vgt_dom1 = NULL;
 /*

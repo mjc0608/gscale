@@ -1214,6 +1214,9 @@ struct pgt_device {
 	u8 enable_ppgtt : 1;
 
 	struct vgt_device_funcs dev_func;
+
+	vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];
+	int ai_index;
 };
 
 extern struct list_head pgt_devices;
@@ -1282,18 +1285,16 @@ static inline void reg_set_mode_ctl(struct pgt_device *pdev, vgt_reg_t reg)
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_MODE_CTL;
 }
 
-extern vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];
-extern int ai_index;
 /* mask bits for addr fix */
 static inline void vgt_set_addr_mask(struct pgt_device *pdev,
 	vgt_reg_t reg, vgt_addr_mask_t mask)
 {
-	ASSERT(ai_index < VGT_ADDR_FIX_NUM - 1);
+	ASSERT(pdev->ai_index < VGT_ADDR_FIX_NUM - 1);
 	//ASSERT(!(pdev->reg_info[reg] & VGT_REG_OWNER));
 
-	vgt_addr_table[ai_index] = mask;
-	reg_set_addr_fix(pdev, reg, ai_index);
-	ai_index++;
+	pdev->vgt_addr_table[ai_index] = mask;
+	reg_set_addr_fix(pdev, reg, pdev->ai_index);
+	pdev->ai_index++;
 }
 
 /* if the type is invalid, we assume dom0 always has the permission */
