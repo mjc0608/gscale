@@ -97,11 +97,7 @@ typedef struct {
 #define _tail_reg_(ring_reg_off)	\
 		(ring_reg_off & ~(sizeof(vgt_ringbuffer_t)-1))
 
-#ifdef SANDY_BRIDGE
-#define  MAX_ENGINES		3
-#else
 #define  MAX_ENGINES		5
-#endif
 
 #define _vgt_mmio_va(pdev, x)		((char*)pdev->gttmmio_base_va+x)	/* PA to VA */
 #define _vgt_mmio_pa(pdev, x)		(pdev->gttmmio_base+x)	/* PA to VA */
@@ -229,7 +225,6 @@ struct mmio_hash_table	{
 #define RING_BUFFER_BCS		2
 #define RING_BUFFER_VECS	3
 #define RING_BUFFER_VCS2	4
-extern unsigned int ring_mmio_base[MAX_ENGINES];
 
 typedef bool (*submit_context_command_t) (struct vgt_device *vgt,
 	int ring_id, rb_dword *cmds, int bytes);
@@ -280,10 +275,10 @@ bool default_submit_context_command (struct vgt_device *vgt,
 #define RB_OFFSET_CTL		0xC
 #define RB_REGS_SIZE		0x10
 
-#define RB_TAIL(id)	(ring_mmio_base[id] + RB_OFFSET_TAIL)
-#define RB_HEAD(id)	(ring_mmio_base[id] + RB_OFFSET_HEAD)
-#define RB_START(id)	(ring_mmio_base[id] + RB_OFFSET_START)
-#define RB_CTL(id)	(ring_mmio_base[id] + RB_OFFSET_CTL)
+#define RB_TAIL(pdev, id)	(pdev->ring_mmio_base[id] + RB_OFFSET_TAIL)
+#define RB_HEAD(pdev, id)	(pdev->ring_mmio_base[id] + RB_OFFSET_HEAD)
+#define RB_START(pdev, id)	(pdev->ring_mmio_base[id] + RB_OFFSET_START)
+#define RB_CTL(pdev, id)	(pdev->ring_mmio_base[id] + RB_OFFSET_CTL)
 
 #define RB_HEAD_OFF_MASK	((1UL << 21) - (1UL << 2))	/* bit 2 to 20 */
 #define RB_HEAD_OFF_SHIFT	2
@@ -1163,6 +1158,12 @@ struct pgt_device {
 	uint64_t gmadr_base;	/* base of GMADR */
 	void *gmadr_va;		/* virtual base of GMADR */
 
+	int max_engines;	/* supported max engines */
+	u32 ring_mmio_base[MAX_ENGINES];
+	u32 ring_psmi[MAX_ENGINES];
+	u32 ring_mi_mode[MAX_ENGINES];
+	submit_context_command_t submit_context_command[MAX_ENGINES];
+
 	vgt_edid_data_t		*pdev_edids[EDID_NUM];	/* per display EDID information */
 
 	 /* 1 bit corresponds to 1MB in the GM space */
@@ -1729,10 +1730,10 @@ static inline void vgt_deactive(struct pgt_device *pdev, struct list_head *rq)
 vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_value);
 vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_value);
 
-static inline bool is_ring_empty(struct pgt_device *pgt, int ring_id)
+static inline bool is_ring_empty(struct pgt_device *pdev, int ring_id)
 {
-	vgt_reg_t head = VGT_MMIO_READ(pgt, RB_HEAD(ring_id));
-	vgt_reg_t tail = VGT_MMIO_READ(pgt, RB_TAIL(ring_id));
+	vgt_reg_t head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
+	vgt_reg_t tail = VGT_MMIO_READ(pdev, RB_TAIL(pdev, ring_id));
 
 	head &= RB_HEAD_OFF_MASK;
 	/*
@@ -1749,9 +1750,9 @@ static inline bool is_ring_empty(struct pgt_device *pgt, int ring_id)
 		val = VGT_MMIO_READ(pdev, reg);	\
 	} while (0)
 
-static inline bool is_ring_enabled (struct pgt_device *pgt, int ring_id)
+static inline bool is_ring_enabled (struct pgt_device *pdev, int ring_id)
 {
-	return (VGT_MMIO_READ(pgt, RB_CTL(ring_id)) & 1);	/* bit 0: enable/disable RB */
+	return (VGT_MMIO_READ(pdev, RB_CTL(pdev, ring_id)) & 1);	/* bit 0: enable/disable RB */
 }
 
 /* FIXME: use readl/writel as Xen doesn't trap GTT access now */

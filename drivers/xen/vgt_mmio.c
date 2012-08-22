@@ -91,12 +91,12 @@ static int __init bypass_scan_setup(char *str)
 }
 __setup("bypass_scan", bypass_scan_setup);
 
-static inline int tail_to_ring_id(unsigned int tail_off)
+static inline int tail_to_ring_id(struct pgt_device *pdev, unsigned int tail_off)
 {
 	int i;
 
-	for (i=0; i< MAX_ENGINES; i++) {
-		if ( ring_mmio_base[i] == tail_off )
+	for (i = 0; i < pdev->max_engines; i++) {
+		if ( pdev->ring_mmio_base[i] == tail_off )
 			return i;
 	}
 	printk("Wrong tail register %s\n", __FUNCTION__);
@@ -330,7 +330,7 @@ bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
 	}
 
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
-	ring_id = tail_to_ring_id ( _tail_reg_(off) );
+	ring_id = tail_to_ring_id (vgt->pdev, _tail_reg_(off) );
 	vring = &vgt->rb[ring_id].vring;
 
 	memcpy(p_data, (char *)vring + rel_off, bytes);
@@ -351,7 +351,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 	ASSERT(!(rel_off & (bytes - 1)));
 
-	ring_id = tail_to_ring_id ( _tail_reg_(off) );
+	ring_id = tail_to_ring_id (vgt->pdev, _tail_reg_(off) );
 	vring = &vgt->rb[ring_id].vring;
 	sring = &vgt->rb[ring_id].sring;
 
@@ -527,7 +527,7 @@ bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	/* TODO: add appropriate action */
 	/* so far, we just simply ignore it and VM treat it as success */
 
-	for (i = 0; i < MAX_ENGINES; i++) {
+	for (i = 0; i < vgt->pdev->max_engines; i++) {
 		show_debug(vgt->pdev, i);
 		show_ringbuffer(vgt->pdev, i, 16 * sizeof(vgt_reg_t));
 	}
@@ -1732,8 +1732,8 @@ bool vgt_initialize_mmio_hooks(struct pgt_device *pdev)
 
 	printk("mmio hooks initialized\n");
 	/* ring registers */
-	for (i=0; i < MAX_ENGINES; i++)
-		if (!vgt_register_mmio_handler(ring_mmio_base[i],
+	for (i=0; i < pdev->max_engines; i++)
+		if (!vgt_register_mmio_handler(pdev->ring_mmio_base[i],
 			 RB_REGS_SIZE,
 			ring_mmio_read, ring_mmio_write))
 			return false;
