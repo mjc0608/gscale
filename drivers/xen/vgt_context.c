@@ -87,8 +87,6 @@
 static bool vgt_restore_context (struct vgt_device *vgt);
 static bool vgt_save_context (struct vgt_device *vgt);
 
-LIST_HEAD(pgt_devices);
-
 bool hvm_render_owner = false;
 static int __init hvm_render_setup(char *str)
 {
@@ -138,10 +136,114 @@ static int __init vgt_novgt_setup(char *str)
 }
 __setup("novgt", vgt_novgt_setup);
 
+static int start_period = 10; /* in unit of second */
+static int __init period_setup(char *str)
+{
+	start_period = simple_strtoul(str, NULL, 10);
+	return 1;
+}
+__setup("vgt_start_period=", period_setup);
+
+static int fastmode = 1;
+static int __init mode_setup(char *str)
+{
+	fastmode = 1;
+	return 1;
+}
+__setup("vgt_fastmode", mode_setup);
+
+/*
+ * FIXME: now video ring switch has weird issue. The cmd
+ * parser may enter endless loop even when head/tail is
+ * zero. earlier posting read doesn't solve the issue.
+ * so disable it for now.
+ */
+static int enable_video_switch = 0;
+static int __init video_switch_setup(char *str)
+{
+	enable_video_switch = 1;
+	return 1;
+}
+
+__setup("enable_video_switch", video_switch_setup);
+
+/* enable this to use the old style switch context */
+static int use_old_ctx_switch = false;
+static int __init use_old_ctx_switch_setup(char *str)
+{
+    use_old_ctx_switch = true;
+    return 1;
+}
+__setup("use_old_ctx_switch", use_old_ctx_switch_setup);
+
+LIST_HEAD(pgt_devices);
 static struct pgt_device default_device = {
 	.bus = 0,
 	.devfn = 0x10,		/* BDF: 0:2:0 */
 };
+
+static int dom0_aperture_sz = 64;	//in MB.
+static int dom0_gm_sz = 64;			//in MB. Dom0 has no hidden gm.
+
+static int __init dom0_aperture_sz_setup(char *str)
+{
+	int t;
+	if (sscanf(str, "%d", &t) == 1 && t > 0 && t <= 256)
+		dom0_aperture_sz = t;
+	else {
+		printk("vGT: dom0_aperture_sz: invalid value ignored.\n");
+	}
+
+	if (dom0_gm_sz < dom0_aperture_sz)
+		dom0_gm_sz = dom0_aperture_sz;
+	return 1;
+}
+__setup("dom0_aperture_sz=", dom0_aperture_sz_setup);
+
+static int __init dom0_gm_sz_setup(char *str)
+{
+	int t;
+	if (sscanf(str, "%d", &t) == 1 && t > 0 && t <= 2048)
+		dom0_gm_sz = t;
+	else {
+		printk("vGT: dom0_gm_sz: invalid value ignored.\n");
+	}
+
+	if (dom0_gm_sz < dom0_aperture_sz)
+		dom0_gm_sz = dom0_aperture_sz;
+	return 1;
+}
+__setup("dom0_gm_sz=", dom0_gm_sz_setup);
+
+static int dom0_fence_sz = 4;
+static int __init dom0_fence_sz_setup(char *str)
+{
+	int t;
+	if (sscanf(str, "%d", &t) == 1 && t > 0 && t <= 16)
+		dom0_fence_sz = t;
+	else {
+		printk("vGT: dom0_fence_sz: invalid value ignored.\n");
+	}
+
+	return 1;
+}
+__setup("dom0_fence_sz=", dom0_fence_sz_setup);
+
+/* Before using the bitmap to manage the allocation of GM space dynamically
+ * (hence Dom0's aperture starts at 0 of GM space, we used static fixed
+ * allocation and Dom0's aperture starts at 128MB of GM space.
+ * If you want to switch to the old 128MB location anyway, enable this kernel
+ * parameter.
+ */
+static int dom0_aperture_starts_at_128MB;
+static int __init dom0_aperture_starts_at_128MB_setup(char *str)
+{
+	dom0_aperture_starts_at_128MB = 1;
+	return 1;
+}
+__setup("dom0_aperture_starts_at_128MB", dom0_aperture_starts_at_128MB_setup);
+
+int vgt_ctx_switch = 1;
 
 /* FIXME: move to pdev */
 /* contains mask info for regs requiring addr fix */
@@ -1140,20 +1242,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	return true;
 }
 
-/*
- * FIXME: now video ring switch has weird issue. The cmd
- * parser may enter endless loop even when head/tail is
- * zero. earlier posting read doesn't solve the issue.
- * so disable it for now.
- */
-static int enable_video_switch = 0;
-static int __init video_switch_setup(char *str)
-{
-	enable_video_switch = 1;
-	return 1;
-}
-__setup("enable_video_switch", video_switch_setup);
-
 bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 {
 	if ( is_ring_enabled(pdev, ring_id) && !is_ring_empty(pdev, ring_id) )
@@ -1374,30 +1462,6 @@ static void check_gtt(struct pgt_device *pdev)
 			vgt_read_gtt(pdev, GTT_INDEX(pdev, addr[i])));
 }
 
-static int start_period = 10; /* in unit of second */
-static int __init period_setup(char *str)
-{
-	start_period = simple_strtoul(str, NULL, 10);
-	return 1;
-}
-__setup("vgt_start_period=", period_setup);
-
-static int fastmode = 1;
-static int __init mode_setup(char *str)
-{
-	fastmode = 1;
-	return 1;
-}
-__setup("vgt_fastmode", mode_setup);
-
-int vgt_ctx_switch = 1;
-static int __init ctx_switch_setup(char *str)
-{
-	vgt_ctx_switch = 1;
-	return 1;
-}
-__setup("vgt_ctx_switch", ctx_switch_setup);
-
 void vgt_toggle_ctx_switch(bool enable)
 {
 	/*
@@ -1411,15 +1475,6 @@ void vgt_toggle_ctx_switch(bool enable)
 }
 
 static int period = HZ/5;	/* default slow mode in 200ms */
-
-/* enable this to use the old style switch context */
-static int use_old_ctx_switch = false;
-static int __init use_old_ctx_switch_setup(char *str)
-{
-    use_old_ctx_switch = true;
-    return 1;
-}
-__setup("use_old_ctx_switch", use_old_ctx_switch_setup);
 
 /*
  * The thread to perform the VGT ownership switch.
@@ -2654,67 +2709,6 @@ static int create_state_instance(struct vgt_device *vgt)
 		state->bar_mapped[i] = 0;
 	return 0;
 }
-
-static int dom0_aperture_sz = 64;	//in MB.
-static int dom0_gm_sz = 64;			//in MB. Dom0 has no hidden gm.
-
-static int __init dom0_aperture_sz_setup(char *str)
-{
-	int t;
-	if (sscanf(str, "%d", &t) == 1 && t > 0 && t <= 256)
-		dom0_aperture_sz = t;
-	else {
-		printk("vGT: dom0_aperture_sz: invalid value ignored.\n");
-	}
-
-	if (dom0_gm_sz < dom0_aperture_sz)
-		dom0_gm_sz = dom0_aperture_sz;
-	return 1;
-}
-__setup("dom0_aperture_sz=", dom0_aperture_sz_setup);
-
-static int __init dom0_gm_sz_setup(char *str)
-{
-	int t;
-	if (sscanf(str, "%d", &t) == 1 && t > 0 && t <= 2048)
-		dom0_gm_sz = t;
-	else {
-		printk("vGT: dom0_gm_sz: invalid value ignored.\n");
-	}
-
-	if (dom0_gm_sz < dom0_aperture_sz)
-		dom0_gm_sz = dom0_aperture_sz;
-	return 1;
-}
-__setup("dom0_gm_sz=", dom0_gm_sz_setup);
-
-static int dom0_fence_sz = 4;
-static int __init dom0_fence_sz_setup(char *str)
-{
-	int t;
-	if (sscanf(str, "%d", &t) == 1 && t > 0 && t <= 16)
-		dom0_fence_sz = t;
-	else {
-		printk("vGT: dom0_fence_sz: invalid value ignored.\n");
-	}
-
-	return 1;
-}
-__setup("dom0_fence_sz=", dom0_fence_sz_setup);
-
-/* Before using the bitmap to manage the allocation of GM space dynamically
- * (hence Dom0's aperture starts at 0 of GM space, we used static fixed
- * allocation and Dom0's aperture starts at 128MB of GM space.
- * If you want to switch to the old 128MB location anyway, enable this kernel
- * parameter.
- */
-static int dom0_aperture_starts_at_128MB;
-static int __init dom0_aperture_starts_at_128MB_setup(char *str)
-{
-	dom0_aperture_starts_at_128MB = 1;
-	return 1;
-}
-__setup("dom0_aperture_starts_at_128MB", dom0_aperture_starts_at_128MB_setup);
 
 static int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp)
 {
