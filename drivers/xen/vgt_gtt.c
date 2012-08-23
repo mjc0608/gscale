@@ -505,7 +505,8 @@ bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 			return false;
 		}
 
-		p->shadow_mpfn = g2m_pfn(vgt->vm_id, page_to_pfn(p->pte_page));
+		/* Shadow PTE is always managed in Dom0 */
+		p->shadow_mpfn = g2m_pfn(0, page_to_pfn(p->pte_page));
 		if (p->shadow_mpfn == INVALID_MFN) {
 			printk(KERN_ERR "Failed to get mpfn for shadow PTE!\n");
 			return false;
