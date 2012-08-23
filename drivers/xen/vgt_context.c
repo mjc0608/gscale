@@ -245,7 +245,6 @@ __setup("dom0_aperture_starts_at_128MB", dom0_aperture_starts_at_128MB_setup);
 
 int vgt_ctx_switch = 1;
 
-static struct vgt_device *vgt_dom1 = NULL;
 /*
  * Print debug registers for CP
  *
@@ -255,7 +254,9 @@ static struct vgt_device *vgt_dom1 = NULL;
 void show_debug(struct pgt_device *pdev, int ring_id)
 {
 	vgt_reg_t reg;
-	if (ring_id == 0 && vgt_dom1) {
+	struct vgt_device *vgt_dom1 = default_device.device[1];
+
+	if (vgt_dom1) {
 		vgt_show_irq_state(vgt_dom0);
 		vgt_show_irq_state(vgt_dom1);
 		printk("DERRMR: %x\n", VGT_MMIO_READ(pdev, 0x44050));
@@ -265,7 +266,7 @@ void show_debug(struct pgt_device *pdev, int ring_id)
 
 	printk("debug registers(ring-%d),reg maked with <*> may not apply to every ring):\n", ring_id);
 	printk("....EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_EIR));
-+	printk("....EMR: %x\n", VGT_MMIO_READ(pdev, _REG_RCS_EMR));
+	printk("....EMR: %x\n", VGT_MMIO_READ(pdev, _REG_RCS_EMR));
 	printk("....ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_ESR));
 	printk("....blit EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_EIR));
 	printk("....blit ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_ESR));
@@ -359,6 +360,15 @@ static void show_context(struct vgt_device *vgt, uint64_t context, bool clobber)
 }
 #endif
 
+/*
+ * TODO: the context layout could be different on generations.
+ * e.g. ring head/tail, ccid, etc. when PPGTT is enabled
+ */
+#define OFF_CACHE_MODE_0       0x4A
+#define OFF_CACHE_MODE_1       0x4B
+#define OFF_INSTPM             0x4D
+#define OFF_EXCC               0x4E
+#define OFF_MI_MODE            0x4F
 static void update_context(struct vgt_device *vgt, uint64_t context)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -367,43 +377,19 @@ static void update_context(struct vgt_device *vgt, uint64_t context)
 
 	ptr = (uint64_t)phys_aperture_vbase(pdev) + context;
 	vptr = (u32 *)ptr;
-	/*
-	 * FIXME: hardcode mode values from debug.
-	 */
-	if (vgt->vgt_id) {
-		*(vptr + 0x4A) = 0xFFFF6900;
-		*(vptr + 0x4D) = 0xFFFF0000;
-		*(vptr + 0x4F) = 0xFFFF4040;
-	} else {
-		*(vptr + 0x4A) = 0xFFFF6800;
-		*(vptr + 0x4D) = 0xFFFF0080;
-		*(vptr + 0x4F) = 0xFFFF0040;
-	}
-}
+#define UPDATE_FIELD(off, reg) \
+	*(vptr + off) = 0xFFFF0000 | (__sreg(vgt, reg) & 0xFFFF);
 
-/*
- * Global mode setting that vGT needs to ensure
- *
- * Now leave it empty
- */
-static void enforce_mode_setting(struct pgt_device *pdev)
-{
-#if 0
-	vgt_reg_t reg;
-	reg = VGT_MMIO_READ(pdev, _REG_MI_MODE);
-	if (!(reg & _REGBIT_MI_FLUSH)) {
-		printk("(vGT): force enabling MI_FLUSH\n");
-		reg |= (_REGBIT_MI_FLUSH << 16) | _REGBIT_MI_FLUSH;
-		VGT_MMIO_WRITE(pdev, _REG_MI_MODE, reg);
-		printk("(vGT): new value : %x\n", VGT_MMIO_READ(pdev, _REG_MI_MODE));
-	}
-#endif
+	UPDATE_FIELD(OFF_CACHE_MODE_0, _REG_CACHE_MODE_0);
+	UPDATE_FIELD(OFF_CACHE_MODE_1, _REG_CACHE_MODE_1);
+	UPDATE_FIELD(OFF_INSTPM, _REG_RCS_INSTPM);
+	UPDATE_FIELD(OFF_EXCC, _REG_RCS_EXCC);
+	UPDATE_FIELD(OFF_MI_MODE, _REG_RCS_MI_MODE);
 }
 
 struct vgt_device *next_display_owner;
 atomic_t display_switched = ATOMIC_INIT(0);
 struct vgt_device *vgt_dom0;
-struct vgt_device *vgt_super_owner;
 struct mmio_hash_table	*mtable[MHASH_SIZE];
 struct mmio_hash_table gtt_mmio_handler={
 	.read = gtt_mmio_read,
@@ -629,15 +615,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	if (!reg_addr_fix(pdev, reg))
 		return g_value;
 
-#if 0
-	if (reg == 0x7019C) {
-		printk("vGT: capture DSPA setting (%x)\n", g_value);
-		return g_value;
-	}
-#endif
-
-	if (reg >= _REG_FENCE_0_LOW && reg <= _REG_FENCE_15_HIGH)
-		ASSERT(0);
+	ASSERT((reg < _REG_FENCE_0_LOW) || (reg > _REG_FENCE_15_HIGH));
 
 	mask = pdev->vgt_addr_table[reg_addr_index(pdev, reg)];
 	dprintk("vGT: address fix g->h for reg (0x%lx) value (0x%x) mask (0x%x)\n", reg, g_value, mask);
@@ -657,49 +635,6 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	h_value = g2h_gm(vgt, g_value & mask);
 	dprintk("....(g)%x->(h)%x\n", g_value, (h_value & mask) | (g_value & ~mask));
 
-#ifdef DOM0_NONIDEN_DISPLAY_ONLY
-	/* a workaround to test display part, before command parser is ready */
-	if (reg == _REG_DSPASURF || reg == _REG_CURABASE) {
-		int g_index = GTT_INDEX(pdev, (g_value & mask));
-		int h_index = GTT_INDEX(pdev, h_value);
-		int i;
-
-		dprintk("index (%x)(%x), value (%x)(%x)\n", g_index, h_index,
-			vgt_read_gtt(pdev, g_index),
-			vgt_read_gtt(pdev, h_index));
-		dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
-		dprintk("content at 0x%x: %lx\n", g_value & mask, *(unsigned long *)((char *)phys_aperture_vbase(pdev) + (g_value & mask)));
-		dprintk("content at 0x%x: %lx\n", h_value & mask, *(unsigned long *)((char *)phys_aperture_vbase(pdev) + (h_value & mask)));
-		dprintk("DSPATILEOFF: %x, DSPLINOFF: %x, SIZE: %x\n",
-			VGT_MMIO_READ(pdev, _REG_DSPATILEOFF), VGT_MMIO_READ(pdev, _REG_DSPALINOFF),
-			VGT_MMIO_READ(pdev, 0x70190));
-		dprintk("_REG_DSPACNTR: %x, _REG_DSPASURFLIVE: %x\n",
-			VGT_MMIO_READ(pdev, _REG_DSPACNTR), VGT_MMIO_READ(pdev, _REG_DSPASURFLIVE));
-		/*
-		 * duplicate GTT entries to the same memory page
-		 * of course it may only work for display part, while 3D objects
-		 * are allocated dynamically in the middle
-		 *
-		 * now cover 16M
-		 */
-		for (i = 0; i < 4096 * 4; i++)
-			vgt_write_gtt(pdev, h_index - g_index + i, vgt_read_gtt(pdev, i));
-
-		dprintk("index (%x)(%x), value (%x)(%x)\n", g_index, h_index,
-			vgt_read_gtt(pdev, g_index),
-			vgt_read_gtt(pdev, h_index));
-		dprintk("DSPATILEOFF: %x, DSPLINOFF: %x, SIZE: %x\n",
-			VGT_MMIO_READ(pdev, _REG_DSPATILEOFF), VGT_MMIO_READ(pdev, _REG_DSPALINOFF),
-			VGT_MMIO_READ(pdev, 0x70190));
-		dprintk("DSPATILEOFF: %x, DSPLINOFF: %x\n",
-			VGT_MMIO_READ(pdev, _REG_DSPATILEOFF), VGT_MMIO_READ(pdev, _REG_DSPALINOFF));
-		dprintk("_REG_DSPACNTR: %x, _REG_DSPASURFLIVE: %x\n",
-			VGT_MMIO_READ(pdev, _REG_DSPACNTR), VGT_MMIO_READ(pdev, _REG_DSPASURFLIVE));
-		dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
-		dprintk("content at 0x%x: %lx\n", g_value & mask, *(unsigned long *)((char *)phys_aperture_vbase(pdev) + (g_value & mask)));
-		dprintk("content at 0x%x: %lx\n", h_value & mask, *(unsigned long *)((char *)phys_aperture_vbase(pdev) + (h_value & mask)));
-	}
-#endif
 	return (h_value & mask) | (g_value & ~mask);
 }
 
@@ -864,24 +799,6 @@ static unsigned long vgt_get_reg_64(struct vgt_device *vgt, unsigned int reg)
 		return __vreg64(vgt, reg);
 }
 
-static bool dom0 = true;
-static struct hrtimer vgt_timer;
-static enum hrtimer_restart vgt_timer_fn(struct hrtimer *data)
-{
-	if (dom0) {
-		VGT_MMIO_WRITE(vgt_dom0->pdev, _REG_DSPASURF, __sreg(vgt_dom0, _REG_DSPASURF));
-		printk("XXXX: switch to dom0 (%x)%x\n", VGT_MMIO_READ(vgt_dom0->pdev, _REG_DSPASURF), __sreg(vgt_dom0, _REG_DSPASURF));
-		dom0 = false;
-	} else {
-		VGT_MMIO_WRITE(vgt_dom0->pdev, _REG_DSPASURF, __sreg(vgt_dom1, _REG_DSPASURF));
-		//VGT_MMIO_WRITE(vgt_dom0->pdev, _REG_DSPASURF, 0x64000);
-		printk("XXXX: switch to dom1 (%x)%x\n", VGT_MMIO_READ(vgt_dom0->pdev, _REG_DSPASURF), __sreg(vgt_dom1, _REG_DSPASURF));
-		dom0 = true;
-	}
-	hrtimer_add_expires_ns(data, 5000000000);
-	return HRTIMER_RESTART;
-}
-
 static int display_pointer_id = 0;
 void vgt_set_display_pointer(int vm_id)
 {
@@ -920,28 +837,8 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 	__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
 	if (reg == _REG_DSPASURF)
 		dprintk("%s: =======: write vReg(%x), sReg(%x)\n", __func__, __vreg(vgt, reg), __sreg(vgt, reg));
-	//if (reg_hw_access(vgt, reg) || reg == _REG_DSPASURF || reg == _REG_CURABASE) {
-	if (reg_hw_access(vgt, reg)) {
-        //printk("vGT: hvm_render_owner = %d, hvm_dpy_owner = %d\n", hvm_render_owner, hvm_dpy_owner);
-        //printk("vGT: vgt_id = %d, vgt_dom1 = %p\n", vgt->vgt_id, vgt_dom1);
-		if (hvm_render_owner && !hvm_dpy_owner) {
-			if (vgt->vgt_id && !vgt_dom1) {
-				printk("XXXXXXXXX: start switch timer\n");
-				vgt_dom1 = vgt;
-				//hrtimer_start(&vgt_timer, ktime_add_ns(ktime_get(), 5000000000), HRTIMER_MODE_ABS);
-			}
-		}
-		if (vgt->vgt_id)
-			dprintk("XXXX(%d): write to reg (%x)\n", vgt->vgt_id, reg);
+	if (reg_hw_access(vgt, reg))
 		VGT_MMIO_WRITE(pdev, reg, __sreg(vgt, reg));
-#if 0
-		if (reg == _REG_DSPASURF && vgt->vgt_id != 0 ) {
-			memcpy(phys_aperture_vbase(pdev) + __sreg(vgt, reg),
-				phys_aperture_vbase(pdev) + __sreg(vgt, reg) + 0x8000000,
-				SIZE_1MB);
-		}
-#endif
-	}
 }
 
 static void vgt_update_reg_64(struct vgt_device *vgt, unsigned int reg)
@@ -1225,7 +1122,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		__sreg(vgt, offset) = (old_sreg & ~mask) | (__sreg(vgt, offset) & mask);
 		dprintk("new mode (%x): %x/%x, mask(%x)\n", offset,
 			__vreg(vgt, offset), __sreg(vgt, offset), vgt_mode_mask_regs[j]);
-		//enforce_mode_setting(vgt->pdev);
 		//show_mode_settings(vgt->pdev);
 	}
 
@@ -2967,13 +2863,11 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	if (vgt->vm_id) {
 		vgt_ops->boot_time = 0;
-		vgt_super_owner = NULL;
 
 		/* a special debug mode to give full access to hvm guest */
 		if (hvm_render_owner)
 			current_render_owner(pdev) = vgt;
 
-		//vgt_super_owner = vgt;
 		if (hvm_dpy_owner)
 			current_display_owner(pdev) = vgt;
 	}
@@ -2988,9 +2882,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt_init_aux_ch_vregs(&vgt->vgt_i2c_bus, vgt->state.vReg);
 	vgt_propagate_edid(vgt, -1);
 
-	/* HACK for debug purpose */
-	if (vgt->vgt_id == 1)
-		vgt_dom1 = vgt;
 	*ptr_vgt = vgt;
 	return 0;
 err:
@@ -3635,11 +3526,8 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 
 	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
-	vgt_super_owner = vgt_dom0;
 	dprintk("create dom0 instance succeeds\n");
 
-	/* FIXME: not sure why? update MI_MODE at this point has no effect! */
-	enforce_mode_setting(pdev);
 	show_mode_settings(pdev);
 
 	if (setup_gtt(pdev))
@@ -3666,9 +3554,6 @@ int vgt_initialize(struct pci_dev *dev)
 	}
 	pdev->p_thread = p_thread;
 	show_debug(pdev, 0);
-
-	hrtimer_init(&vgt_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
-        vgt_timer.function = vgt_timer_fn;
 
 	list_add(&pdev->list, &pgt_devices);
 

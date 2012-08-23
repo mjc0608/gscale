@@ -1324,7 +1324,6 @@ static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 		wake_up(&pdev->wq);
 }
 
-extern struct vgt_device *vgt_super_owner;
 /* check whether a reg access should happen on real hw */
 static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 {
@@ -1334,18 +1333,8 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 	if (reg_always_virt(pdev, reg))
 		return false;
 
-	/* special phase of super owner like boot-time */
-	if (vgt_super_owner == vgt)
+	if (vgt_ops->boot_time)
 		return true;
-
-	/*
-	 * if super owner is not dom0, it means that we want to
-	 * give exclusive permission to the super owner for the
-	 * test. In such case, always return false for other VMs
-	 * including dom0
-	 */
-	if (vgt_super_owner && vgt_super_owner != vgt_dom0)
-		return false;
 
 	/* normal phase of passthrough registers if vgt is the owner */
 	if (reg_pt(pdev, reg) && reg_is_owner(vgt, reg))
