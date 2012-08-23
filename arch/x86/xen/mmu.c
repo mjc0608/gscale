@@ -2663,6 +2663,7 @@ int xen_unmap_domain_mfn_range(struct vm_area_struct *vma,
 }
 EXPORT_SYMBOL_GPL(xen_unmap_domain_mfn_range);
 
+/* Note: here 'mfn' is actually gfn!!! */
 struct vm_struct * xen_remap_domain_mfn_range_in_kernel(unsigned long mfn,
 		int nr, unsigned domid)
 {

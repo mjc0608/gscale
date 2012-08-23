@@ -367,16 +367,9 @@ int vgt_unset_wp_page(struct vgt_device *vgt, unsigned long pfn)
  */
 struct vm_struct *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, unsigned long gaddr)
 {
-	unsigned long mfn;
 	struct vm_struct *area;
 
-	mfn = g2m_pfn(vgt->vm_id, (gaddr >> PAGE_SHIFT));
-	if (mfn == INVALID_MFN) {
-		printk(KERN_ERR "Try to get VM PTE page frame number failed!\n");
-		return NULL;
-	}
-
-	area = xen_remap_domain_mfn_range_in_kernel(mfn, 1, vgt->vm_id);
+	area = xen_remap_domain_mfn_range_in_kernel((gaddr >> PAGE_SHIFT), 1, vgt->vm_id);
 	return (area == NULL) ? NULL : area;
 }
 
