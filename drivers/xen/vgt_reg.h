@@ -1292,7 +1292,7 @@ static inline void vgt_set_addr_mask(struct pgt_device *pdev,
 	ASSERT(pdev->ai_index < VGT_ADDR_FIX_NUM - 1);
 	//ASSERT(!(pdev->reg_info[reg] & VGT_REG_OWNER));
 
-	pdev->vgt_addr_table[ai_index] = mask;
+	pdev->vgt_addr_table[pdev->ai_index] = mask;
 	reg_set_addr_fix(pdev, reg, pdev->ai_index);
 	pdev->ai_index++;
 }

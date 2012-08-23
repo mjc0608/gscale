@@ -243,7 +243,7 @@ static int __init dom0_aperture_starts_at_128MB_setup(char *str)
 }
 __setup("dom0_aperture_starts_at_128MB", dom0_aperture_starts_at_128MB_setup);
 
-static int vgt_ctx_switch = 1;
+int vgt_ctx_switch = 1;
 
 static struct vgt_device *vgt_dom1 = NULL;
 /*
@@ -639,7 +639,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	if (reg >= _REG_FENCE_0_LOW && reg <= _REG_FENCE_15_HIGH)
 		ASSERT(0);
 
-	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
+	mask = pdev->vgt_addr_table[reg_addr_index(pdev, reg)];
 	dprintk("vGT: address fix g->h for reg (0x%lx) value (0x%x) mask (0x%x)\n", reg, g_value, mask);
 	/*
 	 * NOTE: address ZERO is special, and sometimes the driver may hard
@@ -718,7 +718,7 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 		return h_value;
 
 	dprintk("vGT: address fix h->g for reg (%lx)(%x)\n", reg, h_value);
-	mask = vgt_addr_table[reg_addr_index(pdev, reg)];
+	mask = pdev->vgt_addr_table[reg_addr_index(pdev, reg)];
 
 	/*
 	 * it's possible the initial state may not contain a valid address
