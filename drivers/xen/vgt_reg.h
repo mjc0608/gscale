@@ -2451,4 +2451,8 @@ extern u64 mmio_rcnt;
 extern u64 mmio_wcnt;
 extern u64 mmio_wcycles;
 extern u64 mmio_rcycles;
+extern u64 ring_mmio_rcnt;
+extern u64 ring_mmio_wcnt;
+extern u64 ring_tail_mmio_wcnt;
+extern u64 ring_tail_mmio_wcycles;
 #endif	/* _VGT_REG_H_ */

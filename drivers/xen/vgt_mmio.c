@@ -313,11 +313,18 @@ bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
+u64 ring_mmio_rcnt=0;
+u64 ring_mmio_wcnt=0;
+u64 ring_tail_mmio_wcnt=0;
+u64 ring_tail_mmio_wcycles=0;
+
 bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ring_id, rel_off;
 	vgt_ringbuffer_t	*vring;
+
+	ring_mmio_rcnt++;
 
 	ASSERT(bytes <= 4 && !(off & (bytes - 1)));
 	//printk("vGT:ring_mmio_read (%x)\n", off);
@@ -345,7 +352,9 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	vgt_ringbuffer_t	*vring;
 	vgt_ringbuffer_t	*sring;
 	vgt_reg_t	oval;
+	cycles_t	t0, t1;
 
+	ring_mmio_wcnt++;
 	ASSERT(bytes <= 4);
 	dprintk("vGT:ring_mmio_write (0x%x) with val (0x%x)\n", off, *((u32 *)p_data));
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
@@ -360,9 +369,13 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 	switch (rel_off) {
 	case RB_OFFSET_TAIL:
+		t0 = get_cycles();
+		ring_tail_mmio_wcnt++;
 		sring->tail = vring->tail;
 		if ( !bypass_scan )
 			vgt_scan_vring(vgt, ring_id);
+		t1 = get_cycles();
+		ring_tail_mmio_wcycles += (t1-t0);
 		break;
 	case RB_OFFSET_HEAD:
 		//debug
