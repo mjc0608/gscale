@@ -75,7 +75,7 @@
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
 #include <xen/vgt.h>
-#include "vgt_reg.h"
+#include "vgt_drv.h"
 
 struct kobject *vgt_ctrl_kobj;
 struct kset *vgt_kset;

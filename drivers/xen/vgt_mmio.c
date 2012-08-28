@@ -80,7 +80,7 @@
 #include <xen/vgt.h>
 #include <xen/vgt-if.h>
 #include <xen/vgt-parser.h>
-#include "vgt_reg.h"
+#include "vgt_drv.h"
 
 static bool bypass_scan = true;
 static int __init bypass_scan_setup(char *str)

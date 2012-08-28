@@ -66,7 +66,7 @@
 #include <xen/events.h>
 #include <xen/vgt.h>
 #include <xen/interface/vcpu.h>
-#include "vgt_reg.h"
+#include "vgt_drv.h"
 
 /*
  * Major tasks of this file:

@@ -77,7 +77,7 @@
 
 #include <xen/vgt.h>
 #include <xen/vgt-if.h>
-#include "vgt_reg.h"
+#include "vgt_drv.h"
 u64 gtt_mmio_rcnt=0;
 u64 gtt_mmio_wcnt=0;
 u64 gtt_mmio_wcycles=0;

@@ -60,7 +60,7 @@
 #include <linux/module.h>
 #include <linux/bitops.h>
 #include <xen/vgt.h>
-#include "vgt_reg.h"
+#include "vgt_drv.h"
 
 /*
  * GT related irq info

@@ -74,7 +74,7 @@
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
 #include <xen/vgt.h>
-#include "vgt_reg.h"
+#include "vgt_drv.h"
 #include <linux/debugfs.h>
 #include <linux/module.h>
 

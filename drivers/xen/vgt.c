@@ -61,7 +61,7 @@
 #include <linux/kthread.h>
 #include <linux/pci.h>
 #include <xen/vgt.h>
-#include "vgt_reg.h"
+#include "vgt_drv.h"
 #include <xen/vgt-parser.h>
 
 MODULE_AUTHOR("Intel Corporation");

@@ -39,7 +39,7 @@
 #include <asm/cacheflush.h>
 #include <xen/vgt.h>
 #include <xen/vgt-parser.h>
-#include "vgt_reg.h"
+#include "vgt_drv.h"
 
 #undef VGT_DEBUG
 
