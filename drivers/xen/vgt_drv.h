@@ -67,7 +67,6 @@
 #include "vgt_edid.h"
 #include "vgt_reg.h"
 
-#define SANDY_BRIDGE
 struct pgt_device;
 extern struct vgt_device *dom0_vgt;
 extern void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes);
@@ -113,14 +112,10 @@ typedef struct {
 #define VGT_MAX_VMS			3
 #define VGT_RSVD_APERTURE_SZ		(64*SIZE_1MB)	/* reserve 64MB for vGT itself */
 
-#ifdef SANDY_BRIDGE
 #define VGT_MAX_GM_SIZE			(2*SIZE_1MB*SIZE_1KB)
 #define VGT_GM_BITMAP_BITS		(VGT_MAX_GM_SIZE/SIZE_1MB)
 #define VGT_MAX_NUM_FENCES		16
 #define VGT_FENCE_BITMAP_BITS	VGT_MAX_NUM_FENCES
-#else
-#error VGT_MAX_NUM_FENCES and VGT_MAX_GM_SIZE: not defined!
-#endif
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
 #define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 256 KB for now */
