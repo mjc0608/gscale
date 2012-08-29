@@ -652,7 +652,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 
 	ASSERT((reg < _REG_FENCE_0_LOW) || (reg > _REG_FENCE_15_HIGH));
 
-	mask = pdev->vgt_addr_table[reg_addr_index(pdev, reg)];
+	mask = reg_aux_addr_mask(pdev, reg);
 	dprintk("vGT: address fix g->h for reg (0x%lx) value (0x%x) mask (0x%x)\n", reg, g_value, mask);
 	/*
 	 * NOTE: address ZERO is special, and sometimes the driver may hard
@@ -688,7 +688,7 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 		return h_value;
 
 	dprintk("vGT: address fix h->g for reg (%lx)(%x)\n", reg, h_value);
-	mask = pdev->vgt_addr_table[reg_addr_index(pdev, reg)];
+	mask = reg_aux_addr_mask(pdev, reg);
 
 	/*
 	 * it's possible the initial state may not contain a valid address
@@ -1058,7 +1058,6 @@ vgt_reg_t vgt_mode_ctl_regs[] = {
 	_REG_CACHE_MODE_1,
 };
 
-vgt_reg_t vgt_mode_mask_regs[16] = {0};
 
 /* FIXME: need a better way to handle this generation difference */
 vgt_reg_t vgt_gen7_mode_ctl_regs[] = {
@@ -1141,24 +1140,20 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	/* higher 16bits of mode ctl regs are mask bits for change */
 	if (offset < VGT_MMIO_REG_NUM && reg_mode_ctl(pdev, offset)) {
 		u32 mask = __vreg(vgt, offset) >> 16;
-		int j;
 
-		for (j = 0; j < ARRAY_NUM(vgt_mode_ctl_regs); j++) {
-			if (vgt_mode_ctl_regs[j] == offset)
-				break;
-		}
 		dprintk("old mode (%x): %x/%x, mask(%x)\n", offset,
-			__vreg(vgt, offset), __sreg(vgt, offset), vgt_mode_mask_regs[j]);
+			__vreg(vgt, offset), __sreg(vgt, offset),
+			reg_aux_mode_mask(pdev, offset));
 		/*
 		 * share the global mask among VMs, since having one VM touch a bit
 		 * not changed by another VM should be still saved/restored later
 		 */
-		if (j != ARRAY_NUM(vgt_mode_ctl_regs))
-			vgt_mode_mask_regs[j] |= mask << 16;
+		reg_aux_mode_mask(pdev, offset) |= mask << 16;
 		__vreg(vgt, offset) = (old_vreg & ~mask) | (__vreg(vgt, offset) & mask);
 		__sreg(vgt, offset) = (old_sreg & ~mask) | (__sreg(vgt, offset) & mask);
 		dprintk("new mode (%x): %x/%x, mask(%x)\n", offset,
-			__vreg(vgt, offset), __sreg(vgt, offset), vgt_mode_mask_regs[j]);
+			__vreg(vgt, offset), __sreg(vgt, offset),
+			reg_aux_mode_mask(pdev, offset));
 		//show_mode_settings(vgt->pdev);
 	}
 
@@ -2115,7 +2110,6 @@ static void vgt_setup_render_regs(struct pgt_device *pdev)
 
 	for (i = 0; i < ARRAY_NUM(vgt_render_regs); i++) {
 		reg_set_owner(pdev, vgt_render_regs[i], VGT_OT_RENDER);
-		reg_set_pt(pdev, vgt_render_regs[i]);
 	}
 
 	/*
@@ -2125,19 +2119,16 @@ static void vgt_setup_render_regs(struct pgt_device *pdev)
 	/* RCS */
 	for (i = 0x2000; i <= 0x2FFF; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_RENDER);
-		reg_set_pt(pdev, i);
 	}
 
 	/* VCS */
 	for (i = 0x12000; i <= 0x12FFF; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_RENDER);
-		reg_set_pt(pdev, i);
 	}
 
 	/* BCS */
 	for (i = 0x22000; i <= 0x22FFF; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_RENDER);
-		reg_set_pt(pdev, i);
 	}
 
 	if (pdev->is_ivybridge) {
@@ -2218,60 +2209,49 @@ static void vgt_setup_display_regs(struct pgt_device *pdev)
 
 	for (i = 0; i < ARRAY_NUM(vgt_display_regs); i++) {
 		reg_set_owner(pdev, vgt_display_regs[i], VGT_OT_DISPLAY);
-		reg_set_pt(pdev, vgt_display_regs[i]);
 	}
 
 	/* display pallete registers */
 	for (i = 0x4A000; i <= 0x4CFFF; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-		reg_set_pt(pdev, i);
 	}
 
 	/* PIPE control */
 	for (i = 0x60000; i <= 0x6FFFF; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-		reg_set_pt(pdev, i);
 	}
 
 	/* Plane and cursor control */
 	for (i = 0x70000; i <= 0x7FFFF; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-		reg_set_pt(pdev, i);
 	}
 
 	/* ============================== */
 	/* !!!below need double confirm in the future */
 	reg_set_owner(pdev, _REG_DISP_ARB_CTL, VGT_OT_DISPLAY);
-	reg_set_pt(pdev, _REG_DISP_ARB_CTL);
 
 	reg_set_owner(pdev, _REG_DISP_ARB_CTL2, VGT_OT_DISPLAY);
-	reg_set_pt(pdev, _REG_DISP_ARB_CTL2);
 
 	/* display watermark */
 	for (i = 0x45100; i <= 0x45130; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-		reg_set_pt(pdev, i);
 	}
 
 	/* backlight */
 	for (i = 0x48250; i <= 0x48270; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-		reg_set_pt(pdev, i);
 	}
 
 	/* panel power sequence */
 	for (i = 0xc7200; i <= 0xc7210; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-		reg_set_pt(pdev, i);
 	}
 
 	reg_set_owner(pdev, 0xe1180, VGT_OT_DISPLAY); /* PCH_LVDS */
-	reg_set_pt(pdev, 0xe1180);
 
 	/* PCH shared functions (gmbus, gpio, clock, power seq, backlight) */
 	for (i = 0xc0000; i <= 0xc7210; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-		reg_set_pt(pdev, i);
 	}
 
 	/* gmbus are fully virtualized */
@@ -2295,19 +2275,16 @@ static void vgt_setup_display_regs(struct pgt_device *pdev)
 	/* PCH transcoder and port control */
 	for (i = 0xe0000; i <= 0xe4fff; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-		reg_set_pt(pdev, i);
 	}
 
 	/* PCH transcoder and FDI control */
 	for (i = 0xf0000; i <= 0xf2fff; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-		reg_set_pt(pdev, i);
 	}
 
 	/* FDI PLL control */
 	for (i = 0xee000; i <= 0xee007; i += REG_SIZE) {
 		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-		reg_set_pt(pdev, i);
 	}
 }
 
@@ -2371,7 +2348,7 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 {
 	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
 	int num = ARRAY_NUM(vgt_render_regs);
-	int i, j;
+	int i;
 	struct pgt_device *pdev = vgt->pdev;
 
 	sreg = vgt->state.sReg;
@@ -2380,16 +2357,8 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 	for (i=0; i<num; i++) {
 		int reg = vgt_render_regs[i];
 		vgt_reg_t val = __sreg(vgt, reg);
-		if (reg_mode_ctl(pdev, reg)) {
-			for (j = 0; j < ARRAY_NUM(vgt_mode_ctl_regs); j++) {
-				if (vgt_mode_ctl_regs[j] == reg) {
-					val |= vgt_mode_mask_regs[j];
-					break;
-				}
-			}
-			if (j == ARRAY_NUM(vgt_mode_ctl_regs))
-				val |= 0xFFFF0000;
-		}
+		if (reg_mode_ctl(pdev, reg) && reg_aux_mode_mask(pdev, reg))
+			val |= reg_aux_mode_mask(pdev, reg);
 
 		/*
 		 * FIXME: there's regs only with some bits updated by HW. Need
@@ -3252,45 +3221,45 @@ dprintk("VGT: Initial_phys_states\n");
  */
 static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
 {
-	vgt_set_addr_mask(pdev, _REG_RCS_START, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_BCS_START, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_VCS_START, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_RCS_START, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_BCS_START, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_VCS_START, 0xFFFFF000);
 
 	/*
 	 * FIXME: a separate handler maybe required, since a blind address
 	 * translation when valid bit is cleared is problematic
 	 */
-	vgt_set_addr_mask(pdev, _REG_RCS_BB_ADDR, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_VCS_BB_ADDR, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_BCS_BB_ADDR, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_RCS_BB_ADDR, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_VCS_BB_ADDR, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_BCS_BB_ADDR, 0xFFFFF000);
 
-	vgt_set_addr_mask(pdev, _REG_RCS_HWS_PGA, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_VCS_HWS_PGA, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_BCS_HWS_PGA, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_RCS_HWS_PGA, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_VCS_HWS_PGA, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_BCS_HWS_PGA, 0xFFFFF000);
 
-	vgt_set_addr_mask(pdev, _REG_RCS_BB_PREEMPT_ADDR, 0xFFFFF000);
-	//vgt_set_addr_mask(pdev, _REG_RCS_BB_ADDR_DIFF, 0xFFFFF000);
-	//vgt_set_addr_mask(pdev, _REG_RCS_BB_OFFSET, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_CCID, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_RCS_BB_PREEMPT_ADDR, 0xFFFFF000);
+	//reg_set_addr_fix(pdev, _REG_RCS_BB_ADDR_DIFF, 0xFFFFF000);
+	//reg_set_addr_fix(pdev, _REG_RCS_BB_OFFSET, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_CCID, 0xFFFFF000);
 
-	vgt_set_addr_mask(pdev, _REG_RCS_FBC_RT_BASE_ADDR, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_RCS_FBC_RT_BASE_ADDR, 0xFFFFF000);
 
 	if (pdev->enable_ppgtt) {
-		vgt_set_addr_mask(pdev, _REG_RCS_PP_DIR_BASE_IVB, 0xFFFF0000);
-		vgt_set_addr_mask(pdev, _REG_VCS_PP_DIR_BASE, 0xFFFF0000);
-		vgt_set_addr_mask(pdev, _REG_BCS_PP_DIR_BASE, 0xFFFF0000);
+		reg_set_addr_fix(pdev, _REG_RCS_PP_DIR_BASE_IVB, 0xFFFF0000);
+		reg_set_addr_fix(pdev, _REG_VCS_PP_DIR_BASE, 0xFFFF0000);
+		reg_set_addr_fix(pdev, _REG_BCS_PP_DIR_BASE, 0xFFFF0000);
 	}
 
-	vgt_set_addr_mask(pdev, _REG_CURABASE, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_CURBBASE, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_DSPASURF, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_DSPASURFLIVE, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_DSPBSURF, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_DSPBSURFLIVE, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_DVSASURF, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_DVSASURFLIVE, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_DVSBSURF, 0xFFFFF000);
-	vgt_set_addr_mask(pdev, _REG_DVSBSURFLIVE, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_CURABASE, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_CURBBASE, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_DSPASURF, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_DSPASURFLIVE, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_DSPBSURF, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_DSPBSURFLIVE, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_DVSASURF, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_DVSASURFLIVE, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_DVSBSURF, 0xFFFFF000);
+	reg_set_addr_fix(pdev, _REG_DVSBSURFLIVE, 0xFFFFF000);
 
 	/* ===== things to be further studied ====== */
 	/* PP_PFD: 32 PPGTT page fault data registers */

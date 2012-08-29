@@ -378,8 +378,15 @@ enum vgt_owner_type {
 
 /* owner type of the reg, up to 16 owner type */
 #define VGT_REG_OWNER		(0xF)
-/* reg access is propogated to sReg and pReg */
-#define VGT_REG_PT		(1 << 4)
+/*
+ * TODO:
+ * Allows pReg access from any VM but w/o save/restore,
+ * since we don't know the actual bit detail or virtualization
+ * policy yet. the examples include many workaround registers.
+ * regs marked with this flag should be cleared before final
+ * release, since this way is unsafe.
+ */
+#define VGT_REG_WORKAROUND	(1 << 4)
 /* reg contains address, requiring fix */
 #define VGT_REG_ADDR_FIX	(1 << 5)
 /* HW updated regs */
@@ -388,13 +395,23 @@ enum vgt_owner_type {
 #define VGT_REG_ALWAYS_VIRT	(1 << 7)
 /* Mode ctl registers with high 16 bits as the mask bits */
 #define VGT_REG_MODE_CTL	(1 << 8)
-/* index into the address-fix table. Maximum 256 entries now */
+/* VMs have different settings on this reg */
+#define VGT_REG_NEED_SWITCH	(1 << 9)
+/* index into another auxillary table. Maximum 256 entries now */
 #define VGT_REG_INDEX_SHIFT	16
 #define VGT_REG_INDEX_MASK	(0xFFFF << VGT_REG_INDEX_SHIFT)
 typedef u32 reg_info_t;
 
-#define VGT_ADDR_FIX_NUM	256
-typedef vgt_reg_t vgt_addr_mask_t;
+#define VGT_AUX_TABLE_NUM	256
+/* suppose a reg won't set both bits */
+typedef union {
+	struct {
+		vgt_reg_t mask;
+	} mode_ctl;
+	struct {
+		vgt_reg_t mask;
+	} addr_fix;
+} vgt_aux_entry_t;
 
 struct vgt_irq_host_state;
 #define VGT_VBIOS_PAGES 16
@@ -540,8 +557,8 @@ struct pgt_device {
 
 	struct vgt_device_funcs dev_func;
 
-	vgt_addr_mask_t vgt_addr_table[VGT_ADDR_FIX_NUM];
-	int ai_index;
+	vgt_aux_entry_t vgt_aux_table[VGT_AUX_TABLE_NUM];
+	int at_index;
 };
 
 extern struct list_head pgt_devices;
@@ -573,31 +590,23 @@ extern struct list_head pgt_devices;
 #define vgt_ctx_check(d)		(d->ctx_check)
 #define vgt_ctx_switch(d)		(d->ctx_switch)
 
-#define reg_pt(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_PT)
-#define reg_virt(pdev, reg)		(!(reg_pt(pdev, reg)))
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
 #define reg_hw_update(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_UPDATE)
 #define reg_always_virt(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ALWAYS_VIRT)
 #define reg_mode_ctl(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_MODE_CTL)
-#define reg_addr_index(pdev, reg)	\
+#define reg_workaround(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_WORKAROUND)
+#define reg_need_switch(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_NEED_SWITCH)
+#define reg_aux_index(pdev, reg)	\
 	((pdev->reg_info[REG_INDEX(reg)] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
-
-static inline void reg_set_pt(struct pgt_device *pdev, vgt_reg_t reg)
-{
-	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_PT;
-}
+#define reg_has_aux_info(pdev, reg)	(reg_mode_ctl(pdev, reg) | reg_addr_fix(pdev, reg))
+#define reg_aux_mode_mask(pdev, reg)	\
+	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].mode_ctl.mask)
+#define reg_aux_addr_mask(pdev, index)	\
+	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].addr_fix.mask)
 
 static inline void reg_set_hw_update(struct pgt_device *pdev, vgt_reg_t reg)
 {
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_HW_UPDATE;
-}
-
-static inline void reg_set_addr_fix(struct pgt_device *pdev,
-	vgt_reg_t reg, int index)
-{
-	//ASSERT(reg_pt(pdev, reg));
-	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ADDR_FIX |
-		(index << VGT_REG_INDEX_SHIFT);
 }
 
 static inline void reg_set_always_virt(struct pgt_device *pdev, vgt_reg_t reg)
@@ -605,21 +614,29 @@ static inline void reg_set_always_virt(struct pgt_device *pdev, vgt_reg_t reg)
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ALWAYS_VIRT;
 }
 
-static inline void reg_set_mode_ctl(struct pgt_device *pdev, vgt_reg_t reg)
+/* mask bits for addr fix */
+static inline void reg_set_addr_fix(struct pgt_device *pdev,
+	vgt_reg_t reg, vgt_reg_t mask)
 {
-	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_MODE_CTL;
+	ASSERT(!reg_has_aux_info(pdev, reg));
+	ASSERT(pdev->at_index <= VGT_AUX_TABLE_NUM - 1);
+
+	pdev->vgt_aux_table[pdev->at_index].addr_fix.mask = mask;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ADDR_FIX |
+		(pdev->at_index << VGT_REG_INDEX_SHIFT);
+	pdev->at_index++;
 }
 
-/* mask bits for addr fix */
-static inline void vgt_set_addr_mask(struct pgt_device *pdev,
-	vgt_reg_t reg, vgt_addr_mask_t mask)
+/* mask bits for mode mask */
+static inline void reg_set_mode_ctl(struct pgt_device *pdev,
+	vgt_reg_t reg)
 {
-	ASSERT(pdev->ai_index < VGT_ADDR_FIX_NUM - 1);
-	//ASSERT(!(pdev->reg_info[reg] & VGT_REG_OWNER));
+	ASSERT(!reg_has_aux_info(pdev, reg));
+	ASSERT(pdev->at_index <= VGT_AUX_TABLE_NUM - 1);
 
-	pdev->vgt_addr_table[pdev->ai_index] = mask;
-	reg_set_addr_fix(pdev, reg, pdev->ai_index);
-	pdev->ai_index++;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_MODE_CTL |
+		(pdev->at_index << VGT_REG_INDEX_SHIFT);
+	pdev->at_index++;
 }
 
 /* if the type is invalid, we assume dom0 always has the permission */
@@ -666,7 +683,7 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 		return vgt->vgt_id ? true : false;
 
 	/* normal phase of passthrough registers if vgt is the owner */
-	if (reg_pt(pdev, reg) && reg_is_owner(vgt, reg))
+	if (reg_is_owner(vgt, reg))
 		return true;
 
 	/* or else by default no hw access */
