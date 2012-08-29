@@ -595,22 +595,6 @@ static void vgt_snb_irq_init(struct pgt_device *dev)
 #endif
 
 	/* Install vreg handlers */
-	printk("vGT: Installing handlers for interrupt control registers...\n");
-	vgt_register_mmio_write_virt(dev, _REG_DEIMR, vgt_reg_imr_handler);
-	vgt_register_mmio_write_virt(dev, _REG_DEIER, vgt_reg_ier_handler);
-	vgt_register_mmio_write_virt(dev, _REG_DEIIR, vgt_reg_iir_handler);
-
-	vgt_register_mmio_write_virt(dev, _REG_PMIMR, vgt_reg_imr_handler);
-	vgt_register_mmio_write_virt(dev, _REG_PMIER, vgt_reg_ier_handler);
-	vgt_register_mmio_write_virt(dev, _REG_PMIIR, vgt_reg_iir_handler);
-
-	vgt_register_mmio_write_virt(dev, _REG_GTIMR, vgt_reg_imr_handler);
-	vgt_register_mmio_write_virt(dev, _REG_GTIER, vgt_reg_ier_handler);
-	vgt_register_mmio_write_virt(dev, _REG_GTIIR, vgt_reg_iir_handler);
-
-	vgt_register_mmio_write_virt(dev, _REG_SDEIMR, vgt_reg_imr_handler);
-	vgt_register_mmio_write_virt(dev, _REG_SDEIER, vgt_reg_ier_handler);
-	vgt_register_mmio_write_virt(dev, _REG_SDEIIR, vgt_reg_iir_handler);
 #if 0
 	vgt_register_mmio_simple(_REG_RCS_WATCHDOG_CTL, vgt_reg_watchdog_handler);
 	vgt_register_mmio_simple(_REG_RCS_WATCHDOG_THRSH, vgt_reg_watchdog_handler);

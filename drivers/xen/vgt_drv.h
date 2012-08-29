@@ -269,26 +269,6 @@ extern bool vgt_register_mmio_handler(int start, int bytes,
 
 extern bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 		struct vgt_device *next_vgt);
-static inline bool vgt_register_mmio_single(int reg,
-	vgt_mmio_read read, vgt_mmio_write write)
-{
-	return vgt_register_mmio_handler(reg, REG_SIZE,
-			read, write);
-}
-
-static inline bool vgt_register_mmio_write(int reg,
-	vgt_mmio_write write)
-{
-	return vgt_register_mmio_single(reg, NULL, write);
-}
-
-static inline bool vgt_register_mmio_read(int reg,
-	vgt_mmio_read read)
-{
-	return vgt_register_mmio_single(reg, read, NULL);
-}
-
-extern bool vgt_initialize_mmio_hooks(struct pgt_device *);
 extern int vgt_hvm_info_init(struct vgt_device *vgt);
 extern int vgt_hvm_io_init(struct vgt_device *vgt);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
@@ -397,6 +377,10 @@ enum vgt_owner_type {
 #define VGT_REG_MODE_CTL	(1 << 8)
 /* VMs have different settings on this reg */
 #define VGT_REG_NEED_SWITCH	(1 << 9)
+/* This reg has been tracked in vgt_base_reg_info */
+#define VGT_REG_TRACKED		(1 << 10)
+/* This reg has been accessed by a VM */
+#define VGT_REG_ACCESSED	(1 << 11)
 /* index into another auxillary table. Maximum 256 entries now */
 #define VGT_REG_INDEX_SHIFT	16
 #define VGT_REG_INDEX_MASK	(0xFFFF << VGT_REG_INDEX_SHIFT)
@@ -596,6 +580,8 @@ extern struct list_head pgt_devices;
 #define reg_mode_ctl(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_MODE_CTL)
 #define reg_workaround(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_WORKAROUND)
 #define reg_need_switch(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_NEED_SWITCH)
+#define reg_is_tracked(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_TRACKED)
+#define reg_is_accessed(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ACCESSED)
 #define reg_aux_index(pdev, reg)	\
 	((pdev->reg_info[REG_INDEX(reg)] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
 #define reg_has_aux_info(pdev, reg)	(reg_mode_ctl(pdev, reg) | reg_addr_fix(pdev, reg))
@@ -606,11 +592,13 @@ extern struct list_head pgt_devices;
 
 static inline void reg_set_hw_update(struct pgt_device *pdev, vgt_reg_t reg)
 {
+	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_HW_UPDATE;
 }
 
 static inline void reg_set_always_virt(struct pgt_device *pdev, vgt_reg_t reg)
 {
+	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ALWAYS_VIRT;
 }
 
@@ -620,6 +608,7 @@ static inline void reg_set_addr_fix(struct pgt_device *pdev,
 {
 	ASSERT(!reg_has_aux_info(pdev, reg));
 	ASSERT(pdev->at_index <= VGT_AUX_TABLE_NUM - 1);
+	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
 
 	pdev->vgt_aux_table[pdev->at_index].addr_fix.mask = mask;
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ADDR_FIX |
@@ -633,6 +622,7 @@ static inline void reg_set_mode_ctl(struct pgt_device *pdev,
 {
 	ASSERT(!reg_has_aux_info(pdev, reg));
 	ASSERT(pdev->at_index <= VGT_AUX_TABLE_NUM - 1);
+	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
 
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_MODE_CTL |
 		(pdev->at_index << VGT_REG_INDEX_SHIFT);
@@ -651,7 +641,36 @@ static inline bool reg_is_owner(struct vgt_device *vgt, vgt_reg_t reg)
 static inline void reg_set_owner(struct pgt_device *pdev,
 	vgt_reg_t reg, enum vgt_owner_type type)
 {
+	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
 	pdev->reg_info[REG_INDEX(reg)] |= type & VGT_REG_OWNER;
+}
+
+static inline void reg_set_workaround(struct pgt_device *pdev,
+	vgt_reg_t reg)
+{
+	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_WORKAROUND;
+}
+
+static inline void reg_set_tracked(struct pgt_device *pdev,
+	vgt_reg_t reg)
+{
+	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_TRACKED;
+}
+
+static inline void reg_set_accessed(struct pgt_device *pdev,
+	vgt_reg_t reg)
+{
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ACCESSED;
+}
+
+static inline void reg_update_handlers(struct pgt_device *pdev,
+	vgt_reg_t reg, int size, vgt_mmio_read read, vgt_mmio_write write)
+{
+	ASSERT_NUM(reg_is_tracked(pdev, reg), reg);
+	/* TODO search attr table to update fields there */
+	vgt_register_mmio_handler(reg, size, read, write);
 }
 
 /* request types to wake up main thread */
@@ -675,12 +694,17 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 	if (reg_always_virt(pdev, reg))
 		return false;
 
+	/* at boot time dom0 is allowed to access all regs */
 	if (vgt_ops->boot_time)
 		return true;
 
 	/* super owner give full access to HVM instead of dom0 */
 	if (hvm_super_owner)
 		return vgt->vgt_id ? true : false;
+
+	/* allows access from any VM. dangerous!!! */
+	if (reg_workaround(pdev, reg))
+		return true;
 
 	/* normal phase of passthrough registers if vgt is the owner */
 	if (reg_is_owner(vgt, reg))
@@ -690,8 +714,141 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 	return false;
 }
 
+#define VGT_DEV_SNB	(1 << 0)
+#define VGT_DEV_IVB	(1 << 1)
+#define VGT_DEV_HSW	(1 << 2)
+#define VGT_DEV_ALL	(VGT_DEV_SNB | VGT_DEV_IVB | VGT_DEV_HSW)
+
+typedef struct {
+	u32			reg;
+	int			size;
+	enum vgt_owner_type	owner;
+	int			device;
+	bool			workaround;
+	bool			addr_fix;
+	bool			mode_ctl;
+	bool			always_virt;
+	bool			hw_update;
+	vgt_reg_t		addr_mask;
+	vgt_mmio_read		read;
+	vgt_mmio_write		write;
+} reg_attr_t;
+
+static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *attr)
+{
+	if (pdev->is_sandybridge)
+		return attr->device & VGT_DEV_SNB;
+	if (pdev->is_ivybridge)
+		return attr->device & VGT_DEV_IVB;
+	if (pdev->is_haswell)
+		return attr->device & VGT_DEV_HSW;
+
+	return false;
+}
+
+#define _REG_MMIO(_reg, _size, _owner, _device, _read, _write)	\
+	{							\
+		.reg = _reg,					\
+		.size = _size,					\
+		.owner = _owner,				\
+		.device = _device,				\
+		.read = _read,					\
+		.write = _write,				\
+	}
+
+#define _REG_RDR(_reg, _size, _read, _write)	\
+	_REG_MMIO(_reg, _size, VGT_OT_RENDER, VGT_DEV_ALL, _read, _write)
+
+#define _REG_DPY(_reg, _size, _read, _write)	\
+	_REG_MMIO(_reg, _size, VGT_OT_DISPLAY, VGT_DEV_ALL, _read, _write)
+
+#define _REG_PM(_reg, _size, _read, _write)	\
+	_REG_MMIO(_reg, _size, VGT_OT_PM, VGT_DEV_ALL, _read, _write)
+
+#define _REG_MGMT(_reg, _size, _read, _write)	\
+	_REG_MMIO(_reg, _size, VGT_OT_MGMT, VGT_DEV_ALL, _read, _write)
+
+#define _REG_VIRT(_reg, _size, _read, _write)	\
+	_REG_MMIO(_reg, _size, VGT_OT_INVALID, VGT_DEV_ALL, _read, _write)
+
+#define _REG_WA(_reg, _size, _device, _mode_ctl, _read, _write)	\
+	{							\
+		.reg = _reg,					\
+		.size = _size,					\
+		.owner = VGT_OT_INVALID,			\
+		.device = _device,				\
+		.workaround = true,				\
+		.mode_ctl = _mode_ctl,				\
+		.read = _read,					\
+		.write = _write,				\
+	}
+
+#define _REG_MODE(_reg, _size, _owner, _device, _read, _write)	\
+	{							\
+		.reg = _reg,					\
+		.size = _size,					\
+		.owner = _owner,				\
+		.device = _device,				\
+		.mode_ctl = true,				\
+		.read = _read,					\
+		.write = _write,				\
+	}
+
+#define _REG_ALWAYS_VIRT(_reg, _size, _read, _write)		\
+	{							\
+		.reg = _reg,					\
+		.size = _size,					\
+		.owner = VGT_OT_INVALID,			\
+		.device = VGT_DEV_ALL,				\
+		.always_virt = true,				\
+		.read = _read,					\
+		.write = _write,				\
+	}
+
+#define _REG_ADDR_FIX(_reg, _size, _owner, _mask, _read, _write)\
+	{							\
+		.reg = _reg,					\
+		.size = _size,					\
+		.owner = _owner,				\
+		.device = VGT_DEV_ALL,				\
+		.addr_fix = true,				\
+		.addr_mask = _mask,				\
+		.read = _read,					\
+		.write = _write,				\
+	}
+
+#define _REG_HW_UPDATE(_reg, _size, _owner, _read, _write)	\
+	{							\
+		.reg = _reg,					\
+		.size = _size,					\
+		.owner = _owner,				\
+		.device = VGT_DEV_ALL,				\
+		.hw_update = true,				\
+		.read = _read,					\
+		.write = _write,				\
+	}
+
+#define _REG_FULL(_reg, _size, _owner, _device, _wa, _addr_fix,	\
+		_mode_ctl, _always_virt, _hw_update, _mask,	\
+		_read, _write)					\
+	{							\
+		.reg = _reg,					\
+		.size = _size,					\
+		.owner = _owner,				\
+		.device = _device, 				\
+		.workaround = _wa,				\
+		.addr_fix = _addr_fix,				\
+		.mode_ctl = _mode_ctl,				\
+		.always_virt = _always_virt,			\
+		.hw_update = _hw_update,			\
+		.addr_mask = _mask,				\
+		.read = _read,					\
+		.write = _write,				\
+	}
 extern int vgt_ctx_switch;
 extern void vgt_toggle_ctx_switch(bool enable);
+extern void vgt_setup_reg_info(struct pgt_device *pdev);
+extern bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev);
 /* definitions for physical aperture/GM space */
 #define phys_aperture_sz(pdev)		(pdev->bar_size[1])
 #define phys_aperture_pages(pdev)	(phys_aperture_sz(pdev) >> GTT_PAGE_SHIFT)
@@ -1104,22 +1261,6 @@ static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 //	printk("vgt_write_gtt: index=0x%x, gtt_addr=%lx\n", index, GTT_ADDR(pdev, index));
 	VGT_MMIO_WRITE(pdev, GTT_MMIO_OFFSET + index*GTT_ENTRY_SIZE , val);
 	//writel(val, GTT_VADDR(pdev, index));
-}
-
-static inline bool vgt_register_mmio_write_virt(struct pgt_device *pdev,
-	int reg, vgt_mmio_write write)
-{
-	/* add virt policy to let common read handler to emulate read */
-	reg_set_always_virt(pdev, reg);
-	return vgt_register_mmio_write(reg, write);
-}
-
-static inline bool vgt_register_mmio_read_virt(struct pgt_device *pdev,
-	int reg, vgt_mmio_read read)
-{
-	/* add virt policy to let common write handler to emulate write */
-	reg_set_always_virt(pdev, reg);
-	return vgt_register_mmio_read(reg, read);
 }
 
 static inline void vgt_pci_bar_write_32(struct vgt_device *vgt, uint32_t bar_offset, uint32_t val)

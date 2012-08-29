@@ -1021,13 +1021,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 		default_mmio_read(vgt, offset, p_data, bytes);
 	}
 
-#if 0
-	if (vgt->vm_id) {
-		if (VGT_MMIO_READ(pdev, offset) != *(vgt_reg_t *)p_data)
-			printk("vGT: read reg(%x), p(%x), v(%x)\n",
-				offset, VGT_MMIO_READ(pdev, offset), *(vgt_reg_t *)p_data);
-	}
-#endif
+	reg_set_accessed(pdev, offset);
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
@@ -1160,7 +1154,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	if (offset == _REG_RCS_UHPTR)
 		printk("vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
 
-
+	reg_set_accessed(pdev, offset);
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
@@ -1511,8 +1505,6 @@ int vgt_thread(void *priv)
 
 		pdev->dev_func.force_wake(pdev);
 
-		/* Response to the monitor switch request. */
-		/* vgt display switch moved out rendering context switch. */
 		if (list_empty(&pdev->rendering_runq_head)) {
 			/* Idle now, and no pending activity */
 			printk("....idle\n");
@@ -2100,223 +2092,7 @@ vgt_reg_t vgt_render_regs[] = {
 	_REG_RCS_UHPTR,
 	_REG_BCS_UHPTR,
 	_REG_VCS_UHPTR,
-
-	_REG_TILECTL,
 };
-
-static void vgt_setup_render_regs(struct pgt_device *pdev)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_NUM(vgt_render_regs); i++) {
-		reg_set_owner(pdev, vgt_render_regs[i], VGT_OT_RENDER);
-	}
-
-	/*
-	 * FIXME: this should be whitelisted in vgt_render_regs, or else
-	 * give pt permission w/o save/restore is wrong
-	 */
-	/* RCS */
-	for (i = 0x2000; i <= 0x2FFF; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_RENDER);
-	}
-
-	/* VCS */
-	for (i = 0x12000; i <= 0x12FFF; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_RENDER);
-	}
-
-	/* BCS */
-	for (i = 0x22000; i <= 0x22FFF; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_RENDER);
-	}
-
-	if (pdev->is_ivybridge) {
-		for (i = 0; i < ARRAY_NUM(vgt_gen7_mode_ctl_regs); i++) {
-			reg_set_mode_ctl(pdev, vgt_gen7_mode_ctl_regs[i]);
-		}
-	} else {
-		for (i = 0; i < ARRAY_NUM(vgt_mode_ctl_regs); i++)
-			reg_set_mode_ctl(pdev, vgt_mode_ctl_regs[i]);
-	}
-}
-
-/* TODO: lots of to fill */
-vgt_reg_t vgt_display_regs[] = {
-	_REG_CURACNTR	,
-	_REG_CURABASE	,
-	_REG_CURAPOS	,
-	_REG_CURAVGAPOPUPBASE,
-	_REG_CURAPALET_0,
-	_REG_CURAPALET_1,
-	_REG_CURAPALET_2,
-	_REG_CURAPALET_3,
-	_REG_CURASURFLIVE,
-
-	_REG_CURBCNTR	,
-	_REG_CURBBASE	,
-	_REG_CURBPOS	,
-	_REG_CURBPALET_0,
-	_REG_CURBPALET_1,
-	_REG_CURBPALET_2,
-	_REG_CURBPALET_3,
-	_REG_CURBSURFLIVE,
-
-	_REG_DSPACNTR	,
-	_REG_DSPALINOFF	,
-	_REG_DSPASTRIDE	,
-	_REG_DSPASURF	,
-	_REG_DSPATILEOFF,
-	_REG_DSPASURFLIVE,
-
-	_REG_DSPBCNTR	,
-	_REG_DSPBLINOFF	,
-	_REG_DSPBSTRIDE	,
-	_REG_DSPBSURF	,
-	_REG_DSPBTILEOFF,
-	_REG_DSPBSURFLIVE,
-
-	_REG_DVSACNTR	,
-	_REG_DVSALINOFF	,
-	_REG_DVSASTRIDE	,
-	_REG_DVSAPOS	,
-	_REG_DVSASIZE	,
-	_REG_DVSAKEYVAL	,
-	_REG_DVSAKEYMSK	,
-	_REG_DVSASURF	,
-	_REG_DVSAKEYMAXVAL,
-	_REG_DVSATILEOFF,
-	_REG_DVSASURFLIVE,
-	_REG_DVSASCALE	,
-
-	_REG_DVSBCNTR	,
-	_REG_DVSBLINOFF	,
-	_REG_DVSBSTRIDE	,
-	_REG_DVSBPOS	,
-	_REG_DVSBSIZE	,
-	_REG_DVSBKEYVAL	,
-	_REG_DVSBKEYMSK	,
-	_REG_DVSBSURF	,
-	_REG_DVSBKEYMAXVAL,
-	_REG_DVSBTILEOFF,
-	_REG_DVSBSURFLIVE,
-	_REG_DVSBSCALE	,
-};
-
-static void vgt_setup_display_regs(struct pgt_device *pdev)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_NUM(vgt_display_regs); i++) {
-		reg_set_owner(pdev, vgt_display_regs[i], VGT_OT_DISPLAY);
-	}
-
-	/* display pallete registers */
-	for (i = 0x4A000; i <= 0x4CFFF; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-	}
-
-	/* PIPE control */
-	for (i = 0x60000; i <= 0x6FFFF; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-	}
-
-	/* Plane and cursor control */
-	for (i = 0x70000; i <= 0x7FFFF; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-	}
-
-	/* ============================== */
-	/* !!!below need double confirm in the future */
-	reg_set_owner(pdev, _REG_DISP_ARB_CTL, VGT_OT_DISPLAY);
-
-	reg_set_owner(pdev, _REG_DISP_ARB_CTL2, VGT_OT_DISPLAY);
-
-	/* display watermark */
-	for (i = 0x45100; i <= 0x45130; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-	}
-
-	/* backlight */
-	for (i = 0x48250; i <= 0x48270; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-	}
-
-	/* panel power sequence */
-	for (i = 0xc7200; i <= 0xc7210; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-	}
-
-	reg_set_owner(pdev, 0xe1180, VGT_OT_DISPLAY); /* PCH_LVDS */
-
-	/* PCH shared functions (gmbus, gpio, clock, power seq, backlight) */
-	for (i = 0xc0000; i <= 0xc7210; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-	}
-
-	/* gmbus are fully virtualized */
-	/* FIXME: The pt is still set for below registers who are fully
-	 *	  virtualized. It is not a problem since the reg_hw_access()
-	 *	  will not check "pt" if reg is "always_virt". In future,
-	 *	  above loop should be modified to handle display registers
-	 *	  one by one.
-	 */
-
-#ifndef ENABLE_GPIO_EMULATION
-	for (i = _REG_PCH_GPIOA; i <= _REG_PCH_GPIOF; i += REG_SIZE) {
-		reg_set_always_virt(pdev, i);
-	}
-#endif /* ENABLE_GPIO_EMULATION */
-
-	for (i = _REG_PCH_GMBUS0; i <= _REG_PCH_GMBUS3; i += REG_SIZE) {
-		reg_set_always_virt(pdev, i);
-	}
-
-	/* PCH transcoder and port control */
-	for (i = 0xe0000; i <= 0xe4fff; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-	}
-
-	/* PCH transcoder and FDI control */
-	for (i = 0xf0000; i <= 0xf2fff; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-	}
-
-	/* FDI PLL control */
-	for (i = 0xee000; i <= 0xee007; i += REG_SIZE) {
-		reg_set_owner(pdev, i, VGT_OT_DISPLAY);
-	}
-}
-
-/* TODO: lots of to fill */
-vgt_reg_t vgt_pm_regs[] = {
-	_REG_GT_THREAD_STATUS,
-	_REG_GT_CORE_STATUS,
-	_REG_FORCEWAKE,
-	_REG_FORCEWAKE_ACK,
-	_REG_RC_STATE_CTRL_1,
-	_REG_RC_STATE_CTRL_2,
-};
-
-static void vgt_setup_pm_regs(struct pgt_device *pdev)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_NUM(vgt_pm_regs); i++)
-		reg_set_owner(pdev, vgt_pm_regs[i], VGT_OT_PM);
-}
-
-/* TODO: lots of to fill */
-vgt_reg_t vgt_mgmt_regs[] = {
-};
-
-static void vgt_setup_mgmt_regs(struct pgt_device *pdev)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_NUM(vgt_mgmt_regs); i++)
-		reg_set_owner(pdev, vgt_mgmt_regs[i], VGT_OT_MGMT);
-}
 
 void vgt_rendering_save_mmio(struct vgt_device *vgt)
 {
@@ -3214,100 +2990,6 @@ dprintk("VGT: Initial_phys_states\n");
 	return save_vbios(pdev);
 }
 
-/*
- * model specific reg policy setup here
- *
- * based on search of the keyword "GraphicsAddress" in PRM
- */
-static void vgt_setup_addr_fix_info(struct pgt_device *pdev)
-{
-	reg_set_addr_fix(pdev, _REG_RCS_START, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_BCS_START, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_VCS_START, 0xFFFFF000);
-
-	/*
-	 * FIXME: a separate handler maybe required, since a blind address
-	 * translation when valid bit is cleared is problematic
-	 */
-	reg_set_addr_fix(pdev, _REG_RCS_BB_ADDR, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_VCS_BB_ADDR, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_BCS_BB_ADDR, 0xFFFFF000);
-
-	reg_set_addr_fix(pdev, _REG_RCS_HWS_PGA, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_VCS_HWS_PGA, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_BCS_HWS_PGA, 0xFFFFF000);
-
-	reg_set_addr_fix(pdev, _REG_RCS_BB_PREEMPT_ADDR, 0xFFFFF000);
-	//reg_set_addr_fix(pdev, _REG_RCS_BB_ADDR_DIFF, 0xFFFFF000);
-	//reg_set_addr_fix(pdev, _REG_RCS_BB_OFFSET, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_CCID, 0xFFFFF000);
-
-	reg_set_addr_fix(pdev, _REG_RCS_FBC_RT_BASE_ADDR, 0xFFFFF000);
-
-	if (pdev->enable_ppgtt) {
-		reg_set_addr_fix(pdev, _REG_RCS_PP_DIR_BASE_IVB, 0xFFFF0000);
-		reg_set_addr_fix(pdev, _REG_VCS_PP_DIR_BASE, 0xFFFF0000);
-		reg_set_addr_fix(pdev, _REG_BCS_PP_DIR_BASE, 0xFFFF0000);
-	}
-
-	reg_set_addr_fix(pdev, _REG_CURABASE, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_CURBBASE, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_DSPASURF, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_DSPASURFLIVE, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_DSPBSURF, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_DSPBSURFLIVE, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_DVSASURF, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_DVSASURFLIVE, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_DVSBSURF, 0xFFFFF000);
-	reg_set_addr_fix(pdev, _REG_DVSBSURFLIVE, 0xFFFFF000);
-
-	/* ===== things to be further studied ====== */
-	/* PP_PFD: 32 PPGTT page fault data registers */
-	/* VCS context workaround ponter */
-	/* TLB registers */
-	/* performance statistics registers like OABUFFER */
-	/* debug registers */
-}
-
-static void vgt_setup_always_virt(struct pgt_device *pdev)
-{
-	int i;
-
-	for (i = VGT_PVINFO_PAGE; i < VGT_PVINFO_PAGE + VGT_PVINFO_SIZE; i += REG_SIZE)
-		reg_set_always_virt(pdev, i);
-	/*
-	 * FIXME: rinbbuffer registers may return ZERO when power management
-	 * is active. We tried to disable pm logic from i915 driver, but it
-	 * looks that it may not work well. So set the forcewake always virtualized
-	 * and force enabling it. In the future we need to fix this in fine-grained
-	 * level. One problem is that operating forcewake reg at this point has no
-	 * effect, so we postpone to the time at the 1st context switch
-	 */
-	reg_set_always_virt(pdev, _REG_FORCEWAKE);
-	reg_set_always_virt(pdev, _REG_FORCEWAKE_ACK);
-	reg_set_always_virt(pdev, _REG_GT_CORE_STATUS);
-	reg_set_always_virt(pdev, _REG_GT_THREAD_STATUS);
-	reg_set_always_virt(pdev, _REG_RC_STATE_CTRL_1);
-	reg_set_always_virt(pdev, _REG_RC_STATE_CTRL_2);
-
-	reg_set_always_virt(pdev, _REG_MUL_FORCEWAKE);
-}
-
-static void vgt_setup_hw_update_regs(struct pgt_device *pdev)
-{
-	//reg_set_hw_update(pdev, TIMESTAMP);
-	reg_set_hw_update(pdev, _REG_RCS_UHPTR);
-	reg_set_hw_update(pdev, _REG_VCS_UHPTR);
-	reg_set_hw_update(pdev, _REG_BCS_UHPTR);
-
-	reg_set_hw_update(pdev, _REG_CURASURFLIVE);
-	reg_set_hw_update(pdev, _REG_CURBSURFLIVE);
-	reg_set_hw_update(pdev, _REG_DSPASURFLIVE);
-	reg_set_hw_update(pdev, _REG_DSPBSURFLIVE);
-	reg_set_hw_update(pdev, _REG_DVSASURFLIVE);
-	reg_set_hw_update(pdev, _REG_DVSBSURFLIVE);
-}
-
 uint64_t vgt_get_gtt_size(struct pci_bus *bus)
 {
 	uint16_t gmch_ctrl;
@@ -3362,20 +3044,6 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	}
 
 	gm_sz(pdev) = vgt_get_gtt_size(pdev->pbus) * 1024;
-	/* first setup the reg ownership mapping */
-	vgt_setup_render_regs(pdev);
-	vgt_setup_display_regs(pdev);
-	vgt_setup_pm_regs(pdev);
-	vgt_setup_mgmt_regs(pdev);
-
-	/* then setup always virtualized reg */
-	vgt_setup_always_virt(pdev);
-
-	/* then mark regs updated by hw */
-	vgt_setup_hw_update_regs(pdev);
-
-	/* then add addr fix info for pass-through regs */
-	vgt_setup_addr_fix_info(pdev);
 
 	/* clean port status, 0 means not plugged in */
 	memset(pdev->port_detect_status, 0, sizeof(pdev->port_detect_status));
@@ -3541,8 +3209,8 @@ int vgt_initialize(struct pci_dev *dev)
 
 	if (!vgt_initialize_pgt_device(dev, pdev))
 		goto err;
-	if (!vgt_initialize_mmio_hooks(pdev))
-		goto err;
+	vgt_setup_reg_info(pdev);
+	vgt_post_setup_mmio_hooks(pdev);
 	if (!initial_phys_states(pdev))
 		goto err;
 

@@ -1739,125 +1739,6 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 	return rc;
 }
 
-bool vgt_initialize_mmio_hooks(struct pgt_device *pdev)
-{
-	int i;
-
-	printk("mmio hooks initialized\n");
-	/* ring registers */
-	for (i=0; i < pdev->max_engines; i++)
-		if (!vgt_register_mmio_handler(pdev->ring_mmio_base[i],
-			 RB_REGS_SIZE,
-			ring_mmio_read, ring_mmio_write))
-			return false;
-
-	vgt_register_mmio_handler( _REG_PCH_DPB_AUX_CH_CTL, 6*4,
-			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
-
-	vgt_register_mmio_handler( _REG_PCH_DPC_AUX_CH_CTL, 6*4,
-			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
-
-	vgt_register_mmio_handler( _REG_PCH_DPD_AUX_CH_CTL, 6*4,
-			dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write);
-
-	vgt_register_mmio_handler( _REG_FENCE_0_LOW, 0x80,
-			fence_mmio_read, fence_mmio_write);
-
-	vgt_register_mmio_handler(_REG_PCH_ADPA, 4,
-			pch_adpa_mmio_read, pch_adpa_mmio_write);
-
-	vgt_register_mmio_handler( _REG_PCH_GMBUS0, 4*4,
-			gmbus_mmio_read, gmbus_mmio_write);
-
-#ifdef ENABLE_GPIO_EMULATION
-	vgt_register_mmio_handler( _REG_PCH_GPIOA, 6*4,
-			gpio_mmio_read, gpio_mmio_write);
-#endif /* ENABLE_GPIO_EMULATION */
-
-	vgt_register_mmio_handler(_REG_DP_A_CTL, 4,
-			dp_ctl_mmio_read, dp_ctl_mmio_write);
-
-	vgt_register_mmio_handler(_REG_DP_B_CTL, 4,
-			dp_ctl_mmio_read, dp_ctl_mmio_write);
-
-	vgt_register_mmio_handler(_REG_DP_C_CTL, 4,
-			dp_ctl_mmio_read, dp_ctl_mmio_write);
-
-	vgt_register_mmio_handler(_REG_DP_D_CTL, 4,
-			dp_ctl_mmio_read, dp_ctl_mmio_write);
-
-	vgt_register_mmio_handler(_REG_HDMI_B_CTL, 4,
-			hdmi_ctl_mmio_read, hdmi_ctl_mmio_write);
-
-	vgt_register_mmio_handler(_REG_HDMI_C_CTL, 4,
-			hdmi_ctl_mmio_read, hdmi_ctl_mmio_write);
-
-	vgt_register_mmio_handler(_REG_HDMI_D_CTL, 4,
-			hdmi_ctl_mmio_read, hdmi_ctl_mmio_write);
-
-	vgt_register_mmio_write( _REG_FORCEWAKE, force_wake_write);
-
-	vgt_register_mmio_write( _REG_RC_STATE_CTRL_1, rc_state_ctrl_1_mmio_write);
-
-	vgt_register_mmio_write( _REG_RC_STATE_CTRL_2, rc_state_ctrl_2_mmio_write);
-
-	vgt_register_mmio_write( _REG_GEN6_GDRST, gen6_gdrst_mmio_write);
-
-	vgt_register_mmio_write( _REG_PCH_PP_CONTROL, pch_pp_control_mmio_write);
-	vgt_register_mmio_write( _REG_TRANSACONF, transaconf_mmio_write);
-	vgt_register_mmio_write( _REG_TRANSBCONF, transaconf_mmio_write);
-
-	vgt_register_mmio_read( _REG_PIPEA_FRMCOUNT, pipe_frmcount_mmio_read);
-	vgt_register_mmio_read( _REG_PIPEB_FRMCOUNT, pipe_frmcount_mmio_read);
-	vgt_register_mmio_read( _REG_PIPEADSL, pipe_dsl_mmio_read);
-	vgt_register_mmio_read( _REG_PIPEBDSL, pipe_dsl_mmio_read);
-
-	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_1, hdcp_status_mmio_read);
-	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_2, hdcp_status_mmio_read);
-	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_3, hdcp_status_mmio_read);
-	vgt_register_mmio_read( _REG_HDCP_STATUS_REG_4, hdcp_status_mmio_read);
-	vgt_register_mmio_read( _REG_HDCP_KEY_STATUS_REG, hdcp_key_status_mmio_read);
-	vgt_register_mmio_read( _REG_HDCP_PCH_BOOT_AUTH_STATUS_REG ,
-			hdcp_pch_boot_auth_mmio_read);
-
-#ifdef VGT_DEBUGFS_DUMP_FB
-	vgt_register_mmio_write(_REG_DSPASURF, dspsurf_mmio_write);
-	vgt_register_mmio_write(_REG_DSPBSURF, dspsurf_mmio_write);
-#endif
-	vgt_register_mmio_write(_REG_PIPEACONF, pipe_conf_mmio_write);
-	vgt_register_mmio_write(_REG_PIPEBCONF, pipe_conf_mmio_write);
-	vgt_register_mmio_write(_REG_FDI_RXA_IIR, fdi_rx_iir_mmio_write);
-	vgt_register_mmio_write(_REG_FDI_RXB_IIR, fdi_rx_iir_mmio_write);
-	/* TODO: vgt_register_mmio_write(_REG_FDI_RX_IIR_C,...)*/
-	vgt_register_mmio_write(_REG_FDI_RXA_CTL, update_fdi_rx_iir_status);
-	vgt_register_mmio_write(_REG_FDI_RXB_CTL, update_fdi_rx_iir_status);
-	vgt_register_mmio_write(_REG_FDI_TXA_CTL, update_fdi_rx_iir_status);
-	vgt_register_mmio_write(_REG_FDI_TXB_CTL, update_fdi_rx_iir_status);
-	vgt_register_mmio_write(_REG_FDI_RXA_IMR, update_fdi_rx_iir_status);
-	vgt_register_mmio_write(_REG_FDI_RXB_IMR, update_fdi_rx_iir_status);
-
-	if (pdev->enable_ppgtt) {
-		dprintk("Hook up PPGTT register handlers\n");
-		/* trap PPGTT base register */
-		vgt_register_mmio_handler(_REG_RCS_PP_DIR_BASE_IVB, 4,
-				rcs_pp_dir_base_read, rcs_pp_dir_base_write);
-		vgt_register_mmio_handler(_REG_BCS_PP_DIR_BASE, 4,
-				bcs_pp_dir_base_read, bcs_pp_dir_base_write);
-		vgt_register_mmio_handler(_REG_VCS_PP_DIR_BASE, 4,
-				vcs_pp_dir_base_read, vcs_pp_dir_base_write);
-		/* XXX cache register? */
-		/* PPGTT enable register */
-		vgt_register_mmio_handler(_REG_RCS_GFX_MODE_IVB, 4,
-				rcs_gfx_mode_read, rcs_gfx_mode_write);
-		vgt_register_mmio_handler(_REG_BCS_BLT_MODE_IVB, 4,
-				bcs_blt_mode_read, bcs_blt_mode_write);
-		vgt_register_mmio_handler(_REG_VCS_MFX_MODE_IVB, 4,
-				vcs_mfx_mode_read, vcs_mfx_mode_write);
-	}
-
-	return true;
-}
-
 static int xen_get_nr_vcpu(int vm_id)
 {
 	/* get number of the VCPUs */
@@ -2599,4 +2480,321 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 			}
 		}
 	}
+}
+
+/*
+ * TODO:
+ * We'd like to whitelist all regs requiring special handling
+ * other than memory-based r/w. But as the 1st step to avoid
+ * regression, we still copy the coarse-grained ranges in below
+ * temporary array which is scanned with the lowest priority.
+ */
+reg_attr_t vgt_temp_reg_info[] = {
+	/* RCS */
+_REG_RDR(0x2000, 0x1000, NULL, NULL),
+	/* VCS */
+_REG_RDR(0x12000, 0x1000, NULL, NULL),
+	/* BCS */
+_REG_RDR(0x22000, 0x1000, NULL, NULL),
+	/* display pallete registers */
+_REG_DPY(0x4A000, 0x3000, NULL, NULL),
+	/* PIPE control */
+_REG_DPY(0x60000, 0x10000, NULL, NULL),
+	/* Plane and cursor control */
+_REG_DPY(0x70000, 0x10000, NULL, NULL),
+	/* display watermark */
+_REG_DPY(0x45100, 0x30, NULL, NULL),
+	/* backlight */
+_REG_DPY(0x48250, 0x20, NULL, NULL),
+	/* panel power sequence */
+_REG_DPY(0xC7200, 0x10, NULL, NULL),
+	/* PCH shared functions (gmbus, gpio, clock, power seq, backlight) */
+_REG_DPY(0xC0000, 0x7210, NULL, NULL),
+	/* PCH transcoder and port control */
+_REG_DPY(0xE0000, 0x5000, NULL, NULL),
+	/* PCH transcoder and FDI control */
+_REG_DPY(0xF0000, 0x3000, NULL, NULL),
+	/* FDI PLL control */
+_REG_DPY(0xEE000, 0x8, NULL, NULL),
+};
+
+/*
+ * Base reg information which is common on all platforms
+ */
+reg_attr_t vgt_base_reg_info[] = {
+
+	/* -------render regs---------- */
+_REG_ALWAYS_VIRT(_REG_GTIMR, 4, NULL, vgt_reg_imr_handler),
+_REG_ALWAYS_VIRT(_REG_GTIER, 4, NULL, vgt_reg_ier_handler),
+_REG_ALWAYS_VIRT(_REG_GTIIR, 4, NULL, vgt_reg_iir_handler),
+_REG_RDR(_REG_RCS_HWSTAM, 4, NULL, NULL),
+_REG_RDR(_REG_VCS_HWSTAM, 4, NULL, NULL),
+_REG_RDR(_REG_BCS_HWSTAM, 4, NULL, NULL),
+_REG_ADDR_FIX(_REG_RCS_HWS_PGA, 4, VGT_OT_RENDER, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_VCS_HWS_PGA, 4, VGT_OT_RENDER, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_BCS_HWS_PGA, 4, VGT_OT_RENDER, 0xFFFFF000, NULL, NULL),
+_REG_RDR(_REG_RCS_EXCC, 4, NULL, NULL),
+_REG_RDR(_REG_VCS_EXCC, 4, NULL, NULL),
+_REG_RDR(_REG_BCS_EXCC, 4, NULL, NULL),
+_REG_HW_UPDATE(_REG_RCS_UHPTR, 4, VGT_OT_RENDER, NULL, NULL),
+_REG_HW_UPDATE(_REG_VCS_UHPTR, 4, VGT_OT_RENDER, NULL, NULL),
+_REG_HW_UPDATE(_REG_BCS_UHPTR, 4, VGT_OT_RENDER, NULL, NULL),
+_REG_ADDR_FIX(_REG_RCS_BB_PREEMPT_ADDR, 4, VGT_OT_RENDER, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_CCID, 4, VGT_OT_RENDER, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_RCS_FBC_RT_BASE_ADDR, 4, VGT_OT_RENDER, 0xFFFFF000, NULL, NULL),
+_REG_RDR(_REG_RCS_TAIL, 4, ring_mmio_read, ring_mmio_write),
+_REG_RDR(_REG_RCS_HEAD, 4, ring_mmio_read, ring_mmio_write),
+_REG_ADDR_FIX(_REG_RCS_START, 4, VGT_OT_RENDER, 0xFFFFF000,
+	      ring_mmio_read, ring_mmio_write),
+_REG_RDR(_REG_RCS_CTL, 4, ring_mmio_read, ring_mmio_write),
+_REG_RDR(_REG_VCS_TAIL, 4, ring_mmio_read, ring_mmio_write),
+_REG_RDR(_REG_VCS_HEAD, 4, ring_mmio_read, ring_mmio_write),
+_REG_ADDR_FIX(_REG_VCS_START, 4, VGT_OT_RENDER, 0xFFFFF000,
+	      ring_mmio_read, ring_mmio_write),
+_REG_RDR(_REG_VCS_CTL, 4, ring_mmio_read, ring_mmio_write),
+_REG_RDR(_REG_BCS_TAIL, 4, ring_mmio_read, ring_mmio_write),
+_REG_RDR(_REG_BCS_HEAD, 4, ring_mmio_read, ring_mmio_write),
+_REG_ADDR_FIX(_REG_BCS_START, 4, VGT_OT_RENDER, 0xFFFFF000,
+	      ring_mmio_read, ring_mmio_write),
+_REG_RDR(_REG_BCS_CTL, 4, ring_mmio_read, ring_mmio_write),
+_REG_MODE(_REG_GFX_MODE, 4, VGT_OT_RENDER, VGT_DEV_SNB, NULL, NULL),
+_REG_MODE(_REG_RCS_GFX_MODE_IVB, 4, VGT_OT_RENDER, VGT_DEV_IVB, NULL, NULL),
+_REG_MODE(_REG_VCS_MFX_MODE_IVB, 4, VGT_OT_RENDER, VGT_DEV_IVB, NULL, NULL),
+_REG_MODE(_REG_BCS_BLT_MODE_IVB, 4, VGT_OT_RENDER, VGT_DEV_IVB, NULL, NULL),
+_REG_MODE(_REG_ARB_MODE, 4, VGT_OT_RENDER, VGT_DEV_ALL, NULL, NULL),
+_REG_MODE(_REG_RCS_MI_MODE, 4, VGT_OT_RENDER, VGT_DEV_ALL, NULL, NULL),
+_REG_MODE(_REG_VCS_MI_MODE, 4, VGT_OT_RENDER, VGT_DEV_ALL, NULL, NULL),
+_REG_MODE(_REG_BCS_MI_MODE, 4, VGT_OT_RENDER, VGT_DEV_ALL, NULL, NULL),
+_REG_MODE(_REG_RCS_INSTPM, 4, VGT_OT_RENDER, VGT_DEV_ALL, NULL, NULL),
+_REG_MODE(_REG_VCS_INSTPM, 4, VGT_OT_RENDER, VGT_DEV_ALL, NULL, NULL),
+_REG_MODE(_REG_BCS_INSTPM, 4, VGT_OT_RENDER, VGT_DEV_ALL, NULL, NULL),
+_REG_MODE(_REG_GT_MODE, 4, VGT_OT_RENDER, VGT_DEV_ALL, NULL, NULL),
+_REG_MODE(_REG_CACHE_MODE_0, 4, VGT_OT_RENDER, VGT_DEV_ALL, NULL, NULL),
+_REG_MODE(_REG_CACHE_MODE_1, 4, VGT_OT_RENDER, VGT_DEV_ALL, NULL, NULL),
+_REG_ADDR_FIX(_REG_RCS_BB_ADDR, 4, VGT_OT_RENDER, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_VCS_BB_ADDR, 4, VGT_OT_RENDER, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_BCS_BB_ADDR, 4, VGT_OT_RENDER, 0xFFFFF000, NULL, NULL),
+/* addr fix, snb */
+_REG_FULL(_REG_RCS_PP_DIR_BASE_READ, 4, VGT_OT_RENDER, VGT_DEV_SNB,
+	  false, true, false, false, false, 0xFFFF0000, NULL, NULL),
+/* addr fix, snb */
+_REG_FULL(_REG_RCS_PP_DIR_BASE_WRITE, 4, VGT_OT_RENDER, VGT_DEV_SNB,
+	  false, true, false, false, false, 0xFFFF0000, NULL, NULL),
+/* addr fix, ivb */
+_REG_FULL(_REG_RCS_PP_DIR_BASE_IVB, 4, VGT_OT_RENDER, VGT_DEV_IVB,
+	  false, true, false, false, false, 0xFFFF0000, NULL, NULL),
+_REG_ADDR_FIX(_REG_VCS_PP_DIR_BASE, 4, VGT_OT_RENDER, 0xFFFF0000, NULL, NULL),
+_REG_ADDR_FIX(_REG_BCS_PP_DIR_BASE, 4, VGT_OT_RENDER, 0xFFFF0000, NULL, NULL),
+
+	/* -------display regs---------- */
+_REG_ALWAYS_VIRT(_REG_DEIMR, 4, NULL, vgt_reg_imr_handler),
+_REG_ALWAYS_VIRT(_REG_DEIER, 4, NULL, vgt_reg_ier_handler),
+_REG_ALWAYS_VIRT(_REG_DEIIR, 4, NULL, vgt_reg_iir_handler),
+_REG_ALWAYS_VIRT(_REG_SDEIMR, 4, NULL, vgt_reg_imr_handler),
+_REG_ALWAYS_VIRT(_REG_SDEIER, 4, NULL, vgt_reg_ier_handler),
+_REG_ALWAYS_VIRT(_REG_SDEIIR, 4, NULL, vgt_reg_iir_handler),
+_REG_ADDR_FIX(_REG_CURABASE, 4, VGT_OT_DISPLAY, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_CURBBASE, 4, VGT_OT_DISPLAY, 0xFFFFF000, NULL, NULL),
+/* addr fix, hw_update */
+_REG_FULL(_REG_CURASURFLIVE, 4, VGT_OT_DISPLAY, VGT_DEV_ALL, false, true,
+	  false, false, true, 0xFFFFF000, NULL, NULL),
+_REG_FULL(_REG_CURBSURFLIVE, 4, VGT_OT_DISPLAY, VGT_DEV_ALL, false, true,
+	  false, false, true, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_DSPASURF, 4, VGT_OT_DISPLAY, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_DSPBSURF, 4, VGT_OT_DISPLAY, 0xFFFFF000, NULL, NULL),
+/* addr fix, hw_update */
+_REG_FULL(_REG_DSPASURFLIVE, 4, VGT_OT_DISPLAY, VGT_DEV_ALL, false, true,
+	  false, false, true, 0xFFFFF000, NULL, NULL),
+_REG_FULL(_REG_DSPBSURFLIVE, 4, VGT_OT_DISPLAY, VGT_DEV_ALL, false, true,
+	  false, false, true, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_DVSASURF, 4, VGT_OT_DISPLAY, 0xFFFFF000, NULL, NULL),
+_REG_ADDR_FIX(_REG_DVSBSURF, 4, VGT_OT_DISPLAY, 0xFFFFF000, NULL, NULL),
+/* addr fix, hw_update */
+_REG_FULL(_REG_DVSASURFLIVE, 4, VGT_OT_DISPLAY, VGT_DEV_ALL, false, true,
+	  false, false, true, 0xFFFFF000, NULL, NULL),
+_REG_FULL(_REG_DVSBSURFLIVE, 4, VGT_OT_DISPLAY, VGT_DEV_ALL, false, true,
+	  false, false, true, 0xFFFFF000, NULL, NULL),
+_REG_DPY(_REG_PIPEACONF, 4, NULL, pipe_conf_mmio_write),
+_REG_DPY(_REG_PIPEBCONF, 4, NULL, pipe_conf_mmio_write),
+_REG_DPY(_REG_PIPEA_FRMCOUNT, 4, pipe_frmcount_mmio_read, NULL),
+_REG_DPY(_REG_PIPEB_FRMCOUNT, 4, pipe_frmcount_mmio_read, NULL),
+_REG_DPY(_REG_PIPEADSL, 4, pipe_dsl_mmio_read, NULL),
+_REG_DPY(_REG_PIPEBDSL, 4, pipe_dsl_mmio_read, NULL),
+
+_REG_ALWAYS_VIRT(_REG_PCH_GMBUS0, 4*4, gmbus_mmio_read, gmbus_mmio_write),
+#ifdef ENABLE_GPIO_EMULATION
+_REG_ALWAYS_VIRT(_REG_PCH_GPIOA, 6*4, gpio_mmio_read, gpio_mmio_write),
+#endif
+
+_REG_DPY(_REG_PCH_DPB_AUX_CH_CTL, 6*4,
+	      dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write),
+_REG_DPY(_REG_PCH_DPC_AUX_CH_CTL, 6*4,
+	      dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write),
+_REG_DPY(_REG_PCH_DPD_AUX_CH_CTL, 6*4,
+	      dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write),
+_REG_DPY(_REG_PCH_ADPA, 4, pch_adpa_mmio_read, pch_adpa_mmio_write),
+_REG_DPY(_REG_DP_A_CTL, 4, dp_ctl_mmio_read, dp_ctl_mmio_write),
+_REG_DPY(_REG_DP_B_CTL, 4, dp_ctl_mmio_read, dp_ctl_mmio_write),
+_REG_DPY(_REG_DP_C_CTL, 4, dp_ctl_mmio_read, dp_ctl_mmio_write),
+_REG_DPY(_REG_DP_D_CTL, 4, dp_ctl_mmio_read, dp_ctl_mmio_write),
+_REG_DPY(_REG_HDMI_B_CTL, 4, hdmi_ctl_mmio_read, hdmi_ctl_mmio_write),
+_REG_DPY(_REG_HDMI_C_CTL, 4, hdmi_ctl_mmio_read, hdmi_ctl_mmio_write),
+_REG_DPY(_REG_HDMI_D_CTL, 4, hdmi_ctl_mmio_read, hdmi_ctl_mmio_write),
+_REG_DPY(_REG_TRANSACONF, 4, NULL, transaconf_mmio_write),
+_REG_DPY(_REG_TRANSBCONF, 4, NULL, transaconf_mmio_write),
+_REG_DPY(_REG_FDI_RXA_IIR, 4, NULL, fdi_rx_iir_mmio_write),
+_REG_DPY(_REG_FDI_RXB_IIR, 4, NULL, fdi_rx_iir_mmio_write),
+_REG_DPY(_REG_FDI_RXA_CTL, 4, NULL, update_fdi_rx_iir_status),
+_REG_DPY(_REG_FDI_RXB_CTL, 4, NULL, update_fdi_rx_iir_status),
+_REG_DPY(_REG_FDI_TXA_CTL, 4, NULL, update_fdi_rx_iir_status),
+_REG_DPY(_REG_FDI_TXB_CTL, 4, NULL, update_fdi_rx_iir_status),
+_REG_DPY(_REG_FDI_RXA_IMR, 4, NULL, update_fdi_rx_iir_status),
+_REG_DPY(_REG_FDI_RXB_IMR, 4, NULL, update_fdi_rx_iir_status),
+
+_REG_DPY(_REG_PCH_PP_CONTROL, 4, NULL, pch_pp_control_mmio_write),
+_REG_DPY(_REG_PCH_LVDS, 4, NULL, NULL),
+
+_REG_DPY(_REG_HDCP_STATUS_REG_1, 4, hdcp_status_mmio_read, NULL),
+_REG_DPY(_REG_HDCP_STATUS_REG_2, 4, hdcp_status_mmio_read, NULL),
+_REG_DPY(_REG_HDCP_STATUS_REG_3, 4, hdcp_status_mmio_read, NULL),
+_REG_DPY(_REG_HDCP_STATUS_REG_4, 4, hdcp_status_mmio_read, NULL),
+_REG_DPY(_REG_HDCP_KEY_STATUS_REG, 4, hdcp_key_status_mmio_read, NULL),
+_REG_DPY(_REG_HDCP_PCH_BOOT_AUTH_STATUS_REG, 4,
+	      hdcp_pch_boot_auth_mmio_read, NULL),
+
+	/* -------pm regs---------- */
+_REG_ALWAYS_VIRT(_REG_PMIMR, 4, NULL, vgt_reg_imr_handler),
+_REG_ALWAYS_VIRT(_REG_PMIER, 4, NULL, vgt_reg_ier_handler),
+_REG_ALWAYS_VIRT(_REG_PMIIR, 4, NULL, vgt_reg_iir_handler),
+_REG_ALWAYS_VIRT(_REG_FORCEWAKE, 4, NULL, force_wake_write),
+_REG_ALWAYS_VIRT(_REG_FORCEWAKE_ACK, 4, NULL, NULL),
+_REG_ALWAYS_VIRT(_REG_GT_CORE_STATUS, 4, NULL, NULL),
+_REG_ALWAYS_VIRT(_REG_GT_THREAD_STATUS, 4, NULL, NULL),
+_REG_ALWAYS_VIRT(_REG_MUL_FORCEWAKE, 4, NULL, NULL),
+_REG_ALWAYS_VIRT(_REG_RC_STATE_CTRL_1, 4, NULL, rc_state_ctrl_1_mmio_write),
+_REG_ALWAYS_VIRT(_REG_RC_STATE_CTRL_2, 4, NULL, rc_state_ctrl_1_mmio_write),
+
+	/* -------miscellaneous regs-------- */
+_REG_VIRT(_REG_GEN6_GDRST, 4, NULL, gen6_gdrst_mmio_write),
+_REG_VIRT(_REG_FENCE_0_LOW, 0x80, fence_mmio_read, fence_mmio_write),
+_REG_ALWAYS_VIRT(VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, NULL, NULL),
+
+	/* -------workaround regs--------- */
+	/*
+	 * FORMAT: reg, size, device, mode_ctl, read, write
+	 * Many w/a regs have higher 16bits as masks so requiring an
+	 * explicit mode_ctl parameter.
+	 */
+_REG_WA(_REG_TILECTL, 4, VGT_DEV_ALL, false, NULL, NULL),
+_REG_WA(_REG_DISP_ARB_CTL, 4, VGT_DEV_ALL, false, NULL, NULL),
+_REG_WA(_REG_DISP_ARB_CTL2, 4, VGT_DEV_ALL, false, NULL, NULL),
+};
+
+static void vgt_set_reg_attr(struct pgt_device *pdev,
+	u32 reg, reg_attr_t *attr, bool track)
+{
+	/* ensure one entry per reg */
+	ASSERT_NUM(!reg_is_tracked(pdev, reg) || !track, reg);
+
+	if (reg_is_tracked(pdev, reg)) {
+		if (track)
+			printk("vGT: init a tracked reg (%x)!!!\n", reg);
+
+		return;
+	}
+
+	reg_set_owner(pdev, reg, attr->owner);
+	if (attr->workaround)
+		reg_set_workaround(pdev, reg);
+	if (attr->addr_fix) {
+		if (!attr->addr_mask)
+			printk("vGT: ZERO addr fix mask for %x\n", reg);
+		reg_set_addr_fix(pdev, reg, attr->addr_mask);
+	}
+	if (attr->mode_ctl)
+		reg_set_mode_ctl(pdev, reg);
+	if (attr->always_virt)
+		reg_set_always_virt(pdev, reg);
+	if (attr->hw_update)
+		reg_set_hw_update(pdev, reg);
+
+	/* last mark the reg as tracked */
+	if (track)
+		reg_set_tracked(pdev, reg);
+}
+
+static void vgt_initialize_reg_attr(struct pgt_device *pdev,
+	reg_attr_t *info, int num, bool track)
+{
+	int i, cnt = 0, tot = 0;
+	u32 reg;
+	reg_attr_t *attr;
+
+	attr = info;
+	for (i = 0; i < num; i++, attr++) {
+		if (!vgt_match_device_attr(pdev, attr))
+			continue;
+
+		cnt++;
+		if (track)
+			printk("reg(%x): size(%x), owner(%d), device(%d), wa(%d), fix(%d), mode(%d), virt(%d), hw_up(%d), mask(%x), read(%llx), write(%llx)\n",
+				attr->reg, attr->size, attr->owner, attr->device,
+				attr->workaround, attr->addr_fix, attr->mode_ctl,
+				attr->always_virt, attr->hw_update, attr->addr_mask,
+				(u64)attr->read, (u64)attr->write);
+		for (reg = attr->reg;
+		     reg < attr->reg + attr->size;
+		     reg += REG_SIZE) {
+			vgt_set_reg_attr(pdev, reg, attr, track);
+			tot++;
+		}
+
+		if (attr->read || attr->write)
+			vgt_register_mmio_handler(attr->reg, attr->size,
+				attr->read, attr->write);
+	}
+	printk("%d listed, %d used\n", num, cnt);
+	printk("total %d registers tracked\n", tot);
+}
+
+void vgt_setup_reg_info(struct pgt_device *pdev)
+{
+	printk("vGT: setup tracked reg info\n");
+	vgt_initialize_reg_attr(pdev, vgt_base_reg_info,
+		ARRAY_NUM(vgt_base_reg_info), true);
+
+	/* FIXME */
+	printk("vGT: (!!!!) setup catch-all ranges (predicated)\n");
+	vgt_initialize_reg_attr(pdev, vgt_temp_reg_info,
+		ARRAY_NUM(vgt_temp_reg_info), false);
+}
+
+bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
+{
+	printk("post mmio hooks initialized\n");
+
+	if (pdev->enable_ppgtt) {
+		dprintk("Hook up PPGTT register handlers\n");
+		/* trap PPGTT base register */
+		reg_update_handlers(pdev, _REG_RCS_PP_DIR_BASE_IVB, 4,
+				rcs_pp_dir_base_read, rcs_pp_dir_base_write);
+		reg_update_handlers(pdev, _REG_BCS_PP_DIR_BASE, 4,
+				bcs_pp_dir_base_read, bcs_pp_dir_base_write);
+		reg_update_handlers(pdev, _REG_VCS_PP_DIR_BASE, 4,
+				vcs_pp_dir_base_read, vcs_pp_dir_base_write);
+		/* XXX cache register? */
+		/* PPGTT enable register */
+		reg_update_handlers(pdev, _REG_RCS_GFX_MODE_IVB, 4,
+				rcs_gfx_mode_read, rcs_gfx_mode_write);
+		reg_update_handlers(pdev, _REG_BCS_BLT_MODE_IVB, 4,
+				bcs_blt_mode_read, bcs_blt_mode_write);
+		reg_update_handlers(pdev, _REG_VCS_MFX_MODE_IVB, 4,
+				vcs_mfx_mode_read, vcs_mfx_mode_write);
+	}
+
+#ifdef VGT_DEBUGFS_DUMP_FB
+	reg_update_handlers(pdev, _REG_DSPASURF, 4, NULL, dspsurf_mmio_write);
+	reg_update_handlers(pdev, _REG_DSPBSURF, 4, NULL, dspsurf_mmio_write);
+#endif
+	return true;
 }
