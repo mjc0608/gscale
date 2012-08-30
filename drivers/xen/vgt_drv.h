@@ -238,6 +238,7 @@ extern enum vgt_pipe surf_used_pipe;
 
 struct vgt_intel_device_info {
 	u8 gen;
+	u8 pch;
 	u8 is_mobile:1;
 	u8 is_i85x:1;
 	u8 is_i915g:1;
@@ -270,6 +271,8 @@ extern int vgt_initialize(struct pci_dev *dev);
 extern bool vgt_register_mmio_handler(int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write);
 
+extern bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
+		struct vgt_device *next_vgt);
 static inline bool vgt_register_mmio_single(int reg,
 	vgt_mmio_read read, vgt_mmio_write write)
 {
@@ -319,6 +322,7 @@ struct vgt_device {
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
 	vgt_reg_t		last_scan_head[MAX_ENGINES];
 
+	struct vgt_port_struct *attached_port[I915_MAX_PIPES]; /* one port per PIPE */
 	vgt_i2c_bus_t		vgt_i2c_bus;	/* i2c bus state emulaton for reading EDID */
 	vgt_edid_data_t		*vgt_edids[EDID_NUM];	/* per display EDID information */
 
@@ -398,6 +402,58 @@ typedef vgt_reg_t vgt_addr_mask_t;
 
 struct vgt_irq_host_state;
 #define VGT_VBIOS_PAGES 16
+
+enum vgt_output_type {
+	VGT_OUTPUT_ANALOG = 0,
+	VGT_OUTPUT_DISPLAYPORT,
+	VGT_OUTPUT_EDP,
+	VGT_OUTPUT_LVDS,
+	VGT_OUTPUT_HDMI,
+	VGT_OUTPUT_MAX
+};
+
+struct vgt_port_struct {
+	bool enabled;
+	enum vgt_output_type output_type;
+	enum vgt_pipe attached_pipe;
+	enum vgt_plane attached_plane;
+	struct vgt_port_dsp_set_funcs *port_dsp_set_funcs;
+	void *private;
+};
+
+/* Both DP and eDP port use this */
+struct vgt_dp_port {
+	unsigned int dp_ctrl_reg;
+	vgt_reg_t dp_ctrl;
+	u8 link_bw;
+	u8 lane_count;
+	u8 link_configuration[DP_LINK_CONFIGURATION_SIZE];
+	u8 train_set[4];
+	bool is_pch_edp;
+};
+
+struct vgt_port_dsp_set_funcs {
+	void (*mode_fixup)(struct vgt_device *vgt,
+			struct vgt_port_struct *port_struct);
+	void (*prepare)(struct vgt_device *vgt,
+			struct vgt_port_struct *port_struct);
+	void (*mode_set)(struct vgt_device *vgt,
+			struct vgt_port_struct *port_struct);
+	void (*commit)(struct vgt_device *vgt,
+			struct vgt_port_struct *port_struct);
+	void (*detect)(struct vgt_device *vgt,
+			struct vgt_port_struct *port_struct);
+};
+
+
+void vgt_destroy_attached_port(struct vgt_device *vgt);
+struct vgt_dp_port *init_vgt_dp_port_private(
+		unsigned int dp_ctrl_reg,
+		bool is_pch_edp);
+int init_vgt_port_struct(struct vgt_device *vgt,
+		enum vgt_pipe pipe,
+		enum vgt_plane plane,
+		enum vgt_output_type otype);
 
 /* device specific hooks */
 struct vgt_device_funcs {
@@ -1640,5 +1696,12 @@ extern u64 ring_mmio_rcnt;
 extern u64 ring_mmio_wcnt;
 extern u64 ring_tail_mmio_wcnt;
 extern u64 ring_tail_mmio_wcycles;
+
+struct vgt_port_output_struct {
+	unsigned int ctrl_reg;
+	vgt_reg_t enable_bitmask;
+	vgt_reg_t select_bitmask;
+	enum vgt_output_type output_type;
+};
 
 #endif	/* _VGT_DRV_H_ */

@@ -82,6 +82,7 @@ struct kset *vgt_kset;
 static struct pgt_device *vgt_kobj_priv;
 struct vgt_device *vmid_2_vgt_device(int vmid);
 static unsigned int query_reg;
+extern atomic_t display_switched;
 
 static void vgt_kobj_release(struct kobject *kobj)
 {
@@ -154,7 +155,8 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
     next_vgt = vmid_2_vgt_device(vmid);
     if (next_vgt) {
         next_display_owner = next_vgt;
-		do_vgt_display_switch(vgt_kobj_priv);
+		//do_vgt_display_switch(vgt_kobj_priv);
+		atomic_inc(&display_switched);
 	} else {
 		printk("vGT: can not find the vgt instance of dom%d!\n", vmid);
 		return -ENODEV;

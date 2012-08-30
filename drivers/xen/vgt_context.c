@@ -136,6 +136,22 @@ static int __init vgt_novgt_setup(char *str)
 }
 __setup("novgt", vgt_novgt_setup);
 
+bool add_crt_monitor = false;
+static int __init vgt_add_crt_monitor_setup(char *str)
+{
+	add_crt_monitor = true;
+	return 1;
+}
+__setup("add_crt_monitor", vgt_add_crt_monitor_setup);
+
+bool add_dp_monitor = false;
+static int __init vgt_add_dp_monitor_setup(char *str)
+{
+	add_dp_monitor = true;
+	return 1;
+}
+__setup("add_dp_monitor", vgt_add_dp_monitor_setup);
+
 static int start_period = 10; /* in unit of second */
 static int __init period_setup(char *str)
 {
@@ -387,8 +403,8 @@ static void update_context(struct vgt_device *vgt, uint64_t context)
 	UPDATE_FIELD(OFF_MI_MODE, _REG_RCS_MI_MODE);
 }
 
-struct vgt_device *next_display_owner;
 atomic_t display_switched = ATOMIC_INIT(0);
+struct vgt_device *next_display_owner;
 struct vgt_device *vgt_dom0;
 struct mmio_hash_table	*mtable[MHASH_SIZE];
 struct mmio_hash_table gtt_mmio_handler={
@@ -959,6 +975,8 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
 	/* for single-VM UP dom0 case, no nest is expected */
+	if (spin_is_locked(&pdev->lock))
+		dump_stack();
 	ASSERT(!spin_is_locked(&pdev->lock));
 
 //	ASSERT (offset + bytes <= vgt->state.regNum *
@@ -1250,12 +1268,13 @@ void vgt_switch_display_owner(struct vgt_device *prev,
     struct vgt_device *next)
 {
     vgt_save_state(prev);
+	vgt_reinitialize_mode(prev, next);
     vgt_restore_state(next);
 }
 
 void do_vgt_display_switch(struct pgt_device *pdev)
 {
-	unsigned long flags;
+	//unsigned long flags;
     //struct vgt_device *cur, *pre;
 	printk(KERN_WARNING"xuanhua: vGT: display switched\n");
 	printk(KERN_WARNING"xuanhua: vGT: current display owner: %p; next display owner: %p\n",
@@ -1264,7 +1283,7 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 	/* TODO: Because of assert in vgt_emulate_write/read,
 	 * we cannot use this lock in case deadlock */
 	/* FIXME: we do need other locks for this ??? */
-	spin_lock_irqsave(&pdev->lock, flags);
+	//spin_lock_irqsave(&pdev->lock, flags);
 	dprintk("before irq save\n");
 	vgt_irq_save_context(current_display_owner(pdev),
 			VGT_OT_DISPLAY);
@@ -1276,7 +1295,7 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 	//next_display_owner = NULL;
 	dprintk("before irq restore\n");
 	vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
-	spin_unlock_irqrestore(&pdev->lock, flags);
+	//spin_unlock_irqrestore(&pdev->lock, flags);
 	dprintk("after irq restore\n");
 	/*
 	 * Virtual interrupts pending right after display switch
@@ -1284,10 +1303,10 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 	 */
 	if (pdev->request & VGT_REQUEST_IRQ) {
 		printk("vGT: handle pending interrupt in the display context switch time\n");
-		spin_lock_irqsave(&pdev->lock, flags);
+		//spin_lock_irqsave(&pdev->lock, flags);
 		clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 		vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
-		spin_unlock_irqrestore(&pdev->lock, flags);
+		//spin_unlock_irqrestore(&pdev->lock, flags);
 	}
 #if 0
     cur = next_display_owner;
@@ -1497,6 +1516,15 @@ int vgt_thread(void *priv)
 			dprintk("vGT: next vgt (%d)\n", next->vgt_id);
 			if ( next != current_render_owner(pdev) )
 			{
+
+				/* FIXME: add display switch here
+				 * when fully display switch enabled, it may not stay here
+				 */
+				if (atomic_read(&display_switched) == 1) {
+					do_vgt_display_switch(pdev);
+					atomic_dec(&display_switched);
+				}
+
 				rdtsc_barrier();
 				start = get_cycles();
 				rdtsc_barrier();
@@ -2710,6 +2738,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	struct vgt_device *vgt;
 	vgt_state_ring_t	*rb;
 	char *cfg_space;
+	struct vgt_dp_port *vgt_dp;
 	int rc = -ENOMEM;
 
 	printk("vGT: %s: vm_id=%d, aperture_sz=%dMB, gm_sz=%dMB, fence_sz=%d\n",
@@ -2883,6 +2912,36 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt_propagate_edid(vgt, -1);
 
 	*ptr_vgt = vgt;
+
+	rc = init_vgt_port_struct(vgt,
+			PIPE_A, PLANE_A,
+			VGT_OUTPUT_LVDS);
+	if (rc < 0)
+		return rc;
+
+	if (add_crt_monitor && add_dp_monitor)
+		BUG();
+	else if (add_crt_monitor) {
+		rc = init_vgt_port_struct(vgt,
+				PIPE_B, PLANE_B,
+				VGT_OUTPUT_ANALOG);
+		if (rc < 0)
+			return rc;
+	} else if (add_dp_monitor) {
+		rc = init_vgt_port_struct(vgt,
+				PIPE_B, PLANE_B,
+				VGT_OUTPUT_DISPLAYPORT);
+		if (rc < 0)
+			return rc;
+
+		/* on Elitebook 8460p, use port DP_D*/
+		vgt_dp= init_vgt_dp_port_private(
+				_REG_DP_D_CTL, false);
+		if (!vgt_dp)
+			return -ENOMEM;
+		vgt->attached_port[PIPE_B]->private = vgt_dp;
+	}
+
 	return 0;
 err:
 	if ( vgt->aperture_base > 0)
@@ -2910,6 +2969,10 @@ void vgt_release_instance(struct vgt_device *vgt)
 		next_display_owner = vgt_dom0;
 		do_vgt_display_switch(&default_device);
 	}
+
+	/* FIXME: display switch will be
+	 * a disaster after this */
+	vgt_destroy_attached_port(vgt);
 
 	if (vgt_ctx_switch) {
 		spin_lock_irqsave(&vgt->pdev->lock, flags);
