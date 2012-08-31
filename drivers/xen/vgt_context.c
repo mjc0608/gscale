@@ -152,6 +152,14 @@ static int __init vgt_add_dp_monitor_setup(char *str)
 }
 __setup("add_dp_monitor", vgt_add_dp_monitor_setup);
 
+bool old_display_switch = false;
+static int __init vgt_use_old_dsp_switch(char *str)
+{
+	old_display_switch = true;
+	return 1;
+}
+__setup("old_display_switch", vgt_use_old_dsp_switch);
+
 static int start_period = 10; /* in unit of second */
 static int __init period_setup(char *str)
 {
@@ -1268,7 +1276,8 @@ void vgt_switch_display_owner(struct vgt_device *prev,
     struct vgt_device *next)
 {
     vgt_save_state(prev);
-	vgt_reinitialize_mode(prev, next);
+	if (!old_display_switch)
+		vgt_reinitialize_mode(prev, next);
     vgt_restore_state(next);
 }
 
