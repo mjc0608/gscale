@@ -77,6 +77,7 @@ extern void show_debug(struct pgt_device *pdev, int ring_id);
 
 extern bool vgt_debug;
 extern bool novgt;
+extern bool hvm_super_owner;
 
 #define dprintk(fmt, a...)	\
 	do { if (vgt_debug) printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a); } while (0)
@@ -664,6 +665,10 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 
 	if (vgt_ops->boot_time)
 		return true;
+
+	/* super owner give full access to HVM instead of dom0 */
+	if (hvm_super_owner)
+		return vgt->vgt_id ? true : false;
 
 	/* normal phase of passthrough registers if vgt is the owner */
 	if (reg_pt(pdev, reg) && reg_is_owner(vgt, reg))

@@ -112,6 +112,17 @@ static int __init hvm_owner_setup(char *str)
 }
 __setup("hvm_owner", hvm_owner_setup);
 
+bool hvm_super_owner = false;
+static int __init hvm_super_owner_setup(char *str)
+{
+	hvm_super_owner = true;
+	hvm_dpy_owner = true;
+	hvm_render_owner = true;
+
+	return 1;
+}
+__setup("hvm_super_owner", hvm_super_owner_setup);
+
 static bool vgt_primary = false;
 static int __init vgt_primary_setup(char *str)
 {
