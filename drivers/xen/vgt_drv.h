@@ -503,6 +503,7 @@ struct pgt_device {
 	uint64_t rsvd_aperture_pos;	/* position of the next free reserved page */
 	uint64_t scratch_page;		/* page used for data written from GPU */
 	uint64_t ctx_switch_rb_page;	/* page used as ring buffer for context switch */
+	uint64_t batch_buffer_page;	/* page used to map batch buffer */
 	uint64_t dummy_area;
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */

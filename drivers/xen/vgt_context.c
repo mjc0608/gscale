@@ -736,6 +736,27 @@ static void show_seqno(struct pgt_device *pdev)
 }
 #endif
 
+static void show_batchbuffer(struct pgt_device *pdev, u32 addr)
+{
+	int i, index1, index2, pte_val;
+	char *p_contents;
+
+	index1 = GTT_INDEX(pdev, pdev->batch_buffer_page);
+	index2 = GTT_INDEX(pdev, addr);
+	pte_val = vgt_read_gtt(pdev, index2);
+	vgt_write_gtt(pdev, index1, pte_val);
+
+	p_contents = phys_aperture_vbase(pdev) +
+		     pdev->batch_buffer_page +
+		     (addr & ~GTT_PAGE_MASK);
+	printk("Batch buffer remaps to %x (p_contents: %llx)\n",
+		pte_val, (u64)p_contents);
+	printk("[%08x]:", (u32)(addr & ~GTT_PAGE_MASK));
+	for (i = 0; i < 32; i += 4)
+		printk(" %08x", *((u32 *)p_contents + i));
+	printk("\n");
+}
+
 /*
  * Given a ring buffer, print out the current data [-bytes, bytes]
  */
@@ -789,6 +810,8 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 		}
 		printk("Actual pGTT: %x\n",
 			vgt_read_gtt(pdev, GTT_INDEX(pdev, *cur)));
+		show_batchbuffer(pdev, VGT_MMIO_READ(pdev,
+			_REG_RCS_ACTHD + 0x10000 * ring_id));
 	}
 }
 
@@ -3138,7 +3161,15 @@ int vgt_initialize(struct pci_dev *dev)
 	pdev->ctx_switch_rb_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
 		pdev->rsvd_aperture_pos);
 	pdev->rsvd_aperture_pos += PAGE_SIZE;
-	printk("dexuan: ctx_switch_rb_page is allocated at gm(%llx)\n", pdev->ctx_switch_rb_page);
+	printk("ctx_switch_rb_page is allocated at gm(%llx)\n",
+		pdev->batch_buffer_page);
+
+	/* one page for mapping batch buffer when PPGTT is disabled */
+	pdev->batch_buffer_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
+		pdev->rsvd_aperture_pos);
+	pdev->rsvd_aperture_pos += PAGE_SIZE;
+	printk("batch_buffer_page is allocated at gm(%llx)\n",
+		pdev->batch_buffer_page);
 
 	/* initialize EDID data */
 	vgt_probe_edid(pdev, -1);
