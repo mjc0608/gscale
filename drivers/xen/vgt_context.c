@@ -2813,100 +2813,6 @@ dprintk("read back bar_size2 %lx\n", bar_size);
         return bar_size;
 }
 
-static bool save_vbios(struct pgt_device *pdev)
-{
-	char *ptr = __va(0xC0000);
-	u64 size;
-	int i, pages, cnt, rest, j, vbt_start = -1;
-	char sum = 0;
-	struct page *page;
-	char *vbios;
-
-	pdev->vbios = NULL;
-	/* allocate 64KB buffer */
-	page = alloc_pages(GFP_KERNEL | __GFP_ZERO, get_order(VGT_VBIOS_PAGES));
-	if (!page) {
-		printk("vGT: no enough memory for vBIOS\n");
-		return false;
-	}
-	pdev->vbios = page;
-	/* FIXME: not sure why the __va doesn't work sanely here */
-#if 0
-	vbios = __va(page_to_phys(page));
-	printk("vGT: save vbios at %lx\n", (uint64_t)vbios);
-	for (i = 0; i < VGT_VBIOS_PAGES; i++) {
-		printk("%d: pa(%lx), mfn (%lx), va1(%lx), va2(%lx)\n",
-			i, page_to_phys(page + i), g2m_pfn(0, page_to_pfn(page + i)) << PAGE_SHIFT,
-			pfn_to_kaddr(page_to_pfn(page + i)), __va(page_to_phys(page + i)));
-		*(char*)(__va(page_to_phys(page + i))) = 0xaa;
-	}
-#endif
-
-	if (*(uint16_t *)ptr != 0xAA55) {
-		printk("vGT: no valid VBIOS found!\n");
-		return false;
-	}
-
-	printk("vGT: found a valid VBIOS\n");
-	size = ptr[2] * 512;
-	ASSERT_NUM(size && (size < (VGT_VBIOS_PAGES << PAGE_SHIFT)), size);
-
-	pages = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	pages = 1;
-	printk("vGT: VBIOS size: %llx (%d pages)\n", size, pages);
-
-	for (i = 0; i + 4 < size; i++)
-		if (!memcmp(ptr + i, "$VBT", 4)) {
-			printk("vGT: find VBT table at %x\n", 0xC0000+i);
-			vbt_start = i;
-			break;
-		}
-
-	rest = size;
-	cnt = PAGE_SIZE;
-	for (i = 0; i < pages; i++) {
-		if (rest < PAGE_SIZE)
-			cnt = rest;
-		vbios = (char *)kmap(page + i);
-		printk("vGT: copy %dth vbios page (pa-%llx, va-%llx, cnt-%x)\n", i,
-			(u64)page_to_phys(page + i), (u64)vbios, cnt);
-		memcpy(vbios, ptr + i * PAGE_SIZE, cnt);
-		/*
-		 * FIXME: now not sure the reason. only the 1st page can be correctly
-		 * scanned by the 2nd VM. fortunately the vbt size is 0xf61 on this
-		 * platform. So we move the vbt table to be fully within the 1st page
-		 * as a workaround.
-		 */
-		if (i == 0 && vbt_start != -1)
-			memcpy(vbios + 0x60, ptr + vbt_start, 0xf80);
-		for (j = 0; j < cnt; j++)
-			sum += vbios[j];
-		if (i == pages - 1 && sum + vbios[j-1] != 0) {
-			printk("vGT: adjust VBIOS checksum (%x->%x)\n", (u32)vbios[j - 1], (u32)-sum);
-			vbios[j - 1] = -sum;
-		}
-#if 0
-		/* check 1200B VBT table */
-		if (i == 0)
-			for (j = 0xab0; j < 0xab0 + 0x4b0; j += 4) {
-				if (!(j % 16))
-					printk("\n[%4x]:", j);
-				printk(" %4x", *(uint32_t *)(vbios + j));
-			}
-#endif
-		kunmap(page + i);
-		rest -= PAGE_SIZE;
-	}
-
-	/*
-	 * FIXME: ROM BAR on the physical device may be disabled, when the GEN is
-	 * used as the boot device. Hard code to 64KB now
-	 */
-	pdev->bar_size[3] = VGT_VBIOS_PAGES << PAGE_SHIFT;
-	pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR_ROM] &= 0x1; /* enabled */
-	return true;
-}
-
 bool initial_phys_states(struct pgt_device *pdev)
 {
 	int i;
@@ -2987,7 +2893,7 @@ dprintk("VGT: Initial_phys_states\n");
 		VGT_MMIO_WRITE(pdev, 0xc5108, val | 0x8000);
 	}
 
-	return save_vbios(pdev);
+	return true;
 }
 
 uint64_t vgt_get_gtt_size(struct pci_bus *bus)
@@ -3355,8 +3261,6 @@ void vgt_destroy(void)
 	}
 	free_mtable();
 	kfree(pdev->reg_info);
-	if (pdev->vbios)
-		__free_pages(pdev->vbios, get_order(VGT_VBIOS_PAGES));
 
 	for (i = 0; i < EDID_NUM; ++ i) {
 		if (pdev->pdev_edids[i]) {

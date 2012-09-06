@@ -517,7 +517,6 @@ struct pgt_device {
 
 	uint64_t vgtt_sz; /* in bytes */
 	uint32_t *vgtt; /* virtual GTT table for guest to read*/
-	struct page *vbios;
 
 	/* FIXME: Temperary solution: use this to tell hvm domain if external
 	 * monitors are detected. This should be per vm, that

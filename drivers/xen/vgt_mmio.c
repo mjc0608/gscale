@@ -1445,47 +1445,6 @@ int vgt_hvm_enable (struct vgt_device *vgt)
 	return rc;
 }
 
-static int vgt_hvm_map_rom (struct vgt_device *vgt, int map)
-{
-	char *cfg_space = &vgt->state.cfg_space[0];
-	uint64_t gfn_s, num;
-	struct xen_hvm_vgt_map_mmio memmap;
-	int r, i;
-
-	/* guarantee the sequence of map -> unmap -> map -> unmap */
-	if (map == vgt->state.bar_mapped[3])
-		return 0;
-
-	cfg_space += VGT_REG_CFG_SPACE_BAR_ROM;
-	gfn_s = (* (uint32_t*) cfg_space) >> PAGE_SHIFT;
-	num = vgt->state.bar_size[3] >> PAGE_SHIFT;
-
-	if (gfn_s == 0) {
-		printk("vGT: map ROM bar to GFN ZERO!!!! exit!\n");
-		return 0;
-	}
-
-	num = 1;
-	for (i = 0; i < num; i++) {
-		memmap.first_gfn = gfn_s + i;
-		memmap.first_mfn = pfn_to_mfn(page_to_pfn(vgt->pdev->vbios + i));
-		memmap.nr_mfns = 1;
-		memmap.map = map;
-		memmap.domid = vgt->vm_id;
-
-		printk("%s(rombar): domid=%d gfn_s=0x%llx mfn_s=0x%llx nr_mfns=0x%x\n", map==0? "remove_map":"add_map",
-				vgt->vm_id, memmap.first_gfn, memmap.first_mfn, memmap.nr_mfns);
-
-		r = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
-
-		if (r != 0)
-			printk(KERN_ERR "vgt_hvm_map_rom fail with %d!\n", r);
-	}
-
-	vgt->state.bar_mapped[3] = map;
-	return r;
-}
-
 static int vgt_hvm_map_opregion (struct vgt_device *vgt, int map)
 {
 	uint32_t opregion;
@@ -1668,15 +1627,11 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 		case VGT_REG_CFG_SPACE_BAR0:	/* GTTMMIO */
 		case VGT_REG_CFG_SPACE_BAR1:	/* GMADR */
 		case VGT_REG_CFG_SPACE_BAR2:	/* IO */
-		case VGT_REG_CFG_SPACE_BAR_ROM:	/* ROM */
 			ASSERT((bytes == 4) && (off & 3) == 0);
 
 			new = *(uint32_t *)p_data;
 			printk("Programming bar 0x%x with 0x%x\n", off, new);
-			if ((off & ~3) != VGT_REG_CFG_SPACE_BAR_ROM)
-				size = vgt->state.bar_size[(off - VGT_REG_CFG_SPACE_BAR0)/8];
-			else
-				size = vgt->state.bar_size[3];
+			size = vgt->state.bar_size[(off - VGT_REG_CFG_SPACE_BAR0)/8];
 			if ( new == 0xFFFFFFFF || new == 0xFFFFF800 ) {
 				/*
 				 * Power-up software can determine how much address
@@ -1692,13 +1647,9 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 			} else {
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
 					vgt_hvm_map_apperture(vgt, 0);
-				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR_ROM)
-					vgt_hvm_map_rom(vgt, 0);
 				vgt_pci_bar_write_32(vgt, off, new);
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
 					vgt_hvm_map_apperture(vgt, 1);
-				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR_ROM)
-					vgt_hvm_map_rom(vgt, 1);
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR0)
 					vgt_hvm_set_trap_area(vgt);
 			}
