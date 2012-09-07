@@ -62,6 +62,7 @@
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/highmem.h>
+#include <linux/pci.h>
 
 #include <asm/xen/hypercall.h>
 #include <asm/xen/hypervisor.h>
@@ -388,7 +389,7 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 		printk(KERN_ERR "Uninitialized shadow PTE page at index %d?\n", idx);
 		return -1;
 	}
-	vgt->shadow_pde_table[idx].shadow_pte_maddr = p->shadow_mpfn << PAGE_SHIFT;
+	vgt->shadow_pde_table[idx].shadow_pte_maddr = p->shadow_addr;
 
 	/* access VM's pte page */
 	p->guest_pte_vm = vgt_ppgtt_map_guest_pte_page(vgt, virt_pte);
@@ -485,8 +486,10 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 
 bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 {
+	struct pgt_device *pdev = vgt->pdev;
 	int i;
 	vgt_ppgtt_pte_t *p;
+	dma_addr_t dma_addr;
 
 	dprintk("vgt_init_shadow_ppgtt for vm %d\n", vgt->vm_id);
 
@@ -498,12 +501,13 @@ bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 			return false;
 		}
 
-		/* Shadow PTE is always managed in Dom0 */
-		p->shadow_mpfn = g2m_pfn(0, page_to_pfn(p->pte_page));
-		if (p->shadow_mpfn == INVALID_MFN) {
-			printk(KERN_ERR "Failed to get mpfn for shadow PTE!\n");
+		dma_addr = pci_map_page(pdev->pdev, p->pte_page, 0, PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
+		if (pci_dma_mapping_error(pdev->pdev, dma_addr)) {
+			printk(KERN_ERR "Pci map shadow PTE page failed!\n");
 			return false;
 		}
+
+		p->shadow_addr = dma_addr;
 	}
 	return true;
 }
