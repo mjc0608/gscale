@@ -2655,18 +2655,18 @@ static void vgt_set_reg_attr(struct pgt_device *pdev,
 	}
 
 	reg_set_owner(pdev, reg, attr->owner);
-	if (attr->workaround)
+	if (attr->flags & VGT_REG_WORKAROUND)
 		reg_set_workaround(pdev, reg);
-	if (attr->addr_fix) {
+	if (attr->flags & VGT_REG_ADDR_FIX ) {
 		if (!attr->addr_mask)
 			printk("vGT: ZERO addr fix mask for %x\n", reg);
 		reg_set_addr_fix(pdev, reg, attr->addr_mask);
 	}
-	if (attr->mode_ctl)
+	if (attr->flags & VGT_REG_MODE_CTL)
 		reg_set_mode_ctl(pdev, reg);
-	if (attr->always_virt)
+	if (attr->flags & VGT_REG_ALWAYS_VIRT)
 		reg_set_always_virt(pdev, reg);
-	if (attr->hw_update)
+	if (attr->flags & VGT_REG_HW_UPDATE)
 		reg_set_hw_update(pdev, reg);
 
 	/* last mark the reg as tracked */
@@ -2688,10 +2688,10 @@ static void vgt_initialize_reg_attr(struct pgt_device *pdev,
 
 		cnt++;
 		if (track)
-			printk("reg(%x): size(%x), owner(%d), device(%d), wa(%d), fix(%d), mode(%d), virt(%d), hw_up(%d), mask(%x), read(%llx), write(%llx)\n",
+			printk("reg(%x): size(%x), owner(%d), device(%d), flags(%x), mask(%x), read(%llx), write(%llx)\n",
 				attr->reg, attr->size, attr->owner, attr->device,
-				attr->workaround, attr->addr_fix, attr->mode_ctl,
-				attr->always_virt, attr->hw_update, attr->addr_mask,
+				attr->flags,
+				attr->addr_mask,
 				(u64)attr->read, (u64)attr->write);
 		for (reg = attr->reg;
 		     reg < attr->reg + attr->size;

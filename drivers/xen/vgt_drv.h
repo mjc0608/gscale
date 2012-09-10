@@ -724,11 +724,7 @@ typedef struct {
 	int			size;
 	enum vgt_owner_type	owner;
 	int			device;
-	bool			workaround;
-	bool			addr_fix;
-	bool			mode_ctl;
-	bool			always_virt;
-	bool			hw_update;
+	u32			flags;
 	vgt_reg_t		addr_mask;
 	vgt_mmio_read		read;
 	vgt_mmio_write		write;
@@ -777,8 +773,8 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 		.size = _size,					\
 		.owner = VGT_OT_INVALID,			\
 		.device = _device,				\
-		.workaround = true,				\
-		.mode_ctl = _mode_ctl,				\
+		.flags = VGT_REG_WORKAROUND | 			\
+			(_mode_ctl ? VGT_REG_MODE_CTL:0),	\
 		.read = _read,					\
 		.write = _write,				\
 	}
@@ -789,7 +785,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 		.size = _size,					\
 		.owner = _owner,				\
 		.device = _device,				\
-		.mode_ctl = true,				\
+		.flags = VGT_REG_MODE_CTL,			\
 		.read = _read,					\
 		.write = _write,				\
 	}
@@ -800,7 +796,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 		.size = _size,					\
 		.owner = VGT_OT_INVALID,			\
 		.device = VGT_DEV_ALL,				\
-		.always_virt = true,				\
+		.flags = VGT_REG_ALWAYS_VIRT,			\
 		.read = _read,					\
 		.write = _write,				\
 	}
@@ -811,7 +807,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 		.size = _size,					\
 		.owner = _owner,				\
 		.device = VGT_DEV_ALL,				\
-		.addr_fix = true,				\
+		.flags = VGT_REG_ADDR_FIX,			\
 		.addr_mask = _mask,				\
 		.read = _read,					\
 		.write = _write,				\
@@ -823,7 +819,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 		.size = _size,					\
 		.owner = _owner,				\
 		.device = VGT_DEV_ALL,				\
-		.hw_update = true,				\
+		.flags = VGT_REG_HW_UPDATE,			\
 		.read = _read,					\
 		.write = _write,				\
 	}
@@ -836,11 +832,11 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 		.size = _size,					\
 		.owner = _owner,				\
 		.device = _device, 				\
-		.workaround = _wa,				\
-		.addr_fix = _addr_fix,				\
-		.mode_ctl = _mode_ctl,				\
-		.always_virt = _always_virt,			\
-		.hw_update = _hw_update,			\
+		.flags = (_wa ? VGT_REG_WORKAROUND : 0) |	\
+			(_addr_fix ? VGT_REG_ADDR_FIX : 0) |	\
+			(_hw_update ? VGT_REG_HW_UPDATE : 0) |	\
+			( _always_virt ? VGT_REG_ALWAYS_VIRT : 0) |	\
+			(_mode_ctl ? VGT_REG_MODE_CTL:0),	\
 		.addr_mask = _mask,				\
 		.read = _read,					\
 		.write = _write,				\
