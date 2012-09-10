@@ -171,14 +171,6 @@ static int __init vgt_use_old_dsp_switch(char *str)
 }
 __setup("old_display_switch", vgt_use_old_dsp_switch);
 
-static int start_period = 10; /* in unit of second */
-static int __init period_setup(char *str)
-{
-	start_period = simple_strtoul(str, NULL, 10);
-	return 1;
-}
-__setup("vgt_start_period=", period_setup);
-
 static int fastmode = 1;
 static int __init mode_setup(char *str)
 {
@@ -1473,7 +1465,7 @@ int vgt_thread(void *priv)
 	}
 
 	threshold = (10 * HZ) /period;
-	wait = HZ*start_period;
+	wait = period;
 	while (!kthread_should_stop()) {
 		/*
 		 * TODO: Use high priority task and timeout based event
@@ -1530,7 +1522,7 @@ int vgt_thread(void *priv)
 
 		if (list_empty(&pdev->rendering_runq_head)) {
 			/* Idle now, and no pending activity */
-			printk("....idle\n");
+			dprintk("....idle\n");
 			continue;
 		}
 
