@@ -722,7 +722,6 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 typedef struct {
 	u32			reg;
 	int			size;
-	enum vgt_owner_type	owner;
 	int			device;
 	u32			flags;
 	vgt_reg_t		addr_mask;
@@ -746,7 +745,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	{							\
 		.reg = _reg,					\
 		.size = _size,					\
-		.owner = _owner,				\
+		.flags = _owner & VGT_REG_OWNER,		\
 		.device = _device,				\
 		.read = _read,					\
 		.write = _write,				\
@@ -771,9 +770,8 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	{							\
 		.reg = _reg,					\
 		.size = _size,					\
-		.owner = VGT_OT_INVALID,			\
 		.device = _device,				\
-		.flags = VGT_REG_WORKAROUND | 			\
+		.flags = VGT_OT_INVALID | VGT_REG_WORKAROUND | 	\
 			(_mode_ctl ? VGT_REG_MODE_CTL:0),	\
 		.read = _read,					\
 		.write = _write,				\
@@ -783,9 +781,9 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	{							\
 		.reg = _reg,					\
 		.size = _size,					\
-		.owner = _owner,				\
 		.device = _device,				\
-		.flags = VGT_REG_MODE_CTL,			\
+		.flags = VGT_REG_MODE_CTL |			\
+			(_owner & VGT_REG_OWNER),		\
 		.read = _read,					\
 		.write = _write,				\
 	}
@@ -794,9 +792,8 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	{							\
 		.reg = _reg,					\
 		.size = _size,					\
-		.owner = VGT_OT_INVALID,			\
 		.device = VGT_DEV_ALL,				\
-		.flags = VGT_REG_ALWAYS_VIRT,			\
+		.flags = VGT_OT_INVALID | VGT_REG_ALWAYS_VIRT,	\
 		.read = _read,					\
 		.write = _write,				\
 	}
@@ -805,9 +802,9 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	{							\
 		.reg = _reg,					\
 		.size = _size,					\
-		.owner = _owner,				\
 		.device = VGT_DEV_ALL,				\
-		.flags = VGT_REG_ADDR_FIX,			\
+		.flags = VGT_REG_ADDR_FIX |			\
+			(_owner & VGT_REG_OWNER),		\
 		.addr_mask = _mask,				\
 		.read = _read,					\
 		.write = _write,				\
@@ -817,9 +814,9 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	{							\
 		.reg = _reg,					\
 		.size = _size,					\
-		.owner = _owner,				\
 		.device = VGT_DEV_ALL,				\
-		.flags = VGT_REG_HW_UPDATE,			\
+		.flags = VGT_REG_HW_UPDATE |			\
+			(_owner & VGT_REG_OWNER),		\
 		.read = _read,					\
 		.write = _write,				\
 	}
@@ -830,9 +827,9 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	{							\
 		.reg = _reg,					\
 		.size = _size,					\
-		.owner = _owner,				\
 		.device = _device, 				\
 		.flags = (_wa ? VGT_REG_WORKAROUND : 0) |	\
+			( _owner & VGT_REG_OWNER) |		\
 			(_addr_fix ? VGT_REG_ADDR_FIX : 0) |	\
 			(_hw_update ? VGT_REG_HW_UPDATE : 0) |	\
 			( _always_virt ? VGT_REG_ALWAYS_VIRT : 0) |	\

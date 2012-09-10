@@ -2654,7 +2654,7 @@ static void vgt_set_reg_attr(struct pgt_device *pdev,
 		return;
 	}
 
-	reg_set_owner(pdev, reg, attr->owner);
+	reg_set_owner(pdev, reg, attr->flags & VGT_REG_OWNER);
 	if (attr->flags & VGT_REG_WORKAROUND)
 		reg_set_workaround(pdev, reg);
 	if (attr->flags & VGT_REG_ADDR_FIX ) {
@@ -2688,8 +2688,8 @@ static void vgt_initialize_reg_attr(struct pgt_device *pdev,
 
 		cnt++;
 		if (track)
-			printk("reg(%x): size(%x), owner(%d), device(%d), flags(%x), mask(%x), read(%llx), write(%llx)\n",
-				attr->reg, attr->size, attr->owner, attr->device,
+			printk("reg(%x): size(%x), device(%d), flags(%x), mask(%x), read(%llx), write(%llx)\n",
+				attr->reg, attr->size, attr->device,
 				attr->flags,
 				attr->addr_mask,
 				(u64)attr->read, (u64)attr->write);
