@@ -2626,8 +2626,8 @@ _REG_ALWAYS_VIRT(_REG_RC_STATE_CTRL_1, 4, NULL, rc_state_ctrl_1_mmio_write),
 _REG_ALWAYS_VIRT(_REG_RC_STATE_CTRL_2, 4, NULL, rc_state_ctrl_1_mmio_write),
 
 	/* -------miscellaneous regs-------- */
-_REG_VIRT(_REG_GEN6_GDRST, 4, NULL, gen6_gdrst_mmio_write),
-_REG_VIRT(_REG_FENCE_0_LOW, 0x80, fence_mmio_read, fence_mmio_write),
+	{_REG_GEN6_GDRST, 4, NULL, gen6_gdrst_mmio_write, VGT_DEV_ALL, VGT_OT_INVALID, 0},
+	{_REG_FENCE_0_LOW, 0x80, fence_mmio_read, fence_mmio_write, VGT_DEV_ALL, VGT_OT_INVALID, 0},
 _REG_ALWAYS_VIRT(VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, NULL, NULL),
 
 	/* -------workaround regs--------- */
@@ -2636,9 +2636,12 @@ _REG_ALWAYS_VIRT(VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, NULL, NULL),
 	 * Many w/a regs have higher 16bits as masks so requiring an
 	 * explicit mode_ctl parameter.
 	 */
-_REG_WA(_REG_TILECTL, 4, VGT_DEV_ALL, false, NULL, NULL),
-_REG_WA(_REG_DISP_ARB_CTL, 4, VGT_DEV_ALL, false, NULL, NULL),
-_REG_WA(_REG_DISP_ARB_CTL2, 4, VGT_DEV_ALL, false, NULL, NULL),
+//_REG_WA(_REG_TILECTL, 4, VGT_DEV_ALL, false, NULL, NULL),
+//_REG_WA(_REG_DISP_ARB_CTL, 4, VGT_DEV_ALL, false, NULL, NULL),
+//_REG_WA(_REG_DISP_ARB_CTL2, 4, VGT_DEV_ALL, false, NULL, NULL),
+	{_REG_TILECTL, 4, NULL, NULL, VGT_DEV_ALL, FLAGS_WA, 0},
+	{_REG_DISP_ARB_CTL, 4, NULL, NULL, VGT_DEV_ALL, FLAGS_WA, 0},
+	{_REG_DISP_ARB_CTL2, 4, NULL, NULL, VGT_DEV_ALL, FLAGS_WA, 0},
 };
 
 static void vgt_set_reg_attr(struct pgt_device *pdev,

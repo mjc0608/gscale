@@ -722,11 +722,11 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 typedef struct {
 	u32			reg;
 	int			size;
+	vgt_mmio_read		read;
+	vgt_mmio_write		write;
 	int			device;
 	u32			flags;
 	vgt_reg_t		addr_mask;
-	vgt_mmio_read		read;
-	vgt_mmio_write		write;
 } reg_attr_t;
 
 static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *attr)
@@ -766,6 +766,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 #define _REG_VIRT(_reg, _size, _read, _write)	\
 	_REG_MMIO(_reg, _size, VGT_OT_INVALID, VGT_DEV_ALL, _read, _write)
 
+#define FLAGS_WA	(VGT_OT_INVALID | VGT_REG_WORKAROUND)
 #define _REG_WA(_reg, _size, _device, _mode_ctl, _read, _write)	\
 	{							\
 		.reg = _reg,					\
