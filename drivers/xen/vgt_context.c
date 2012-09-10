@@ -1012,7 +1012,8 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 		default_mmio_read(vgt, offset, p_data, bytes);
 	}
 
-	reg_set_accessed(pdev, offset);
+	if (offset < VGT_MMIO_REG_NUM)
+		reg_set_accessed(pdev, offset);
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
@@ -1155,7 +1156,8 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	if (offset == _REG_RCS_UHPTR)
 		printk("vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
 
-	reg_set_accessed(pdev, offset);
+	if (offset < VGT_MMIO_REG_NUM)
+		reg_set_accessed(pdev, offset);
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
