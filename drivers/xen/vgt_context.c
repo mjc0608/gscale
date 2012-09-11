@@ -335,20 +335,28 @@ static void show_mode_settings(struct pgt_device *pdev)
 	SHOW_MODE(_REG_RCS_MI_MODE);
 	SHOW_MODE(_REG_VCS_MI_MODE);
 	SHOW_MODE(_REG_BCS_MI_MODE);
-	SHOW_MODE(_REG_GFX_MODE);
-	SHOW_MODE(_REG_ARB_MODE);
-	SHOW_MODE(_REG_GT_MODE);
-	SHOW_MODE(_REG_RCS_INSTPM);
-	SHOW_MODE(_REG_VCS_INSTPM);
-	SHOW_MODE(_REG_BCS_INSTPM);
-	SHOW_MODE(_REG_CACHE_MODE_0);
-	SHOW_MODE(_REG_CACHE_MODE_1);
-	SHOW_MODE(_REG_TILECTL);
+
 	if (pdev->is_ivybridge) {
 		SHOW_MODE(_REG_RCS_GFX_MODE_IVB);
 		SHOW_MODE(_REG_BCS_BLT_MODE_IVB);
 		SHOW_MODE(_REG_VCS_MFX_MODE_IVB);
+		SHOW_MODE(_REG_CACHE_MODE_0_IVB);
+		SHOW_MODE(_REG_CACHE_MODE_1_IVB);
+		SHOW_MODE(_REG_GT_MODE_IVB);
+	} else if (pdev->is_sandybridge) {
+		SHOW_MODE(_REG_GFX_MODE);
+		SHOW_MODE(_REG_ARB_MODE);
+		SHOW_MODE(_REG_GT_MODE);
+		SHOW_MODE(_REG_CACHE_MODE_0);
+		SHOW_MODE(_REG_CACHE_MODE_1);
 	}
+
+	SHOW_MODE(_REG_RCS_INSTPM);
+	SHOW_MODE(_REG_VCS_INSTPM);
+	SHOW_MODE(_REG_BCS_INSTPM);
+
+	SHOW_MODE(_REG_TILECTL);
+
 }
 
 #if 0
@@ -1065,17 +1073,29 @@ vgt_reg_t vgt_mode_ctl_regs[] = {
 	_REG_GT_MODE,
 	_REG_CACHE_MODE_0,
 	_REG_CACHE_MODE_1,
+
 };
 
 
 /* FIXME: need a better way to handle this generation difference */
 vgt_reg_t vgt_gen7_mode_ctl_regs[] = {
+	_REG_ARB_MODE,
+	_REG_GT_MODE_IVB,
+	_REG_CACHE_MODE_0_IVB,
+	_REG_CACHE_MODE_1_IVB,
+
 	_REG_BCS_MI_MODE,
 	_REG_BCS_BLT_MODE_IVB,
+	_REG_BCS_INSTPM,
+
 	_REG_RCS_MI_MODE,
 	_REG_RCS_GFX_MODE_IVB,
+	_REG_RCS_INSTPM,
+
 	_REG_VCS_MI_MODE,
 	_REG_VCS_MFX_MODE_IVB,
+	_REG_VCS_INSTPM,
+
 };
 
 /*
@@ -2107,19 +2127,57 @@ vgt_reg_t vgt_render_regs[] = {
 	_REG_RCS_UHPTR,
 	_REG_BCS_UHPTR,
 	_REG_VCS_UHPTR,
+
+	_REG_TILECTL,
 };
 
-void vgt_rendering_save_mmio(struct vgt_device *vgt)
+vgt_reg_t vgt_gen7_render_regs[] = {
+	/* Add IVB register, so they all got pass-through */
+
+	_REG_ARB_MODE,
+
+	_REG_BCS_HWS_PGA_GEN7,
+	_REG_RCS_HWS_PGA,
+	_REG_VCS_HWS_PGA,
+
+	_REG_GT_MODE_IVB,
+	_REG_CACHE_MODE_0_IVB,
+	_REG_CACHE_MODE_1_IVB,
+
+	_REG_BCS_MI_MODE,
+	_REG_BCS_BLT_MODE_IVB,
+	_REG_BCS_INSTPM,
+	_REG_BCS_HWSTAM,
+	_REG_BCS_EXCC,
+	_REG_BCS_UHPTR,
+
+	_REG_RCS_MI_MODE,
+	_REG_RCS_GFX_MODE_IVB,
+	_REG_RCS_INSTPM,
+	_REG_RCS_HWSTAM,
+	_REG_RCS_EXCC,
+	_REG_RCS_UHPTR,
+
+	_REG_VCS_MI_MODE,
+	_REG_VCS_MFX_MODE_IVB,
+	_REG_VCS_INSTPM,
+	_REG_VCS_HWSTAM,
+	_REG_VCS_EXCC,
+	_REG_VCS_UHPTR,
+
+	_REG_TILECTL,
+};
+
+static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *regs)
 {
 	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
-	int num = ARRAY_NUM(vgt_render_regs);
 	int i;
 
 	sreg = vgt->state.sReg;
 	vreg = vgt->state.vReg;
 
 	for (i=0; i<num; i++) {
-		int reg = vgt_render_regs[i];
+		int reg = regs[i];
 		//if (reg_hw_update(vgt->pdev, reg)) {
 		/* FIXME: only hw update reg needs save */
 		if (!reg_mode_ctl(vgt->pdev, reg))
@@ -2131,23 +2189,29 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 	}
 }
 
-/*
- * Rstore MMIO registers per rendering context.
- * (Not include ring buffer registers).
- */
-void vgt_rendering_restore_mmio(struct vgt_device *vgt)
+void vgt_rendering_save_mmio(struct vgt_device *vgt)
 {
-	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
-	int num = ARRAY_NUM(vgt_render_regs);
-	int i;
 	struct pgt_device *pdev = vgt->pdev;
+
+	if (pdev->is_sandybridge)
+		__vgt_rendering_save(vgt, ARRAY_NUM(vgt_render_regs), &vgt_render_regs[0]);
+	else if (pdev->is_ivybridge)
+		__vgt_rendering_save(vgt, ARRAY_NUM(vgt_gen7_render_regs), &vgt_gen7_render_regs[0]);
+}
+
+static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs, vgt_reg_t *render_regs)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
+	int i;
 
 	sreg = vgt->state.sReg;
 	vreg = vgt->state.vReg;
 
-	for (i=0; i<num; i++) {
-		int reg = vgt_render_regs[i];
+	for (i = 0; i < num_render_regs; i++) {
+		int reg = render_regs[i];
 		vgt_reg_t val = __sreg(vgt, reg);
+
 		if (reg_mode_ctl(pdev, reg) && reg_aux_mode_mask(pdev, reg))
 			val |= reg_aux_mode_mask(pdev, reg);
 
@@ -2164,6 +2228,20 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 		VGT_MMIO_WRITE(vgt->pdev, reg, val);
 		dprintk("....restore mmio (%x) with (%x)\n", reg, val);
 	}
+}
+
+/*
+ * Rstore MMIO registers per rendering context.
+ * (Not include ring buffer registers).
+ */
+void vgt_rendering_restore_mmio(struct vgt_device *vgt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+
+	if (pdev->is_sandybridge)
+		__vgt_rendering_restore(vgt, ARRAY_NUM(vgt_render_regs), &vgt_render_regs[0]);
+	else if (pdev->is_ivybridge)
+		__vgt_rendering_restore(vgt, ARRAY_NUM(vgt_gen7_render_regs), &vgt_gen7_render_regs[0]);
 }
 
 /*

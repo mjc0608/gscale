@@ -155,6 +155,9 @@
 #define _REG_BCS_BLT_MODE_IVB	0x2229C
 #define _REG_RCS_GFX_MODE_IVB	0x0229C
 #define _REG_VCS_MFX_MODE_IVB	0x1229C
+#define _REG_CACHE_MODE_0_IVB	0x7000
+#define _REG_CACHE_MODE_1_IVB	0x7004
+#define _REG_GT_MODE_IVB	0x7008
 
 /* PPGTT entry */
 #define _REGBIT_PDE_VALID	(1<<0)
@@ -180,7 +183,7 @@
 #define _REG_RCS_HWS_PGA	0x4080
 #define _REG_VCS_HWS_PGA	0x4180
 #define _REG_BCS_HWS_PGA	0x24080
-#define _REG_IVB_BCS_HWS_PGA	0x4280
+#define _REG_BCS_HWS_PGA_GEN7	0x4280
 
 #define _REG_RCS_EXCC		0x2028
 #define _REG_VCS_EXCC		0x12028
@@ -1195,6 +1198,7 @@ enum vgt_port_type {
 #define _REG_RCS_IMR		0x20A8
 #define _REG_VCS_IMR		0x120A8
 #define _REG_BCS_IMR		0x220A8
+#define RING_IMR(ring)	(0x20a8 + 0x10000 * ring)
 
 #define _REG_RCS_WATCHDOG_CTL	0x2178
 #define _REG_RCS_WATCHDOG_THRSH	0x217C
