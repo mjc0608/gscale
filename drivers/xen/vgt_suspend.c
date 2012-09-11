@@ -763,17 +763,17 @@ void vgt_wait_for_vblank(struct vgt_device *vgt, enum vgt_pipe pipe)
 }
 
 static void vgt_assert_planes_disabled(struct vgt_device *vgt,
-		enum vgt_pipe pipe)
+		enum vgt_plane plane)
 {
 	vgt_reg_t reg_data;
 	struct pgt_device *pdev = vgt->pdev;
 
 	/* Planes are fixed with the pipe on SNB */
 	if (VGT_HAS_PCH_SPLIT(pdev)) {
-		reg_data = VGT_MMIO_READ(pdev, VGT_DSPCNTR(pipe));
+		reg_data = VGT_MMIO_READ(pdev, VGT_DSPCNTR(plane));
 		if (reg_data & _REGBIT_PRIMARY_PLANE_ENABLE) {
 			vgt_printk("assertion failed, %s should be disabled.",
-					VGT_PLANE_NAME(pipe));
+					VGT_PLANE_NAME(plane));
 		}
 		return;
 	}
@@ -1299,7 +1299,7 @@ bool vgt_ironlake_crtc_disable(struct vgt_device *vgt,
 	enum vgt_pipe pipe = port_struct->attached_pipe;
 	enum vgt_plane plane = port_struct->attached_plane;
 
-	ASSERT(pipe < I915_MAX_PLANES);
+	ASSERT((pipe < I915_MAX_PIPES) && (plane < I915_MAX_PLANES));
 
 	/* FIXME: we must check if there are any pending page flips.
 	 * Such pending flip may overwrite surface base address that
@@ -1339,7 +1339,7 @@ bool vgt_ironlake_crtc_disable(struct vgt_device *vgt,
 	}
 
 	/* Disable pipe */
-	vgt_assert_planes_disabled(vgt, pipe);
+	vgt_assert_planes_disabled(vgt, plane);
 
 	/*FIXME: intel_disable_pipe(): watch out quirks of QUIRK_PIPEA_FORCE*/
 	reg_data = VGT_MMIO_READ(pdev, VGT_PIPECONF(pipe));
