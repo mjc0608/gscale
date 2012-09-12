@@ -426,11 +426,6 @@ atomic_t display_switched = ATOMIC_INIT(0);
 struct vgt_device *next_display_owner;
 struct vgt_device *vgt_dom0;
 struct mmio_hash_table	*mtable[MHASH_SIZE];
-struct mmio_hash_table gtt_mmio_handler={
-	.read = gtt_mmio_read,
-	.write = gtt_mmio_write,
-	.mmio_base = 0x200000,
-};
 
 static void vgt_hash_add_mtable(struct vgt_device *vgt, int table, int index, struct mmio_hash_table *mht)
 {
@@ -463,8 +458,6 @@ struct mmio_hash_table *vgt_hash_lookup_mtable(struct vgt_device *vgt, int table
 
 	switch(table) {
 	case VGT_HASH_MMIO:
-		if (item >= gtt_mmio_handler.mmio_base)
-			return &gtt_mmio_handler;
 		mht = mtable[index];
 		item &= ~3;
 		break;
@@ -991,8 +984,6 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 		dump_stack();
 	ASSERT(!spin_is_locked(&pdev->lock));
 
-//	ASSERT (offset + bytes <= vgt->state.regNum *
-//				sizeof(vgt->state.vReg[0]));
 	ASSERT (bytes <= 8);
 //	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 	if (!VGT_REG_IS_ALIGNED(offset, bytes)){
@@ -1005,6 +996,14 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 
 	spin_lock_irqsave(&pdev->lock, flags);
 
+	if (reg_is_gtt(pdev, offset)) {
+		gtt_mmio_read(vgt, offset, p_data, bytes);
+		spin_unlock_irqrestore(&pdev->lock, flags);
+		return true;
+	}
+
+	ASSERT (reg_is_mmio(pdev, offset + bytes));
+
 	mht = lookup_mtable(offset);
 	if ( mht && mht->read )
 		mht->read(vgt, offset, p_data, bytes);
@@ -1012,8 +1011,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 		default_mmio_read(vgt, offset, p_data, bytes);
 	}
 
-	if (offset < VGT_MMIO_REG_NUM)
-		reg_set_accessed(pdev, offset);
+	reg_set_accessed(pdev, offset);
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
@@ -1093,8 +1091,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
 	ASSERT(!spin_is_locked(&pdev->lock));
-//	ASSERT (offset + bytes <= vgt->state.regNum *
-//				sizeof(vgt->state.vReg[0]));
 	/* at least FENCE registers are accessed in 8 bytes */
 	ASSERT (bytes <= 8);
 	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
@@ -1110,7 +1106,15 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 
 	spin_lock_irqsave(&pdev->lock, flags);
 
-	if (offset < VGT_MMIO_REG_NUM && reg_mode_ctl(pdev, offset)) {
+	if (reg_is_gtt(pdev, offset)) {
+		gtt_mmio_write(vgt, offset, p_data, bytes);
+		spin_unlock_irqrestore(&pdev->lock, flags);
+		return true;
+	}
+
+	ASSERT (reg_is_mmio(pdev, offset + bytes));
+
+	if (reg_mode_ctl(pdev, offset)) {
 		old_vreg = __vreg(vgt, offset);
 		old_sreg = __sreg(vgt, offset);
 	}
@@ -1134,7 +1138,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	}
 
 	/* higher 16bits of mode ctl regs are mask bits for change */
-	if (offset < VGT_MMIO_REG_NUM && reg_mode_ctl(pdev, offset)) {
+	if (reg_mode_ctl(pdev, offset)) {
 		u32 mask = __vreg(vgt, offset) >> 16;
 
 		dprintk("old mode (%x): %x/%x, mask(%x)\n", offset,
@@ -1156,8 +1160,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	if (offset == _REG_RCS_UHPTR)
 		printk("vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
 
-	if (offset < VGT_MMIO_REG_NUM)
-		reg_set_accessed(pdev, offset);
+	reg_set_accessed(pdev, offset);
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
@@ -2383,7 +2386,8 @@ err:
 
 static void state_vreg_init(struct vgt_device *vgt)
 {
-	memcpy (vgt->state.vReg, vgt->pdev->initial_mmio_state, VGT_MMIO_SPACE_SZ);
+	memcpy (vgt->state.vReg, vgt->pdev->initial_mmio_state,
+		vgt->pdev->mmio_size);
 
 	/* set the bit 0:2 (Thread C-State) to C0
 	 * TODO: consider other bit 3:31
@@ -2402,7 +2406,7 @@ static void state_sreg_init(struct vgt_device *vgt)
 	vgt_reg_t *sreg;
 
 	sreg = vgt->state.sReg;
-	memcpy (sreg, vgt->pdev->initial_mmio_state, VGT_MMIO_SPACE_SZ);
+	memcpy (sreg, vgt->pdev->initial_mmio_state, vgt->pdev->mmio_size);
 
 	/*
 	 * Do we really need address fix for initial state? Any address information
@@ -2412,7 +2416,7 @@ static void state_sreg_init(struct vgt_device *vgt)
 	 */
 #if 0
 	/* FIXME: add off in addr table to avoid checking all regs */
-	for (i = 0; i < VGT_MMIO_REG_NUM; i++) {
+	for (i = 0; i < vgt->pdev->reg_num; i++) {
 		if (reg_addr_fix(vgt->pdev, i * REG_SIZE)) {
 			__sreg(vgt, i) = mmio_g2h_gmadr(vgt, i, __vreg(vgt, i));
 			dprintk("vGT: address fix for reg (%x): (%x->%x)\n",
@@ -2435,8 +2439,8 @@ static int create_state_instance(struct vgt_device *vgt)
 
 	dprintk("create_state_instance\n");
 	state = &vgt->state;
-	state->vReg = kmalloc (state->regNum * REG_SIZE, GFP_KERNEL);
-	state->sReg = kmalloc (state->regNum * REG_SIZE, GFP_KERNEL);
+	state->vReg = kmalloc (vgt->pdev->mmio_size, GFP_KERNEL);
+	state->sReg = kmalloc (vgt->pdev->mmio_size, GFP_KERNEL);
 	if ( state->vReg == NULL || state->sReg == NULL )
 	{
 		printk("VGT: insufficient memory allocation at %s\n", __FUNCTION__);
@@ -2583,7 +2587,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt->exit_req_from_render_switch = 0;
 	init_completion(&vgt->exit_from_render_switch);
 
-	vgt->state.regNum = VGT_MMIO_REG_NUM;
 	INIT_LIST_HEAD(&vgt->list);
 
 	if ((rc = create_state_instance(vgt)) < 0)
@@ -2872,16 +2875,40 @@ dprintk("read back bar_size2 %lx\n", bar_size);
         return bar_size;
 }
 
+static uint64_t vgt_get_gtt_size(struct pci_bus *bus)
+{
+	uint16_t gmch_ctrl;
+
+	ASSERT(!bus->number);
+	/* GTT size is within GMCH. */
+	pci_bus_read_config_word(bus, 0, _REG_GMCH_CONTRL, &gmch_ctrl);
+	switch ( (gmch_ctrl >> 8) & 3 ) {
+	case	1:
+		return 1 * SIZE_1MB;
+	case	2:
+		return 2 * SIZE_1MB;
+	default:
+		printk("Wrong GTT memory size\n");
+		break;
+	}
+	return 0;
+}
+
 bool initial_phys_states(struct pgt_device *pdev)
 {
 	int i;
 	uint64_t	bar0, bar1;
 	struct pci_dev *dev = pdev->pdev;
 
-dprintk("VGT: Initial_phys_states\n");
+	dprintk("VGT: Initial_phys_states\n");
+
+	pdev->gtt_size = vgt_get_gtt_size(pdev->pbus);
+	gm_sz(pdev) = vgt_get_gtt_size(pdev->pbus) * 1024;
+
 	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4)
 		pci_read_config_dword(dev, i,
 				(uint32_t *)&pdev->initial_cfg_space[i]);
+
 	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4) {
 		if (!(i % 16))
 			dprintk("\n[%2x]: ", i);
@@ -2904,6 +2931,11 @@ dprintk("VGT: Initial_phys_states\n");
 	ASSERT ((bar0 & 7) == 4);
 	/* memory, 64 bits bar0 */
 	pdev->gttmmio_base = bar0 & ~0xf;
+	pdev->mmio_size = VGT_MMIO_SPACE_SZ;
+	pdev->reg_num = pdev->mmio_size/REG_SIZE;
+	ASSERT(pdev->mmio_size + pdev->gtt_size == pdev->bar_size[0]);
+	printk("mmio size: %x, gtt size: %x\n", pdev->mmio_size,
+		pdev->gtt_size);
 
 	ASSERT ((bar1 & 7) == 4);
 	/* memory, 64 bits bar */
@@ -2911,7 +2943,8 @@ dprintk("VGT: Initial_phys_states\n");
 	printk("gttmmio: 0x%llx, gmadr: 0x%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
 
 	/* TODO: no need for this mapping since hypercall is used */
-	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base, 2 * VGT_MMIO_SPACE_SZ);
+	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base,
+		pdev->mmio_size + pdev->gtt_size);
 	if ( pdev->gttmmio_base_va == NULL ) {
 		printk("Insufficient memory for ioremap1\n");
 		return false;
@@ -2919,7 +2952,6 @@ dprintk("VGT: Initial_phys_states\n");
 	printk("gttmmio_base_va: 0x%llx\n", (uint64_t)pdev->gttmmio_base_va);
 
 #if 1		// TODO: runtime sanity check warning...
-	//pdev->phys_gmadr_va = ioremap (pdev->gmadr_base, VGT_TOTAL_APERTURE_SZ);
 	pdev->gmadr_va = ioremap (pdev->gmadr_base, pdev->bar_size[1]);
 	if ( pdev->gmadr_va == NULL ) {
 		iounmap(pdev->gttmmio_base_va);
@@ -2929,16 +2961,22 @@ dprintk("VGT: Initial_phys_states\n");
 	printk("gmadr_va: 0x%llx\n", (uint64_t)pdev->gmadr_va);
 #endif
 
+	pdev->initial_mmio_state = kzalloc(pdev->mmio_size, GFP_KERNEL);
+	if (!pdev->initial_mmio_state) {
+		printk("vGT: failed to allocate initial_mmio_state\n");
+		return false;
+	}
+
 #if 0
 	/* TODO: Extend VCPUOP_request_io_emulation hypercall to handle
 	 * trunk data read request, and use hypercall here.
 	 * Or enable "rep movsx" support.
 	 */
 	memcpy (pdev->initial_mmio_state, pdev->gttmmio_base_va,
-			VGT_MMIO_SPACE_SZ);
+			pdev->mmio_size);
 
 #else
-	for (i = 0; i < VGT_MMIO_REG_NUM; i++) {
+	for (i = 0; i < pdev->reg_num; i++) {
 		/* XXX We need to skip some reserved space, or known forbidden
 		 * space for access, otherwise it may cause hang */
 		if (i >= (0x5180 >> 2) && i < (0x6000 >> 2))
@@ -2959,25 +2997,6 @@ dprintk("VGT: Initial_phys_states\n");
 	return true;
 }
 
-uint64_t vgt_get_gtt_size(struct pci_bus *bus)
-{
-	uint16_t gmch_ctrl;
-
-	ASSERT(!bus->number);
-	/* GTT size is within GMCH. */
-	pci_bus_read_config_word(bus, 0, _REG_GMCH_CONTRL, &gmch_ctrl);
-	switch ( (gmch_ctrl >> 8) & 3 ) {
-	case	1:
-		return 1 * SIZE_1MB;
-	case	2:
-		return 2 * SIZE_1MB;
-	default:
-		printk("Wrong GTT memory size\n");
-		break;
-	}
-	return 0;
-}
-
 static void vgt_set_device_type(struct pgt_device *pdev)
 {
 	pdev->is_sandybridge = _is_sandybridge(pdev->pdev->device);
@@ -2989,6 +3008,30 @@ static void vgt_set_device_type(struct pgt_device *pdev)
 	pdev->is_haswell = _is_haswell(pdev->pdev->device);
 	if ( pdev->is_haswell )
 		printk("Detected Haswell\n");
+}
+
+static void vgt_init_reserved_aperture(struct pgt_device *pdev)
+{
+	/* setup the scratch page for the context switch */
+	pdev->scratch_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
+		pdev->rsvd_aperture_pos);
+	printk("scratch page is allocated at gm(0x%llx)\n", pdev->scratch_page);
+	/* reserve the 1st trunk for vGT's general usage */
+	pdev->rsvd_aperture_pos += VGT_APERTURE_PER_INSTANCE_SZ;
+
+	/* reserve 1 page as the temporary ring buffer for context switch */
+	pdev->ctx_switch_rb_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
+		pdev->rsvd_aperture_pos);
+	pdev->rsvd_aperture_pos += PAGE_SIZE;
+	printk("ctx_switch_rb_page is allocated at gm(%llx)\n",
+		pdev->batch_buffer_page);
+
+	/* one page for mapping batch buffer when PPGTT is disabled */
+	pdev->batch_buffer_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
+		pdev->rsvd_aperture_pos);
+	pdev->rsvd_aperture_pos += PAGE_SIZE;
+	printk("batch_buffer_page is allocated at gm(%llx)\n",
+		pdev->batch_buffer_page);
 }
 
 static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
@@ -3004,18 +3047,6 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 
 	INIT_LIST_HEAD(&pdev->rendering_runq_head);
 	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
-
-	pdev->reg_info = kzalloc (VGT_MMIO_REG_NUM * sizeof(reg_info_t),
-				GFP_KERNEL);
-	if (!pdev->reg_info) {
-		printk("vGT: failed to allocate reg_info\n");
-		return false;
-	}
-
-	gm_sz(pdev) = vgt_get_gtt_size(pdev->pbus) * 1024;
-
-	/* clean port status, 0 means not plugged in */
-	memset(pdev->port_detect_status, 0, sizeof(pdev->port_detect_status));
 
 	/* TODO: add ivb/hsw difference later */
 	pdev->max_engines = 3;
@@ -3038,6 +3069,31 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	pdev->submit_context_command[RING_BUFFER_BCS] =
 		default_submit_context_command;
 
+	/* clean port status, 0 means not plugged in */
+	memset(pdev->port_detect_status, 0, sizeof(pdev->port_detect_status));
+
+	if (!initial_phys_states(pdev)) {
+		printk("vGT: failed to initialize physical state\n");
+		return false;
+	}
+
+	pdev->reg_info = kzalloc (pdev->reg_num * sizeof(reg_info_t),
+				GFP_KERNEL);
+	if (!pdev->reg_info) {
+		printk("vGT: failed to allocate reg_info\n");
+		return false;
+	}
+
+	initialize_gm_fence_allocation_bitmaps(pdev);
+
+	vgt_setup_reg_info(pdev);
+	vgt_post_setup_mmio_hooks(pdev);
+	if (vgt_irq_init(pdev) != 0) {
+		printk("vGT: failed to initialize irq\n");
+		return false;
+	}
+
+	vgt_init_reserved_aperture(pdev);
 	return true;
 }
 
@@ -3150,37 +3206,6 @@ int vgt_initialize(struct pci_dev *dev)
 
 	if (!vgt_initialize_pgt_device(dev, pdev))
 		goto err;
-	vgt_setup_reg_info(pdev);
-	vgt_post_setup_mmio_hooks(pdev);
-	if (!initial_phys_states(pdev))
-		goto err;
-
-	initialize_gm_fence_allocation_bitmaps(pdev);
-
-	if (vgt_irq_init(pdev) != 0)
-		goto err;
-
-	/* setup the scratch page for the context switch */
-	pdev->scratch_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
-		pdev->rsvd_aperture_pos);
-	printk("scratch page is allocated at gm(0x%llx)\n", pdev->scratch_page);
-	/* reserve the 1st trunk for vGT's general usage */
-	pdev->rsvd_aperture_pos += VGT_APERTURE_PER_INSTANCE_SZ;
-
-	/* reserve 1 page as the temporary ring buffer for context switch */
-	pdev->ctx_switch_rb_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
-		pdev->rsvd_aperture_pos);
-	pdev->rsvd_aperture_pos += PAGE_SIZE;
-	printk("ctx_switch_rb_page is allocated at gm(%llx)\n",
-		pdev->batch_buffer_page);
-
-	/* one page for mapping batch buffer when PPGTT is disabled */
-	pdev->batch_buffer_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
-		pdev->rsvd_aperture_pos);
-	pdev->rsvd_aperture_pos += PAGE_SIZE;
-	printk("batch_buffer_page is allocated at gm(%llx)\n",
-		pdev->batch_buffer_page);
-
 	/* initialize EDID data */
 	vgt_probe_edid(pdev, -1);
 
@@ -3302,6 +3327,7 @@ void vgt_destroy(void)
 	}
 	free_mtable();
 	kfree(pdev->reg_info);
+	kfree(pdev->initial_mmio_state);
 
 	for (i = 0; i < EDID_NUM; ++ i) {
 		if (pdev->pdev_edids[i]) {

@@ -383,7 +383,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	/* virtual mmio space dump */
 	p = &vgt_debugfs_data[vgt_id][VGT_DEBUGFS_VIRTUAL_MMIO];
 	p->array = (u32 *)(vgt->state.vReg);
-	p->elements = VGT_MMIO_SPACE_SZ/(sizeof(u32));
+	p->elements = pdev->reg_num;
 	d_debugfs_entry[vgt_id][VGT_DEBUGFS_VIRTUAL_MMIO] = vgt_debugfs_create_blob("virtual_mmio_space",
 			0444,
 			d_per_vgt[vgt_id],
@@ -397,7 +397,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 
 	p = &vgt_debugfs_data[vgt_id][VGT_DEBUGFS_SHADOW_MMIO];
 	p->array = (u32 *)(vgt->state.sReg);
-	p->elements = VGT_MMIO_SPACE_SZ/(sizeof(u32));
+	p->elements = pdev->reg_num;
 	d_debugfs_entry[vgt_id][VGT_DEBUGFS_SHADOW_MMIO] = vgt_debugfs_create_blob("shadow_mmio_space",
 			0444,
 			d_per_vgt[vgt_id],

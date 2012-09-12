@@ -126,11 +126,9 @@ extern unsigned long vgt_id_alloc_bitmap;
 #define REG_SIZE    		sizeof(vgt_reg_t)        /* size of gReg/sReg[0] */
 #define REG_INDEX(reg)		((reg) / REG_SIZE)
 #define VGT_MMIO_SPACE_SZ	(2*SIZE_1MB)
-#define VGT_MMIO_REG_NUM	(VGT_MMIO_SPACE_SZ/REG_SIZE)	/* 2MB space in totoal */
 #define VGT_CFG_SPACE_SZ	256
 #define VGT_BAR_NUM		4
 typedef struct {
-    int		regNum;		/* Total number of MMIO registers in vGT */
     uint64_t    mmio_base_gpa;	/* base guest physical address of the MMIO registers */
     vgt_reg_t	*vReg;		/* guest view of the register state */
     vgt_reg_t	*sReg;		/* Shadow (used by hardware) state of the register */
@@ -471,7 +469,7 @@ struct pgt_device {
 	uint64_t ctx_switch;	/* the number of context switch count in vgt thread */
 	uint32_t magic;		/* the magic number for checking the completion of context switch */
 
-	vgt_reg_t initial_mmio_state[VGT_MMIO_REG_NUM];	/* copy from physical at start */
+	vgt_reg_t *initial_mmio_state;	/* copy from physical at start */
 	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */
 	uint32_t bar_size[VGT_BAR_NUM];
 	uint64_t total_gm_sz;	/* size of available GM space, e.g 2M GTT is 2GB */
@@ -480,6 +478,9 @@ struct pgt_device {
 	void *gttmmio_base_va;	/* virtual base of mmio */
 	uint64_t gmadr_base;	/* base of GMADR */
 	void *gmadr_va;		/* virtual base of GMADR */
+	u32 mmio_size;
+	u32 gtt_size;
+	int reg_num;
 
 	int max_engines;	/* supported max engines */
 	u32 ring_mmio_base[MAX_ENGINES];
@@ -1054,10 +1055,13 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 		g_gm_is_hidden(vgt, g_start + size - 1);
 }
 
-#define GTT_MMIO_OFFSET			VGT_MMIO_SPACE_SZ
-#define GTT_BASE(pdev)			(pdev->gttmmio_base + GTT_MMIO_OFFSET)
-#define GTT_VBASE(pdev)			(pdev->gttmmio_base_va + GTT_MMIO_OFFSET)
+#define GTT_BASE(pdev)		(pdev->gttmmio_base + pdev->mmio_size)
+#define GTT_VBASE(pdev)		(pdev->gttmmio_base_va + pdev->mmio_size)
 #define GTT_SIZE				(2* SIZE_1MB)
+#define reg_is_mmio(pdev, reg)	\
+	(reg >= 0 && reg < pdev->mmio_size)
+#define reg_is_gtt(pdev, reg)	\
+	(reg >= pdev->mmio_size && reg < pdev->mmio_size + pdev->gtt_size)
 
 #define GTT_PAGE_SHIFT		12
 #define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
@@ -1241,14 +1245,14 @@ static inline bool is_ring_enabled (struct pgt_device *pdev, int ring_id)
 static inline u32 vgt_read_gtt(struct pgt_device *pdev, u32 index)
 {
 //	printk("vgt_read_gtt: index=0x%x, gtt_addr=%lx\n", index, GTT_ADDR(pdev, index));
-	return VGT_MMIO_READ(pdev, GTT_MMIO_OFFSET + index*GTT_ENTRY_SIZE);
+	return VGT_MMIO_READ(pdev, pdev->mmio_size + index*GTT_ENTRY_SIZE);
 	//return readl(GTT_VADDR(pdev, index));
 }
 
 static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 {
 //	printk("vgt_write_gtt: index=0x%x, gtt_addr=%lx\n", index, GTT_ADDR(pdev, index));
-	VGT_MMIO_WRITE(pdev, GTT_MMIO_OFFSET + index*GTT_ENTRY_SIZE , val);
+	VGT_MMIO_WRITE(pdev, pdev->mmio_size + index*GTT_ENTRY_SIZE , val);
 	//writel(val, GTT_VADDR(pdev, index));
 }
 

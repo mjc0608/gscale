@@ -149,7 +149,7 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 
 	t0 = get_cycles();
 	gtt_mmio_rcnt++;
-	off -= VGT_MMIO_SPACE_SZ;
+	off -= vgt->pdev->mmio_size;
 	if (off >= vgt->vgtt_sz) {
 		dprintk("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
 		return false;
@@ -177,7 +177,7 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 	t0 = get_cycles();
 	gtt_mmio_wcnt++;
-	off -= VGT_MMIO_SPACE_SZ;
+	off -= vgt->pdev->mmio_size;
 
 	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
 	g_gtt_val = *(uint32_t*)p_data;
