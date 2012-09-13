@@ -675,17 +675,16 @@ static __inline__ bool vgt_can_sleep(void)
 	//return true;
 }
 
-#define _wait_for(COND, MS, W) ({ \
-	int ret__ = 0;							\
-	int max_times = 10;						\
-	while (!(COND)) {						\
-		mdelay(MS);							\
-		if (!(max_times--)) {			\
-			ret__ = -ETIMEDOUT;				\
-			break;						\
-		}							\
-	}								\
-	ret__;								\
+#define _wait_for(COND, MS, W) ({	\
+	int ret__ = 0;					\
+	int ms__ = MS;					\
+									\
+	while (!(COND) && ms__--)		\
+		mdelay(1);					\
+									\
+	if (!ms__ && !(COND))			\
+		ret__ = -ETIMEDOUT;			\
+	ret__;							\
 })
 #define wait_for(COND, MS) _wait_for(COND, MS, 1)
 //#define wait_for(COND, MS) (udelay(1000), 0)
