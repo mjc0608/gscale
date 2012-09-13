@@ -85,11 +85,16 @@
 static bool bypass_scan = true;
 static int __init bypass_scan_setup(char *str)
 {
-	bypass_scan = true;
+	if (str != NULL){
+		if (strncmp(str, "off", 3) == 0)
+			bypass_scan = false;
+		if (strncmp(str, "on", 2) == 0)
+			bypass_scan = true;
+	}
 
 	return 1;
 }
-__setup("bypass_scan", bypass_scan_setup);
+__setup("bypass_scan=", bypass_scan_setup);
 
 static inline int tail_to_ring_id(struct pgt_device *pdev, unsigned int tail_off)
 {
