@@ -710,131 +710,46 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 	return false;
 }
 
-#define VGT_DEV_SNB	(1 << 0)
-#define VGT_DEV_IVB	(1 << 1)
-#define VGT_DEV_HSW	(1 << 2)
-#define VGT_DEV_ALL	(VGT_DEV_SNB | VGT_DEV_IVB | VGT_DEV_HSW)
+#define D_SNB	(1 << 0)
+#define D_IVB	(1 << 1)
+#define D_HSW	(1 << 2)
+#define D_GEN7PLUS (D_IVB | D_HSW)
+#define D_ALL	(D_SNB | D_IVB | D_HSW)
 
 typedef struct {
 	u32			reg;
 	int			size;
-	vgt_mmio_read		read;
-	vgt_mmio_write		write;
-	int			device;
 	u32			flags;
 	vgt_reg_t		addr_mask;
+	int			device;
+	vgt_mmio_read		read;
+	vgt_mmio_write		write;
 } reg_attr_t;
 
 static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *attr)
 {
 	if (pdev->is_sandybridge)
-		return attr->device & VGT_DEV_SNB;
+		return attr->device & D_SNB;
 	if (pdev->is_ivybridge)
-		return attr->device & VGT_DEV_IVB;
+		return attr->device & D_IVB;
 	if (pdev->is_haswell)
-		return attr->device & VGT_DEV_HSW;
+		return attr->device & D_HSW;
 
 	return false;
 }
 
-#define _REG_MMIO(_reg, _size, _owner, _device, _read, _write)	\
-	{							\
-		.reg = _reg,					\
-		.size = _size,					\
-		.flags = _owner & VGT_REG_OWNER,		\
-		.device = _device,				\
-		.read = _read,					\
-		.write = _write,				\
-	}
+#define F_VIRT		VGT_OT_INVALID | VGT_REG_ALWAYS_VIRT
+#define F_RDR		VGT_OT_RENDER
+#define F_RDR_ADRFIX	VGT_OT_RENDER | VGT_REG_ADDR_FIX
+#define F_RDR_HWSTS	VGT_OT_RENDER | VGT_REG_HW_UPDATE
+#define F_RDR_MODE	VGT_OT_RENDER | VGT_REG_MODE_CTL
+#define F_DPY		VGT_OT_DISPLAY
+#define F_DPY_ADRFIX	VGT_OT_DISPLAY | VGT_REG_ADDR_FIX
+#define F_DPY_HWSTS_ADRFIX	\
+	VGT_OT_DISPLAY | VGT_REG_ADDR_FIX | VGT_REG_HW_UPDATE
+#define F_PM		VGT_OT_PM
+#define F_WA		VGT_OT_INVALID | VGT_REG_WORKAROUND
 
-#define _REG_RDR(_reg, _size, _read, _write)	\
-	_REG_MMIO(_reg, _size, VGT_OT_RENDER, VGT_DEV_ALL, _read, _write)
-
-#define _REG_DPY(_reg, _size, _read, _write)	\
-	_REG_MMIO(_reg, _size, VGT_OT_DISPLAY, VGT_DEV_ALL, _read, _write)
-
-#define _REG_PM(_reg, _size, _read, _write)	\
-	_REG_MMIO(_reg, _size, VGT_OT_PM, VGT_DEV_ALL, _read, _write)
-
-#define _REG_MGMT(_reg, _size, _read, _write)	\
-	_REG_MMIO(_reg, _size, VGT_OT_MGMT, VGT_DEV_ALL, _read, _write)
-
-#define _REG_VIRT(_reg, _size, _read, _write)	\
-	_REG_MMIO(_reg, _size, VGT_OT_INVALID, VGT_DEV_ALL, _read, _write)
-
-#define FLAGS_WA	(VGT_OT_INVALID | VGT_REG_WORKAROUND)
-#define _REG_WA(_reg, _size, _device, _mode_ctl, _read, _write)	\
-	{							\
-		.reg = _reg,					\
-		.size = _size,					\
-		.device = _device,				\
-		.flags = VGT_OT_INVALID | VGT_REG_WORKAROUND | 	\
-			(_mode_ctl ? VGT_REG_MODE_CTL:0),	\
-		.read = _read,					\
-		.write = _write,				\
-	}
-
-#define _REG_MODE(_reg, _size, _owner, _device, _read, _write)	\
-	{							\
-		.reg = _reg,					\
-		.size = _size,					\
-		.device = _device,				\
-		.flags = VGT_REG_MODE_CTL |			\
-			(_owner & VGT_REG_OWNER),		\
-		.read = _read,					\
-		.write = _write,				\
-	}
-
-#define _REG_ALWAYS_VIRT(_reg, _size, _read, _write)		\
-	{							\
-		.reg = _reg,					\
-		.size = _size,					\
-		.device = VGT_DEV_ALL,				\
-		.flags = VGT_OT_INVALID | VGT_REG_ALWAYS_VIRT,	\
-		.read = _read,					\
-		.write = _write,				\
-	}
-
-#define _REG_ADDR_FIX(_reg, _size, _owner, _mask, _read, _write)\
-	{							\
-		.reg = _reg,					\
-		.size = _size,					\
-		.device = VGT_DEV_ALL,				\
-		.flags = VGT_REG_ADDR_FIX |			\
-			(_owner & VGT_REG_OWNER),		\
-		.addr_mask = _mask,				\
-		.read = _read,					\
-		.write = _write,				\
-	}
-
-#define _REG_HW_UPDATE(_reg, _size, _owner, _read, _write)	\
-	{							\
-		.reg = _reg,					\
-		.size = _size,					\
-		.device = VGT_DEV_ALL,				\
-		.flags = VGT_REG_HW_UPDATE |			\
-			(_owner & VGT_REG_OWNER),		\
-		.read = _read,					\
-		.write = _write,				\
-	}
-
-#define _REG_FULL(_reg, _size, _owner, _device, _wa, _addr_fix,	\
-		_mode_ctl, _always_virt, _hw_update, _mask,	\
-		_read, _write)					\
-	{							\
-		.reg = _reg,					\
-		.size = _size,					\
-		.device = _device, 				\
-		.flags = (_wa ? VGT_REG_WORKAROUND : 0) |	\
-			( _owner & VGT_REG_OWNER) |		\
-			(_addr_fix ? VGT_REG_ADDR_FIX : 0) |	\
-			(_hw_update ? VGT_REG_HW_UPDATE : 0) |	\
-			( _always_virt ? VGT_REG_ALWAYS_VIRT : 0) |	\
-			(_mode_ctl ? VGT_REG_MODE_CTL:0),	\
-		.addr_mask = _mask,				\
-		.read = _read,					\
-		.write = _write,				\
-	}
 extern int vgt_ctx_switch;
 extern void vgt_toggle_ctx_switch(bool enable);
 extern void vgt_setup_reg_info(struct pgt_device *pdev);
