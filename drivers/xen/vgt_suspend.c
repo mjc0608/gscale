@@ -1899,8 +1899,23 @@ static void vgt_enable_plane(struct vgt_device *vgt,
 		return;
 
 	reg_data = __sreg(vgt, reg);
-	ASSERT(reg_data & _REGBIT_PRIMARY_PLANE_ENABLE);
-	vgt_restore_sreg(reg);
+	/* Previously, Plane is supposed to be enabled for each vm
+	 * that in "display switch". But for some reason, vm can
+	 * trun it off (like power saving?). So we forcely turn
+	 * it on in case it block the process.(disabled plane will block
+	 * the display switch ?). In this situation, it change hardware
+	 * status that vm does not aware. This may cause potential issues.
+	 * */
+	//ASSERT(reg_data & _REGBIT_PRIMARY_PLANE_ENABLE);
+	//vgt_restore_sreg(reg);
+	if (!(reg_data & _REGBIT_PRIMARY_PLANE_ENABLE)) {
+		vgt_printk("VGT(%d): plane should be enabled in"
+				"DSPCNTR(%d), actually not!",
+				vgt->vgt_id, plane);
+		VGT_MMIO_WRITE(pdev, reg, (reg_data | _REGBIT_PRIMARY_PLANE_ENABLE));
+	} else
+		vgt_restore_sreg(reg);
+
 	vgt_flush_display_plane(vgt, plane);
 	vgt_wait_for_vblank(vgt, pipe);
 }
