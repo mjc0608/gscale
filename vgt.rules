@@ -26,8 +26,10 @@
 # bit field definition of the hot_plug trigger value:
 #
 # bit 31 - bit 16	: Reserved;
-# bit 15 - bit 8	: vmid; value of 0xf means all VMs.
-# bit 7 - bit 4		:Reserved;
+# bit 15 - bit 8	: vmid; Warning since vmid can be used out if you keep on destory & recreate the same VM or you create so many VMs
+#					  Now we only use 0 as vmid in our command  and by default forward virtual_event for all other live VMs.
+#					  In future, we will redesign this command to avoid vmid out of range.
+# bit 7 - bit 4		: Reserved;
 # bit 3 - bit 1		: Monitor selection:
 # 		0	-	CRT
 # 		1	-	DP_A
@@ -47,6 +49,6 @@
 #ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo CRT monitor removed! >> /tmp/hotplug'"
 #KERNEL=="control", RUN+="/bin/sh -c 'echo inserted >> /tmp/hotplug'"
 #
-#write 0xf1 for plug in; 0xf0 for pull out.
+#write 0x0f1(241) for plug in; 0x0f0(240) for pull out.
 ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo 241 > /sys/kernel/vgt/control/virtual_event'"
 ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo 240 > /sys/kernel/vgt/control/virtual_event'"

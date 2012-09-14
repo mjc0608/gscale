@@ -1822,8 +1822,12 @@ static inline int get_env_and_edid_info(unsigned cmd,
 void vgt_trigger_display_hot_plug(struct pgt_device *dev, unsigned hotplug_cmd)
 {
 	int i;
-	int vmid = (hotplug_cmd & 0xf0) >> 8;
-
+	/* Default: send hotplug virtual interrupts to all VMs currently.
+	 * Since 'vmid' has no concern with vgt_id, e.g.  if you have a HVM
+	 * with vmid = 1 and after destroy & recreate it, its vmid become 2
+	 * we need to use vmid_2_vgt_device() to map vmid to vgt_device if
+	 * we need to send these hotplug virtual interrupts to a specific vm
+	 */
 	for (i = 0; i < VGT_MAX_VMS; ++ i) {
 		int bit;
 		struct vgt_irq_info *info;
@@ -1832,9 +1836,8 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev, unsigned hotplug_cmd)
 		edid_index_t edid_idx = 0;
 		struct vgt_device *vgt = dev->device[i];
 
-		if (!vgt || ((vmid != 0xf) && (vgt->vgt_id != vmid))) {
+		if (!vgt)
 			continue;
-		}
 
 		if (get_env_and_edid_info(hotplug_cmd, &event, &edid_idx)) {
 			continue;
