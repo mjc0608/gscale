@@ -1123,12 +1123,19 @@ bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	reg = offset & ~(bytes - 1);
 
 	rc = default_mmio_read(vgt, offset, p_data, bytes);
+	reg_data = *(vgt_reg_t *)p_data;
 	if (reg_hw_access(vgt, reg)) {
-		reg_data = *(vgt_reg_t *)p_data;
 		if (reg_data & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK)
 			set_bit(VGT_CRT, pdev->port_detect_status);
 		else
 			clear_bit(VGT_CRT, pdev->port_detect_status);
+	} else {
+		if (test_bit(VGT_CRT, pdev->port_detect_status))
+			__vreg(vgt, reg) |= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+		else
+			__vreg(vgt, reg) &= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+
+		*(vgt_reg_t *)p_data = __vreg(vgt, reg);
 	}
 
 	return rc;
