@@ -281,6 +281,7 @@ extern void vgt_parser_restore_address(void);
 #define OP_3DPRIMITIVE					INDEX_3D_MEDIA( 0x3 ,0x3, 0x00 )
 
 extern int vgt_cmd_parser_init(void);
+extern void vgt_cmd_parser_exit(void);
 
 extern int vgt_cmd_handler_register(unsigned int type, unsigned int opcode,
 		char* name, int (*handler)(struct vgt_cmd_data *data));

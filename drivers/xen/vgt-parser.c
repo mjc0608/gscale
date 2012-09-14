@@ -59,6 +59,7 @@
 #include <linux/linkage.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/circ_buf.h>
 #include <xen/vgt.h>
 #include <xen/vgt-parser.h>
 #include "vgt_drv.h"
@@ -133,13 +134,83 @@ static inline int cmd_length(struct vgt_cmd_data *data, int nr_bits)
 	return (data->instruction[0] & ( (1U << nr_bits) - 1)) + 2;
 }
 
-#define VGT_CMD_PRINTK(fmt, arg...) {			\
-	    if (vgt_cmd_debug) {				\
-		printk(fmt, ##arg);		\
-	    }					\
+static bool vgt_cmd_debug = false;
+static int __init vgt_cmd_debug_setup(char *str)
+{
+	vgt_cmd_debug = true;
+	return 1;
+}
+__setup("vgt_cmd_debug", vgt_cmd_debug_setup);
+
+#define CMD_LOG_BUF_LEN 128
+/* must be power of 2 */
+#define CMD_LOG_BUFS	(1<<5)
+static struct {
+	spinlock_t lock;
+	int head;
+	int tail;
+	int size;
+	char bufs[CMD_LOG_BUFS][CMD_LOG_BUF_LEN];
+} *logs = NULL;
+
+#define INDEX_INC(index, size) (((index)+1) & ((size)-1))
+
+static void vgt_cmd_logs_init(void)
+{
+	if (!vgt_cmd_debug)
+		return;
+
+	logs = kmalloc(sizeof(*logs), GFP_KERNEL);
+	if (logs == NULL){
+		printk(KERN_ERR "insufficient memory, command parser debug disabled\n");
+		vgt_cmd_debug = false;
+		return;
 	}
 
-static bool vgt_cmd_debug=0;
+	logs->head = logs->tail = 0;
+	logs->size = CMD_LOG_BUFS;
+	spin_lock_init(&logs->lock);
+}
+
+static void vgt_cmd_printk(const char *fmt, ...)
+{
+	va_list args;
+	unsigned long flags;
+
+	if (!vgt_cmd_debug)
+		return;
+
+	va_start(args, fmt);
+	spin_lock_irqsave(&logs->lock, flags);
+
+	if (CIRC_SPACE(logs->head, logs->tail, logs->size) == 1) {
+		/* free old logs entry */
+		logs->tail = INDEX_INC(logs->tail, logs->size);
+	}
+	vscnprintf(logs->bufs[logs->head], CMD_LOG_BUF_LEN, fmt, args);
+	logs->head = INDEX_INC(logs->head, logs->size);
+
+	spin_unlock_irqrestore(&logs->lock, flags);
+	va_end(args);
+}
+
+static void vgt_cmd_show_logs(void)
+{
+	int head, tail;
+	unsigned long flags;
+
+	if (!vgt_cmd_debug)
+		return;
+
+	spin_lock_irqsave(&logs->lock, flags);
+	head = logs->head;
+	tail = logs->tail;
+	while(head != tail){
+		printk("CMD_LOG: %s", logs->bufs[tail]);
+		tail = INDEX_INC(tail, logs->size);
+	}
+	spin_unlock_irqrestore(&logs->lock, flags);
+}
 
 static void show_instruction_info(struct vgt_cmd_data *d);
 
@@ -186,7 +257,9 @@ static void inline address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
 
 static inline void length_fixup(struct vgt_cmd_data *data, int nr_bits)
 {
-	data->instruction += cmd_length(data, nr_bits);
+	int len = cmd_length(data, nr_bits);
+	data->instruction += len;
+	vgt_cmd_printk("cmd length=%d\n", len);
 }
 
 static int vgt_cmd_handler_noop(struct vgt_cmd_data *data)
@@ -358,7 +431,7 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 		data->ret_instruction = data->instruction + 2;
 	}
 
-	VGT_CMD_PRINTK("MI_BATCH_BUFFER_START: buffer GraphicsAddress=%x Clear Command Buffer Enable=%d\n",
+	vgt_cmd_printk("MI_BATCH_BUFFER_START: buffer GraphicsAddress=%x Clear Command Buffer Enable=%d\n",
 			data->instruction[1], (data->instruction[0]>>11) & 1);
 
 	address_fixup(data, data->instruction + 1);
@@ -1026,7 +1099,14 @@ int vgt_cmd_parser_init(void)
 
 	vgt_addr_fix_list_init();
 
+	vgt_cmd_logs_init();
+
 	return 0;
+}
+
+void vgt_cmd_parser_exit(void)
+{
+	kfree(logs);
 }
 
 int vgt_cmd_handler_register(unsigned int type, unsigned int index,
@@ -1066,6 +1146,7 @@ static int vgt_cmd_handler_exec(struct vgt_cmd_data *decode_data)
 	}
 
 	decode_data->name = cmd_handlers[type].handlers[opcode].name;
+	vgt_cmd_printk("cmd %s\n", decode_data->name);
 
 	return cmd_handlers[type].handlers[opcode].handler(decode_data);
 }
@@ -1122,6 +1203,7 @@ int vgt_cmd_parser_render(struct vgt_cmd_data* decode_data)
 			}
 
 			decode_data->name = cmd_handlers[GEN_GFX_CMD_TYPE_GFXPIPE].handlers[index].name;
+			vgt_cmd_printk("cmd %s\n", decode_data->name );
 
 			ret = cmd_handlers[GEN_GFX_CMD_TYPE_GFXPIPE].handlers[index].handler(decode_data);
 
@@ -1165,16 +1247,19 @@ static int __vgt_scan_vring(struct vgt_device *vgt, vgt_reg_t head, vgt_reg_t ta
 
 	decode_data.buffer_type = RING_BUFFER_INSTRUCTION;
 	decode_data.vgt = vgt;
+	vgt_cmd_printk("ring buffer scan start\n");
 	while(instr != instr_end){
 		decode_data.instruction = (uint32_t*)instr;
-		VGT_CMD_PRINTK("vGT: %s: instruction=%0x\n",
+		vgt_cmd_printk("scan %s ip(%p) cmd %08x %08x %08x %08x\n",
 				decode_data.buffer_type == RING_BUFFER_INSTRUCTION ? "RING_BUFFER": "BATCH_BUFFER",
-				decode_data.instruction[0]);
+				instr, decode_data.instruction[0], decode_data.instruction[1],
+				decode_data.instruction[2],	decode_data.instruction[3]);
 
 		ret = vgt_cmd_parser_render(&decode_data);
 		if (ret < 0){
 			error_count++;
 			printk("error_count=%d\n", error_count);
+			vgt_cmd_show_logs();
 			break;
 		}
 
@@ -1187,7 +1272,6 @@ static int __vgt_scan_vring(struct vgt_device *vgt, vgt_reg_t head, vgt_reg_t ta
 
 			if (instr == va_bottom){
 				instr = va_base;
-				VGT_CMD_PRINTK("ring buffer wrap\n");
 			}
 		}
 	}

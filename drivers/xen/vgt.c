@@ -160,6 +160,7 @@ static void __exit vgt_exit_module(void)
 
 	// fill other exit works here
 	vgt_destroy();
+	vgt_cmd_parser_exit();
 	printk("VGT module exit %d\n", rc);
 	return;
 }
