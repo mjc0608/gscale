@@ -358,6 +358,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	vgt_ringbuffer_t	*sring;
 	vgt_reg_t	oval;
 	cycles_t	t0, t1;
+	struct pgt_device *pdev = vgt->pdev;
 
 	ring_mmio_wcnt++;
 	ASSERT(bytes <= 4);
@@ -365,7 +366,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 	ASSERT(!(rel_off & (bytes - 1)));
 
-	ring_id = tail_to_ring_id (vgt->pdev, _tail_reg_(off) );
+	ring_id = tail_to_ring_id (pdev, _tail_reg_(off) );
 	vring = &vgt->rb[ring_id].vring;
 	sring = &vgt->rb[ring_id].sring;
 
@@ -393,18 +394,15 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	case RB_OFFSET_CTL:
 		sring->ctl = vring->ctl;
 
-		/* TODO: need lock with kthread */
-		/* Do we need to wait for the completion of current slice? */
 		if ( (oval & _RING_CTL_ENABLE) &&
 			!(vring->ctl & _RING_CTL_ENABLE) ) {
 			printk("vGT: deactivate vgt (%d) on ring (%d)\n", vgt->vgt_id, ring_id);
-			vgt_deactive (vgt->pdev, &vgt->list);
+			vgt_disable_ring(vgt, ring_id);
 		}
 		else if ( !(oval & _RING_CTL_ENABLE) &&
 			(vring->ctl & _RING_CTL_ENABLE) ) {
-			/* enabled */
 			printk("vGT: activate vgt (%d) on ring (%d)\n", vgt->vgt_id, ring_id);
-			vgt_active (vgt->pdev, &vgt->list);
+			vgt_enable_ring(vgt, ring_id);
 		}
 		if (!bypass_scan && (vring->ctl & _RING_CTL_ENABLE)) {
 			vgt->last_scan_head[ring_id] =
@@ -426,7 +424,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	 * quantum
 	 */
 	if (reg_hw_access(vgt, off))
-		VGT_MMIO_WRITE(vgt->pdev, off, *(vgt_reg_t*)((char *)sring + rel_off));
+		VGT_MMIO_WRITE(pdev, off, *(vgt_reg_t*)((char *)sring + rel_off));
 	//ring_debug(vgt, ring_id);
 	return true;
 }

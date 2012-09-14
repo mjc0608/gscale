@@ -350,15 +350,13 @@ struct vgt_device {
 	 * table.
 	 */
 	bool need_ppgtt_setup;
+	DECLARE_BITMAP(enabled_rings, MAX_ENGINES);
 	struct mmio_hash_table	*wp_table[MHASH_SIZE];	/* hash for WP pages */
 	vgt_ppgtt_pde_t	shadow_pde_table[VGT_PPGTT_PDE_ENTRIES];	 /* current max PDE entries should be 512 for 2G mapping */
 	vgt_ppgtt_pte_t shadow_pte_table[1024];
 
-	/* When it's set, vgt_thread shouldn't do render-switch for this VM */
-	unsigned int exit_req_from_render_switch;
-
-	/* The VM destroy logic must wait on this if the VM is the render owner */
-	struct completion exit_from_render_switch;
+	/* force removal from the render run queue */
+	bool force_removal;
 };
 
 extern struct vgt_device *vgt_dom0;
@@ -480,7 +478,8 @@ struct pgt_device {
 	int devfn;		/* device function number */
 
 	struct task_struct *p_thread;
-	wait_queue_head_t wq;
+	wait_queue_head_t event_wq;
+	wait_queue_head_t destroy_wq;
 	uint32_t request;
 
 	uint64_t ctx_check;	/* the number of checked count in vgt thread */
@@ -691,12 +690,13 @@ static inline void reg_update_handlers(struct pgt_device *pdev,
 #define VGT_REQUEST_IRQ		0	/* a new irq pending from device */
 #define VGT_REQUEST_UEVENT	1
 #define VGT_REQUEST_PPGTT_INIT  2	/* shadow ppgtt init request */
+#define VGT_REQUEST_SCHED 	3	/* immediate reschedule requested */
 
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {
 	set_bit(flag, (void *)&pdev->request);
-	if (waitqueue_active(&pdev->wq))
-		wake_up(&pdev->wq);
+	if (waitqueue_active(&pdev->event_wq))
+		wake_up(&pdev->event_wq);
 }
 
 /* check whether a reg access should happen on real hw */
@@ -1128,22 +1128,67 @@ int vgt_save_state(struct vgt_device *vgt);
 int vgt_restore_state(struct vgt_device *vgt);
 
 /*
- * Activate/Deactive an VGT instance.
+ * Activate a VGT instance to render runqueue.
  */
-static inline void vgt_active(struct pgt_device *pdev, struct list_head *rq)
+static inline void vgt_enable_render(struct vgt_device *vgt)
 {
-	list_del(rq);		/* remove from idle queue */
-	list_add(rq, &pdev->rendering_runq_head);	/* add to run queue */
+	struct pgt_device *pdev = vgt->pdev;
+	ASSERT(spin_is_locked(&pdev->lock));
+	if (bitmap_empty(vgt->enabled_rings, MAX_ENGINES))
+		printk("vGT-%d: Enable render but no ring is enabled yet\n",
+			vgt->vgt_id);
+	/* remove from idle queue */
+	list_del(&vgt->list);
+	/* add to run queue */
+	list_add(&vgt->list, &pdev->rendering_runq_head);
+	printk("vGT-%d: add to render run queue!\n", vgt->vgt_id);
+}
+
+/* now we scheduler all render rings together */
+static inline void vgt_enable_ring(struct vgt_device *vgt, int ring_id)
+{
+	int enable = bitmap_empty(vgt->enabled_rings, MAX_ENGINES);
+
+	set_bit(ring_id, (void *)vgt->enabled_rings);
+	if (enable)
+		vgt_enable_render(vgt);
 }
 
 /*
- * Remove from run queue, but the vgt may be still in executing.
+ * Remove a VGT instance from render runqueue.
  */
-static inline void vgt_deactive(struct pgt_device *pdev, struct list_head *rq)
+static inline void vgt_disable_render(struct vgt_device *vgt)
 {
-	/* TODO: make sure it is not the current vgt */
-	list_del(rq);		/* remove from run queue */
-	list_add(rq, &pdev->rendering_idleq_head);	/* add to idle queue */
+	struct pgt_device *pdev = vgt->pdev;
+	ASSERT(spin_is_locked(&pdev->lock));
+	if (!bitmap_empty(vgt->enabled_rings, MAX_ENGINES))
+		printk("vGT-%d: disable render with enabled rings\n",
+			vgt->vgt_id);
+	/* remove from run queue */
+	list_del(&vgt->list);
+	/* add to idle queue */
+	list_add(&vgt->list, &pdev->rendering_idleq_head);
+	printk("vGT-%d: remove from render run queue!\n", vgt->vgt_id);
+}
+
+static inline void vgt_disable_ring(struct vgt_device *vgt, int ring_id)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	/* multiple disables */
+	if (!test_and_clear_bit(ring_id, (void *)vgt->enabled_rings)) {
+		printk("vGT-%d: disable a disabled ring (%d)\n",
+			vgt->vgt_id, ring_id);
+		return;
+	}
+
+	/* request to remove from runqueue if all rings are disabled */
+	if (bitmap_empty(vgt->enabled_rings, MAX_ENGINES)) {
+		ASSERT(spin_is_locked(&pdev->lock));
+		if (current_render_owner(pdev) == vgt)
+			vgt_raise_request(pdev, VGT_REQUEST_SCHED);
+		else
+			vgt_disable_render(vgt);
+	}
 }
 
 vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_value);

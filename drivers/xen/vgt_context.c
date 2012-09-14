@@ -1462,7 +1462,8 @@ int vgt_thread(void *priv)
 		 * TODO: Use high priority task and timeout based event
 		 * 	mechanism for QoS. schedule in 50ms now.
 		 */
-		wait = wait_event_timeout(pdev->wq, pdev->request, wait);
+		wait = wait_event_timeout(pdev->event_wq,
+				pdev->request, wait);
 
 		if (!pdev->request && wait) {
 			printk("vGT: main thread waken up by unknown reasons!\n");
@@ -1495,8 +1496,12 @@ int vgt_thread(void *priv)
 			}
 		}
 
-		/* context switch timeout hasn't expired */
-		if (wait)
+		/*
+		 * context switch timeout hasn't expired, or
+		 * on-demand scheule hasn't been requested
+		 */
+		if (wait &&
+		    !test_and_clear_bit(VGT_REQUEST_SCHED, (void *)&pdev->request))
 			continue;
 
 		wait = period;
@@ -1592,16 +1597,24 @@ int vgt_thread(void *priv)
 					break;
 				}
 
-				if (prev->exit_req_from_render_switch) {
-					vgt_deactive(prev->pdev, &prev->list);
-					complete(&prev->exit_from_render_switch);
-				}
-
 				previous_render_owner(pdev) = current_render_owner(pdev);
 				current_render_owner(pdev) = next;
 				vgt_irq_restore_context(next, VGT_OT_RENDER);
 				//show_seqno(pdev);
 				vgt_resume_ringbuffers(next);
+
+				if (prev->force_removal ||
+				    bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
+					printk("Disable render for vgt(%d) from kthread\n",
+						prev->vgt_id);
+					vgt_disable_render(prev);
+					wmb();
+					if (prev->force_removal) {
+						prev->force_removal = false;
+						if (waitqueue_active(&pdev->destroy_wq))
+							wake_up(&pdev->destroy_wq);
+					}
+				}
 
 				rdtsc_barrier();
 				end = get_cycles();
@@ -2584,8 +2597,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt->vm_id = vp.vm_id;
 	vgt->pdev = pdev;
 
-	vgt->exit_req_from_render_switch = 0;
-	init_completion(&vgt->exit_from_render_switch);
+	vgt->force_removal = false;
 
 	INIT_LIST_HEAD(&vgt->list);
 
@@ -2727,6 +2739,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		if (hvm_dpy_owner)
 			current_display_owner(pdev) = vgt;
 	}
+	bitmap_zero(vgt->enabled_rings, MAX_ENGINES);
 
 	/* create debugfs interface */
 	(void)vgt_init_debugfs();
@@ -2785,39 +2798,51 @@ err:
 void vgt_release_instance(struct vgt_device *vgt)
 {
 	int i;
-	unsigned long flags;
-	bool in_rendering_rq = false;
+	struct pgt_device *pdev = vgt->pdev;
 	struct list_head *pos;
+	struct vgt_device *v = NULL;
 
+	printk("prepare to destroy vgt (%d)\n", vgt->vgt_id);
 	vgt_destroy_debugfs(vgt);
 
+	spin_lock_irq(&pdev->lock);
+	printk("check display ownership...\n");
 	/* switch the display owner to Dom0 if needed */
-	if (current_display_owner(vgt->pdev) != vgt_dom0) {
+	if (current_display_owner(pdev) == vgt) {
+		printk("switch display ownership back to dom0\n");
 		next_display_owner = vgt_dom0;
-		do_vgt_display_switch(&default_device);
+		do_vgt_display_switch(pdev);
 	}
 
+	printk("check render ownership...\n");
+	list_for_each (pos, &pdev->rendering_runq_head) {
+		v = list_entry (pos, struct vgt_device, list);
+		if (v == vgt)
+			break;
+	}
+
+	if (v != vgt)
+		printk("vgt instance has been removed from run queue\n");
+	else if (current_render_owner(pdev) != vgt) {
+		printk("remove vgt(%d) from runqueue safely\n",
+			vgt->vgt_id);
+		vgt_disable_render(vgt);
+	} else {
+		printk("vgt(%d) is current owner, request reschedule\n",
+			vgt->vgt_id);
+		vgt->force_removal = true;
+		vgt_raise_request(pdev, VGT_REQUEST_SCHED);
+	}
+
+	spin_unlock_irq(&pdev->lock);
+	if (vgt->force_removal)
+		/* wait for removal completion */
+		wait_event(pdev->destroy_wq, !vgt->force_removal);
+
+	printk("release display/render ownership... done\n");
 	/* FIXME: display switch will be
 	 * a disaster after this */
 	vgt_destroy_attached_port(vgt);
-
-	if (vgt_ctx_switch) {
-		spin_lock_irqsave(&vgt->pdev->lock, flags);
-		list_for_each (pos, &vgt->pdev->rendering_runq_head)
-			if (pos == &vgt->list) {
-				in_rendering_rq = true;
-				vgt->exit_req_from_render_switch = 1;
-				break;
-			}
-		spin_unlock_irqrestore(&vgt->pdev->lock, flags);
-
-		if (in_rendering_rq)
-			wait_for_completion(&vgt->exit_from_render_switch);
-
-		/* The vgt may be still in executing. */
-		while ( is_current_render_owner(vgt) )
-			schedule();
-	}
 
 	vgt_hvm_info_deinit(vgt);
 	vgt->pdev->device[vgt->vgt_id] = NULL;
@@ -2841,8 +2866,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	kfree(vgt->state.sReg);
 	free_vgt_id(vgt->vgt_id);
 	kfree(vgt);
-	printk("vGT: vgt_release_instance done for dom%d: vgt_id=%d\n",
-		vgt->vm_id, vgt->vgt_id);
+	printk("vGT: vgt_release_instance done\n");
 }
 
 static uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
@@ -3239,7 +3263,8 @@ int vgt_initialize(struct pci_dev *dev)
 	pdev->ctx_switch = 0;
 	pdev->magic = 0;
 
-	init_waitqueue_head(&pdev->wq);
+	init_waitqueue_head(&pdev->event_wq);
+	init_waitqueue_head(&pdev->destroy_wq);
 	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
 	if (!p_thread) {
 		goto err;
@@ -3293,8 +3318,10 @@ void vgt_destroy(void)
 
 	/* Deactive all VGTs */
 	while ( !list_empty(&pdev->rendering_runq_head) ) {
-		list_for_each (pos, &pdev->rendering_runq_head)
-			vgt_deactive(pdev, pos);
+		list_for_each (pos, &pdev->rendering_runq_head) {
+			vgt = list_entry (pos, struct vgt_device, list);
+			vgt_disable_render(vgt);
+		}
 	};
 
 #ifdef VGT_DEBUGFS_DUMP_FB
