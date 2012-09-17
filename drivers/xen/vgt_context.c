@@ -408,7 +408,6 @@ static void update_context(struct vgt_device *vgt, uint64_t context)
 	UPDATE_FIELD(OFF_MI_MODE, _REG_RCS_MI_MODE);
 }
 
-atomic_t display_switched = ATOMIC_INIT(0);
 struct vgt_device *next_display_owner;
 struct vgt_device *vgt_dom0;
 struct mmio_hash_table	*mtable[MHASH_SIZE];
@@ -1252,6 +1251,7 @@ bool is_rendering_engines_empty(struct pgt_device *pdev, int *ring_id)
 	return true;
 }
 
+#if 0
 /*
  * Request from user level daemon/IOCTL
  */
@@ -1260,6 +1260,7 @@ void vgt_request_display_owner_switch(struct vgt_device *vgt)
 	if (next_display_owner != current_display_owner(vgt->pdev))
 		next_display_owner = vgt;
 }
+#endif
 
 /*
  * Do monitor owner switch.
@@ -1275,39 +1276,35 @@ void vgt_switch_display_owner(struct vgt_device *prev,
 
 void do_vgt_display_switch(struct pgt_device *pdev)
 {
-	//unsigned long flags;
-    //struct vgt_device *cur, *pre;
-	printk(KERN_WARNING"xuanhua: vGT: display switched\n");
-	printk(KERN_WARNING"xuanhua: vGT: current display owner: %p; next display owner: %p\n",
+	if (current_display_owner(pdev) == next_display_owner)
+		goto out;
+
+	printk("vGT: doing display switch: from %p to %p\n",
 			current_display_owner(pdev), next_display_owner);
 
-	/* TODO: Because of assert in vgt_emulate_write/read,
-	 * we cannot use this lock in case deadlock */
-	/* FIXME: we do need other locks for this ??? */
-	//spin_lock_irqsave(&pdev->lock, flags);
+	ASSERT(spin_is_locked(&pdev->lock));
 	dprintk("before irq save\n");
 	vgt_irq_save_context(current_display_owner(pdev),
 			VGT_OT_DISPLAY);
 	dprintk("after irq save\n");
+
 	vgt_switch_display_owner(current_display_owner(pdev),
 			next_display_owner);
 	previous_display_owner(pdev) = current_display_owner(pdev);
 	current_display_owner(pdev) = next_display_owner;
-	//next_display_owner = NULL;
+
 	dprintk("before irq restore\n");
 	vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
-	//spin_unlock_irqrestore(&pdev->lock, flags);
 	dprintk("after irq restore\n");
+
 	/*
 	 * Virtual interrupts pending right after display switch
 	 * Need send to both prev and next owner.
 	 */
 	if (pdev->request & VGT_REQUEST_IRQ) {
 		printk("vGT: handle pending interrupt in the display context switch time\n");
-		//spin_lock_irqsave(&pdev->lock, flags);
 		clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 		vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
-		//spin_unlock_irqrestore(&pdev->lock, flags);
 	}
 #if 0
     cur = next_display_owner;
@@ -1324,6 +1321,9 @@ void do_vgt_display_switch(struct pgt_device *pdev)
     VGT_MMIO_WRITE(cur->pdev, _REG_DSPASURF, __sreg(cur, _REG_DSPASURF));
     printk("XXXX: display switch to dom %d\n", cur->vgt_id);
 #endif
+
+out:
+	next_display_owner = NULL; /* mark the end of a display_owner switch */
 }
 
 static struct vgt_device *next_vgt(
@@ -1522,10 +1522,8 @@ int vgt_thread(void *priv)
 				/* FIXME: add display switch here
 				 * when fully display switch enabled, it may not stay here
 				 */
-				if (atomic_read(&display_switched) == 1) {
+				if (next_display_owner != NULL)
 					do_vgt_display_switch(pdev);
-					atomic_dec(&display_switched);
-				}
 
 				rdtsc_barrier();
 				t1 = get_cycles();
@@ -2825,6 +2823,9 @@ void vgt_release_instance(struct vgt_device *vgt)
 		printk("switch display ownership back to dom0\n");
 		next_display_owner = vgt_dom0;
 		do_vgt_display_switch(pdev);
+	} else if (next_display_owner == vgt) {
+		/* clear possible pending display_owner switch request. */
+		next_display_owner = NULL;
 	}
 
 	printk("check render ownership...\n");

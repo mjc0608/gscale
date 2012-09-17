@@ -82,7 +82,6 @@ struct kset *vgt_kset;
 static struct pgt_device *vgt_kobj_priv;
 struct vgt_device *vmid_2_vgt_device(int vmid);
 static unsigned int query_reg;
-extern atomic_t display_switched;
 
 static void vgt_kobj_release(struct kobject *kobj)
 {
@@ -141,29 +140,40 @@ static ssize_t vgt_display_owner_show(struct kobject *kobj, struct kobj_attribut
 
 struct vgt_device *vmid_2_vgt_device(int vmid);
 extern struct vgt_device *next_display_owner;
-void do_vgt_display_switch(struct pgt_device *pdev);
 static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
             const char *buf, size_t count)
 {
+	unsigned long flags;
+	int ret = count;
     int vmid;
     struct vgt_device *next_vgt;
+
     if (sscanf(buf, "%d", &vmid) != 1)
 		return -EINVAL;
 
-    /* FIXME: to avoid nested spin_lock_irq issue, use spin_lock_irqsave instead of spin_lock_irq*/
-    //spin_lock_irqsave(&vgt_kobj_priv->lock, flags);
-    next_vgt = vmid_2_vgt_device(vmid);
-    if (next_vgt) {
-        next_display_owner = next_vgt;
-		//do_vgt_display_switch(vgt_kobj_priv);
-		atomic_inc(&display_switched);
-	} else {
-		printk("vGT: can not find the vgt instance of dom%d!\n", vmid);
-		return -ENODEV;
-	}
-    //spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
+	//TODO: vgt_kobj_priv is the same as pdev now. make it per-pdev???
+	spin_lock_irqsave(&vgt_kobj_priv->lock, flags);
 
-    return count;
+    next_vgt = vmid_2_vgt_device(vmid);
+    if (next_vgt == NULL) {
+		printk("vGT: can not find the vgt instance of dom%d!\n", vmid);
+		ret = -ENODEV;
+		goto out;
+	}
+
+	/* Is the switch already ongoing? */
+	if (next_display_owner != NULL) {
+		ret = -EBUSY;
+		goto out;
+	}
+
+	if (current_display_owner(next_vgt->pdev) == next_vgt)
+        goto out;
+
+	next_display_owner = next_vgt;
+out:
+	spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
+	return ret;
 }
 
 static ssize_t vgt_display_pointer_store(struct kobject *kobj, struct kobj_attribute *attr,
