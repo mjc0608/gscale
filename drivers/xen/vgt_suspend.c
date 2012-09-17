@@ -3356,7 +3356,6 @@ int init_vgt_port_struct(struct vgt_device *vgt,
 
 	port = kzalloc(sizeof(struct vgt_port_struct), GFP_KERNEL);
 	if (!port) {
-		kfree(port);
 		return -ENOMEM;
 	}
 
@@ -3410,22 +3409,28 @@ struct vgt_dp_port *init_vgt_dp_port_private(
 	return p;
 }
 
-void vgt_destroy_attached_port(struct vgt_device *vgt)
+static void vgt_destroy_single_port(struct vgt_device *vgt,
+		enum vgt_pipe pipe)
 {
-	struct vgt_port_struct *port;
-	enum vgt_pipe pipe;
-	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; pipe++) {
-		port = vgt->attached_port[pipe];
-		if (port) {
-			if (port->private) {
-				kfree(port->private);
-			}
-			kfree(port);
+	struct vgt_port_struct *port_struct = vgt->attached_port[pipe];
+	ASSERT(pipe < I915_MAX_PIPES);
+	if (port_struct) {
+		if (port_struct->private) {
+			kfree(port_struct->private);
+			port_struct->private = NULL;
 		}
+		kfree(port_struct);
+		vgt->attached_port[pipe] = NULL;
 	}
 }
 
-#if 0
+void vgt_destroy_attached_port(struct vgt_device *vgt)
+{
+	enum vgt_pipe pipe;
+	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; pipe++)
+		vgt_destroy_single_port(vgt, pipe);
+}
+
 struct vgt_port_output_struct vgt_port_table[] = {
 	{_REG_PCH_ADPA, _REGBIT_ADPA_DAC_ENABLE, PORT_TRANS_SEL_MASK, VGT_OUTPUT_ANALOG},
 	{_REG_PCH_LVDS, _REGBIT_LVDS_PORT_ENABLE, LVDS_TRANS_SEL_MASK, VGT_OUTPUT_LVDS},
@@ -3444,7 +3449,7 @@ vgt_get_pipe_from_ctrl_reg( struct vgt_device *vgt,
 		struct vgt_port_output_struct *port)
 {
 	//enum vgt_pipe pipe;
-	struct pgt_device *pdev = vgt->pdev;
+	//struct pgt_device *pdev = vgt->pdev;
 	vgt_reg_t ctrl,
 			  enable_bitmask = (1 << 31),
 			  pipe_sel_bitmask = (3 << 29);
@@ -3453,7 +3458,8 @@ vgt_get_pipe_from_ctrl_reg( struct vgt_device *vgt,
 	ASSERT((port->ctrl_reg & 0x3) == 0);
 
 	/* FIXME: read unused pipe ctrl reg, can cause hang ? */
-	ctrl = VGT_MMIO_READ(pdev, port->ctrl_reg);
+	ctrl = __sreg(vgt, port->ctrl_reg);
+	//ctrl = VGT_MMIO_READ(pdev, port->ctrl_reg);
 	if ((ctrl & enable_bitmask) == 0)
 		return I915_MAX_PIPES;
 
@@ -3474,7 +3480,7 @@ vgt_get_dp_from_transcoder(struct vgt_device *vgt,
 		struct vgt_port_output_struct *port)
 {
 	//int dp_ctrl_reg;
-	struct pgt_device *pdev = vgt->pdev;
+	//struct pgt_device *pdev = vgt->pdev;
 	vgt_reg_t trans_dp_ctrl,
 			  dp_sel_mask = (3 << 29),
 			  enable_bitmask = (1 << 31);
@@ -3482,7 +3488,8 @@ vgt_get_dp_from_transcoder(struct vgt_device *vgt,
 	ASSERT(port);
 	ASSERT((port->ctrl_reg & 0x3) == 0);
 
-	trans_dp_ctrl = VGT_MMIO_READ(pdev, port->ctrl_reg);
+	trans_dp_ctrl = __sreg(vgt, port->ctrl_reg);
+	//trans_dp_ctrl = VGT_MMIO_READ(pdev, port->ctrl_reg);
 	if ((trans_dp_ctrl & enable_bitmask) == 0)
 		return 0;
 
@@ -3498,39 +3505,34 @@ vgt_get_dp_from_transcoder(struct vgt_device *vgt,
 	}
 }
 
-/* should only be invoked by vgt_dom0 */
+/* Call it when first display-switch or after any hot-plug events */
 static void vgt_detect_attached_ports(struct vgt_device *vgt)
 {
 	int i,ret;
-	static bool is_first_scan = true;
 	struct pgt_device *pdev = vgt->pdev;
 	enum vgt_pipe pipe, max_pipe;
 	struct vgt_port_output_struct *port;
 	unsigned int dp_ctrl_reg;
 	struct vgt_dp_port *vgt_dp;
 
-	if (!is_first_scan)
-		return;
-
-	is_first_scan = false;
 	if (pdev->is_sandybridge)
 		max_pipe = PIPE_B;
 	else
 		max_pipe = PIPE_C;
+
+	vgt_destroy_attached_port(vgt);
 
 	for (i = 0; i < sizeof(vgt_port_table)/sizeof(struct vgt_port_output_struct); i++) {
 		port = &(vgt_port_table[i]);
 		switch (port->ctrl_reg) {
 			case _REG_PCH_ADPA:
 			case _REG_PCH_LVDS:
-			case _REG_HDMI_B_CTL:
-			case _REG_HDMI_C_CTL:
-			case _REG_HDMI_D_CTL:
 				pipe = vgt_get_pipe_from_ctrl_reg(vgt, port);
 				if (pipe != I915_MAX_PIPES) {
-					vgt_printk("detect port(0x%08x) use %s",
-							port->ctrl_reg, VGT_PIPE_NAME(pipe));
-					/* FIXME: pipe A always paired with plane A ? */
+					vgt_printk("VGT(%d): detect port(0x%08x) use %s",
+							vgt->vgt_id, port->ctrl_reg,
+							VGT_PIPE_NAME(pipe));
+
 					ret = init_vgt_port_struct(vgt, pipe,
 							pipe, port->output_type);
 					if (ret < 0)
@@ -3561,13 +3563,29 @@ static void vgt_detect_attached_ports(struct vgt_device *vgt)
 				}
 
 				break;
+			case _REG_HDMI_B_CTL:
+			case _REG_HDMI_C_CTL:
+			case _REG_HDMI_D_CTL:
+				break;
 			default:
 				BUG(); /* BUG() is only good for debugging :( */
 		}
 	}
 }
-#endif
 
+static void vgt_scan_ports_for_all_domains(struct pgt_device *pdev)
+{
+	int i;
+	struct vgt_device *vgt;
+	ASSERT(pdev);
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		vgt = pdev->device[i];
+		if (vgt)
+			vgt_detect_attached_ports(vgt);
+	}
+}
+
+bool need_scan_attached_ports = true;
 bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 		struct vgt_device *next_vgt)
 {
@@ -3584,6 +3602,10 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 
 	/* the early version refered bool drm_crtc_helper_set_mode()
 	 */
+	if (need_scan_attached_ports) {
+		vgt_scan_ports_for_all_domains(cur_vgt->pdev);
+		//need_scan_attached_ports = false;
+	}
 
 	/* FIXME: only support SNB */
 	for (pipe = 0; pipe < I915_MAX_PIPES - 1; pipe++) {

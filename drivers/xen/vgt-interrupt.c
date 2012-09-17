@@ -1395,6 +1395,7 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 	if (physical == true) {
 		/* Consume irq to prevent virtual irq triggered */
 		//vgt_sde_iir(dev) &= ~_REGBIT_CRT_HOTPLUG;
+		need_scan_attached_ports = true;
 
 		/* Check plugged in or out */
 		sde_isr = VGT_MMIO_READ(dev, _REG_SDEISR);

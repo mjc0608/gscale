@@ -285,6 +285,7 @@ extern int vgt_initialize(struct pci_dev *dev);
 extern bool vgt_register_mmio_handler(int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write);
 
+extern bool need_scan_attached_ports;
 extern bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 		struct vgt_device *next_vgt);
 extern int vgt_hvm_info_init(struct vgt_device *vgt);
