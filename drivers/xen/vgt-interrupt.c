@@ -1798,7 +1798,7 @@ static inline int get_env_and_edid_info(unsigned cmd,
 				edid_index_t *pedid_idx)
 {
 	int ret = 0;
-	switch((cmd & 0x7) >> 1) {
+	switch((cmd >> 1) & 0x7) {
 	case 0:
 		*pedid_idx = EDID_VGA;
 		*pevent = IRQ_CRT_HOTPLUG;
@@ -1821,7 +1821,7 @@ static inline int get_env_and_edid_info(unsigned cmd,
 		break;
 	default:
 		printk("vGT: Not supported hot plug type: 0x%x!\n",
-			(cmd & 0x7) >> 1);
+			((cmd >> 1) & 0x7));
 		ret = -1;
 		break;
 	}
