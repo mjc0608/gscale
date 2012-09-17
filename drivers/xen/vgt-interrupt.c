@@ -1350,35 +1350,37 @@ void vgt_handle_histogram(struct pgt_device *dev,
 	info->propogate_virtual_event(vgt, bit, info);
 }
 
-void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset)
+void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int value, unsigned int offset)
 {
 	struct vgt_device *vgt;
 	vgt_reg_t vreg_data;
 	unsigned int i;
 
 	ASSERT(!(offset & 0x3));
-	ASSERT(bit < 32);
 
-	for_each_set_bit(i, &vgt_id_alloc_bitmap, (8 * sizeof(unsigned long))) {
+	for (i = 0; i < VGT_MAX_VMS; i++) {
 		vgt = pdev->device[i];
-		vreg_data = __vreg(vgt, offset) & ~(1 << bit);
-		__vreg(vgt, offset) = vreg_data;
+		if (vgt) {
+			vreg_data = __vreg(vgt, offset) & (~value);
+			__vreg(vgt, offset) = vreg_data;
+		}
 	}
 }
 
-void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int bit, unsigned int offset)
+void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int value, unsigned int offset)
 {
 	struct vgt_device *vgt;
 	vgt_reg_t vreg_data;
 	unsigned int i;
 
 	ASSERT(!(offset & 0x3));
-	ASSERT(bit < 32);
 
-	for_each_set_bit(i, &vgt_id_alloc_bitmap, (8 * sizeof(unsigned long))) {
+	for (i = 0; i < VGT_MAX_VMS; i++) {
 		vgt = pdev->device[i];
-		vreg_data = __vreg(vgt, offset) | (1 << bit);
-		__vreg(vgt, offset) = vreg_data;
+		if (vgt) {
+			vreg_data = __vreg(vgt, offset) | value;
+			__vreg(vgt, offset) = vreg_data;
+		}
 	}
 }
 
@@ -1386,8 +1388,8 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt)
 {
-    vgt_reg_t sde_isr;
-	//struct pgt_device *pdev = vgt->pdev;
+    vgt_reg_t sde_isr, adpa_ctrl, hpd_ch_status;
+	struct pgt_device *pdev = vgt->pdev;
 
 	/* send out udev events when handling physical interruts */
 	if (physical == true) {
@@ -1399,11 +1401,18 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 		if (sde_isr & _REGBIT_CRT_HOTPLUG) {
 			printk("%s: %d: vGT: detect crt insert uevent!\n", __func__, __LINE__);
 			set_bit(CRT_HOTPLUG_IN, vgt_uevents_bitmap);
-			set_bit(VGT_CRT, dev->port_detect_status);
+			adpa_ctrl = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
+			hpd_ch_status = adpa_ctrl & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+			if (hpd_ch_status != 0) {
+				set_bit(VGT_CRT, dev->port_detect_status);
+				vgt_set_all_vreg_bit(pdev, hpd_ch_status, _REG_PCH_ADPA);
+			}
+
 		} else {
 			printk("%s: %d: vGT: detect crt evict uevent!\n", __func__, __LINE__);
 			set_bit(CRT_HOTPLUG_OUT, vgt_uevents_bitmap);
 			clear_bit(VGT_CRT, dev->port_detect_status);
+			vgt_clear_all_vreg_bit(pdev, _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK, _REG_PCH_ADPA);
 		}
 
 		/* FIXME: since raise VGT_REQUEST_IRQ in physical handling */
