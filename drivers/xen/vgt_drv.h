@@ -1802,6 +1802,8 @@ extern bool vgt_init_shadow_ppgtt(struct vgt_device *vgt);
 extern bool vgt_setup_ppgtt(struct vgt_device *vgt);
 extern void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt);
 
+extern struct dentry *vgt_init_debugfs(struct pgt_device *pdev);
+extern int vgt_create_debugfs(struct vgt_device *vgt);
 /* Debugfs: if you want to enable dumping framebuffer,
  * you should define VGT_DEBUGFS_DUMP_FB, since Windows
  * can update surface base frequently, for performance

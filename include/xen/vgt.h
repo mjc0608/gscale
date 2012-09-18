@@ -110,6 +110,3 @@ extern int hcall_mmio_write(
 
 // MMIO definitions
 
-// Debugfs interface
-struct dentry *vgt_init_debugfs(void);
-int vgt_create_debugfs(struct vgt_device *vgt);

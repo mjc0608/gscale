@@ -252,21 +252,58 @@ static struct dentry *vgt_debugfs_create_blob(const char *name, mode_t mode,
 	return debugfs_create_file(name, mode, parent, p, &u32_array_fops);
 }
 
+static int vgt_reginfo_show(struct seq_file *m, void *data)
+{
+	int i, accessed, untracked;
+	struct pgt_device *pdev = (struct pgt_device *)m->private;
+
+	accessed = 0;
+	untracked = 0;
+	seq_printf(m, "--------Untracked Regs--------\n");
+	for (i = 0; i < pdev->mmio_size; i +=  REG_SIZE) {
+		if (!reg_is_accessed(pdev, i))
+			continue;
+
+		accessed++;
+		if (!reg_is_tracked(pdev, i)) {
+			untracked++;
+			seq_printf(m, "0x%x\n", i);
+		}
+	}
+	seq_printf(m, "-------------------\n");
+	seq_printf(m, "Total %d untracked out of %d accessed\n",
+		   untracked, accessed);
+	return 0;
+}
+
+static int vgt_reginfo_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vgt_reginfo_show, inode->i_private);
+}
+
+static const struct file_operations reginfo_fops = {
+	.open = vgt_reginfo_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 /* TODO: initialize vGT debufs top directory */
 /* FIXME: how about the second graphics card */
-struct dentry *vgt_init_debugfs(void)
+struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 {
 	struct dentry *temp_d;
 	int   i;
 
-    if (!d_vgt_debug) {
-        d_vgt_debug = debugfs_create_dir("vgt", NULL);
+	if (!d_vgt_debug) {
+		d_vgt_debug = debugfs_create_dir("vgt", NULL);
 
-        if (!d_vgt_debug)
-            pr_warning("Could not create 'vgt' debugfs directory\n");
-    }
+		if (!d_vgt_debug) {
+			pr_warning("Could not create 'vgt' debugfs directory\n");
+			return NULL;
+		}
+	}
 
-    if ( d_vgt_debug )
 	for ( i = 0; stat_info[i].stat != NULL; i++ ) {
 		temp_d = debugfs_create_u64(stat_info[i].node_name,
 			0444,
@@ -277,7 +314,12 @@ struct dentry *vgt_init_debugfs(void)
 				stat_info[i].node_name);
 	}
 
-    return d_vgt_debug;
+	temp_d = debugfs_create_file("untracked_mmio", 0444, d_vgt_debug,
+			 pdev, &reginfo_fops);
+	if (!temp_d)
+		return NULL;
+
+	return d_vgt_debug;
 }
 
 #ifdef VGT_DEBUGFS_DUMP_FB

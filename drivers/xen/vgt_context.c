@@ -2741,10 +2741,13 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	}
 	bitmap_zero(vgt->enabled_rings, MAX_ENGINES);
 
-	/* create debugfs interface */
-	(void)vgt_init_debugfs();
 	/* create debugfs per vgt */
-	(void)vgt_create_debugfs(vgt);
+	if (vgt_create_debugfs(vgt)) {
+		printk("vGT: failed to create debugfs for vgt-%d\n",
+			vgt->vgt_id);
+		goto err;
+	}
+
 	/* initialize i2c states */
 	vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
 	/* assign aux_ch vregs for aux_ch virtualization */
@@ -3233,6 +3236,11 @@ int vgt_initialize(struct pci_dev *dev)
 	/* initialize EDID data */
 	vgt_probe_edid(pdev, -1);
 
+	/* create debugfs interface */
+	if (!vgt_init_debugfs(pdev)) {
+		printk("vGT:failed to create debugfs\n");
+		goto err;
+	}
 	/* create domain 0 instance */
 	vp.vm_id = 0;
 	vp.aperture_sz = dom0_aperture_sz;
