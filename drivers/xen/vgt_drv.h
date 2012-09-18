@@ -386,8 +386,8 @@ enum vgt_owner_type {
 #define VGT_REG_WORKAROUND	(1 << 4)
 /* reg contains address, requiring fix */
 #define VGT_REG_ADDR_FIX	(1 << 5)
-/* HW updated regs */
-#define VGT_REG_HW_UPDATE	(1 << 6)
+/* Status bit updated from HW */
+#define VGT_REG_HW_STATUS	(1 << 6)
 /* Always virtualized even at boot time */
 #define VGT_REG_ALWAYS_VIRT	(1 << 7)
 /* Mode ctl registers with high 16 bits as the mask bits */
@@ -589,7 +589,7 @@ extern struct list_head pgt_devices;
 #define vgt_ctx_switch(d)		(d->ctx_switch)
 
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
-#define reg_hw_update(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_UPDATE)
+#define reg_hw_status(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_STATUS)
 #define reg_always_virt(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ALWAYS_VIRT)
 #define reg_mode_ctl(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_MODE_CTL)
 #define reg_workaround(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_WORKAROUND)
@@ -604,10 +604,10 @@ extern struct list_head pgt_devices;
 #define reg_aux_addr_mask(pdev, index)	\
 	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].addr_fix.mask)
 
-static inline void reg_set_hw_update(struct pgt_device *pdev, vgt_reg_t reg)
+static inline void reg_set_hw_status(struct pgt_device *pdev, vgt_reg_t reg)
 {
 	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
-	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_HW_UPDATE;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_HW_STATUS;
 }
 
 static inline void reg_set_always_virt(struct pgt_device *pdev, vgt_reg_t reg)
@@ -760,12 +760,12 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 #define F_VIRT		VGT_OT_INVALID | VGT_REG_ALWAYS_VIRT
 #define F_RDR		VGT_OT_RENDER
 #define F_RDR_ADRFIX	VGT_OT_RENDER | VGT_REG_ADDR_FIX
-#define F_RDR_HWSTS	VGT_OT_RENDER | VGT_REG_HW_UPDATE
+#define F_RDR_HWSTS	VGT_OT_RENDER | VGT_REG_HW_STATUS
 #define F_RDR_MODE	VGT_OT_RENDER | VGT_REG_MODE_CTL
 #define F_DPY		VGT_OT_DISPLAY
 #define F_DPY_ADRFIX	VGT_OT_DISPLAY | VGT_REG_ADDR_FIX
 #define F_DPY_HWSTS_ADRFIX	\
-	VGT_OT_DISPLAY | VGT_REG_ADDR_FIX | VGT_REG_HW_UPDATE
+	VGT_OT_DISPLAY | VGT_REG_ADDR_FIX | VGT_REG_HW_STATUS
 #define F_PM		VGT_OT_PM
 #define F_WA		VGT_OT_INVALID | VGT_REG_WORKAROUND
 

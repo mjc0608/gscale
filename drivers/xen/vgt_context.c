@@ -819,7 +819,7 @@ static inline unsigned long vgt_get_passthrough_reg(struct vgt_device *vgt,
 static unsigned long vgt_get_reg(struct vgt_device *vgt, unsigned int reg)
 {
 	/* check whether to update vreg from HW */
-//	if (reg_hw_update(pdev, reg) &&
+//	if (reg_hw_status(pdev, reg) &&
 	if (reg_hw_access(vgt, reg))
 		return vgt_get_passthrough_reg(vgt, reg);
 	else
@@ -843,7 +843,7 @@ static inline unsigned long vgt_get_passthrough_reg_64(struct vgt_device *vgt, u
 static unsigned long vgt_get_reg_64(struct vgt_device *vgt, unsigned int reg)
 {
 	/* check whether to update vreg from HW */
-//	if (reg_hw_update(pdev, reg) &&
+//	if (reg_hw_status(pdev, reg) &&
 	if (reg_hw_access(vgt, reg))
 		return vgt_get_passthrough_reg_64(vgt, reg);
 	else
@@ -2160,7 +2160,7 @@ static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *reg
 
 	for (i=0; i<num; i++) {
 		int reg = regs[i];
-		//if (reg_hw_update(vgt->pdev, reg)) {
+		//if (reg_hw_status(vgt->pdev, reg)) {
 		/* FIXME: only hw update reg needs save */
 		if (!reg_mode_ctl(vgt->pdev, reg))
 		{
@@ -2201,7 +2201,7 @@ static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs
 		 * FIXME: there's regs only with some bits updated by HW. Need
 		 * OR vm's update with hw's bits?
 		 */
-		//if (!reg_hw_update(vgt->pdev, reg))
+		//if (!reg_hw_status(vgt->pdev, reg))
 		if (__sreg(vgt, _REG_RCS_UHPTR) & 1) {
 			printk("!!!!!UHPTR is valid after resuming. Clear the valid bit\n");
 			__sreg(vgt, _REG_RCS_UHPTR) &= ~1;

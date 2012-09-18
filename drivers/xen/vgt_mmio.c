@@ -2692,8 +2692,8 @@ static void vgt_set_reg_attr(struct pgt_device *pdev,
 		reg_set_mode_ctl(pdev, reg);
 	if (attr->flags & VGT_REG_ALWAYS_VIRT)
 		reg_set_always_virt(pdev, reg);
-	if (attr->flags & VGT_REG_HW_UPDATE)
-		reg_set_hw_update(pdev, reg);
+	if (attr->flags & VGT_REG_HW_STATUS)
+		reg_set_hw_status(pdev, reg);
 
 	/* last mark the reg as tracked */
 	if (track)
