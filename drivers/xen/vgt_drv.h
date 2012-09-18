@@ -397,8 +397,8 @@ enum vgt_owner_type {
 #define VGT_REG_ADDR_FIX	(1 << 5)
 /* Status bit updated from HW */
 #define VGT_REG_HW_STATUS	(1 << 6)
-/* Always virtualized even at boot time */
-#define VGT_REG_ALWAYS_VIRT	(1 << 7)
+/* Virtualized */
+#define VGT_REG_VIRT	(1 << 7)
 /* Mode ctl registers with high 16 bits as the mask bits */
 #define VGT_REG_MODE_CTL	(1 << 8)
 /* VMs have different settings on this reg */
@@ -407,6 +407,8 @@ enum vgt_owner_type {
 #define VGT_REG_TRACKED		(1 << 10)
 /* This reg has been accessed by a VM */
 #define VGT_REG_ACCESSED	(1 << 11)
+/* Virtualized, but accessible by dom0 at boot time */
+#define VGT_REG_BOOTTIME	(1 << 12)
 /* index into another auxillary table. Maximum 256 entries now */
 #define VGT_REG_INDEX_SHIFT	16
 #define VGT_REG_INDEX_MASK	(0xFFFF << VGT_REG_INDEX_SHIFT)
@@ -645,12 +647,13 @@ extern struct list_head pgt_devices;
 
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
 #define reg_hw_status(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_STATUS)
-#define reg_always_virt(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ALWAYS_VIRT)
+#define reg_virt(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_VIRT)
 #define reg_mode_ctl(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_MODE_CTL)
 #define reg_workaround(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_WORKAROUND)
 #define reg_need_switch(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_NEED_SWITCH)
 #define reg_is_tracked(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_TRACKED)
 #define reg_is_accessed(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ACCESSED)
+#define reg_boottime(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_BOOTTIME)
 #define reg_aux_index(pdev, reg)	\
 	((pdev->reg_info[REG_INDEX(reg)] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
 #define reg_has_aux_info(pdev, reg)	(reg_mode_ctl(pdev, reg) | reg_addr_fix(pdev, reg))
@@ -665,10 +668,16 @@ static inline void reg_set_hw_status(struct pgt_device *pdev, vgt_reg_t reg)
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_HW_STATUS;
 }
 
-static inline void reg_set_always_virt(struct pgt_device *pdev, vgt_reg_t reg)
+static inline void reg_set_virt(struct pgt_device *pdev, vgt_reg_t reg)
 {
 	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
-	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ALWAYS_VIRT;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_VIRT;
+}
+
+static inline void reg_set_boottime(struct pgt_device *pdev, vgt_reg_t reg)
+{
+	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_BOOTTIME;
 }
 
 /* mask bits for addr fix */
@@ -760,12 +769,8 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 {
 	struct pgt_device *pdev = vgt->pdev;
 
-	/* always virtualzed regs like PVINFO */
-	if (reg_always_virt(pdev, reg))
-		return false;
-
-	/* at boot time dom0 is allowed to access all regs */
-	if (vgt_ops->boot_time)
+	/* regs accessible by dom0 at boot time */
+	if (vgt_ops->boot_time && reg_boottime(pdev, reg))
 		return true;
 
 	/* super owner give full access to HVM instead of dom0 */
@@ -780,7 +785,7 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 	if (reg_is_owner(vgt, reg))
 		return true;
 
-	/* or else by default no hw access */
+	//ASSERT(reg_virt(pdev, reg));
 	return false;
 }
 
@@ -812,19 +817,19 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	return false;
 }
 
-#define F_VIRT		VGT_OT_INVALID | VGT_REG_ALWAYS_VIRT
-#define F_RDR		VGT_OT_RENDER
-#define F_RDR_ADRFIX	VGT_OT_RENDER | VGT_REG_ADDR_FIX
-#define F_RDR_HWSTS	VGT_OT_RENDER | VGT_REG_HW_STATUS
-#define F_RDR_MODE	VGT_OT_RENDER | VGT_REG_MODE_CTL
-#define F_DPY		VGT_OT_DISPLAY
-#define F_DPY_ADRFIX	VGT_OT_DISPLAY | VGT_REG_ADDR_FIX
-#define F_DPY_HWSTS_ADRFIX	\
-	VGT_OT_DISPLAY | VGT_REG_ADDR_FIX | VGT_REG_HW_STATUS
-#define F_PM		VGT_OT_PM
-#define F_WA		VGT_OT_INVALID | VGT_REG_WORKAROUND
-/* Boot time passthrough */
-#define F_BT_PS		VGT_OT_INVALID
+#define F_VIRT			VGT_OT_INVALID | VGT_REG_VIRT
+#define F_BOOTTIME		F_VIRT | VGT_REG_BOOTTIME
+#define F_RDR			VGT_OT_RENDER
+#define F_RDR_ADRFIX		F_RDR | VGT_REG_ADDR_FIX
+#define F_RDR_HWSTS		F_RDR | VGT_REG_HW_STATUS
+#define F_RDR_MODE		F_RDR | VGT_REG_MODE_CTL
+#define F_DPY			VGT_OT_DISPLAY
+#define F_DPY_ADRFIX		F_DPY | VGT_REG_ADDR_FIX
+#define F_DPY_HWSTS_ADRFIX	F_DPY_ADRFIX | VGT_REG_HW_STATUS
+#define F_PM			VGT_OT_PM
+#define F_WA			VGT_OT_INVALID | VGT_REG_WORKAROUND
+/* suppose owned by management domain (e.g. dom0) only */
+#define F_MGMT			VGT_OT_MGMT
 
 extern int vgt_ctx_switch;
 extern bool fastpath_dpy_switch;
