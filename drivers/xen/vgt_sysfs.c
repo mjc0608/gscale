@@ -234,7 +234,7 @@ static ssize_t vgt_hot_plug_trigger(struct kobject *kobj,
 {
 	unsigned hotplug_cmd = 0;
 	sscanf(buf, "%du", &hotplug_cmd);
-	vgt_trigger_display_hot_plug(vgt_kobj_priv, hotplug_cmd);
+	vgt_trigger_display_hot_plug(vgt_kobj_priv, (vgt_hotplug_cmd_t)hotplug_cmd);
 	return count;
 }
 

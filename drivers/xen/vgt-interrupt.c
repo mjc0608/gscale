@@ -1794,12 +1794,12 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 }
 
 
-static inline int get_env_and_edid_info(unsigned cmd,
+static inline int get_env_and_edid_info(vgt_hotplug_cmd_t cmd,
 				enum vgt_event_type *pevent,
 				edid_index_t *pedid_idx)
 {
 	int ret = 0;
-	switch((cmd >> 1) & 0x7) {
+	switch(cmd.port_sel) {
 	case 0:
 		*pedid_idx = EDID_VGA;
 		*pevent = IRQ_CRT_HOTPLUG;
@@ -1822,14 +1822,15 @@ static inline int get_env_and_edid_info(unsigned cmd,
 		break;
 	default:
 		printk("vGT: Not supported hot plug type: 0x%x!\n",
-			((cmd >> 1) & 0x7));
+			cmd.port_sel);
 		ret = -1;
 		break;
 	}
 	return ret;
 }
 
-void vgt_trigger_display_hot_plug(struct pgt_device *dev, unsigned hotplug_cmd)
+void vgt_trigger_display_hot_plug(struct pgt_device *dev,
+		vgt_hotplug_cmd_t  hotplug_cmd)
 {
 	int i;
 	/* Default: send hotplug virtual interrupts to all VMs currently.
@@ -1858,7 +1859,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev, unsigned hotplug_cmd)
 		ASSERT(info);
 		bit = ops->get_bit_from_event(dev, event, info);
 
-		if (hotplug_cmd & 0x1) {
+		if (hotplug_cmd.action == 0x1) {
 			/* plug in */
 			vgt_propagate_edid(vgt, edid_idx);
 		} else {

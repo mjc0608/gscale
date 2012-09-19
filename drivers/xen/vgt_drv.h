@@ -417,6 +417,17 @@ typedef union {
 struct vgt_irq_host_state;
 #define VGT_VBIOS_PAGES 16
 
+typedef union {
+	uint32_t cmd;
+	struct {
+		uint32_t action : 1;
+		uint32_t port_sel: 3;
+		uint32_t rsvd_4_7 : 4;
+		uint32_t vmid : 8;
+		uint32_t rsvd_16_31 : 16;
+	};
+} vgt_hotplug_cmd_t;
+
 enum vgt_output_type {
 	VGT_OUTPUT_ANALOG = 0,
 	VGT_OUTPUT_DISPLAYPORT,
@@ -1733,7 +1744,7 @@ void vgt_handle_dp_a_hotplug(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt);
 
-void vgt_trigger_display_hot_plug(struct pgt_device *dev, unsigned hotplug_cmd);
+void vgt_trigger_display_hot_plug(struct pgt_device *dev, vgt_hotplug_cmd_t hotplug_cmd);
 
 void vgt_handle_aux_channel(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
