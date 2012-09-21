@@ -489,6 +489,9 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		/* write_gtt with new shadow PTE page address */
 		vgt_write_gtt(vgt->pdev, h_index, shadow_pde);
 	}
+
+	vgt->ppgtt_initialized = true;
+
 	return true;
 }
 
@@ -527,10 +530,14 @@ void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt)
 	vgt_ppgtt_pte_t *p;
 
 	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
-		vgt_unset_wp_page(vgt, vgt->shadow_pde_table[i].virtual_phyaddr >> PAGE_SHIFT);
-
 		p = &vgt->shadow_pte_table[i];
-		xen_unmap_domain_mfn_range_in_kernel(p->guest_pte_vm, 1, vgt->vm_id);
+
+		if (vgt->ppgtt_initialized) {
+			vgt_unset_wp_page(vgt, vgt->shadow_pde_table[i].virtual_phyaddr >> PAGE_SHIFT);
+
+			if (p->guest_pte_vm)
+				xen_unmap_domain_mfn_range_in_kernel(p->guest_pte_vm, 1, vgt->vm_id);
+		}
 		__free_page(p->pte_page);
 	}
 }

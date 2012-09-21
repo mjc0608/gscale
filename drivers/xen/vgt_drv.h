@@ -338,6 +338,7 @@ struct vgt_device {
 	/* PPGTT info: currently not per-ring but assume three rings share same
 	 * table.
 	 */
+	bool ppgtt_initialized;
 	bool need_ppgtt_setup;
 	DECLARE_BITMAP(enabled_rings, MAX_ENGINES);
 	struct mmio_hash_table	*wp_table[MHASH_SIZE];	/* hash for WP pages */
