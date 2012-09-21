@@ -3544,11 +3544,12 @@ static void vgt_detect_attached_ports(struct vgt_device *vgt)
 			case _REG_TRANS_DP_C_CTL:
 				dp_ctrl_reg = vgt_get_dp_from_transcoder(vgt, port);
 				if (dp_ctrl_reg != 0) {
-					vgt_printk("detect DP port(0x%08x) use %s",
-							dp_ctrl_reg, VGT_PIPE_NAME(pipe));
 
 					pipe = ((dp_ctrl_reg - _REG_TRANS_DP_A_CTL) >> 12);
 					ASSERT(pipe < I915_MAX_PIPES);
+
+					vgt_printk("detect DP port(0x%08x) use %s",
+							dp_ctrl_reg, VGT_PIPE_NAME(pipe));
 
 					ret = init_vgt_port_struct(vgt, pipe,
 							pipe, port->output_type);
