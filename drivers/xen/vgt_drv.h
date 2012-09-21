@@ -134,6 +134,7 @@ typedef struct {
 #define VGT_GM_BITMAP_BITS		(VGT_MAX_GM_SIZE/SIZE_1MB)
 #define VGT_MAX_NUM_FENCES		16
 #define VGT_FENCE_BITMAP_BITS	VGT_MAX_NUM_FENCES
+#define VGT_RSVD_APERTURE_BITMAP_BITS (VGT_RSVD_APERTURE_SZ/PAGE_SIZE)
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
 #define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 256 KB for now */
@@ -333,7 +334,6 @@ struct vgt_device {
 	uint64_t   vgtt_sz; /* virtual GTT size in byte */
 	uint32_t   *vgtt; /* virtual GTT table for guest to read */
 
-	uint64_t  	rsvd_aperture_base;	/* aperture used for VGT driver */
 	vgt_reg_t	saved_wakeup;		/* disable PM before switching */
 
 	struct vgt_irq_virt_state *irq_vstate;
@@ -525,9 +525,11 @@ struct pgt_device {
 	/* 1 bit corresponds to 1 fence register */
 	DECLARE_BITMAP(fence_bitmap, VGT_FENCE_BITMAP_BITS);
 
+	/* 1 bit corresponds to 1 PAGE(4K) in aperture */
+	DECLARE_BITMAP(rsvd_aperture_bitmap, VGT_RSVD_APERTURE_BITMAP_BITS);
+
 	uint64_t rsvd_aperture_sz;
 	uint64_t rsvd_aperture_base;
-	uint64_t rsvd_aperture_pos;	/* position of the next free reserved page */
 	uint64_t scratch_page;		/* page used for data written from GPU */
 	uint64_t ctx_switch_rb_page;	/* page used as ring buffer for context switch */
 	uint64_t batch_buffer_page;	/* page used to map batch buffer */
@@ -983,6 +985,11 @@ static inline uint64_t h2g_gm(struct vgt_device *vgt, uint64_t h_addr)
 
 	return g_addr;
 }
+
+extern unsigned long rsvd_aperture_alloc(struct pgt_device *pdev,
+		unsigned long size);
+extern void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start,
+		unsigned long size);
 
 extern dma_addr_t dummy_addr;
 /*

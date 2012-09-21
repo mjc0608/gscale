@@ -2470,6 +2470,40 @@ static int create_state_instance(struct vgt_device *vgt)
 	return 0;
 }
 
+/* allocate pages in reserved aperture
+  NB: size must be page aligned */
+unsigned long rsvd_aperture_alloc(struct pgt_device *pdev, unsigned long size)
+{
+	/* TODO: lock ? */
+	unsigned long start, nr_pages;
+
+	nr_pages = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	start = bitmap_find_next_zero_area( pdev->rsvd_aperture_bitmap,
+			VGT_RSVD_APERTURE_BITMAP_BITS, 0, nr_pages, 0 );
+
+	/* reserved aperture is enough to serve all VMs,
+	   out of memory should not happen
+	 */
+	ASSERT (start < VGT_RSVD_APERTURE_BITMAP_BITS);
+
+	bitmap_set(pdev->rsvd_aperture_bitmap, start, nr_pages);
+
+	return pdev->rsvd_aperture_base + (start << PAGE_SHIFT);
+}
+
+/* free pages in reserved aperture */
+void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start, unsigned long size)
+{
+	unsigned long nr_pages = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+
+	if ( (start >= pdev->rsvd_aperture_base) &&
+			(start + size <= pdev->rsvd_aperture_base + pdev->rsvd_aperture_sz) )
+	{
+		bitmap_clear(pdev->rsvd_aperture_bitmap,
+				(start - pdev->rsvd_aperture_base)>>PAGE_SHIFT, nr_pages);
+	}
+}
+
 static int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -2543,6 +2577,37 @@ static void free_vm_aperture_gm_and_fence(struct vgt_device *vgt)
 	bitmap_clear(fence_bitmap, vgt->fence_base,  vgt->fence_sz);
 }
 
+static int alloc_vm_rsvd_aperture(struct vgt_device *vgt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_state_ring_t *rb;
+	int i;
+
+	for (i=0; i< pdev->max_engines; i++) {
+		rb = &vgt->rb[i];
+		rb->context_save_area = aperture_2_gm(pdev,
+				rsvd_aperture_alloc(pdev, SZ_CONTEXT_AREA_PER_RING) );
+		printk("VM%d Ring%d context_save_area is allocated at gm(%llx)\n", vgt->vm_id, i,
+				rb->context_save_area);
+		rb->initialized = false;
+	}
+
+	return 0;
+}
+
+static void free_vm_rsvd_aperture(struct vgt_device *vgt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_state_ring_t *rb;
+	int i;
+
+	for (i=0; i< pdev->max_engines; i++) {
+		rb = &vgt->rb[i];
+		rsvd_aperture_free(pdev, rb->context_save_area + phys_aperture_base(pdev),
+				SZ_CONTEXT_AREA_PER_RING);
+	}
+}
+
 static void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev)
 {
 	unsigned long *gm_bitmap = pdev->gm_bitmap;
@@ -2565,9 +2630,6 @@ static void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev)
 	printk("vGT: reserved aperture: [0x%llx, 0x%llx)\n",
 			pdev->rsvd_aperture_base,
 			pdev->rsvd_aperture_base + pdev->rsvd_aperture_sz);
-
-	/* serve as a simple linear allocator */
-	pdev->rsvd_aperture_pos = 0;
 }
 
 /*
@@ -2575,9 +2637,7 @@ static void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev)
  */
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp)
 {
-	int i;
 	struct vgt_device *vgt;
-	vgt_state_ring_t	*rb;
 	char *cfg_space;
 	struct vgt_dp_port *vgt_dp;
 	int rc = -ENOMEM;
@@ -2631,19 +2691,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		goto err;
 	}
 
-	vgt->rsvd_aperture_base = pdev->rsvd_aperture_base + pdev->rsvd_aperture_pos;
-	pdev->rsvd_aperture_pos += VGT_APERTURE_PER_INSTANCE_SZ;
-	printk("vGT:   rsvd_aperture_base: 0x%llx\n", vgt->rsvd_aperture_base);
-
-	for (i=0; i< pdev->max_engines; i++) {
-		rb = &vgt->rb[i];
-		rb->context_save_area = aperture_2_gm(pdev, vgt->rsvd_aperture_base +
-			i * SZ_CONTEXT_AREA_PER_RING);
-		rb->initialized = false;
-	}
-	/* TODO */
-	pdev->dummy_area = aperture_2_gm(pdev, vgt->rsvd_aperture_base +
-                        pdev->max_engines * SZ_CONTEXT_AREA_PER_RING);
+	alloc_vm_rsvd_aperture(vgt);
 
 	vgt->rb[RING_BUFFER_RCS].stateless = 0;	/* RCS */
 	vgt->rb[RING_BUFFER_VCS].stateless = 1;	/* BCS */
@@ -2864,6 +2912,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 		vgt_destroy_shadow_ppgtt(vgt);
 
 	free_vm_aperture_gm_and_fence(vgt);
+	free_vm_rsvd_aperture(vgt);
 	kfree(vgt->vgtt);
 	kfree(vgt->state.vReg);
 	kfree(vgt->state.sReg);
@@ -3040,25 +3089,23 @@ static void vgt_set_device_type(struct pgt_device *pdev)
 static void vgt_init_reserved_aperture(struct pgt_device *pdev)
 {
 	/* setup the scratch page for the context switch */
-	pdev->scratch_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
-		pdev->rsvd_aperture_pos);
+	pdev->scratch_page = aperture_2_gm(pdev, rsvd_aperture_alloc(pdev,
+				VGT_APERTURE_PER_INSTANCE_SZ));
 	printk("scratch page is allocated at gm(0x%llx)\n", pdev->scratch_page);
 	/* reserve the 1st trunk for vGT's general usage */
-	pdev->rsvd_aperture_pos += VGT_APERTURE_PER_INSTANCE_SZ;
 
 	/* reserve 1 page as the temporary ring buffer for context switch */
-	pdev->ctx_switch_rb_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
-		pdev->rsvd_aperture_pos);
-	pdev->rsvd_aperture_pos += PAGE_SIZE;
-	printk("ctx_switch_rb_page is allocated at gm(%llx)\n",
-		pdev->batch_buffer_page);
+	pdev->ctx_switch_rb_page = aperture_2_gm(pdev, rsvd_aperture_alloc(pdev, PAGE_SIZE));
+	printk("ctx_switch_rb_page is allocated at gm(0x%llx)\n",
+		pdev->ctx_switch_rb_page);
 
 	/* one page for mapping batch buffer when PPGTT is disabled */
-	pdev->batch_buffer_page = aperture_2_gm(pdev, pdev->rsvd_aperture_base +
-		pdev->rsvd_aperture_pos);
-	pdev->rsvd_aperture_pos += PAGE_SIZE;
-	printk("batch_buffer_page is allocated at gm(%llx)\n",
+	pdev->batch_buffer_page = aperture_2_gm(pdev, rsvd_aperture_alloc(pdev, PAGE_SIZE));
+	printk("batch_buffer_page is allocated at gm(0x%llx)\n",
 		pdev->batch_buffer_page);
+
+	pdev->dummy_area = aperture_2_gm(pdev, rsvd_aperture_alloc(pdev, SZ_CONTEXT_AREA_PER_RING));
+	printk("dummy_area is allocated at gm(0x%llx)\n", pdev->dummy_area);
 }
 
 static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
