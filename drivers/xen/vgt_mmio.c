@@ -166,8 +166,9 @@ bool gmbus_mmio_write(struct vgt_device *vgt, unsigned int offset,
 			pedid = (vgt_edid_data_t **)
 					&vgt->vgt_edids[EDID_HDMIC];
 			break;
-		case 5: /* Should not happen. */
-			ASSERT(0);
+		case 5: /* Port B */
+			pedid = (vgt_edid_data_t **)
+					&vgt->vgt_edids[EDID_HDMIB];
 			break;
 		case 6: /* Port D */
 			pedid = (vgt_edid_data_t **)
