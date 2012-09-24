@@ -1040,6 +1040,7 @@ union _TRANS_CONFIG
 #define DP_ADJUST_PRE_EMPHASIS_LANE1_SHIFT  6
 /* Ironlake */
 #define _REG_CPU_VGACNTRL	0x41000
+#define _REGBIT_VGA_DISPLAY_DISABLE   		(1UL << 31)
 
 /*
  * Instruction and interrupt control regs

@@ -2467,6 +2467,36 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 	}
 }
 
+static bool vga_control_r(struct vgt_device *vgt, unsigned int offset,
+    void *p_data, unsigned int bytes)
+{
+	ASSERT (bytes == 4 && offset == _REG_CPU_VGACNTRL);
+
+	return default_mmio_read(vgt, offset, p_data, bytes);
+}
+
+static bool vga_control_w (struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	ASSERT (bytes == 4 && offset == _REG_CPU_VGACNTRL);
+
+	default_mmio_write(vgt, offset, p_data, bytes);
+
+	if ( __vreg(vgt, offset) & _REGBIT_VGA_DISPLAY_DISABLE ) {
+		/* Disable VGA */
+		printk("VGT(%d): Disable VGA mode %x\n", vgt->vgt_id,
+			(unsigned int) __vreg(vgt, offset));
+		/* TODO: udev notification for user level response */
+	}
+	else {
+		/* Enable VGA */
+		printk("VGT(%d): Enable VGA mode %x\n", vgt->vgt_id,
+			(unsigned int) __vreg(vgt, offset));
+		/* TODO: udev notification for user level response */
+	}
+	return true;
+}
+
 /*
  * TODO:
  * We'd like to whitelist all regs requiring special handling
@@ -2666,6 +2696,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_TILECTL, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_DISP_ARB_CTL, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_DISP_ARB_CTL2, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_CPU_VGACNTRL, 4, F_VIRT, 0, D_ALL, vga_control_r, vga_control_w},
 };
 
 static void vgt_set_reg_attr(struct pgt_device *pdev,
