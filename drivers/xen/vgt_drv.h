@@ -781,6 +781,8 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	VGT_OT_DISPLAY | VGT_REG_ADDR_FIX | VGT_REG_HW_STATUS
 #define F_PM		VGT_OT_PM
 #define F_WA		VGT_OT_INVALID | VGT_REG_WORKAROUND
+/* Boot time passthrough */
+#define F_BT_PS		VGT_OT_INVALID
 
 extern int vgt_ctx_switch;
 extern void vgt_toggle_ctx_switch(bool enable);
