@@ -3562,7 +3562,6 @@ static void vgt_detect_attached_ports(struct vgt_device *vgt)
 					/* Attach dp specific datastructure */
 					vgt->attached_port[pipe]->private = vgt_dp;
 				}
-
 				break;
 			case _REG_HDMI_B_CTL:
 			case _REG_HDMI_C_CTL:
@@ -3591,8 +3590,7 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 		struct vgt_device *next_vgt)
 {
 	/* FIXME: default use DP_B */
-	struct vgt_port_struct *cur_port_struct,
-						   *next_port_struct;
+	struct vgt_port_struct *port_struct;
 	struct vgt_port_dsp_set_funcs *dsp_set_funcs;
 	enum vgt_pipe pipe;
 
@@ -3610,20 +3608,12 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 
 	/* FIXME: only support SNB */
 	for (pipe = 0; pipe < I915_MAX_PIPES - 1; pipe++) {
-		if (cur_vgt->attached_port[pipe]) {
+		/* walk each pipe(port) that is enabled for incoming dpy owners */
+		if (next_vgt->attached_port[pipe]) {
 
-			cur_port_struct = cur_vgt->attached_port[pipe];
+			port_struct = next_vgt->attached_port[pipe];
 
-			ASSERT((next_vgt->attached_port[pipe]));
-			next_port_struct = next_vgt->attached_port[pipe];
-
-			/* Make sure they has the same port on the same
-			 * pipe, that make sure they share the same set
-			 * of display mode setting functions */
-			ASSERT((cur_port_struct->output_type
-						== next_port_struct->output_type));
-
-			dsp_set_funcs = cur_port_struct->port_dsp_set_funcs;
+			dsp_set_funcs = port_struct->port_dsp_set_funcs;
 			ASSERT(dsp_set_funcs != NULL);
 
 			/* step A */
@@ -3634,7 +3624,7 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 			/* 2) Nothing to do with vgt_crt_mode_fixup */
 			/* 3) Nothing to dp with vgt_dp_mode fixup */
 			if (dsp_set_funcs->mode_fixup)
-				dsp_set_funcs->mode_fixup(cur_vgt, cur_port_struct);
+				dsp_set_funcs->mode_fixup(cur_vgt, port_struct);
 
 			/* step B */
 			/* ctrc_funcs->mode_fixup()
@@ -3649,7 +3639,7 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 			/* 2) power off with crt */
 			/* 3) XXX with dp */
 			if (dsp_set_funcs->prepare)
-				dsp_set_funcs->prepare(cur_vgt, cur_port_struct);
+				dsp_set_funcs->prepare(cur_vgt, port_struct);
 
 			/* step D
 			 * FIXME: what's the purpose of "->get_ctrc()" ?
@@ -3668,13 +3658,13 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 			/* step E */
 			/* ctrc_funcs->prepare */
 			/* crtc disable */
-			vgt_ironlake_crtc_disable(cur_vgt, cur_port_struct);
+			vgt_ironlake_crtc_disable(cur_vgt, port_struct);
 
 			/*************** End of the current vgt *****************/
 
 			/* step F */
 			/* crtc_funcs->mode_set() */
-			vgt_ironlake_crtc_mode_set(next_vgt, next_port_struct);
+			vgt_ironlake_crtc_mode_set(next_vgt, port_struct);
 
 			/* step G */
 			/* encoder_funcs->mode_set() */
@@ -3683,16 +3673,16 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 			/* 3) DP intel_dp_mode_set(): if we don't support audio
 			 *    nothing to do here */
 			if (dsp_set_funcs->mode_set)
-				dsp_set_funcs->mode_set(next_vgt, next_port_struct);
+				dsp_set_funcs->mode_set(next_vgt, port_struct);
 
 			/* step H */
 			/* crtc_funcs->commit() */
-			vgt_ironlake_crtc_enable(next_vgt, next_port_struct);
+			vgt_ironlake_crtc_enable(next_vgt, port_struct);
 
 			/* step I */
 			/* encoder_funcs->commit(encoder) */
 			if (dsp_set_funcs->commit)
-				dsp_set_funcs->commit(next_vgt, next_port_struct);
+				dsp_set_funcs->commit(next_vgt, port_struct);
 		}
 	}
 
