@@ -147,22 +147,6 @@ static int __init vgt_novgt_setup(char *str)
 }
 __setup("novgt", vgt_novgt_setup);
 
-bool add_crt_monitor = false;
-static int __init vgt_add_crt_monitor_setup(char *str)
-{
-	add_crt_monitor = true;
-	return 1;
-}
-__setup("add_crt_monitor", vgt_add_crt_monitor_setup);
-
-bool add_dp_monitor = false;
-static int __init vgt_add_dp_monitor_setup(char *str)
-{
-	add_dp_monitor = true;
-	return 1;
-}
-__setup("add_dp_monitor", vgt_add_dp_monitor_setup);
-
 bool old_display_switch = false;
 static int __init vgt_use_old_dsp_switch(char *str)
 {
@@ -2639,7 +2623,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 {
 	struct vgt_device *vgt;
 	char *cfg_space;
-	struct vgt_dp_port *vgt_dp;
 	int rc = -ENOMEM;
 
 	printk("vGT: %s: vm_id=%d, aperture_sz=%dMB, gm_sz=%dMB, fence_sz=%d\n",
@@ -2803,35 +2786,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt_propagate_edid(vgt, -1);
 
 	*ptr_vgt = vgt;
-
-	rc = init_vgt_port_struct(vgt,
-			PIPE_A, PLANE_A,
-			VGT_OUTPUT_LVDS);
-	if (rc < 0)
-		return rc;
-
-	if (add_crt_monitor && add_dp_monitor)
-		BUG();
-	else if (add_crt_monitor) {
-		rc = init_vgt_port_struct(vgt,
-				PIPE_B, PLANE_B,
-				VGT_OUTPUT_ANALOG);
-		if (rc < 0)
-			return rc;
-	} else if (add_dp_monitor) {
-		rc = init_vgt_port_struct(vgt,
-				PIPE_B, PLANE_B,
-				VGT_OUTPUT_DISPLAYPORT);
-		if (rc < 0)
-			return rc;
-
-		/* on Elitebook 8460p, use port DP_D*/
-		vgt_dp= init_vgt_dp_port_private(
-				_REG_DP_D_CTL, false);
-		if (!vgt_dp)
-			return -ENOMEM;
-		vgt->attached_port[PIPE_B]->private = vgt_dp;
-	}
 
 	return 0;
 err:
