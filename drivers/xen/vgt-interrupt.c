@@ -312,6 +312,12 @@ bool vgt_default_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt
         return false;
 }
 
+bool vgt_hotplug_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev)
+{
+	vgt_probe_edid(dev, -1);
+	return vgt_default_uevent_handler(uevent_entry, dev);
+}
+
 void inline vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent)
 {
 	ASSERT(uevent < UEVENT_MAX);
@@ -319,24 +325,24 @@ void inline vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent)
 }
 
 static struct vgt_uevent_info vgt_default_uevent_info_table[UEVENT_MAX] = {
-	{"CRT insert", KOBJ_ADD, {"CRT_INSERT=1", NULL}, vgt_default_uevent_handler},
-	{"CRT remove", KOBJ_REMOVE, {"CRT_REMOVE=1", NULL}, vgt_default_uevent_handler},
-	{"DP A insert", KOBJ_ADD, {"DP_A_INSERT=1", NULL}, vgt_default_uevent_handler},
-	{"DP A remove", KOBJ_REMOVE, {"DP_A_REMOVE=1", NULL}, vgt_default_uevent_handler},
-	{"SDVO B insert", KOBJ_ADD, {"SDVO_B_INSERT=1", NULL}, vgt_default_uevent_handler},
-	{"SDVO B remove", KOBJ_REMOVE, {"SDVO_B_REMOVE=1", NULL}, vgt_default_uevent_handler},
-	{"DP B insert", KOBJ_ADD, {"DP_B_INSERT=1", NULL}, vgt_default_uevent_handler},
-	{"DP B remove", KOBJ_REMOVE, {"DP_B_REMOVE=1", NULL}, vgt_default_uevent_handler},
-	{"DP C insert", KOBJ_ADD, {"DP_C_INSERT=1", NULL}, vgt_default_uevent_handler},
-	{"DP C remove", KOBJ_REMOVE, {"DP_C_REMOVE=1", NULL}, vgt_default_uevent_handler},
-	{"DP D insert", KOBJ_ADD, {"DP_D_INSERT=1", NULL}, vgt_default_uevent_handler},
-	{"DP D remove", KOBJ_REMOVE, {"DP_D_REMOVE=1", NULL}, vgt_default_uevent_handler},
-	{"HDMI B insert", KOBJ_ADD, {"HDMI_B_INSERT=1", NULL}, vgt_default_uevent_handler},
-	{"HDMI B remove", KOBJ_REMOVE, {"HDMI_B_REMOVE=1", NULL}, vgt_default_uevent_handler},
-	{"HDMI C insert", KOBJ_ADD, {"HDMI_C_INSERT=1", NULL}, vgt_default_uevent_handler},
-	{"HDMI C remove", KOBJ_REMOVE, {"HDMI_C_REMOVE=1", NULL}, vgt_default_uevent_handler},
-	{"HDMI D insert", KOBJ_ADD, {"HDMI_D_INSERT=1", NULL}, vgt_default_uevent_handler},
-	{"HDMI D remove", KOBJ_REMOVE, {"HDMI_D_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"CRT insert", KOBJ_ADD, {"CRT_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
+	{"CRT remove", KOBJ_REMOVE, {"CRT_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
+	{"DP A insert", KOBJ_ADD, {"DP_A_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
+	{"DP A remove", KOBJ_REMOVE, {"DP_A_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
+	{"SDVO B insert", KOBJ_ADD, {"SDVO_B_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
+	{"SDVO B remove", KOBJ_REMOVE, {"SDVO_B_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
+	{"DP B insert", KOBJ_ADD, {"DP_B_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
+	{"DP B remove", KOBJ_REMOVE, {"DP_B_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
+	{"DP C insert", KOBJ_ADD, {"DP_C_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
+	{"DP C remove", KOBJ_REMOVE, {"DP_C_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
+	{"DP D insert", KOBJ_ADD, {"DP_D_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
+	{"DP D remove", KOBJ_REMOVE, {"DP_D_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
+	{"HDMI B insert", KOBJ_ADD, {"HDMI_B_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
+	{"HDMI B remove", KOBJ_REMOVE, {"HDMI_B_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
+	{"HDMI C insert", KOBJ_ADD, {"HDMI_C_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
+	{"HDMI C remove", KOBJ_REMOVE, {"HDMI_C_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
+	{"HDMI D insert", KOBJ_ADD, {"HDMI_D_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
+	{"HDMI D remove", KOBJ_REMOVE, {"HDMI_D_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
 	{"VGT enable VGA mode", KOBJ_ADD, {"VGT_ENABLE_VGA=1", NULL}, vgt_default_uevent_handler},
 	{"VGT disable VGA mode", KOBJ_ADD, {"VGT_ENABLE_VGA=0", NULL}, vgt_default_uevent_handler},
 };

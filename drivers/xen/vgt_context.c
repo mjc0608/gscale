@@ -1466,7 +1466,6 @@ int vgt_thread(void *priv)
 			/* TODO: Give a new type of request when not all
 			 *	 uevents are for hotplug
 			 */
-			vgt_probe_edid(pdev, -1);
 			vgt_signal_uevent(pdev);
 		}
 
