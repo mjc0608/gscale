@@ -308,6 +308,14 @@ struct vgt_hvm_info{
 				 index is vcpu id */
 };
 
+struct vgt_statistics {
+	u64	schedule_in_time;	/* TSC time when it is last scheduled in */
+	u64	allocated_cycles;
+	u64	used_cycles;
+	u64	pirq_num;
+	u64	virq_num;
+};
+
 /* per-VM structure */
 struct vgt_device {
 	int vgt_id;		/* 0 is always for dom0 */
@@ -340,6 +348,7 @@ struct vgt_device {
 	struct vgt_hvm_info  *hvm_info;
         uint32_t        last_cf8;
 	struct kobject kobj;
+	struct vgt_statistics	stat;		/* statistics info */
 
 	bool		ballooning;		/* VM supports ballooning */
 	void*		opregion_va;

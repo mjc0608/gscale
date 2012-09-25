@@ -1542,6 +1542,9 @@ int vgt_thread(void *priv)
 				 * interrupt part.
 				 */
 				prev = current_render_owner(pdev);
+				if ( prev )
+					prev->stat.allocated_cycles +=
+						(t1 - prev->stat.schedule_in_time);
 				vgt_ctx_switch(pdev)++;
 
 				//show_seqno(pdev);
@@ -1605,6 +1608,7 @@ int vgt_thread(void *priv)
 				rdtsc_barrier();
 				t2 = get_cycles();
 				rdtsc_barrier();
+				next->stat.schedule_in_time = t2;
 				//printk("vGT: take %lld cycles\n", t2 - t1);
 			}
 			else

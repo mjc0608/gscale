@@ -111,6 +111,18 @@ static debug_statistics_t  stat_info [] = {
 	{ "", NULL}
 };
 
+#define debugfs_create_u64_node(name, perm, parent, u64_ptr) \
+	do { \
+		struct dentry *__dentry = debugfs_create_u64( \
+		(name),\
+		(perm), \
+		(parent), \
+		(u64_ptr) \
+		); \
+		if (!__dentry) \
+			printk(KERN_ERR "Failed to create debugfs node: %s\n", (name)); \
+	} while (0)
+
 static struct dentry *d_vgt_debug;
 static struct dentry *d_per_vgt[VGT_MAX_VMS];
 static struct dentry *d_debugfs_entry[VGT_MAX_VMS][VGT_DEBUGFS_ENTRY_MAX];
@@ -393,6 +405,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	struct array_data *p;
 	int vgt_id = vgt->vgt_id;
 	struct pgt_device *pdev = vgt->pdev;
+	struct dentry *perf_dir_entry;
 
 #ifdef VGT_DEBUGFS_DUMP_FB
 	INIT_WORK(&vgt->fb_debugfs_work, fb_debugfs_work_func);
@@ -503,7 +516,17 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	else
 		printk("vGT(%d): create debugfs node: surfB_base\n", vgt_id);
 
-
+	/* perf vm perfermance statistics */
+	perf_dir_entry = debugfs_create_dir("perf", d_per_vgt[vgt_id]);
+	if (!perf_dir_entry)
+		printk(KERN_ERR "vGT(%d): failed to create debugfs directory: perf\n", vgt_id);
+	else {
+		debugfs_create_u64_node ("schedule_in_time", 0444, perf_dir_entry, &(vgt->stat.schedule_in_time));
+		//debugfs_create_u64_node ("schedule_in_time", 0444, perf_dir_entry, &(vgt->stat.allocated_cycles));
+		//debugfs_create_u64_node ("used_cycles", 0444, perf_dir_entry, &(vgt->stat.used_cycles));
+		//debugfs_create_u64_node ("pirq_num", 0444, perf_dir_entry, &(vgt->stat.pirq_num));
+		//debugfs_create_u64_node ("virq_num", 0444, perf_dir_entry, &(vgt->stat.virq_num));
+	}
 
 	return 0;
 }
