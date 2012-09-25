@@ -86,6 +86,8 @@
  */
 static bool vgt_restore_context (struct vgt_device *vgt);
 static bool vgt_save_context (struct vgt_device *vgt);
+u64	context_switch_cost = 0;
+u64	context_switch_num = 0;
 
 bool hvm_render_owner = false;
 static int __init hvm_render_setup(char *str)
@@ -1429,7 +1431,7 @@ int vgt_thread(void *priv)
 	int threshold = 2; /* print every 10s */
 	long wait = 0;
 	int ring_id;
-	cycles_t start, end;
+	cycles_t t0, t1, t2, t3;
 
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
@@ -1449,6 +1451,7 @@ int vgt_thread(void *priv)
 		wait = wait_event_timeout(pdev->event_wq,
 				pdev->request, wait);
 
+		t0 = get_cycles();
 		if (!pdev->request && wait) {
 			printk("vGT: main thread waken up by unknown reasons!\n");
 			continue;
@@ -1515,7 +1518,7 @@ int vgt_thread(void *priv)
 			dprintk("vGT: next vgt (%d)\n", next->vgt_id);
 			if ( next != current_render_owner(pdev) )
 			{
-
+				context_switch_num ++;
 				/* FIXME: add display switch here
 				 * when fully display switch enabled, it may not stay here
 				 */
@@ -1525,7 +1528,7 @@ int vgt_thread(void *priv)
 				}
 
 				rdtsc_barrier();
-				start = get_cycles();
+				t1 = get_cycles();
 				rdtsc_barrier();
 				/*
 				 * FIXME: now acquire the lock with interrupt disabled.
@@ -1600,9 +1603,9 @@ int vgt_thread(void *priv)
 				}
 
 				rdtsc_barrier();
-				end = get_cycles();
+				t2 = get_cycles();
 				rdtsc_barrier();
-				//printk("vGT: take %lld cycles\n", end - start);
+				//printk("vGT: take %lld cycles\n", t2 - t1);
 			}
 			else
 				dprintk("....no other instance\n");
@@ -1621,6 +1624,8 @@ int vgt_thread(void *priv)
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
 			spin_unlock_irq(&pdev->lock);
 		}
+		t3 = get_cycles();
+		context_switch_cost += (t3-t0);
 	}
 	return 0;
 }

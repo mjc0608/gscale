@@ -1881,6 +1881,8 @@ extern u64 ring_mmio_rcnt;
 extern u64 ring_mmio_wcnt;
 extern u64 ring_tail_mmio_wcnt;
 extern u64 ring_tail_mmio_wcycles;
+extern u64 context_switch_cost;
+extern u64 context_switch_num;
 
 struct vgt_port_output_struct {
 	unsigned int ctrl_reg;
