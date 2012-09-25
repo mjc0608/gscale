@@ -2478,6 +2478,7 @@ static bool vga_control_r(struct vgt_device *vgt, unsigned int offset,
 static bool vga_control_w (struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
+	struct pgt_device *pdev = vgt->pdev;
 	ASSERT (bytes == 4 && offset == _REG_CPU_VGACNTRL);
 
 	default_mmio_write(vgt, offset, p_data, bytes);
@@ -2486,13 +2487,15 @@ static bool vga_control_w (struct vgt_device *vgt, unsigned int offset,
 		/* Disable VGA */
 		printk("VGT(%d): Disable VGA mode %x\n", vgt->vgt_id,
 			(unsigned int) __vreg(vgt, offset));
-		/* TODO: udev notification for user level response */
+		vgt_set_uevent(vgt, VGT_DISABLE_VGA);
+		vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
 	}
 	else {
 		/* Enable VGA */
 		printk("VGT(%d): Enable VGA mode %x\n", vgt->vgt_id,
 			(unsigned int) __vreg(vgt, offset));
-		/* TODO: udev notification for user level response */
+		vgt_set_uevent(vgt, VGT_ENABLE_VGA);
+		vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
 	}
 	return true;
 }

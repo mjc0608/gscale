@@ -52,3 +52,5 @@
 #write 0x0f1(241) for plug in; 0x0f0(240) for pull out.
 ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo 241 > /sys/kernel/vgt/control/virtual_event'"
 ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo 240 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="add", KERNEL=="control", ENV{VGT_ENABLE_VGA}=="1", RUN+="/bin/sh -c 'd=`date +%Y-%m-%d`; echo $d vGT enable VGT mode >> /tmp/vgt-log'"
+ACTION=="add", KERNEL=="control", ENV{VGT_ENABLE_VGA}=="0", RUN+="/bin/sh -c 'd=`date +%Y-%m-%d`; echo $d vGT disable VGT mode >> /tmp/vgt-log'"

@@ -417,6 +417,39 @@ typedef union {
 struct vgt_irq_host_state;
 #define VGT_VBIOS_PAGES 16
 
+enum vgt_uevent_type {
+    CRT_HOTPLUG_IN = 0,
+    CRT_HOTPLUG_OUT,
+	DP_A_HOTPLUG_IN,
+	DP_A_HOTPLUG_OUT,
+	SDVO_B_HOTPLUG_IN,
+	SDVO_B_HOTPLUG_OUT,
+	DP_B_HOTPLUG_IN,
+	DP_B_HOTPLUG_OUT,
+	DP_C_HOTPLUG_IN,
+	DP_C_HOTPLUG_OUT,
+	DP_D_HOTPLUG_IN,
+	DP_D_HOTPLUG_OUT,
+	HDMI_B_HOTPLUG_IN,
+	HDMI_B_HOTPLUG_OUT,
+	HDMI_C_HOTPLUG_IN,
+	HDMI_C_HOTPLUG_OUT,
+	HDMI_D_HOTPLUG_IN,
+	HDMI_D_HOTPLUG_OUT,
+	VGT_ENABLE_VGA,
+	VGT_DISABLE_VGA,
+    UEVENT_MAX
+};
+
+struct vgt_uevent_info {
+    char *uevent_name;
+    enum kobject_action action;
+    char *env_var_table[2];
+    bool (*vgt_uevent_handler)(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev);
+};
+
+void inline vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent);
+
 typedef union {
 	uint32_t cmd;
 	struct {

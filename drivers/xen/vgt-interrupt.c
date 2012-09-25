@@ -299,37 +299,8 @@ enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
 	[IRQ_RESERVED] = VGT_OT_INVALID,
 };
 
-enum vgt_uevent_type {
-    CRT_HOTPLUG_IN = 0,
-    CRT_HOTPLUG_OUT,
-	DP_A_HOTPLUG_IN,
-	DP_A_HOTPLUG_OUT,
-	SDVO_B_HOTPLUG_IN,
-	SDVO_B_HOTPLUG_OUT,
-	DP_B_HOTPLUG_IN,
-	DP_B_HOTPLUG_OUT,
-	DP_C_HOTPLUG_IN,
-	DP_C_HOTPLUG_OUT,
-	DP_D_HOTPLUG_IN,
-	DP_D_HOTPLUG_OUT,
-	HDMI_B_HOTPLUG_IN,
-	HDMI_B_HOTPLUG_OUT,
-	HDMI_C_HOTPLUG_IN,
-	HDMI_C_HOTPLUG_OUT,
-	HDMI_D_HOTPLUG_IN,
-	HDMI_D_HOTPLUG_OUT,
-    UEVENT_MAX
-};
-
 DECLARE_BITMAP(vgt_uevents_bitmap, UEVENT_MAX);
 extern struct kobject *vgt_ctrl_kobj;
-
-struct vgt_uevent_info {
-    char *uevent_name;
-    enum kobject_action action;
-    char *env_var_table[2];
-    bool (*vgt_uevent_handler)(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev);
-};
 
 bool vgt_default_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev)
 {
@@ -341,25 +312,33 @@ bool vgt_default_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt
         return false;
 }
 
+void inline vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent)
+{
+	ASSERT(uevent < UEVENT_MAX);
+	set_bit(uevent, vgt_uevents_bitmap);
+}
+
 static struct vgt_uevent_info vgt_default_uevent_info_table[UEVENT_MAX] = {
-    {"CRT insert", KOBJ_ADD, {"CRT_INSERT=1", NULL}, vgt_default_uevent_handler},
-    {"CRT remove", KOBJ_REMOVE, {"CRT_REMOVE=1", NULL}, vgt_default_uevent_handler},
-    {"DP A insert", KOBJ_ADD, {"DP_A_INSERT=1", NULL}, vgt_default_uevent_handler},
-    {"DP A remove", KOBJ_REMOVE, {"DP_A_REMOVE=1", NULL}, vgt_default_uevent_handler},
-    {"SDVO B insert", KOBJ_ADD, {"SDVO_B_INSERT=1", NULL}, vgt_default_uevent_handler},
-    {"SDVO B remove", KOBJ_REMOVE, {"SDVO_B_REMOVE=1", NULL}, vgt_default_uevent_handler},
-    {"DP B insert", KOBJ_ADD, {"DP_B_INSERT=1", NULL}, vgt_default_uevent_handler},
-    {"DP B remove", KOBJ_REMOVE, {"DP_B_REMOVE=1", NULL}, vgt_default_uevent_handler},
-    {"DP C insert", KOBJ_ADD, {"DP_C_INSERT=1", NULL}, vgt_default_uevent_handler},
-    {"DP C remove", KOBJ_REMOVE, {"DP_C_REMOVE=1", NULL}, vgt_default_uevent_handler},
-    {"DP D insert", KOBJ_ADD, {"DP_D_INSERT=1", NULL}, vgt_default_uevent_handler},
-    {"DP D remove", KOBJ_REMOVE, {"DP_D_REMOVE=1", NULL}, vgt_default_uevent_handler},
-    {"HDMI B insert", KOBJ_ADD, {"HDMI_B_INSERT=1", NULL}, vgt_default_uevent_handler},
-    {"HDMI B remove", KOBJ_REMOVE, {"HDMI_B_REMOVE=1", NULL}, vgt_default_uevent_handler},
-    {"HDMI C insert", KOBJ_ADD, {"HDMI_C_INSERT=1", NULL}, vgt_default_uevent_handler},
-    {"HDMI C remove", KOBJ_REMOVE, {"HDMI_C_REMOVE=1", NULL}, vgt_default_uevent_handler},
-    {"HDMI D insert", KOBJ_ADD, {"HDMI_D_INSERT=1", NULL}, vgt_default_uevent_handler},
-    {"HDMI D remove", KOBJ_REMOVE, {"HDMI_D_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"CRT insert", KOBJ_ADD, {"CRT_INSERT=1", NULL}, vgt_default_uevent_handler},
+	{"CRT remove", KOBJ_REMOVE, {"CRT_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"DP A insert", KOBJ_ADD, {"DP_A_INSERT=1", NULL}, vgt_default_uevent_handler},
+	{"DP A remove", KOBJ_REMOVE, {"DP_A_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"SDVO B insert", KOBJ_ADD, {"SDVO_B_INSERT=1", NULL}, vgt_default_uevent_handler},
+	{"SDVO B remove", KOBJ_REMOVE, {"SDVO_B_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"DP B insert", KOBJ_ADD, {"DP_B_INSERT=1", NULL}, vgt_default_uevent_handler},
+	{"DP B remove", KOBJ_REMOVE, {"DP_B_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"DP C insert", KOBJ_ADD, {"DP_C_INSERT=1", NULL}, vgt_default_uevent_handler},
+	{"DP C remove", KOBJ_REMOVE, {"DP_C_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"DP D insert", KOBJ_ADD, {"DP_D_INSERT=1", NULL}, vgt_default_uevent_handler},
+	{"DP D remove", KOBJ_REMOVE, {"DP_D_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"HDMI B insert", KOBJ_ADD, {"HDMI_B_INSERT=1", NULL}, vgt_default_uevent_handler},
+	{"HDMI B remove", KOBJ_REMOVE, {"HDMI_B_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"HDMI C insert", KOBJ_ADD, {"HDMI_C_INSERT=1", NULL}, vgt_default_uevent_handler},
+	{"HDMI C remove", KOBJ_REMOVE, {"HDMI_C_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"HDMI D insert", KOBJ_ADD, {"HDMI_D_INSERT=1", NULL}, vgt_default_uevent_handler},
+	{"HDMI D remove", KOBJ_REMOVE, {"HDMI_D_REMOVE=1", NULL}, vgt_default_uevent_handler},
+	{"VGT enable VGA mode", KOBJ_ADD, {"VGT_ENABLE_VGA=1", NULL}, vgt_default_uevent_handler},
+	{"VGT disable VGA mode", KOBJ_ADD, {"VGT_ENABLE_VGA=0", NULL}, vgt_default_uevent_handler},
 };
 
 void vgt_signal_uevent(struct pgt_device *dev)
@@ -1401,7 +1380,7 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 		sde_isr = VGT_MMIO_READ(dev, _REG_SDEISR);
 		if (sde_isr & _REGBIT_CRT_HOTPLUG) {
 			printk("%s: %d: vGT: detect crt insert uevent!\n", __func__, __LINE__);
-			set_bit(CRT_HOTPLUG_IN, vgt_uevents_bitmap);
+			vgt_set_uevent(vgt, CRT_HOTPLUG_IN);
 			adpa_ctrl = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
 			hpd_ch_status = adpa_ctrl & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 			if (hpd_ch_status != 0) {
@@ -1411,7 +1390,7 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 
 		} else {
 			printk("%s: %d: vGT: detect crt evict uevent!\n", __func__, __LINE__);
-			set_bit(CRT_HOTPLUG_OUT, vgt_uevents_bitmap);
+			vgt_set_uevent(vgt, CRT_HOTPLUG_OUT);
 			clear_bit(VGT_CRT, dev->port_detect_status);
 			vgt_clear_all_vreg_bit(pdev, _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK, _REG_PCH_ADPA);
 		}
@@ -1448,13 +1427,13 @@ void vgt_handle_sdvo_b_hotplug(struct pgt_device *dev,
     sde_isr = VGT_MMIO_READ(dev, _REG_SDEISR);
     if (sde_isr & _REGBIT_SDVO_B_HOTPLUG) {
         printk("%s: %d: vGT: detect SDVO B insert uevent!\n", __func__, __LINE__);
-        set_bit(SDVO_B_HOTPLUG_IN, vgt_uevents_bitmap);
+		vgt_set_uevent(vgt, SDVO_B_HOTPLUG_IN);
 		/* Since for port B, SDVO and HDMI/DVI mode depends on encoding and configure in HDMI_CTL reg, all of them refer the same status bit in HDMI_CTL */
 		set_bit(VGT_HDMI_B, dev->port_detect_status);
 		vgt_set_all_vreg_bit(dev, _REGBIT_HDMI_PORT_DETECTED, _REG_HDMI_B_CTL);
     } else {
         printk("%s: %d: vGT: detect SDVO B remove uevent!\n", __func__, __LINE__);
-        set_bit(SDVO_B_HOTPLUG_OUT, vgt_uevents_bitmap);
+		vgt_set_uevent(vgt, SDVO_B_HOTPLUG_OUT);
 		clear_bit(VGT_HDMI_B, dev->port_detect_status);
 		vgt_clear_all_vreg_bit(dev, _REGBIT_HDMI_PORT_DETECTED, _REG_HDMI_B_CTL);
     }
@@ -1484,13 +1463,13 @@ void vgt_handle_dp_hdmi_b_hotplug(struct pgt_device *dev,
     if (sde_isr & _REGBIT_DP_B_HOTPLUG) {
 		/* DP and HDMI are mutually exclusive */
 		if (dp_ctl & _REGBIT_DP_PORT_DETECTED) {
-			set_bit(DP_B_HOTPLUG_IN, vgt_uevents_bitmap);
+			vgt_set_uevent(vgt, DP_B_HOTPLUG_IN);
 			set_bit(VGT_DP_B, dev->port_detect_status);
 			vgt_set_all_vreg_bit(dev, _REGBIT_DP_PORT_DETECTED, _REG_DP_B_CTL);
 			printk("%s: %d: vGT: detect DP B insert uevent!\n",
 					__func__, __LINE__);
 		} else if (hdmi_ctl & _REGBIT_HDMI_PORT_DETECTED) {
-			set_bit(HDMI_B_HOTPLUG_IN, vgt_uevents_bitmap);
+			vgt_set_uevent(vgt, HDMI_B_HOTPLUG_IN);
 			set_bit(VGT_HDMI_B, dev->port_detect_status);
 			vgt_set_all_vreg_bit(dev, _REGBIT_HDMI_PORT_DETECTED, _REG_HDMI_B_CTL);
 			printk("%s: %d: vGT: detect HDMI/DVI B insert uevent!\n",
@@ -1499,13 +1478,13 @@ void vgt_handle_dp_hdmi_b_hotplug(struct pgt_device *dev,
 			BUG();
     } else {
 		if (!(dp_ctl & _REGBIT_DP_PORT_DETECTED) && test_bit(VGT_DP_B, dev->port_detect_status)) {
-			set_bit(DP_B_HOTPLUG_OUT, vgt_uevents_bitmap);
+			vgt_set_uevent(vgt, DP_B_HOTPLUG_OUT);
 			clear_bit(VGT_DP_B, dev->port_detect_status);
 			vgt_clear_all_vreg_bit(dev, _REGBIT_DP_PORT_DETECTED, _REG_DP_B_CTL);
 			printk("%s: %d: vGT: detect DP B remove uevent!\n",
 					__func__, __LINE__);
 		} else if (!(hdmi_ctl & _REGBIT_HDMI_PORT_DETECTED) && test_bit(VGT_HDMI_B, dev->port_detect_status)) {
-			set_bit(HDMI_B_HOTPLUG_OUT, vgt_uevents_bitmap);
+			vgt_set_uevent(vgt, HDMI_B_HOTPLUG_OUT);
 			clear_bit(VGT_HDMI_B, dev->port_detect_status);
 			vgt_clear_all_vreg_bit(dev, _REGBIT_HDMI_PORT_DETECTED, _REG_HDMI_B_CTL);
 			printk("%s: %d: vGT: detect HDMI B remove uevent!\n", __func__, __LINE__);
@@ -1538,13 +1517,13 @@ void vgt_handle_dp_hdmi_c_hotplug(struct pgt_device *dev,
     if (sde_isr & _REGBIT_DP_C_HOTPLUG) {
 		/* DP and HDMI are mutually exclusive */
 		if (dp_ctl & _REGBIT_DP_PORT_DETECTED) {
-			set_bit(DP_C_HOTPLUG_IN, vgt_uevents_bitmap);
+			vgt_set_uevent(vgt, DP_C_HOTPLUG_IN);
 			set_bit(VGT_DP_C, dev->port_detect_status);
 			vgt_set_all_vreg_bit(dev, _REGBIT_DP_PORT_DETECTED, _REG_DP_C_CTL);
 			printk("%s: %d: vGT: detect DP C insert uevent!\n",
 					__func__, __LINE__);
 		} else if (hdmi_ctl & _REGBIT_HDMI_PORT_DETECTED) {
-			set_bit(HDMI_C_HOTPLUG_IN, vgt_uevents_bitmap);
+			vgt_set_uevent(vgt, HDMI_C_HOTPLUG_IN);
 			set_bit(VGT_HDMI_C, dev->port_detect_status);
 			vgt_set_all_vreg_bit(dev, _REGBIT_HDMI_PORT_DETECTED, _REG_HDMI_C_CTL);
 			printk("%s: %d: vGT: detect HDMI/DVI C insert uevent!\n",
@@ -1553,13 +1532,13 @@ void vgt_handle_dp_hdmi_c_hotplug(struct pgt_device *dev,
 			BUG();
     } else {
 		if (!(dp_ctl & _REGBIT_DP_PORT_DETECTED) && test_bit(VGT_DP_C, dev->port_detect_status)) {
-			set_bit(DP_C_HOTPLUG_OUT, vgt_uevents_bitmap);
+			vgt_set_uevent(vgt, DP_C_HOTPLUG_OUT);
 			clear_bit(VGT_DP_C, dev->port_detect_status);
 			vgt_clear_all_vreg_bit(dev, _REGBIT_DP_PORT_DETECTED, _REG_DP_C_CTL);
 			printk("%s: %d: vGT: detect DP C remove uevent!\n",
 					__func__, __LINE__);
 		} else if (!(hdmi_ctl & _REGBIT_HDMI_PORT_DETECTED) && test_bit(VGT_HDMI_C, dev->port_detect_status)) {
-			set_bit(HDMI_C_HOTPLUG_OUT, vgt_uevents_bitmap);
+			vgt_set_uevent(vgt, HDMI_C_HOTPLUG_OUT);
 			clear_bit(VGT_HDMI_C, dev->port_detect_status);
 			vgt_clear_all_vreg_bit(dev, _REGBIT_HDMI_PORT_DETECTED, _REG_HDMI_C_CTL);
 			printk("%s: %d: vGT: detect HDMI C remove uevent!\n", __func__, __LINE__);
@@ -1592,13 +1571,13 @@ void vgt_handle_dp_hdmi_d_hotplug(struct pgt_device *dev,
 		if (sde_isr & _REGBIT_DP_D_HOTPLUG) {
 			/* DP and HDMI are mutually exclusive */
 			if (dp_ctl & _REGBIT_DP_PORT_DETECTED) {
-				set_bit(DP_D_HOTPLUG_IN, vgt_uevents_bitmap);
+				vgt_set_uevent(vgt, DP_D_HOTPLUG_IN);
 				set_bit(VGT_DP_D, dev->port_detect_status);
 				vgt_set_all_vreg_bit(dev, _REGBIT_DP_PORT_DETECTED, _REG_DP_D_CTL);
 				printk("%s: %d: vGT: detect DP C insert uevent!\n",
 						__func__, __LINE__);
 			} else if (hdmi_ctl & _REGBIT_HDMI_PORT_DETECTED) {
-				set_bit(HDMI_D_HOTPLUG_IN, vgt_uevents_bitmap);
+				vgt_set_uevent(vgt, HDMI_D_HOTPLUG_IN);
 				set_bit(VGT_HDMI_D, dev->port_detect_status);
 				vgt_set_all_vreg_bit(dev, _REGBIT_HDMI_PORT_DETECTED, _REG_HDMI_D_CTL);
 				printk("%s: %d: vGT: detect HDMI/DVI C insert uevent!\n",
@@ -1607,13 +1586,13 @@ void vgt_handle_dp_hdmi_d_hotplug(struct pgt_device *dev,
 				BUG();
 		} else {
 			if (test_bit(VGT_DP_D, dev->port_detect_status)) {
-				set_bit(DP_D_HOTPLUG_OUT, vgt_uevents_bitmap);
+				vgt_set_uevent(vgt, DP_D_HOTPLUG_OUT);
 				clear_bit(VGT_DP_D, dev->port_detect_status);
 				vgt_clear_all_vreg_bit(dev, _REGBIT_DP_PORT_DETECTED, _REG_DP_D_CTL);
 				printk("%s: %d: vGT: detect DP C remove uevent!\n",
 						__func__, __LINE__);
 			} else if (test_bit(VGT_HDMI_D, dev->port_detect_status)) {
-				set_bit(HDMI_D_HOTPLUG_OUT, vgt_uevents_bitmap);
+				vgt_set_uevent(vgt, HDMI_D_HOTPLUG_OUT);
 				clear_bit(VGT_HDMI_D, dev->port_detect_status);
 				vgt_clear_all_vreg_bit(dev, _REGBIT_HDMI_PORT_DETECTED, _REG_HDMI_D_CTL);
 				printk("%s: %d: vGT: detect HDMI C remove uevent!\n", __func__, __LINE__);
@@ -1648,12 +1627,12 @@ void vgt_handle_dp_a_hotplug(struct pgt_device *dev,
     de_isr = VGT_MMIO_READ(dev, _REG_DEISR);
     if (de_isr & _REGBIT_DP_A_HOTPLUG) {
         printk("%s: %d: vGT: detect (embedded) DP A insert uevent!\n", __func__, __LINE__);
-        set_bit(DP_A_HOTPLUG_IN, vgt_uevents_bitmap);
+		vgt_set_uevent(vgt, DP_A_HOTPLUG_IN);
 		set_bit(VGT_DP_A, dev->port_detect_status);
 		vgt_set_all_vreg_bit(dev, _REGBIT_DP_PORT_A_DETECTED, _REG_DP_A_CTL);
     } else {
         printk("%s: %d: vGT: detect (embedded) DP A remove uevent!\n", __func__, __LINE__);
-        set_bit(DP_A_HOTPLUG_OUT, vgt_uevents_bitmap);
+		vgt_set_uevent(vgt, DP_A_HOTPLUG_OUT);
 		clear_bit(VGT_DP_A, dev->port_detect_status);
 		vgt_clear_all_vreg_bit(dev, _REGBIT_DP_PORT_A_DETECTED, _REG_DP_A_CTL);
     }
