@@ -827,7 +827,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 #define F_BT_PS		VGT_OT_INVALID
 
 extern int vgt_ctx_switch;
-extern bool old_display_switch;
+extern bool fastpath_dpy_switch;
 extern void vgt_toggle_ctx_switch(bool enable);
 extern void vgt_setup_reg_info(struct pgt_device *pdev);
 extern bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev);

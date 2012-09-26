@@ -220,7 +220,7 @@ static ssize_t vgt_dpy_switch_store(struct kobject *kobj, struct kobj_attribute 
 	if (sscanf(buf, "%d", &val) != 1)
 		return -EINVAL;
 
-	old_display_switch = !!val;
+	fastpath_dpy_switch = !!val;
 	return count;
 }
 
@@ -228,9 +228,9 @@ static ssize_t vgt_dpy_switch_show(struct kobject *kobj, struct kobj_attribute *
 			char *buf)
 {
 	return sprintf(buf, "VGT display_owner switch: using the %s method.\n",
-				old_display_switch ?
-				"fast(old) method. write 0 to use the new(but slow)"
-				 : "new(slow) method. write 1 to use the old(but fast)");
+				fastpath_dpy_switch ?
+				"fast-path method(write 0 to use the slow-path)"
+				 : "slow-path method(write 1 to use the fast-path");
 }
 
 static ssize_t vgt_hot_plug_reader(struct kobject *kobj,

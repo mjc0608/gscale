@@ -149,13 +149,13 @@ static int __init vgt_novgt_setup(char *str)
 }
 __setup("novgt", vgt_novgt_setup);
 
-bool old_display_switch = false;
-static int __init vgt_use_old_dsp_switch(char *str)
+bool fastpath_dpy_switch = false;
+static int __init vgt_use_fastpath_dpy_switch(char *str)
 {
-	old_display_switch = true;
+	fastpath_dpy_switch = true;
 	return 1;
 }
-__setup("old_display_switch", vgt_use_old_dsp_switch);
+__setup("fastpath_dpy_switch", vgt_use_fastpath_dpy_switch);
 
 static int fastmode = 1;
 static int __init mode_setup(char *str)
@@ -1269,7 +1269,7 @@ void vgt_switch_display_owner(struct vgt_device *prev,
     struct vgt_device *next)
 {
     vgt_save_state(prev);
-	if (!old_display_switch)
+	if (!fastpath_dpy_switch)
 		vgt_reinitialize_mode(prev, next);
     vgt_restore_state(next);
 }
