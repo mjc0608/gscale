@@ -522,7 +522,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		printk(KERN_ERR "vGT(%d): failed to create debugfs directory: perf\n", vgt_id);
 	else {
 		debugfs_create_u64_node ("schedule_in_time", 0444, perf_dir_entry, &(vgt->stat.schedule_in_time));
-		//debugfs_create_u64_node ("schedule_in_time", 0444, perf_dir_entry, &(vgt->stat.allocated_cycles));
+		debugfs_create_u64_node ("allocated_cycles", 0444, perf_dir_entry, &(vgt->stat.allocated_cycles));
 		//debugfs_create_u64_node ("used_cycles", 0444, perf_dir_entry, &(vgt->stat.used_cycles));
 		//debugfs_create_u64_node ("pirq_num", 0444, perf_dir_entry, &(vgt->stat.pirq_num));
 		//debugfs_create_u64_node ("virq_num", 0444, perf_dir_entry, &(vgt->stat.virq_num));
