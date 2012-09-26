@@ -114,16 +114,24 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
 	* (where we want to release the vgt instance).
 	*/
 	(void)sscanf(buf, "%63s", param_str);
-	param_cnt = sscanf(param_str, "%d,%d,%d,%d", &vp.vm_id, &vp.aperture_sz,
-		&vp.gm_sz, &vp.fence_sz);
+	param_cnt = sscanf(param_str, "%d,%d,%d,%d,%d", &vp.vm_id, &vp.aperture_sz,
+		&vp.gm_sz, &vp.fence_sz, &vp.vgt_primary);
 
 	if (param_cnt == 1) {
 		if (vp.vm_id >= 0)
 			return -EINVAL;
-	} else if (param_cnt == 4) {
+	} else if (param_cnt == 4 || param_cnt == 5) {
 		if (!(vp.vm_id > 0 && vp.aperture_sz > 0 &&
 			vp.aperture_sz <= vp.gm_sz && vp.fence_sz > 0))
 			return -EINVAL;
+
+		if (param_cnt == 5) {
+			/* -1/0/1 means: not-specified, non-primary, primary */
+			if (vp.vgt_primary < -1 && vp.vgt_primary > 1)
+				return -EINVAL;
+		} else {
+			vp.vgt_primary =  -1; /* no valid value specified. */
+		}
 	} else
 		return -EINVAL;
 

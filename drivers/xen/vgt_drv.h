@@ -1824,6 +1824,9 @@ typedef struct {
 	int aperture_sz; /* in MB */
 	int gm_sz;       /* in MB */
 	int fence_sz;
+
+	int vgt_primary; /* 0/1: config the vgt device as secondary/primary VGA,
+						-1: means the ioemu doesn't supply a value */
 } vgt_params_t;
 
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp);

@@ -2639,8 +2639,10 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	char *cfg_space;
 	int rc = -ENOMEM;
 
-	printk("vGT: %s: vm_id=%d, aperture_sz=%dMB, gm_sz=%dMB, fence_sz=%d\n",
-		__func__, vp.vm_id, vp.aperture_sz, vp.gm_sz, vp.fence_sz);
+	printk("vGT: %s: vm_id=%d, aperture_sz=%dMB, gm_sz=%dMB, fence_sz=%d"
+			", vgt_primary=%d\n",
+		__func__, vp.vm_id, vp.aperture_sz, vp.gm_sz, vp.fence_sz,
+		vp.vgt_primary);
 
 	vgt = kzalloc (sizeof(*vgt), GFP_KERNEL);
 	if (vgt == NULL) {
@@ -2725,7 +2727,12 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		vgt_guest_hidden_gm_base(vgt),
 		vgt_guest_hidden_gm_end(vgt));
 
-	if (vgt->vm_id != 0 && !vgt_primary){
+	/* If the user explicitly specified a value, use it; or, use the
+	 * global vgt_primary.
+	 */
+	ASSERT(vgt->vm_id == 0 || (vp.vgt_primary >= -1 && vp.vgt_primary <= 1));
+	if (vgt->vm_id != 0 &&
+		(vp.vgt_primary == 0 || (vp.vgt_primary == -1 && !vgt_primary))) {
 		/* Mark vgt device as non primary VGA */
 		cfg_space[VGT_REG_CFG_CLASS_CODE] = VGT_PCI_CLASS_VGA;
 		cfg_space[VGT_REG_CFG_SUB_CLASS_CODE] = VGT_PCI_CLASS_VGA_OTHER;
@@ -3264,6 +3271,7 @@ int vgt_initialize(struct pci_dev *dev)
 	vp.aperture_sz = dom0_aperture_sz;
 	vp.gm_sz = dom0_gm_sz;
 	vp.fence_sz = dom0_fence_sz;
+	vp.vgt_primary = 1; /* this isn't actually used for dom0 */
 	if (create_vgt_instance(pdev, &vgt_dom0, vp) < 0)
 		goto err;
 
