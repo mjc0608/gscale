@@ -213,6 +213,26 @@ static ssize_t vgt_ctx_switch_show(struct kobject *kobj, struct kobj_attribute *
 		       vgt_ctx_switch ? "enabled" : "disabled");
 }
 
+static ssize_t vgt_dpy_switch_store(struct kobject *kobj, struct kobj_attribute *attr,
+            const char *buf, size_t count)
+{
+	int val;
+	if (sscanf(buf, "%d", &val) != 1)
+		return -EINVAL;
+
+	old_display_switch = !!val;
+	return count;
+}
+
+static ssize_t vgt_dpy_switch_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	return sprintf(buf, "VGT display_owner switch: using the %s method.\n",
+				old_display_switch ?
+				"fast(old) method. write 0 to use the new(but slow)"
+				 : "new(slow) method. write 1 to use the old(but fast)");
+}
+
 static ssize_t vgt_hot_plug_reader(struct kobject *kobj,
 				struct kobj_attribute *attr, char *buf)
 {
@@ -324,6 +344,9 @@ static struct kobj_attribute reg_owner_attrs =
 static struct kobj_attribute ctx_switch_attrs =
 	__ATTR(ctx_switch, 0660, vgt_ctx_switch_show, vgt_ctx_switch_store);
 
+static struct kobj_attribute dpy_switch_attrs =
+	__ATTR(display_switch_method, 0660, vgt_dpy_switch_show, vgt_dpy_switch_store);
+
 static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
 	&display_owner_ctrl_attrs.attr,
@@ -331,6 +354,7 @@ static struct attribute *vgt_ctrl_attrs[] = {
 	&hot_plug_event_attrs.attr,
 	&reg_owner_attrs.attr,
 	&ctx_switch_attrs.attr,
+	&dpy_switch_attrs.attr,
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 
