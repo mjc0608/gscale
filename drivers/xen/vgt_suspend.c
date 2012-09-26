@@ -548,6 +548,8 @@ static void vgt_flush_display_plane(struct vgt_device *vgt,
 
 /* This function will be called from vgt_context.c */
 //int i915_restore_state(struct drm_device *dev)
+
+static void vgt_update_cursor(struct vgt_device *vgt, enum vgt_pipe pipe);
 int vgt_restore_state(struct vgt_device *vgt)
 {
     struct pgt_device *pdev = vgt->pdev;
@@ -637,6 +639,8 @@ int vgt_restore_state(struct vgt_device *vgt)
 
     vgt_flush_display_plane(vgt, PIPE_A);
     vgt_flush_display_plane(vgt, PIPE_B);
+	vgt_update_cursor(vgt, PIPE_A);
+	vgt_update_cursor(vgt, PIPE_B);
 
     return 0;
 }
@@ -2302,18 +2306,12 @@ static void vgt_ironlake_pch_enable(struct vgt_device *vgt,
 static void vgt_update_cursor(struct vgt_device *vgt,
 		enum vgt_pipe pipe)
 {
-	//unsigned int reg;
-	//vgt_reg_t reg_data;
-	//struct pgt_device *pdev = vgt->pdev;
-
 	ASSERT(pipe < PIPE_C);
-
-	/* Update cursor is just this kind of easy ? */
 	vgt_restore_sreg(VGT_CURPOS(pipe));
 	vgt_restore_sreg(VGT_CURCNTR(pipe));
 	vgt_restore_sreg(VGT_CURBASE(pipe));
+	vgt_wait_for_vblank(vgt, pipe);
 }
-
 
 static void vgt_ironlake_crtc_enable(struct vgt_device *vgt,
 		struct vgt_port_struct *port_struct)
