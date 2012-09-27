@@ -2450,15 +2450,15 @@ static int create_state_instance(struct vgt_device *vgt)
 
 	dprintk("create_state_instance\n");
 	state = &vgt->state;
-	state->vReg = kmalloc (vgt->pdev->mmio_size, GFP_KERNEL);
-	state->sReg = kmalloc (vgt->pdev->mmio_size, GFP_KERNEL);
+	state->vReg = vmalloc(vgt->pdev->mmio_size);
+	state->sReg = vmalloc(vgt->pdev->mmio_size);
 	if ( state->vReg == NULL || state->sReg == NULL )
 	{
 		printk("VGT: insufficient memory allocation at %s\n", __FUNCTION__);
 		if ( state->vReg )
-			kfree (state->vReg);
+			vfree (state->vReg);
 		if ( state->sReg )
-			kfree (state->sReg);
+			vfree (state->sReg);
 		state->sReg = state->vReg = NULL;
 		return -ENOMEM;
 	}
@@ -2813,8 +2813,8 @@ err:
 	if ( vgt->aperture_base > 0)
 		free_vm_aperture_gm_and_fence(vgt);
 	kfree(vgt->vgtt);
-	kfree(vgt->state.vReg);
-	kfree(vgt->state.sReg);
+	vfree(vgt->state.vReg);
+	vfree(vgt->state.sReg);
 	if (vgt->vgt_id >= 0)
 		free_vgt_id(vgt->vgt_id);
 	kfree(vgt);
@@ -2892,8 +2892,8 @@ void vgt_release_instance(struct vgt_device *vgt)
 	free_vm_aperture_gm_and_fence(vgt);
 	free_vm_rsvd_aperture(vgt);
 	kfree(vgt->vgtt);
-	kfree(vgt->state.vReg);
-	kfree(vgt->state.sReg);
+	vfree(vgt->state.vReg);
+	vfree(vgt->state.sReg);
 	free_vgt_id(vgt->vgt_id);
 	kfree(vgt);
 	printk("vGT: vgt_release_instance done\n");
