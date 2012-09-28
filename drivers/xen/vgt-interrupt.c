@@ -248,7 +248,7 @@ enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
 	[IRQ_GSE] = VGT_OT_MGMT,
 	[IRQ_DP_A_HOTPLUG] = VGT_OT_DISPLAY,
 	[IRQ_AUX_CHANNEL_A] = VGT_OT_MGMT,
-	[IRQ_PCH_IRQ] = VGT_OT_INVALID,		// 2nd level events
+	[IRQ_PCH_IRQ] = VGT_OT_NONE,		// 2nd level events
 	[IRQ_PERF_COUNTER] = VGT_OT_DISPLAY,
 	[IRQ_POISON] = VGT_OT_DISPLAY,		// ???
 	[IRQ_GTT_FAULT] = VGT_OT_DISPLAY,	// ???
@@ -296,7 +296,7 @@ enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
 	[IRQ_AUDIO_POWER_STATE_CHANGE_C] = VGT_OT_DISPLAY,
 	[IRQ_AUDIO_POWER_STATE_CHANGE_D] = VGT_OT_DISPLAY,
 
-	[IRQ_RESERVED] = VGT_OT_INVALID,
+	[IRQ_RESERVED] = VGT_OT_NONE,
 };
 
 DECLARE_BITMAP(vgt_uevents_bitmap, UEVENT_MAX);
@@ -1717,7 +1717,7 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 }
 
 /*
- * VGT_OT_INVALID indicates normal injection, and other valid types indicate injections
+ * VGT_OT_NONE indicates normal injection, and other valid types indicate injections
  * to both prev/next owners
  */
 void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type type)
@@ -1866,8 +1866,8 @@ static void vgt_initialize_always_emulated_events(struct pgt_device *dev)
 	/* timers are always emulated */
 	set_bit(IRQ_RCS_WATCHDOG_EXCEEDED, vgt_always_emulated_events(dev));
 	set_bit(IRQ_VCS_WATCHDOG_EXCEEDED, vgt_always_emulated_events(dev));
-	vgt_get_event_owner_type(dev, IRQ_RCS_WATCHDOG_EXCEEDED) = VGT_OT_INVALID;
-	vgt_get_event_owner_type(dev, IRQ_VCS_WATCHDOG_EXCEEDED) = VGT_OT_INVALID;
+	vgt_get_event_owner_type(dev, IRQ_RCS_WATCHDOG_EXCEEDED) = VGT_OT_NONE;
+	vgt_get_event_owner_type(dev, IRQ_VCS_WATCHDOG_EXCEEDED) = VGT_OT_NONE;
 }
 
 /*

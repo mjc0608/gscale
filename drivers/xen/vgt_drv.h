@@ -371,7 +371,7 @@ struct vgt_device {
 
 extern struct vgt_device *vgt_dom0;
 enum vgt_owner_type {
-	VGT_OT_INVALID = 0,
+	VGT_OT_NONE = 0,		// No owner type
 	VGT_OT_RCS,                  // the owner directly operating render command buffers
 	VGT_OT_BCS,                 // the owner directly operating blitter command buffers
 	VGT_OT_VCS,                   // the owner directly operating video command buffers
@@ -817,7 +817,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	return false;
 }
 
-#define F_VIRT			VGT_OT_INVALID | VGT_REG_VIRT
+#define F_VIRT			VGT_OT_NONE | VGT_REG_VIRT
 #define F_BOOTTIME		F_VIRT | VGT_REG_BOOTTIME
 #define F_RDR			VGT_OT_RENDER
 #define F_RDR_ADRFIX		F_RDR | VGT_REG_ADDR_FIX
@@ -827,7 +827,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 #define F_DPY_ADRFIX		F_DPY | VGT_REG_ADDR_FIX
 #define F_DPY_HWSTS_ADRFIX	F_DPY_ADRFIX | VGT_REG_HW_STATUS
 #define F_PM			VGT_OT_PM
-#define F_WA			VGT_OT_INVALID | VGT_REG_WORKAROUND
+#define F_WA			VGT_OT_NONE | VGT_REG_WORKAROUND
 /* suppose owned by management domain (e.g. dom0) only */
 #define F_MGMT			VGT_OT_MGMT
 

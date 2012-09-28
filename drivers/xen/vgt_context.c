@@ -1460,7 +1460,7 @@ int vgt_thread(void *priv)
 		/* Handle virtual interrupt injection to current owner */
 		if (test_and_clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request)) {
 			spin_lock_irq(&pdev->lock);
-			vgt_handle_virtual_interrupt(pdev, VGT_OT_INVALID);
+			vgt_handle_virtual_interrupt(pdev, VGT_OT_NONE);
 			spin_unlock_irq(&pdev->lock);
 		}
 
