@@ -817,18 +817,53 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 	return false;
 }
 
+/*
+ * Below are some wrappers for commonly used policy flags.
+ * Add on demand to feed your requirement
+ */
+/* virtualized */
 #define F_VIRT			VGT_OT_NONE | VGT_REG_VIRT
+/* virtualized, but allow hw access from dom0 at boot time */
 #define F_BOOTTIME		F_VIRT | VGT_REG_BOOTTIME
+/*
+ * render context
+ * 	- render owner access pReg
+ * 	- non-render owner access vReg
+ */
 #define F_RDR			VGT_OT_RENDER
+/* render context, require address fix */
 #define F_RDR_ADRFIX		F_RDR | VGT_REG_ADDR_FIX
+/* render context, status updated by hw */
 #define F_RDR_HWSTS		F_RDR | VGT_REG_HW_STATUS
+/* render context, mode register (high 16 bits as write mask) */
 #define F_RDR_MODE		F_RDR | VGT_REG_MODE_CTL
+/*
+ * display context
+ * 	- display owner access pReg
+ * 	- non-display owner access vReg
+ */
 #define F_DPY			VGT_OT_DISPLAY
+/* display context, require address fix */
 #define F_DPY_ADRFIX		F_DPY | VGT_REG_ADDR_FIX
+/* display context, require address fix, status updated by hw */
 #define F_DPY_HWSTS_ADRFIX	F_DPY_ADRFIX | VGT_REG_HW_STATUS
+/*
+ * pm context
+ * 	- pm owner access pReg
+ * 	- non-pm owner access vReg
+ */
 #define F_PM			VGT_OT_PM
+/*
+ * workaround reg
+ * 	- any VM directly access pReg
+ * 	- no save/restore
+ * 	- dangerous as a workaround only
+ */
 #define F_WA			VGT_OT_NONE | VGT_REG_WORKAROUND
-/* suppose owned by management domain (e.g. dom0) only */
+/*
+ * suppose owned by management domain (e.g. dom0) only
+ * (consider whether it's necessary)
+ */
 #define F_MGMT			VGT_OT_MGMT
 
 extern int vgt_ctx_switch;
