@@ -2761,8 +2761,8 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_BLC_PWM_CPU_CTL2, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_BLC_PWM_CPU_CTL, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_BLC_PWM_PCH_CTL1, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_BLC_PWM_PCH_CTL2, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_BLC_PWM_PCH_CTL1, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
+{_REG_BLC_PWM_PCH_CTL2, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
 
 {_REG_PCH_GMBUS0, 4*4, F_VIRT, 0, D_ALL, gmbus_mmio_read, gmbus_mmio_write},
 #ifdef ENABLE_GPIO_EMULATION
@@ -2852,6 +2852,9 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PCH_FPB1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PCH_DREF_CONTROL, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PCH_DPLL_SEL, 4, F_DPY, 0, D_ALL, NULL, NULL},
+	/* Linux defines as PP_ON_DEPLAY/PP_OFF_DELAY. Not in spec */
+{0x61208, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x6120c, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
 {_REG_HDCP_STATUS_REG_1, 4, F_DPY, 0, D_ALL, hdcp_status_mmio_read, NULL},
 {_REG_HDCP_STATUS_REG_2, 4, F_DPY, 0, D_ALL, hdcp_status_mmio_read, NULL},
@@ -2861,6 +2864,7 @@ reg_attr_t vgt_base_reg_info[] = {
 	hdcp_key_status_mmio_read, NULL},
 {_REG_HDCP_PCH_BOOT_AUTH_STATUS_REG, 4, F_DPY, 0, D_ALL,
 	      hdcp_pch_boot_auth_mmio_read, NULL},
+{_REG_SHOTPLUG_CTL, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
 	/* -------pm regs---------- */
 {_REG_PMIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
@@ -2882,10 +2886,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_GEN6_GDRST, 4, F_VIRT, 0, D_ALL, NULL, gen6_gdrst_mmio_write},
 {_REG_FENCE_0_LOW, 0x80, F_VIRT, 0, D_ALL, fence_mmio_read, fence_mmio_write},
 {VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, F_VIRT, 0, D_ALL, NULL, NULL},
-	/* Linux defines as PP_ON_DEPLAY/PP_OFF_DELAY. Not in spec */
-{0x61208, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{0x6120c, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_SHOTPLUG_CTL, 4, F_MGMT, 0, D_ALL, NULL, NULL},
 {_REG_CPU_VGACNTRL, 4, F_BOOTTIME, 0, D_ALL, vga_control_r, vga_control_w},
 	/* MCHBAR, suppose read-only */
 {_REG_MCHBAR_MIRROR, 0x40000, F_VIRT, 0, D_ALL, NULL, NULL},
@@ -2902,17 +2902,17 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_RCS_PSMI, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_VCS_PSMI, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_BCS_PSMI, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_DISPLAY_CHICKEN_BITS_1, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_DISPLAY_CHICKEN_BITS_2, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_DSPCLK_GATE_D, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_DISPLAY_CHICKEN_BITS_1, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
+{_REG_DISPLAY_CHICKEN_BITS_2, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
+{_REG_DSPCLK_GATE_D, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
 {_REG_SOUTH_CHICKEN1, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_SOUTH_CHICKEN2, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_SOUTH_DSPCLK_GATE_D, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_TRANSA_CHICKEN2, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_TRANSB_CHICKEN2, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x3c, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_UCG_CTL1, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_UCG_CTL2, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x3c, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
+{_REG_UCG_CTL1, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
+{_REG_UCG_CTL2, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
 };
 
 static void vgt_set_reg_attr(struct pgt_device *pdev,
