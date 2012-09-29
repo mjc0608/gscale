@@ -202,10 +202,6 @@ static void vgt_restore_display(struct vgt_device *vgt)
     else
         vgt_restore_mmio_reg(_REG_ADPA);
 
-	/* LVDS state */
-    if (VGT_GEN(vgt) >= 4 && !VGT_HAS_PCH_SPLIT(vgt))
-        vgt_restore_mmio_reg(_REG_BLC_PWM_CTL2);
-
     if (VGT_HAS_PCH_SPLIT(vgt)) {
         vgt_restore_mmio_reg(_REG_PCH_LVDS);
     } else {
@@ -219,10 +215,6 @@ static void vgt_restore_display(struct vgt_device *vgt)
     */
 
     if (VGT_HAS_PCH_SPLIT(vgt)) {
-        vgt_restore_mmio_reg(_REG_BLC_PWM_PCH_CTL1);
-        vgt_restore_mmio_reg(_REG_BLC_PWM_PCH_CTL2);
-        vgt_restore_mmio_reg(_REG_BLC_PWM_CPU_CTL);
-        vgt_restore_mmio_reg(_REG_BLC_PWM_CPU_CTL2);
         vgt_restore_mmio_reg(_REG_PCH_PP_ON_DELAYS);
         vgt_restore_mmio_reg(_REG_PCH_PP_OFF_DELAYS);
         vgt_restore_mmio_reg(_REG_PCH_PP_DIVISOR);
@@ -403,10 +395,6 @@ static int vgt_save_display(struct vgt_device *vgt)
 
     if (VGT_HAS_PCH_SPLIT(pdev)) {
         vgt_save_mmio_reg(_REG_PCH_PP_CONTROL);
-        vgt_save_mmio_reg(_REG_BLC_PWM_PCH_CTL1);
-        vgt_save_mmio_reg(_REG_BLC_PWM_PCH_CTL2);
-        vgt_save_mmio_reg(_REG_BLC_PWM_CPU_CTL);
-        vgt_save_mmio_reg(_REG_BLC_PWM_CPU_CTL2);
         vgt_save_mmio_reg(_REG_PCH_LVDS);
     } else {
         /* TODO: snb gfx save should not go to here */
@@ -2373,12 +2361,6 @@ static void vgt_ironlake_crtc_enable(struct vgt_device *vgt,
 	vgt_update_cursor(vgt, pipe);
 }
 
-static void vgt_pch_panel_set_backlight(struct vgt_device *vgt)
-{
-	//struct pgt_device *pdev = vgt->pdev;
-	vgt_restore_sreg(_REG_BLC_PWM_CPU_CTL);
-}
-
 static void vgt_lvds_enable(struct vgt_device *vgt,
 		struct vgt_port_struct *port_struct)
 {
@@ -2405,9 +2387,6 @@ static void vgt_lvds_enable(struct vgt_device *vgt,
 
 	if(wait_for((VGT_MMIO_READ(pdev, _REG_PCH_PP_STATUS) & _REGBIT_PANEL_POWER_ON) != 0, 1000))
 		vgt_printk("timed out waiting for panel to power on");
-
-	//setup backlight ...continue...
-	vgt_pch_panel_set_backlight(vgt);
 }
 
 static void vgt_crt_set_dpms(struct vgt_device *vgt,
