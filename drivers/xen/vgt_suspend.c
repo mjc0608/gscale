@@ -122,10 +122,6 @@ struct vgt_intel_device_info *vgt_devinfo = &snb_devinfo;
 
 #define vgt_restore_mmio_reg(offset)                            \
     do {                                                        \
-        if (!reg_is_owner(vgt, (offset))) {                     \
-            dprintk("vGT: restore non-owner reg(%x)\n", (offset)); \
-            break;                                              \
-        }                                                       \
         __sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset))); \
         VGT_MMIO_WRITE(pdev, (offset), __sreg(vgt, (offset)));      \
     } while(0)
