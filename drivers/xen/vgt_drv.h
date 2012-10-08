@@ -452,10 +452,12 @@ enum vgt_uevent_type {
     UEVENT_MAX
 };
 
+#define VGT_MAX_UEVENT_VARS 20
 struct vgt_uevent_info {
     char *uevent_name;
+	int vm_id;
     enum kobject_action action;
-    char *env_var_table[2];
+    char *env_var_table[VGT_MAX_UEVENT_VARS];
     bool (*vgt_uevent_handler)(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev);
 };
 
