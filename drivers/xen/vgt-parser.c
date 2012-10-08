@@ -74,6 +74,9 @@
  *         -1 if error, e.g. command not recognized
  */
 
+#define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))
+#define BATCH_BUFFER_PPGTT_BIT(x)	(((x)>>8) & 1U)
+
 #ifdef VGT_ENABLE_ADDRESS_FIX_SAVE_RESTORE
 
 static struct vgt_addr_fix_list addr_list;
@@ -210,6 +213,19 @@ static void vgt_cmd_show_logs(void)
 		tail = INDEX_INC(tail, logs->size);
 	}
 	spin_unlock_irqrestore(&logs->lock, flags);
+}
+
+static void* batch_buffer_va(struct vgt_cmd_data *d)
+{
+	unsigned long gpa;
+
+	gpa = vgt_gma_2_gpa(d->vgt, d->instruction[1] & BATCH_BUFFER_ADDR_MASK,
+			BATCH_BUFFER_PPGTT_BIT(d->instruction[0]));
+	if (gpa == INVALID_ADDR){
+		return NULL;
+	}
+
+	return vgt_vmem_gpa_2_va(d->vgt, gpa);
 }
 
 static void show_instruction_info(struct vgt_cmd_data *d);
@@ -448,8 +464,6 @@ static int vgt_cmd_handler_mi_report_perf_count(struct vgt_cmd_data *data)
 	return 0;
 }
 
-/* bit 31:2 */
-#define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))
 static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 {
 	if (data->buffer_type == RING_BUFFER_INSTRUCTION){
@@ -461,9 +475,13 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 
 	address_fixup(data, data->instruction + 1);
 
-	/* FIXME: assume batch buffer also can be accessed by aperture */
-	data->instruction = (uint32_t*)v_aperture(data->vgt->pdev,
-				data->instruction[1] & BATCH_BUFFER_ADDR_MASK);
+	data->instruction = (uint32_t*)batch_buffer_va(data);
+	if (data->instruction == NULL){
+		printk(KERN_WARNING"invalid batch buffer addr, so skip scanning it\n");
+		vgt_cmd_handler_mi_batch_buffer_end(data);
+		return 0;
+	}
+
 	data->buffer_type = BATCH_BUFFER_INSTRUCTION;
 	return 0;
 }

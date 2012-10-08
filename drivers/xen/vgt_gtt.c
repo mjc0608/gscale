@@ -139,6 +139,33 @@ int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val)
 	return 0;
 }
 
+/*  translate gma (graphics memory address) to guest phyiscal address
+ *  by walking guest GTT table
+ */
+unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
+{
+   gtt_pte_t pte;
+   uint32_t gtt_index;
+   unsigned long pfn, pa;
+
+   if (ppgtt){
+       /*TODO: add PPGTT support */
+       BUG();
+   } else {
+       /* Global GTT */
+       gtt_index = gma >> GTT_PAGE_SHIFT;
+       if (gtt_index * GTT_ENTRY_SIZE >= vgt->vgtt_sz){
+           printk(KERN_ERR "invalid gma %lx\n", gma);
+		   return INVALID_ADDR;
+       }
+
+       gtt_pte_make(&pte, vgt->vgtt[gtt_index]);
+       pfn = gtt_pte_get_pfn(&pte);
+       pa = (pfn << PAGE_SHIFT) + (gma & ~PAGE_MASK);
+   }
+   return pa;
+}
+
 bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
