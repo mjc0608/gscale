@@ -2553,6 +2553,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_GTIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
 {_REG_GTIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
 {_REG_GTIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
+{_REG_GTISR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_RCS_IMR, 4, F_RDR, 0, D_SNB, NULL, NULL},
 {_REG_BCS_IMR, 4, F_RDR, 0, D_SNB, NULL, NULL},
 {_REG_VCS_IMR, 4, F_RDR, 0, D_SNB, NULL, NULL},
@@ -2624,9 +2625,13 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
 {_REG_DEIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
 {_REG_DEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
+{_REG_DEISR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_SDEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
 {_REG_SDEIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
 {_REG_SDEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
+{_REG_SDEISR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+
+{_REG_DE_RRMR, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
 {_REG_PIPEACONF, 4, F_DPY, 0, D_ALL, NULL, pipe_conf_mmio_write},
 {_REG_PIPEADSL, 4, F_DPY, 0, D_ALL, pipe_dsl_mmio_read, NULL},
@@ -2742,13 +2747,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PFA_WIN_POS, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PFB_WIN_POS, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
-/*
- * TODO: framebuffer compression is disabled for now
- * until it's handled at display context switch
- */
-{_REG_DPFC_CB_BASE, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_DPFC_CONTROL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-
 {_REG_WM0_PIPEA_ILK, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_WM0_PIPEB_ILK, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_WM0_PIPEC_IVB, 4, F_DPY, 0, D_GEN7PLUS, NULL, NULL},
@@ -2855,6 +2853,8 @@ reg_attr_t vgt_base_reg_info[] = {
 	/* Linux defines as PP_ON_DEPLAY/PP_OFF_DELAY. Not in spec */
 {0x61208, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {0x6120c, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_PCH_PP_ON_DELAYS, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_PCH_PP_OFF_DELAYS, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
 {_REG_HDCP_STATUS_REG_1, 4, F_DPY, 0, D_ALL, hdcp_status_mmio_read, NULL},
 {_REG_HDCP_STATUS_REG_2, 4, F_DPY, 0, D_ALL, hdcp_status_mmio_read, NULL},
@@ -2870,6 +2870,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PMIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
 {_REG_PMIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
 {_REG_PMIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
+{_REG_PMISR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_FORCEWAKE, 4, F_VIRT, 0, D_ALL, NULL, force_wake_write},
 {_REG_FORCEWAKE_ACK, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_GT_CORE_STATUS, 4, F_VIRT, 0, D_ALL, NULL, NULL},
@@ -2890,11 +2891,18 @@ reg_attr_t vgt_base_reg_info[] = {
 	/* MCHBAR, suppose read-only */
 {_REG_MCHBAR_MIRROR, 0x40000, F_VIRT, 0, D_ALL, NULL, NULL},
 
-	/* -------workaround regs--------- */
+	/* -------non-audited regs--------- */
 	/*
-	 * FORMAT: reg, size, device, mode_ctl, read, write
-	 * Many w/a regs have higher 16bits as masks so requiring an
-	 * explicit mode_ctl parameter.
+	 * below registers require next step audit:
+	 *   - some are workaround registers which we allow
+	 *     for pReg access from any VM
+	 *   - some are marked as virtualized for now, if they
+	 *     don't fall into coarse-grained ranges, to avoid
+	 *     regression.
+	 *   - there are also boottime regs in this list. In the
+	 *     end, all boottime and workaround types should be
+	 *     removed and then placed under mgmt category, meaning
+	 *     controlled by dom0 only
 	 */
 {_REG_TILECTL, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_DISP_ARB_CTL, 4, F_WA, 0, D_ALL, NULL, NULL},
@@ -2913,6 +2921,90 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x3c, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
 {_REG_UCG_CTL1, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
 {_REG_UCG_CTL2, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
+
+{0x860, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_RC_PWRCTX_MAXCNT, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_3D_CHICKEN1, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_3D_CHICKEN2, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_3D_CHICKEN3, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_FF_SLICE_CHICKEN, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_FF_SLICE_CS_CHICKEN2, 4, F_WA, 0, D_GEN7PLUS, NULL, NULL},
+/* no definition on this. from Linux */
+{_REG_GEN3_MI_ARB_STATE, 4, F_WA, 0, D_SNB, NULL, NULL},
+{_REG_RCS_ECOSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_VCS_ECOSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_BCS_ECOSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x41d0, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_RENDER_PIPE_STATUS, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_VFSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_RUNLIST_SUBMIT_PORT, 4, F_WA, 0, D_SNB, NULL, NULL},
+{_REG_ECOCHK, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_GAC_ECOCHK, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_2D_CG_DIS, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_3D_CG_DIS, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_3D_CG_DIS2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0x7000, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_TD_CTL2, 4, F_VIRT, 0, D_SNB, NULL, NULL},
+{_REG_SAMPLE_MODE, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_3DCHKN0, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0x7408, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0x7c00, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_SNPCR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_MBCTL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PAVP_FUSE_1, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PAVP_FUSE_2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+
+{_REG_GAB_CTL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+/*
+ * TODO: framebuffer compression is disabled for now
+ * until it's handled at display context switch
+ */
+{_REG_DPFC_CB_BASE, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_DPFC_CONTROL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_DPFC_RECOMP_CTL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_DPFC_CPU_FENCE_OFFSET, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_DPFC_CONTROL_SA, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_DPFC_CPU_FENCE_OFFSET_SA, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+
+{_REG_MBM_CTRL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_A_COEFFICIENTS_1, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_A_COEFFICIENTS_2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_A_COEFFICIENTS_3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_A_COEFFICIENTS_4, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_A_COEFFICIENTS_5, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_A_COEFFICIENTS_6, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_A_MODE, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PRECSC_A_HIGH_COLOR_CHANNEL_OFFSET, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PRECSC_A_MEDIUM_COLOR_CHANNEL_OFFSET, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PRECSC_A_LOW_COLOR_CHANNEL_OFFSET, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_B_COEFFICIENTS_1, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_B_COEFFICIENTS_2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_B_COEFFICIENTS_3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_B_COEFFICIENTS_4, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_B_COEFFICIENTS_5, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_B_COEFFICIENTS_6, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_CSC_B_MODE, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PRECSC_B_HIGH_COLOR_CHANNEL_OFFSET, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PRECSC_B_MEDIUM_COLOR_CHANNEL_OFFSET, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PRECSC_B_LOW_COLOR_CHANNEL_OFFSET, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_SWF, 0x110, F_VIRT, 0, D_SNB, NULL, NULL},
+{_REG_SWF, 0x90, F_VIRT, 0, D_GEN7PLUS, NULL, NULL},
+{_REG_FDI_TXA_CHICKEN, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_FDI_TXB_CHICKEN, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_CHK_REG0, 4, F_WA, 0, D_SNB, NULL, NULL},
+{_REG_LVDS_INT_CTL1, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_HDCP_DDI_B, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_HDCP_DDI_B_INIT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_HDCP_DDI_C, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_HDCP_DDI_C_INIT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_HDCP_DDI_D, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_HDCP_DDI_D_INIT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_HDCP_EDP, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_HDCP_EDP_INIT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+/* now looks gmbus handler can't cover 4/5 ports */
+{_REG_PCH_GMBUS4, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_PCH_GMBUS5, 4, F_WA, 0, D_ALL, NULL, NULL},
+
 };
 
 static void vgt_set_reg_attr(struct pgt_device *pdev,
