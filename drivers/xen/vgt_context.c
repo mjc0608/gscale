@@ -70,8 +70,12 @@
 #include <asm/bitops.h>
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
+#include <asm/xen/hypercall.h>
+#include <asm/xen/hypervisor.h>
 #include <xen/vgt.h>
 #include <xen/vgt-parser.h>
+#include <xen/interface/xen.h>
+#include <xen/xen-ops.h>
 #include "vgt_drv.h"
 #include "vgt_devtable.h"
 #include <xen/vgt-if.h>
@@ -2630,6 +2634,86 @@ static void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev)
 			pdev->rsvd_aperture_base + pdev->rsvd_aperture_sz);
 }
 
+/* get VM's total memory size */
+unsigned long xen_get_vm_mem_sz(int vm_id)
+{
+	struct xen_domctl arg;
+	int rc;
+
+	arg.domain = vm_id;
+	arg.cmd = XEN_DOMCTL_getdomaininfo;
+	arg.interface_version = XEN_DOMCTL_INTERFACE_VERSION;
+
+	rc = HYPERVISOR_domctl(&arg);
+	if (rc<0){
+		printk(KERN_ERR "HYPERVISOR_domctl fail ret=%d\n",rc);
+		return 0;
+	}
+
+	return arg.u.getdomaininfo.tot_pages << PAGE_SHIFT;
+}
+
+static int vgt_vmem_init(struct vgt_device *vgt)
+{
+	unsigned long i;
+
+	/* Dom0 already has mapping for itself */
+	if(vgt->vm_id == 0)
+		return 0;
+
+	vgt->vmem_sz = xen_get_vm_mem_sz(vgt->vm_id);
+	vgt->vmem_vma = kmalloc(sizeof(*vgt->vmem_vma)*(vgt->vmem_sz>>VMEM_BUCK_SHIFT),GFP_KERNEL);
+	if (vgt->vmem_vma == NULL){
+		printk(KERN_ERR "Insufficient memory for vmem_vma, vmem_sz=0x%llx\n",
+				vgt->vmem_sz );
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < vgt->vmem_sz >> VMEM_BUCK_SHIFT; i++){
+		vgt->vmem_vma[i]= xen_remap_domain_mfn_range_in_kernel(
+				i << (VMEM_BUCK_SHIFT - PAGE_SHIFT),
+				VMEM_BUCK_SIZE >> PAGE_SHIFT,
+				vgt->vm_id);
+		if (vgt->vmem_vma[i] == NULL)
+			printk("warning: no mapping for vmem buck starting @ %ldMB\n", i<<(VMEM_BUCK_SHIFT-20));
+	}
+
+	return 0;
+}
+
+static void vgt_vmem_destroy(struct vgt_device *vgt)
+{
+	int i;
+
+	if(vgt->vm_id == 0)
+		return;
+
+	if (vgt->vmem_vma == NULL)
+		return;
+
+	for (i=0; i <vgt->vmem_sz >> VMEM_BUCK_SHIFT; i++){
+		if (vgt->vmem_vma[i] != NULL){
+			xen_unmap_domain_mfn_range_in_kernel(vgt->vmem_vma[i],
+					VMEM_BUCK_SIZE >> PAGE_SHIFT, vgt->vm_id);
+		}
+	}
+	kfree(vgt->vmem_vma);
+}
+
+void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
+{
+	unsigned long buck_index;
+
+	if (vgt->vm_id == 0)
+		return __va(gpa);
+
+	buck_index = gpa >> VMEM_BUCK_SHIFT;
+	if (!vgt->vmem_vma || !vgt->vmem_vma[buck_index])
+		return NULL;
+
+	return (char*)(vgt->vmem_vma[buck_index]->addr) + (gpa & (VMEM_BUCK_SIZE -1));
+}
+
 /*
  * priv: VCPU ?
  */
@@ -2691,6 +2775,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	}
 
 	alloc_vm_rsvd_aperture(vgt);
+
+	vgt_vmem_init(vgt);
 
 	vgt->rb[RING_BUFFER_RCS].stateless = 0;	/* RCS */
 	vgt->rb[RING_BUFFER_VCS].stateless = 1;	/* BCS */
@@ -2891,6 +2977,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	free_vm_aperture_gm_and_fence(vgt);
 	free_vm_rsvd_aperture(vgt);
+	vgt_vmem_destroy(vgt);
 	kfree(vgt->vgtt);
 	vfree(vgt->state.vReg);
 	vfree(vgt->state.sReg);

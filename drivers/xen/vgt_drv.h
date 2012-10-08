@@ -343,6 +343,11 @@ struct vgt_device {
 	int			fence_base;
 	int			fence_sz;
 
+#define VMEM_BUCK_SHIFT		20
+#define VMEM_BUCK_SIZE		(1<<VMEM_BUCK_SHIFT)
+	uint64_t	vmem_sz;
+	struct vm_struct **vmem_vma;
+
 	uint64_t   vgtt_sz; /* virtual GTT size in byte */
 	uint32_t   *vgtt; /* virtual GTT table for guest to read */
 
@@ -1903,6 +1908,8 @@ extern bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 extern int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val);
 
 extern unsigned long g2m_pfn(int vm_id, unsigned long g_pfn);
+
+extern void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 
 #define INVALID_MFN  (~0UL)
 
