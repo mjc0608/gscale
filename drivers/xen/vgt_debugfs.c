@@ -483,13 +483,45 @@ static void fb_debugfs_work_func(struct work_struct *work)
 }
 #endif
 
+static void vgt_create_cmdstat_per_ring(struct vgt_device *vgt, int ring_id, struct dentry *parent)
+{
+	char *ring_name;
+	struct dentry *ring_dir_entry;
+	switch (ring_id) {
+		case RING_BUFFER_RCS:
+			ring_name = "render";
+			break;
+		case RING_BUFFER_VCS:
+			ring_name = "video";
+			break;
+		case RING_BUFFER_BCS:
+			ring_name = "blitter";
+			break;
+		case RING_BUFFER_VECS:
+			ring_name = "ve";
+			break;
+		case RING_BUFFER_VCS2:
+			ring_name = "vc";
+			break;
+		default:
+			return;
+	}
+	ring_dir_entry = debugfs_create_dir(ring_name, parent);
+	if (!ring_dir_entry)
+		printk(KERN_ERR "vGT(%d): failed to create debugfs directory: %s\n", vgt->vgt_id, ring_name);
+	else {
+		debugfs_create_u64_node("ring_cmd_nr", 0444, ring_dir_entry, &(vgt->rb[ring_id].nr_cmd_ring));
+		debugfs_create_u64_node("batch_cmd_nr", 0444, ring_dir_entry, &(vgt->rb[ring_id].nr_cmd_batch));
+	}
+}
+
 int vgt_create_debugfs(struct vgt_device *vgt)
 {
-	int retval;
+	int retval,i;
 	struct array_data *p;
 	int vgt_id = vgt->vgt_id;
 	struct pgt_device *pdev = vgt->pdev;
-	struct dentry *perf_dir_entry;
+	struct dentry *perf_dir_entry, *cmdstat_dir_entry;
 
 #ifdef VGT_DEBUGFS_DUMP_FB
 	INIT_WORK(&vgt->fb_debugfs_work, fb_debugfs_work_func);
@@ -610,7 +642,17 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		//debugfs_create_u64_node ("used_cycles", 0444, perf_dir_entry, &(vgt->stat.used_cycles));
 		//debugfs_create_u64_node ("pirq_num", 0444, perf_dir_entry, &(vgt->stat.pirq_num));
 		//debugfs_create_u64_node ("virq_num", 0444, perf_dir_entry, &(vgt->stat.virq_num));
+
+		/* cmd statistics for ring/batch buffers */
+		cmdstat_dir_entry = debugfs_create_dir("ring", perf_dir_entry);
+		if (!cmdstat_dir_entry)
+			printk(KERN_ERR "vGT(%d): failed to create debugfs directory: ringbuffer\n", vgt_id);
+		else
+			/* for each ring */
+			for (i = 0; i < pdev->max_engines; i++)
+				vgt_create_cmdstat_per_ring(vgt, i, cmdstat_dir_entry);
 	}
+
 
 	return 0;
 }
