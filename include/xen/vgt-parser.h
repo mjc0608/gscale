@@ -66,6 +66,7 @@
 
 struct vgt_cmd_data{
 	struct vgt_device *vgt;
+	int ring_id;
 	enum {
 		RING_BUFFER_INSTRUCTION,
 		BATCH_BUFFER_INSTRUCTION

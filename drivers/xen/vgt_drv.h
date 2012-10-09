@@ -212,6 +212,10 @@ typedef struct {
 	vgt_ring_ppgtt_t	sring_ppgtt_info; /* shadow info */
 	u8 has_ppgtt_base_set : 1;	/* Is PP dir base set? */
 	u8 has_ppgtt_mode_enabled : 1;  /* Is ring's mode reg PPGTT enable set? */
+
+	/* statistics */
+	uint64_t nr_cmd_ring; /* cmd issued in ring buffer*/
+	uint64_t nr_cmd_batch; /* cmd issued in batch buffer */
 } vgt_state_ring_t;
 
 struct vgt_device;

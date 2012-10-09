@@ -1226,7 +1226,20 @@ static void show_instruction_info(struct vgt_cmd_data *d)
 			d->buffer_type, d->instruction[0], d->type, d->sub_type, d->opcode, d->sub_opcode);
 }
 
-static int __vgt_scan_vring(struct vgt_device *vgt, vgt_reg_t head, vgt_reg_t tail, vgt_reg_t base, vgt_reg_t size)
+static inline void stat_nr_cmd_inc(struct vgt_cmd_data* d)
+{
+	vgt_state_ring_t* rs;
+
+	rs = &d->vgt->rb[d->ring_id];
+
+	if (d->buffer_type == RING_BUFFER_INSTRUCTION)
+		rs->nr_cmd_ring++;
+	else
+		rs->nr_cmd_batch++;
+	return;
+}
+
+static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head, vgt_reg_t tail, vgt_reg_t base, vgt_reg_t size)
 {
 	static int error_count=0;
 	char* instr, *instr_end, *va_bottom, *va_base;
@@ -1247,6 +1260,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, vgt_reg_t head, vgt_reg_t ta
 
 	decode_data.buffer_type = RING_BUFFER_INSTRUCTION;
 	decode_data.vgt = vgt;
+	decode_data.ring_id = ring_id;
 	vgt_cmd_printk("ring buffer scan start\n");
 	while(instr != instr_end){
 		decode_data.instruction = (uint32_t*)instr;
@@ -1254,6 +1268,8 @@ static int __vgt_scan_vring(struct vgt_device *vgt, vgt_reg_t head, vgt_reg_t ta
 				decode_data.buffer_type == RING_BUFFER_INSTRUCTION ? "RING_BUFFER": "BATCH_BUFFER",
 				instr, decode_data.instruction[0], decode_data.instruction[1],
 				decode_data.instruction[2],	decode_data.instruction[3]);
+
+		stat_nr_cmd_inc(&decode_data);
 
 		ret = vgt_cmd_parser_render(&decode_data);
 		if (ret < 0){
@@ -1297,7 +1313,7 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 		return 0;
 	}
 
-	ret = __vgt_scan_vring (vgt, vgt->last_scan_head[ring_id],
+	ret = __vgt_scan_vring (vgt, ring_id, vgt->last_scan_head[ring_id],
 		vring->tail & RB_TAIL_OFF_MASK,
 		vring->start, _RING_CTL_BUF_SIZE(vring->ctl));
 
