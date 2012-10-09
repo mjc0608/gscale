@@ -254,18 +254,43 @@ static void inline address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
 	return -VGT_UNHANDLEABLE;
 #endif
 }
+static int vgt_cmd_handler_mi_batch_buffer_end(struct vgt_cmd_data *data);
 
-static inline void length_fixup(struct vgt_cmd_data *data, int nr_bits)
+
+static inline bool batch_buffer_cross_page(struct vgt_cmd_data *d, int len)
 {
-	int len = cmd_length(data, nr_bits);
-	data->instruction += len;
-	vgt_cmd_printk("cmd length=%d\n", len);
+	unsigned long start, end;
+
+	if (d->buffer_type != BATCH_BUFFER_INSTRUCTION)
+		return false;
+
+	start = (unsigned long)d->instruction;
+	end = (unsigned long)(d->instruction + len);
+
+	return (start & PAGE_MASK) != (end & PAGE_MASK);
+}
+
+static inline void advance_ip(struct vgt_cmd_data *d, int len_in_qword)
+{
+	if (batch_buffer_cross_page(d, len_in_qword)){
+		printk(KERN_WARNING "Batch buffer (0x%p:0x%x) cross page, so skip scaning it\n",
+				d->instruction, len_in_qword*4);
+		vgt_cmd_handler_mi_batch_buffer_end(d);
+	}
+	else
+		d->instruction += len_in_qword;
+	vgt_cmd_printk("cmd length are 0x%x bytes\n", len_in_qword*4);
 }
 
 static int vgt_cmd_handler_noop(struct vgt_cmd_data *data)
 {
-	data->instruction += 1;
+	advance_ip(data, 1);
 	return 0;
+}
+
+static inline void length_fixup(struct vgt_cmd_data *data, int nr_bits)
+{
+	advance_ip(data, cmd_length(data, nr_bits));
 }
 
 static int vgt_cmd_handler_length_fixup_8(struct vgt_cmd_data *data)
