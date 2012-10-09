@@ -1,0 +1,127 @@
+#!/usr/bin/python
+
+import os, sys, re
+
+if len(sys.argv) == 2:
+	path = sys.argv[1]
+else:
+	path = "drivers/xen/vgt_reg.h"
+fi = open(path, "r")
+s = fi.read()
+fi.close()
+
+# Collect reg name
+reginfo = {}
+for line in s.split("\n"):
+	m = re.search("^#define[ \t]+_REG_[A-Z_]+", line)
+	if not m:
+		continue
+	m = re.search("^#define[ \t]+_REG_(?P<name>[0-9A-Z_]+)[ \t]+(?P<offset>0x[0-9a-zA-Z]+)", line)
+
+	if not m or m.group("name") == "INVALID":
+		continue
+	offset = int(m.group("offset"), 16)
+	if not offset in reginfo:
+		reginfo[offset] = {}
+		reginfo[offset]["name"] = m.group("name")
+	elif reginfo[offset]["name"].find(m.group("name")) == -1:
+		reginfo[offset]["name"] += " | " + m.group("name")
+		print "find multiple names for regs", hex(offset), reginfo[offset]["name"]
+	#print hex(offset), reginfo[offset]["name"]
+
+# get info for each access reg
+fi = open("/sys/kernel/debug/vgt/reginfo", "r")
+info = fi.read()
+fi.close()
+for line in info.split("\n"):
+	if len(line.split(":")) == 1 or line.find("Reg:") != -1:
+		continue
+	m = re.search("^[ \t]*(?P<reg>[0-9a-zA-Z]+):[ \t]*(?P<flags>[0-9a-zA-Z]+) ", line)
+	if not m:
+		continue
+	reg = int(m.group("reg"), 16)
+	if not reg in reginfo:
+		reginfo[reg] = {}
+		reginfo[reg]["name"] = ""
+	flags = int(m.group("flags"), 16)
+
+	reginfo[reg]["Accessed"] = True
+	reginfo[reg]["Owner"] = "N/A"
+	if (flags & 0xf == 0):
+		reginfo[reg]["Owner"] = "None"
+	elif (flags & 0xf == 4):
+		reginfo[reg]["Owner"] = "RDR"
+	elif (flags & 0xf == 5):
+		reginfo[reg]["Owner"] = "DPY"
+	elif (flags & 0xf == 6):
+		reginfo[reg]["Owner"] = "PM"
+	elif (flags & 0xf == 7):
+		reginfo[reg]["Owner"] = "MGMT"
+
+	reginfo[reg]["Type"] = "N/A"
+	if (flags & 0xf != 0):
+		reginfo[reg]["Type"] = "MPT"
+	elif (flags & (1 << 12)):
+		reginfo[reg]["Type"] = "Boot"
+	elif (flags & (1 << 4)):
+		reginfo[reg]["Type"] = "WA"
+	elif (flags & (1 << 7)):
+		reginfo[reg]["Type"] = "Virt"
+
+	if (flags & (1 << 5)):
+		reginfo[reg]["AddressFix"] = True;
+	if (flags & (1 << 6)):
+		reginfo[reg]["HwStatus"] = True;
+	if (flags & (1 << 8)):
+		reginfo[reg]["ModeMask"] = True;
+	if (flags & (1 << 10) == 0):
+		reginfo[reg]["Untracked"] = True;
+	reginfo[reg]["Flags"] = flags;
+
+def show_untracked():
+	fi = open("/sys/kernel/debug/vgt/untracked_regs", "r")
+	info = fi.read()
+	fi.close()
+
+def get_reg_attr(reg):
+	out = ""
+	if "AddressFix" in reg:
+		out += " AF"
+	if "HwStatus" in reg:
+		out += " HW"
+	if "ModeMask" in reg:
+		out += " MD"
+	return out
+
+def get_reg_state(reg):
+	out = ""
+	if "Untracked" in reg:
+		out += " U"
+	return out
+
+def show_reginfo():
+	print "===================================="
+	print "Owner Type:"
+	print "\tNone, RDR(Render), DPY(Display), PM, MGMT(Management)"
+	print "Type:"
+	print "\tVIRT - default virtualized"
+	print "\tMPT - Mediated Pass-Through based on owner type"
+	print "\tWA - workaround regs pass-through to any VM"
+	print "\tBOOT - pass-through to dom0 at boot time. Otherwise virtualized"
+	print "Attributes:"
+	print "\tAF - Address check required"
+	print "\tHW - Contain HW updated status bit"
+	print "\tMD - High 16bits as mask for change"
+	print "State:"
+	print "\tU - Untracked"
+	print "\tD - Different value among VMs"
+
+	print "\n%10s: %5s|%5s|%12s|%8s|%-8s" % ("Reg", "Owner", "Type", "Attributes", "State", "Name")
+	print "------------------------------------"
+
+	for reg in sorted(reginfo):
+		if not "Accessed" in reginfo[reg]:
+			continue
+		print "%10s: %5s|%5s|%12s|%8s|%s  (%s)" % (hex(reg), reginfo[reg]["Owner"], reginfo[reg]["Type"], get_reg_attr(reginfo[reg]), get_reg_state(reginfo[reg]), reginfo[reg]["name"], hex(reg))
+
+show_reginfo()
