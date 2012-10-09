@@ -660,6 +660,8 @@ extern struct list_head pgt_devices;
 #define reg_is_tracked(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_TRACKED)
 #define reg_is_accessed(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ACCESSED)
 #define reg_boottime(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_BOOTTIME)
+#define reg_get_owner(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_OWNER)
+#define reg_invalid(pdev, reg)		(!pdev->reg_info[REG_INDEX(reg)])
 #define reg_aux_index(pdev, reg)	\
 	((pdev->reg_info[REG_INDEX(reg)] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
 #define reg_has_aux_info(pdev, reg)	(reg_mode_ctl(pdev, reg) | reg_addr_fix(pdev, reg))

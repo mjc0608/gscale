@@ -266,7 +266,7 @@ static struct dentry *vgt_debugfs_create_blob(const char *name, mode_t mode,
 	return debugfs_create_file(name, mode, parent, p, &u32_array_fops);
 }
 
-static int vgt_reginfo_show(struct seq_file *m, void *data)
+static int vgt_show_untracked_regs(struct seq_file *m, void *data)
 {
 	int i, accessed, untracked;
 	struct pgt_device *pdev = (struct pgt_device *)m->private;
@@ -290,9 +290,88 @@ static int vgt_reginfo_show(struct seq_file *m, void *data)
 	return 0;
 }
 
+static int vgt_untracked_reg_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vgt_show_untracked_regs, inode->i_private);
+}
+
+static const struct file_operations untracked_fops = {
+	.open = vgt_untracked_reg_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
+static inline char *reg_show_reg_owner(struct pgt_device *pdev, int i)
+{
+	char *str;
+	switch (reg_get_owner(pdev, i)) {
+		case VGT_OT_NONE:
+			str = "NONE";
+			break;
+		case VGT_OT_RENDER:
+			str = "Render";
+			break;
+		case VGT_OT_DISPLAY:
+			str = "Display";
+			break;
+		case VGT_OT_PM:
+			str = "PM";
+			break;
+		case VGT_OT_MGMT:
+			str = "MGMT";
+			break;
+		default:
+			str = "";
+			break;
+	}
+	return str;
+}
+
+static inline char *reg_show_reg_type(struct pgt_device *pdev, int i)
+{
+	if (reg_get_owner(pdev, i) != VGT_OT_NONE)
+		return "MPT";
+	else if (reg_boottime(pdev, i))
+		return "Boot";
+	else if (reg_workaround(pdev, i))
+		return "WA";
+	else if (reg_virt(pdev, i))
+		return "Virt";
+	else
+		return "";
+}
+
+static int vgt_show_regs(struct seq_file *m, void *data)
+{
+	int i, tot;
+	struct pgt_device *pdev = (struct pgt_device *)m->private;
+
+	tot = 0;
+	seq_printf(m, "------------------------------------------\n");
+	seq_printf(m, "MGMT - Management context\n");
+	seq_printf(m, "MPT - Mediated Pass-Through based on owner type\n");
+	seq_printf(m, "WA - workaround regs with special risk\n");
+	seq_printf(m, "%8s: %8s (%-8s %-4s)\n",
+		   "Reg", "Flags", "Owner", "Type");
+	for (i = 0; i < pdev->mmio_size; i +=  REG_SIZE) {
+		if (!reg_is_accessed(pdev, i))
+			continue;
+
+		tot++;
+		seq_printf(m, "%8x: %8x (%-8s %-4s)\n",
+			   i, pdev->reg_info[REG_INDEX(i)],
+			   reg_show_reg_owner(pdev, i),
+			   reg_show_reg_type(pdev, i));
+	}
+	seq_printf(m, "------------------------------------------\n");
+	seq_printf(m, "Total %d accessed registers are shown\n", tot);
+	return 0;
+}
+
 static int vgt_reginfo_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, vgt_reginfo_show, inode->i_private);
+	return single_open(file, vgt_show_regs, inode->i_private);
 }
 
 static const struct file_operations reginfo_fops = {
@@ -328,7 +407,12 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 				stat_info[i].node_name);
 	}
 
-	temp_d = debugfs_create_file("untracked_mmio", 0444, d_vgt_debug,
+	temp_d = debugfs_create_file("untracked_regs", 0444, d_vgt_debug,
+			 pdev, &untracked_fops);
+	if (!temp_d)
+		return NULL;
+
+	temp_d = debugfs_create_file("reginfo", 0444, d_vgt_debug,
 			 pdev, &reginfo_fops);
 	if (!temp_d)
 		return NULL;
