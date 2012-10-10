@@ -75,6 +75,7 @@
 #define __HYPERVISOR_event_channel_op     32
 #define __HYPERVISOR_physdev_op           33
 #define __HYPERVISOR_hvm_op               34
+#define __HYPERVISOR_domctl               36
 #define __HYPERVISOR_tmem_op              38
 
 /* Architecture-specific hypercall definitions. */
@@ -744,6 +745,62 @@ struct tmem_op {
 };
 
 DEFINE_GUEST_HANDLE(u64);
+
+/* XEN_DOMCTL_getdomaininfo */
+struct xen_domctl_getdomaininfo {
+	/* OUT variables. */
+	domid_t  domain;              /* Also echoed in domctl.domain */
+	/* Domain is scheduled to die. */
+#define _XEN_DOMINF_dying     0
+#define XEN_DOMINF_dying      (1U<<_XEN_DOMINF_dying)
+	/* Domain is an HVM guest (as opposed to a PV guest). */
+#define _XEN_DOMINF_hvm_guest 1
+#define XEN_DOMINF_hvm_guest  (1U<<_XEN_DOMINF_hvm_guest)
+	/* The guest OS has shut down. */
+#define _XEN_DOMINF_shutdown  2
+#define XEN_DOMINF_shutdown   (1U<<_XEN_DOMINF_shutdown)
+	/* Currently paused by control software. */
+#define _XEN_DOMINF_paused    3
+#define XEN_DOMINF_paused     (1U<<_XEN_DOMINF_paused)
+	/* Currently blocked pending an event.     */
+#define _XEN_DOMINF_blocked   4
+#define XEN_DOMINF_blocked    (1U<<_XEN_DOMINF_blocked)
+	/* Domain is currently running.            */
+#define _XEN_DOMINF_running   5
+#define XEN_DOMINF_running    (1U<<_XEN_DOMINF_running)
+	/* Being debugged.  */
+#define _XEN_DOMINF_debugged  6
+#define XEN_DOMINF_debugged   (1U<<_XEN_DOMINF_debugged)
+	/* XEN_DOMINF_shutdown guest-supplied code.  */
+#define XEN_DOMINF_shutdownmask 255
+#define XEN_DOMINF_shutdownshift 16
+	uint32_t flags;              /* XEN_DOMINF_* */
+	aligned_u64 tot_pages;
+	aligned_u64 max_pages;
+	aligned_u64 shr_pages;
+	aligned_u64 paged_pages;
+	aligned_u64 shared_info_frame; /* GMFN of shared_info struct */
+	aligned_u64 cpu_time;
+	uint32_t nr_online_vcpus;    /* Number of VCPUs currently online. */
+	uint32_t max_vcpu_id;        /* Maximum VCPUID in use by this domain. */
+	uint32_t ssidref;
+	xen_domain_handle_t handle;
+	uint32_t cpupool;
+};
+DEFINE_GUEST_HANDLE_STRUCT(xen_domctl_getdomaininfo);
+
+#define XEN_DOMCTL_INTERFACE_VERSION 0x00000008
+#define XEN_DOMCTL_getdomaininfo                  5
+struct xen_domctl {
+	uint32_t cmd;
+	uint32_t interface_version; /* XEN_DOMCTL_INTERFACE_VERSION */
+	domid_t  domain;
+	union {
+		struct xen_domctl_getdomaininfo     getdomaininfo;
+		uint8_t                             pad[128];
+	}u;
+};
+DEFINE_GUEST_HANDLE_STRUCT(xen_domctl);
 
 #else /* __ASSEMBLY__ */
 

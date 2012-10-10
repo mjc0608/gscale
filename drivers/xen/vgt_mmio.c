@@ -1734,9 +1734,21 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 
 static int xen_get_nr_vcpu(int vm_id)
 {
-	/* get number of the VCPUs */
-	/* TODO: add hypervisor specific implementation */
-	return 1;
+	struct xen_domctl arg;
+	int rc;
+
+	arg.domain = vm_id;
+	arg.cmd = XEN_DOMCTL_getdomaininfo;
+	arg.interface_version = XEN_DOMCTL_INTERFACE_VERSION;
+
+	rc = HYPERVISOR_domctl(&arg);
+	if (rc<0){
+		printk(KERN_ERR "HYPERVISOR_domctl fail ret=%d\n",rc);
+		/* assume it is UP */
+		return 1;
+	}
+
+	return arg.u.getdomaininfo.nr_online_vcpus;
 }
 
 static int hvm_get_parameter_by_dom(domid_t domid, int idx, uint64_t *value)
