@@ -2909,7 +2909,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	if (v != vgt)
 		printk("vgt instance has been removed from run queue\n");
-	else if (current_render_owner(pdev) != vgt) {
+	else if (hvm_render_owner || current_render_owner(pdev) != vgt) {
 		printk("remove vgt(%d) from runqueue safely\n",
 			vgt->vgt_id);
 		vgt_disable_render(vgt);
