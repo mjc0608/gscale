@@ -439,7 +439,12 @@ bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 
 	dprintk("VM%d write register FORCE_WAKE with %x\n", vgt->vm_id, data);
 
-	__vreg(vgt, _REG_FORCEWAKE_ACK) = data;
+	if (vgt->pdev->is_haswell) {
+		__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = data;
+	} else {
+		__vreg(vgt, _REG_FORCEWAKE_ACK) = data;
+	}
+
 	__vreg(vgt, _REG_FORCEWAKE) = data;
 	if (data == 1)
 		set_vRC_to_C0(vgt);
@@ -452,7 +457,7 @@ bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 bool mul_force_wake_ack_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	*(u32 *)p_data = __vreg(vgt, _REG_MUL_FORCEWAKE_ACK);
+	*(u32 *)p_data = __vreg(vgt, offset);
 	return true;
 }
 
@@ -470,7 +475,12 @@ bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 
 	dprintk("VM%d write register FORCE_WAKE_MT with %x\n", vgt->vm_id, data);
 
-	__vreg(vgt, _REG_MUL_FORCEWAKE_ACK) = data;
+	if (vgt->pdev->is_haswell) {
+		__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = data;
+	} else {
+		__vreg(vgt, _REG_MUL_FORCEWAKE_ACK) = data;
+	}
+
 	__vreg(vgt, _REG_MUL_FORCEWAKE) = data;
 	if (data == 1)
 		set_vRC_to_C0(vgt);
@@ -2865,6 +2875,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_GTFIFO_FREE_ENTRIES, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_MUL_FORCEWAKE, 4, F_VIRT, 0, D_ALL, NULL, mul_force_wake_write},
 {_REG_MUL_FORCEWAKE_ACK, 4, F_VIRT, 0, D_ALL, mul_force_wake_ack_read, NULL},
+{_REG_FORCEWAKE_ACK_HSW, 4, F_VIRT, 0, D_ALL, mul_force_wake_ack_read, NULL},
 {_REG_ECOBUS, 4, F_PM, 0, D_ALL, NULL, NULL},
 {_REG_RC_STATE_CTRL_1, 4, F_VIRT, 0, D_ALL, NULL, rc_state_ctrl_1_mmio_write},
 {_REG_RC_STATE_CTRL_2, 4, F_VIRT, 0, D_ALL, NULL, rc_state_ctrl_1_mmio_write},
