@@ -56,6 +56,9 @@
  *
  */
 
+#ifndef _VGT_IF_H
+#define _VGT_IF_H
+
 
 /* Reserve 32KB for vGT shared infor: 0x78000-0x7FFFF */
 #define VGT_PVINFO_PAGE	0x78000
@@ -122,3 +125,5 @@ struct vgt_if {
 };
 
 #define vgt_info_off(x)        (VGT_PVINFO_PAGE + (long)&((struct vgt_if*) NULL)->x)
+
+#endif /* _VGT_IF_H */

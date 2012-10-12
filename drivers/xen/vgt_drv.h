@@ -35,6 +35,7 @@
 #include <xen/interface/hvm/ioreq.h>
 #include "vgt_edid.h"
 #include "vgt_reg.h"
+#include <xen/vgt-if.h>
 
 struct pgt_device;
 extern struct vgt_device *dom0_vgt;
@@ -757,9 +758,13 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 	if (vgt_ops->boot_time && reg_boottime(pdev, reg))
 		return true;
 
+	/* filter out PVINFO PAGE to avoid clobbered by hvm_super_owner */
+	if (reg >= VGT_PVINFO_PAGE && reg < VGT_PVINFO_PAGE + VGT_PVINFO_SIZE)
+		return false;
+
 	/* super owner give full access to HVM instead of dom0 */
-	if (hvm_super_owner)
-		return vgt->vgt_id ? true : false;
+	if (hvm_super_owner && vgt->vgt_id)
+		return true;
 
 	/* allows access from any VM. dangerous!!! */
 	if (reg_workaround(pdev, reg))
