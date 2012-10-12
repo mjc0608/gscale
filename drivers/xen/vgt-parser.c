@@ -44,7 +44,7 @@
  */
 
 #define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))
-#define BATCH_BUFFER_PPGTT_BIT(x)	(((x)>>8) & 1U)
+#define BATCH_BUFFER_ADR_SPACE_BIT(x)	(((x)>>8) & 1U)
 
 #ifdef VGT_ENABLE_ADDRESS_FIX_SAVE_RESTORE
 
@@ -189,7 +189,7 @@ static void* batch_buffer_va(struct vgt_cmd_data *d)
 	unsigned long gpa;
 
 	gpa = vgt_gma_2_gpa(d->vgt, d->instruction[1] & BATCH_BUFFER_ADDR_MASK,
-			BATCH_BUFFER_PPGTT_BIT(d->instruction[0]));
+			d->buf_addr_type == PPGTT_BUFFER);
 	if (gpa == INVALID_ADDR){
 		return NULL;
 	}
@@ -294,6 +294,7 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct vgt_cmd_data *data)
 {
 	data->instruction = data->ret_instruction;
 	data->buffer_type = RING_BUFFER_INSTRUCTION;
+	data->buf_addr_type = GTT_BUFFER;
 	return 0;
 }
 
@@ -433,8 +434,22 @@ static int vgt_cmd_handler_mi_report_perf_count(struct vgt_cmd_data *data)
 	return 0;
 }
 
+static void addr_type_update_snb(struct vgt_cmd_data *d)
+{
+	if ( (d->buffer_type == RING_BUFFER_INSTRUCTION) &&
+			(d->vgt->rb[d->ring_id].has_ppgtt_mode_enabled) &&
+			(BATCH_BUFFER_ADR_SPACE_BIT(d->instruction[0]) == 1)
+	   )
+	{
+		d->buf_addr_type = PPGTT_BUFFER;
+	}
+}
+
 static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 {
+	/* FIXME: add IVB/HSW code */
+	addr_type_update_snb(data);
+
 	if (data->buffer_type == RING_BUFFER_INSTRUCTION){
 		data->ret_instruction = data->instruction + 2;
 	}
@@ -1271,6 +1286,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	instr_end = va_base + tail;
 
 	decode_data.buffer_type = RING_BUFFER_INSTRUCTION;
+	decode_data.buf_addr_type = GTT_BUFFER;
 	decode_data.vgt = vgt;
 	decode_data.ring_id = ring_id;
 	vgt_cmd_printk("ring buffer scan start\n");

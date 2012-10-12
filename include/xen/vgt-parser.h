@@ -67,10 +67,18 @@
 struct vgt_cmd_data{
 	struct vgt_device *vgt;
 	int ring_id;
+
 	enum {
 		RING_BUFFER_INSTRUCTION,
 		BATCH_BUFFER_INSTRUCTION
 	}buffer_type;
+
+	/* batch buffer address type */
+	enum{
+		GTT_BUFFER,
+		PPGTT_BUFFER
+	}buf_addr_type;
+
 	char* name;
 	unsigned int *instruction;
 	/* next instruction when return from  batch buffer to ring buffer */
