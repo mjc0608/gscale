@@ -41,6 +41,7 @@
 #include <asm/cacheflush.h>
 #include <asm/xen/hypercall.h>
 #include <asm/xen/hypervisor.h>
+#include <asm/xen/page.h>
 #include <xen/vgt.h>
 #include <xen/vgt-parser.h>
 #include <xen/interface/xen.h>
@@ -2673,8 +2674,9 @@ void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
 {
 	unsigned long buck_index;
 
-	if (vgt->vm_id == 0)
-		return __va(gpa);
+	if (vgt->vm_id == 0){
+		return (char*)mfn_to_virt(gpa>>PAGE_SHIFT) + (gpa & (PAGE_SIZE-1));
+	}
 
 	buck_index = gpa >> VMEM_BUCK_SHIFT;
 	if (!vgt->vmem_vma || !vgt->vmem_vma[buck_index])
