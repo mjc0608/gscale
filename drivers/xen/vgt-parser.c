@@ -45,6 +45,7 @@
 
 #define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))
 #define BATCH_BUFFER_ADR_SPACE_BIT(x)	(((x)>>8) & 1U)
+#define BATCH_BUFFER_2ND_LEVEL_BIT(x)   ((x)>>22 & 1U)
 
 #ifdef VGT_ENABLE_ADDRESS_FIX_SAVE_RESTORE
 
@@ -447,6 +448,9 @@ static void addr_type_update_snb(struct vgt_cmd_data *d)
 
 static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 {
+	/* FIXME: add 2nd level batch buffer support */
+	ASSERT(BATCH_BUFFER_2ND_LEVEL_BIT(data->instruction[0]) == 0);
+
 	/* FIXME: add IVB/HSW code */
 	addr_type_update_snb(data);
 
