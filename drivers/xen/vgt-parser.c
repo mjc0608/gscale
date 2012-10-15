@@ -33,16 +33,6 @@
 #include <xen/vgt-parser.h>
 #include "vgt_drv.h"
 
-/*
- * parse and handle the gfx command
- * which usually in ring buffer
- *
- * IN: instruction - mapped instruction address
- *
- * Return: the instruction bytes that have been handled
- *         -1 if error, e.g. command not recognized
- */
-
 #define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))
 #define BATCH_BUFFER_ADR_SPACE_BIT(x)	(((x)>>8) & 1U)
 #define BATCH_BUFFER_2ND_LEVEL_BIT(x)   ((x)>>22 & 1U)
@@ -101,10 +91,20 @@ static int vgt_addr_fix_list_init(void) {}
 
 #endif /* VGT_ENABLE_ADDRESS_FIX_SAVE_RESTORE */
 
+static inline uint32_t* instr_ptr(struct vgt_cmd_data *d, int instr_index)
+{
+	return d->instruction + instr_index;
+}
+
+static inline uint32_t instr_val(struct vgt_cmd_data *d, int instr_index)
+{
+	return *instr_ptr(d, instr_index);
+}
+
 static inline int cmd_length(struct vgt_cmd_data *data, int nr_bits)
 {
 	/*  DWord Length is bits (nr_bits-1):0 */
-	return (data->instruction[0] & ( (1U << nr_bits) - 1)) + 2;
+	return (instr_val(data,0) & ( (1U << nr_bits) - 1)) + 2;
 }
 
 static bool vgt_cmd_debug = false;
@@ -189,7 +189,7 @@ static void* batch_buffer_va(struct vgt_cmd_data *d)
 {
 	unsigned long gpa;
 
-	gpa = vgt_gma_2_gpa(d->vgt, d->instruction[1] & BATCH_BUFFER_ADDR_MASK,
+	gpa = vgt_gma_2_gpa(d->vgt, instr_val(d,1) & BATCH_BUFFER_ADDR_MASK,
 			d->buf_addr_type == PPGTT_BUFFER);
 	if (gpa == INVALID_ADDR){
 		return NULL;
@@ -261,7 +261,7 @@ static inline void advance_ip(struct vgt_cmd_data *d, int len_in_qword)
 {
 	if (batch_buffer_cross_page(d, len_in_qword)){
 		printk(KERN_WARNING "Batch buffer (0x%p:0x%x) cross page, so skip scaning it\n",
-				d->instruction, len_in_qword*4);
+				instr_ptr(d,0), len_in_qword*4);
 		vgt_cmd_handler_mi_batch_buffer_end(d);
 	}
 	else
@@ -375,13 +375,13 @@ static int vgt_cmd_handler_mi_update_gtt(struct vgt_cmd_data *data)
 	gtt_pte_t pte, *p_pte;
 
 	/*TODO: remove this assert when PPGTT support is added */
-	ASSERT(data->instruction[0] & USE_GLOBAL_GTT_MASK);
+	ASSERT(instr_val(data,0) & USE_GLOBAL_GTT_MASK);
 	dprintk("mi_update_gtt\n");
 
 	address_fixup(data, 1);
 
-	entry_num = data->instruction[0] & ((1U<<8) - 1); /* bit 7:0 */
-	entry = v_aperture(data->vgt->pdev, data->instruction[1]);
+	entry_num = instr_val(data,0) & ((1U<<8) - 1); /* bit 7:0 */
+	entry = v_aperture(data->vgt->pdev, instr_val(data,1));
 	p_pte = &pte;
 	for (i=0; i<entry_num; i++){
 		dprintk("vgt: update GTT entry %d\n", i);
@@ -440,7 +440,7 @@ static void addr_type_update_snb(struct vgt_cmd_data *d)
 {
 	if ( (d->buffer_type == RING_BUFFER_INSTRUCTION) &&
 			(d->vgt->rb[d->ring_id].has_ppgtt_mode_enabled) &&
-			(BATCH_BUFFER_ADR_SPACE_BIT(d->instruction[0]) == 1)
+			(BATCH_BUFFER_ADR_SPACE_BIT(instr_val(d,0)) == 1)
 	   )
 	{
 		d->buf_addr_type = PPGTT_BUFFER;
@@ -450,7 +450,7 @@ static void addr_type_update_snb(struct vgt_cmd_data *d)
 static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 {
 	/* FIXME: add 2nd level batch buffer support */
-	ASSERT(BATCH_BUFFER_2ND_LEVEL_BIT(data->instruction[0]) == 0);
+	ASSERT(BATCH_BUFFER_2ND_LEVEL_BIT(instr_val(data,0)) == 0);
 
 	/* FIXME: add IVB/HSW code */
 	addr_type_update_snb(data);
@@ -460,7 +460,7 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 	}
 
 	vgt_cmd_printk("MI_BATCH_BUFFER_START: buffer GraphicsAddress=%x Clear Command Buffer Enable=%d\n",
-			data->instruction[1], (data->instruction[0]>>11) & 1);
+			instr_val(data,1),  (instr_val(data,0)>>11) & 1);
 
 	address_fixup(data, 1);
 
@@ -681,7 +681,7 @@ static int vgt_cmd_handler_3dstate_index_buffer(struct vgt_cmd_data *data)
 {
 	address_fixup(data,1);
 
-	if (*(data->instruction + 2) != 0)
+	if (instr_val(data,2) != 0)
 		address_fixup(data,2);
 
 	length_fixup(data,8);
@@ -772,13 +772,13 @@ static int vgt_cmd_handler_state_base_address(struct vgt_cmd_data *data)
 	address_fixup(data,4);
 	address_fixup(data,5);
 	/* Zero Bound is ignore */
-	if (data->instruction[6] >> 12)
+	if (instr_val(data,6) >> 12)
 		address_fixup(data,6);
-	if (data->instruction[7] >> 12)
+	if (instr_val(data,7) >> 12)
 		address_fixup(data,7);
-	if (data->instruction[8] >> 12)
+	if (instr_val(data,8) >> 12)
 		address_fixup(data,8);
-	if (data->instruction[9] >> 12)
+	if (instr_val(data,9) >> 12)
 		address_fixup(data,9);
 	length_fixup(data,8);
 	return 0;
@@ -1189,7 +1189,7 @@ int vgt_cmd_parser_render(struct vgt_cmd_data* decode_data)
 	unsigned int index;
 	int ret = -VGT_UNHANDLEABLE;
 
-	command.raw = *decode_data->instruction;
+	command.raw = instr_val(decode_data,0);
 	decode_data->type = command.common.type;
 
 	switch (decode_data->type){
@@ -1255,7 +1255,7 @@ static void show_instruction_info(struct vgt_cmd_data *d)
 {
 	/* FIXME: for unknown command, the following info may be incorrect*/
 	printk(KERN_ERR "buffer_type=%d instruction=%08x type=0x%x sub_type=0x%x opcode=0x%x sub_opcode=0x%x\n",
-			d->buffer_type, d->instruction[0], d->type, d->sub_type, d->opcode, d->sub_opcode);
+			d->buffer_type, instr_val(d,0), d->type, d->sub_type, d->opcode, d->sub_opcode);
 }
 
 static inline void stat_nr_cmd_inc(struct vgt_cmd_data* d)
@@ -1299,8 +1299,8 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		decode_data.instruction = (uint32_t*)instr;
 		vgt_cmd_printk("scan %s ip(%p) cmd %08x %08x %08x %08x\n",
 				decode_data.buffer_type == RING_BUFFER_INSTRUCTION ? "RING_BUFFER": "BATCH_BUFFER",
-				instr, decode_data.instruction[0], decode_data.instruction[1],
-				decode_data.instruction[2],	decode_data.instruction[3]);
+				instr, instr_val(&decode_data,0), instr_val(&decode_data,1),
+				instr_val(&decode_data,2), instr_val(&decode_data,3));
 
 		stat_nr_cmd_inc(&decode_data);
 
