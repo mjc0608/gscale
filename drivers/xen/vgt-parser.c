@@ -211,7 +211,8 @@ static unsigned int constant_buffer_address_offset_disable(struct vgt_cmd_data *
 	return VGT_MMIO_READ(d->vgt->pdev,_REG_RCS_INSTPM) & INSTPM_CONS_BUF_ADDR_OFFSET_DIS;
 }
 
-static void inline address_fixup(struct vgt_cmd_data *d, uint32_t *addr)
+/* index: the index to the instruction  i.e. the address to be fixed is d->instruction[index] */
+static void inline address_fixup(struct vgt_cmd_data *d, int index)
 {
 #if 0
 
@@ -305,7 +306,7 @@ static int vgt_cmd_handler_mi_conditional_batch_buffer_end(struct vgt_cmd_data *
 	   need add PPGTT support later */
 
 	/* TODO: handle the DWord Length */
-	address_fixup(data,data->instruction + 2);
+	address_fixup(data,2);
 	length_fixup(data,8);
 
 	return 0;
@@ -314,7 +315,7 @@ static int vgt_cmd_handler_mi_conditional_batch_buffer_end(struct vgt_cmd_data *
 static int vgt_cmd_handler_mi_display_flip(struct vgt_cmd_data *data)
 {
 	/* TODO: handle the DWord Length */
-	address_fixup(data,data->instruction + 2);
+	address_fixup(data,2);
 	length_fixup(data,8);
 
 	return 0;
@@ -325,7 +326,7 @@ static int vgt_cmd_handler_mi_semaphore_mbox(struct vgt_cmd_data *data)
 
 	if (!(data->data & (1U<<18))){
 		/* memory address, not MMIO register */
-		address_fixup(data,data->instruction + 2);
+		address_fixup(data,2);
 	}
 
 	length_fixup(data,8);
@@ -334,7 +335,7 @@ static int vgt_cmd_handler_mi_semaphore_mbox(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_mi_set_context(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 1);
+	address_fixup(data,1);
 	length_fixup(data,8);
 
 	return 0;
@@ -348,7 +349,7 @@ static int vgt_cmd_handler_mi_math(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_mi_store_data_imm(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 2);
+	address_fixup(data,2);
 	length_fixup(data,8);
 	return 0;
 }
@@ -377,7 +378,7 @@ static int vgt_cmd_handler_mi_update_gtt(struct vgt_cmd_data *data)
 	ASSERT(data->instruction[0] & USE_GLOBAL_GTT_MASK);
 	dprintk("mi_update_gtt\n");
 
-	address_fixup(data,data->instruction + 1);
+	address_fixup(data, 1);
 
 	entry_num = data->instruction[0] & ((1U<<8) - 1); /* bit 7:0 */
 	entry = v_aperture(data->vgt->pdev, data->instruction[1]);
@@ -397,7 +398,7 @@ static int vgt_cmd_handler_mi_update_gtt(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_mi_store_register_mem(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 2);
+	address_fixup(data,2);
 	length_fixup(data,8);
 	return 0;
 }
@@ -407,13 +408,13 @@ static int vgt_cmd_handler_mi_flush_dw(struct vgt_cmd_data *data)
 	int i, len;
 	/* Check post-sync bit */
 	if ( (data->data >> 14) & 0x3){
-		address_fixup(data,data->instruction + 1);
+		address_fixup(data, 1);
 	}
 
 	len = cmd_length(data, 6);
 
 	for (i=2; i<len; i++){
-		address_fixup(data, data->instruction+i);
+		address_fixup(data, i);
 	}
 
 	length_fixup(data,6);
@@ -423,14 +424,14 @@ static int vgt_cmd_handler_mi_flush_dw(struct vgt_cmd_data *data)
 static int vgt_cmd_handler_mi_clflush(struct vgt_cmd_data *data)
 {
 	/* TODO: may need to check if field "DW Representing 1/2 Cache Line" is out of bound */
-	address_fixup(data,data->instruction + 1);
+	address_fixup(data,1);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_mi_report_perf_count(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 1);
+	address_fixup(data, 1);
 	length_fixup(data,6);
 	return 0;
 }
@@ -461,7 +462,7 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 	vgt_cmd_printk("MI_BATCH_BUFFER_START: buffer GraphicsAddress=%x Clear Command Buffer Enable=%d\n",
 			data->instruction[1], (data->instruction[0]>>11) & 1);
 
-	address_fixup(data, data->instruction + 1);
+	address_fixup(data, 1);
 
 	data->instruction = (uint32_t*)batch_buffer_va(data);
 	if (data->instruction == NULL){
@@ -477,9 +478,9 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 static int vgt_cmd_handler_xy_setup_blt(struct vgt_cmd_data *data)
 {
 	/* Destination Base Address */
-	address_fixup(data,data->instruction + 4);
+	address_fixup(data, 4);
 	/* Pattern Base Address for Color Pattern */
-	address_fixup(data,data->instruction + 7);
+	address_fixup(data, 7);
 	length_fixup(data,8);
 	return 0;
 }
@@ -492,7 +493,7 @@ static int vgt_cmd_handler_xy_setup_clip_blt(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_xy_setup_mono_pattern_sl_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
+	address_fixup(data, 4);
 	length_fixup(data,8);
 	return 0;
 }
@@ -511,60 +512,60 @@ static int vgt_cmd_handler_xy_scanlines_blt(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_xy_text_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 3);
+	address_fixup(data, 3);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_color_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 3);
+	address_fixup(data, 3);
 	length_fixup(data,5);
 	return 0;
 }
 
 static int vgt_cmd_handler_src_copy_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 3);
+	address_fixup(data, 3);
 	length_fixup(data,5);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_color_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
+	address_fixup(data, 4);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_pat_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 5);
+	address_fixup(data, 4);
+	address_fixup(data, 5);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_mono_pat_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 5);
+	address_fixup(data, 4);
+	address_fixup(data, 5);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_src_copy_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 7);
+	address_fixup(data,4);
+	address_fixup(data,7);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_mono_src_copy_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 5);
+	address_fixup(data,4);
+	address_fixup(data,5);
 	length_fixup(data,8);
 	return 0;
 }
@@ -577,62 +578,62 @@ static int vgt_cmd_handler_xy_full_blt(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_xy_full_mono_src_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 5);
-	address_fixup(data,data->instruction + 8);
+	address_fixup(data,4);
+	address_fixup(data,5);
+	address_fixup(data,8);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_full_mono_pattern_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 7);
+	address_fixup(data,4);
+	address_fixup(data,7);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_full_mono_pattern_mono_src_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 5);
+	address_fixup(data,4);
+	address_fixup(data,5);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_mono_pat_fixed_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
+	address_fixup(data,4);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_mono_src_copy_immediate_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
+	address_fixup(data,4);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_pat_blt_immediate(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
+	address_fixup(data,4);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_src_copy_chroma_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 7);
+	address_fixup(data,4);
+	address_fixup(data,7);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_full_immediate_pattern_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 7);
+	address_fixup(data,4);
+	address_fixup(data,7);
 	length_fixup(data,8);
 	return 0;
 }
@@ -640,23 +641,23 @@ static int vgt_cmd_handler_xy_full_immediate_pattern_blt(struct vgt_cmd_data *da
 
 static int vgt_cmd_handler_xy_full_mono_src_immediate_pattern_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 5);
+	address_fixup(data,4);
+	address_fixup(data,5);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_pat_chroma_blt(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 5);
+	address_fixup(data,4);
+	address_fixup(data,5);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_xy_pat_chroma_blt_immediate(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 4);
+	address_fixup(data,4);
 	length_fixup(data,8);
 	return 0;
 }
@@ -668,8 +669,8 @@ static int vgt_cmd_handler_3dstate_vertex_buffers(struct vgt_cmd_data *data)
 	length = cmd_length(data, 8);
 
 	for (i=1; i < length; i = i+4){
-		address_fixup(data,data->instruction + i + 1);
-		address_fixup(data,data->instruction + i + 2);
+		address_fixup(data,i + 1);
+		address_fixup(data,i + 2);
 	}
 
 	length_fixup(data,8);
@@ -678,10 +679,10 @@ static int vgt_cmd_handler_3dstate_vertex_buffers(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_3dstate_index_buffer(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 1);
+	address_fixup(data,1);
 
 	if (*(data->instruction + 2) != 0)
-		address_fixup(data,data->instruction + 2);
+		address_fixup(data,2);
 
 	length_fixup(data,8);
 	return 0;
@@ -690,11 +691,11 @@ static int vgt_cmd_handler_3dstate_index_buffer(struct vgt_cmd_data *data)
 static int vgt_cmd_handler_3dstate_constant_gs(struct vgt_cmd_data *data)
 {
 	if (constant_buffer_address_offset_disable(data) == 1){
-		address_fixup(data,data->instruction + 1);
+		address_fixup(data,1);
 	}
-	address_fixup(data,data->instruction + 2);
-	address_fixup(data,data->instruction + 3);
-	address_fixup(data,data->instruction + 4);
+	address_fixup(data,2);
+	address_fixup(data,3);
+	address_fixup(data,4);
 
 	length_fixup(data,8);
 	return 0;
@@ -703,11 +704,11 @@ static int vgt_cmd_handler_3dstate_constant_gs(struct vgt_cmd_data *data)
 static int vgt_cmd_handler_3dstate_constant_ps(struct vgt_cmd_data *data)
 {
 	if (constant_buffer_address_offset_disable(data) == 1){
-		address_fixup(data,data->instruction + 1);
+		address_fixup(data,1);
 	}
-	address_fixup(data,data->instruction + 2);
-	address_fixup(data,data->instruction + 3);
-	address_fixup(data,data->instruction + 4);
+	address_fixup(data,2);
+	address_fixup(data,3);
+	address_fixup(data,4);
 
 	length_fixup(data,8);
 	return 0;
@@ -716,29 +717,29 @@ static int vgt_cmd_handler_3dstate_constant_ps(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_3dstate_depth_buffer(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 2);
+	address_fixup(data,2);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_3dstate_stencil_buffer(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 2);
+	address_fixup(data,2);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_3dstate_hier_depth_buffer(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 2);
+	address_fixup(data,2);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_3dstate_so_buffer(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 2);
-	address_fixup(data,data->instruction + 3);
+	address_fixup(data,2);
+	address_fixup(data,3);
 	length_fixup(data,8);
 	return 0;
 }
@@ -751,34 +752,34 @@ static int vgt_cmd_handler_3dstate_so_decl_list(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_pipe_control(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 2);
+	address_fixup(data,2);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_state_prefetch(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 1);
+	address_fixup(data,1);
 	length_fixup(data,8);
 	return 0;
 }
 
 static int vgt_cmd_handler_state_base_address(struct vgt_cmd_data *data)
 {
-	address_fixup(data,data->instruction + 1);
-	address_fixup(data,data->instruction + 2);
-	address_fixup(data,data->instruction + 3);
-	address_fixup(data,data->instruction + 4);
-	address_fixup(data,data->instruction + 5);
+	address_fixup(data,1);
+	address_fixup(data,2);
+	address_fixup(data,3);
+	address_fixup(data,4);
+	address_fixup(data,5);
 	/* Zero Bound is ignore */
 	if (data->instruction[6] >> 12)
-		address_fixup(data,data->instruction + 6);
+		address_fixup(data,6);
 	if (data->instruction[7] >> 12)
-		address_fixup(data,data->instruction + 7);
+		address_fixup(data,7);
 	if (data->instruction[8] >> 12)
-		address_fixup(data,data->instruction + 8);
+		address_fixup(data,8);
 	if (data->instruction[9] >> 12)
-		address_fixup(data,data->instruction + 9);
+		address_fixup(data,9);
 	length_fixup(data,8);
 	return 0;
 }
@@ -786,11 +787,11 @@ static int vgt_cmd_handler_state_base_address(struct vgt_cmd_data *data)
 static int vgt_cmd_handler_3dstate_constant_vs(struct vgt_cmd_data *data)
 {
 	if (constant_buffer_address_offset_disable(data) == 1){
-		address_fixup(data,data->instruction + 1);
+		address_fixup(data,1);
 	}
-	address_fixup(data,data->instruction + 2);
-	address_fixup(data,data->instruction + 3);
-	address_fixup(data,data->instruction + 4);
+	address_fixup(data,2);
+	address_fixup(data,3);
+	address_fixup(data,4);
 
 	length_fixup(data,8);
 	return 0;
