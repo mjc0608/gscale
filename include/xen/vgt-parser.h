@@ -80,9 +80,22 @@ struct vgt_cmd_data{
 	}buf_addr_type;
 
 	char* name;
-	unsigned int *instruction;
+
+	/* instruction graphics memory address */
+	unsigned long instr_gma;
+
+	/* mapped va of the instr_gma */
+	uint32_t *instr_va;
+
+	/* length of free buffer in current page, in qword */
+	unsigned long instr_buf_len;
+
+	/* mapped va of the next page near instr_gma */
+	uint32_t *instr_va_next_page;
+
 	/* next instruction when return from  batch buffer to ring buffer */
-	unsigned int *ret_instruction;
+	unsigned long ret_instr_gma;
+
 	unsigned int type;
 	unsigned int sub_type;
 	unsigned int opcode;

@@ -93,12 +93,49 @@ static int vgt_addr_fix_list_init(void) {}
 
 static inline uint32_t* instr_ptr(struct vgt_cmd_data *d, int instr_index)
 {
-	return d->instruction + instr_index;
+	if (instr_index < d->instr_buf_len)
+		return d->instr_va + instr_index;
+	else
+		return d->instr_va_next_page + (instr_index - d->instr_buf_len);
 }
 
 static inline uint32_t instr_val(struct vgt_cmd_data *d, int instr_index)
 {
 	return *instr_ptr(d, instr_index);
+}
+
+static int instr_gma_set(struct vgt_cmd_data *d, unsigned long instr_gma)
+{
+	unsigned long gma_next_page;
+	ASSERT(VGT_REG_IS_ALIGNED(instr_gma, 4));
+
+	d->instr_gma = instr_gma;
+	d->instr_va = vgt_gma_to_va(d->vgt, instr_gma,
+			d->buf_addr_type == PPGTT_BUFFER);
+	ASSERT(d->instr_va);
+
+	gma_next_page = ((instr_gma >> PAGE_SHIFT) + 1) << PAGE_SHIFT;
+	d->instr_va_next_page = vgt_gma_to_va(d->vgt, gma_next_page,
+			d->buf_addr_type == PPGTT_BUFFER);
+	ASSERT(d->instr_va_next_page);
+
+	d->instr_buf_len = (gma_next_page - instr_gma) / sizeof(uint32_t);
+
+	return 0;
+}
+
+static int instr_gma_advance(struct vgt_cmd_data *d, unsigned long len)
+{
+	if (d->instr_buf_len > len){
+		/* not cross page, advance ip inside page */
+		d->instr_gma += len*sizeof(uint32_t);
+		d->instr_va += len;
+		d->instr_buf_len -= len;
+	} else{
+		/* cross page, reset instr_gma */
+		instr_gma_set(d, d->instr_gma + len*sizeof(uint32_t));
+	}
+	return 0;
 }
 
 static inline int cmd_length(struct vgt_cmd_data *data, int nr_bits)
@@ -185,19 +222,6 @@ static void vgt_cmd_show_logs(void)
 	spin_unlock_irqrestore(&logs->lock, flags);
 }
 
-static void* batch_buffer_va(struct vgt_cmd_data *d)
-{
-	unsigned long gpa;
-
-	gpa = vgt_gma_2_gpa(d->vgt, instr_val(d,1) & BATCH_BUFFER_ADDR_MASK,
-			d->buf_addr_type == PPGTT_BUFFER);
-	if (gpa == INVALID_ADDR){
-		return NULL;
-	}
-
-	return vgt_vmem_gpa_2_va(d->vgt, gpa);
-}
-
 static void show_instruction_info(struct vgt_cmd_data *d);
 
 static unsigned int constant_buffer_address_offset_disable(struct vgt_cmd_data *d)
@@ -241,31 +265,11 @@ static void inline address_fixup(struct vgt_cmd_data *d, int index)
 	return -VGT_UNHANDLEABLE;
 #endif
 }
-static int vgt_cmd_handler_mi_batch_buffer_end(struct vgt_cmd_data *data);
-
-
-static inline bool batch_buffer_cross_page(struct vgt_cmd_data *d, int len)
-{
-	unsigned long start, end;
-
-	if (d->buffer_type != BATCH_BUFFER_INSTRUCTION)
-		return false;
-
-	start = (unsigned long)d->instruction;
-	end = (unsigned long)(d->instruction + len);
-
-	return (start & PAGE_MASK) != (end & PAGE_MASK);
-}
 
 static inline void advance_ip(struct vgt_cmd_data *d, int len_in_qword)
 {
-	if (batch_buffer_cross_page(d, len_in_qword)){
-		printk(KERN_WARNING "Batch buffer (0x%p:0x%x) cross page, so skip scaning it\n",
-				instr_ptr(d,0), len_in_qword*4);
-		vgt_cmd_handler_mi_batch_buffer_end(d);
-	}
-	else
-		d->instruction += len_in_qword;
+	instr_gma_advance(d, len_in_qword);
+
 	vgt_cmd_printk("cmd length are 0x%x bytes\n", len_in_qword*4);
 }
 
@@ -294,7 +298,7 @@ static int vgt_cmd_handler_length_fixup_16(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_mi_batch_buffer_end(struct vgt_cmd_data *data)
 {
-	data->instruction = data->ret_instruction;
+	instr_gma_set(data, data->ret_instr_gma);
 	data->buffer_type = RING_BUFFER_INSTRUCTION;
 	data->buf_addr_type = GTT_BUFFER;
 	return 0;
@@ -449,6 +453,8 @@ static void addr_type_update_snb(struct vgt_cmd_data *d)
 
 static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 {
+	int rc;
+
 	/* FIXME: add 2nd level batch buffer support */
 	ASSERT(BATCH_BUFFER_2ND_LEVEL_BIT(instr_val(data,0)) == 0);
 
@@ -456,7 +462,7 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 	addr_type_update_snb(data);
 
 	if (data->buffer_type == RING_BUFFER_INSTRUCTION){
-		data->ret_instruction = data->instruction + 2;
+		data->ret_instr_gma = data->instr_gma + 2*sizeof(uint32_t);
 	}
 
 	vgt_cmd_printk("MI_BATCH_BUFFER_START: buffer GraphicsAddress=%x Clear Command Buffer Enable=%d\n",
@@ -464,8 +470,9 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 
 	address_fixup(data, 1);
 
-	data->instruction = (uint32_t*)batch_buffer_va(data);
-	if (data->instruction == NULL){
+	rc = instr_gma_set(data, instr_val(data,1) & BATCH_BUFFER_ADDR_MASK);
+
+	if (rc < 0){
 		printk(KERN_WARNING"invalid batch buffer addr, so skip scanning it\n");
 		vgt_cmd_handler_mi_batch_buffer_end(data);
 		return 0;
@@ -1274,32 +1281,28 @@ static inline void stat_nr_cmd_inc(struct vgt_cmd_data* d)
 static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head, vgt_reg_t tail, vgt_reg_t base, vgt_reg_t size)
 {
 	static int error_count=0;
-	char* instr, *instr_end, *va_bottom, *va_base;
+	unsigned long instr_gma, instr_gma_end, instr_gma_bottom;
 	struct vgt_cmd_data decode_data;
-	struct pgt_device  *pdev;
 	int ret=0;
 
 	if (error_count > 10)
 		return 0;
 
-	pdev = vgt->pdev;
-
-	va_base = v_aperture(pdev, base);
-	va_bottom = va_base + size;
-
-	instr = va_base + head;
-	instr_end = va_base + tail;
+	instr_gma = base + head;
+	instr_gma_end = base + tail;
+	instr_gma_bottom = base + size;
 
 	decode_data.buffer_type = RING_BUFFER_INSTRUCTION;
 	decode_data.buf_addr_type = GTT_BUFFER;
 	decode_data.vgt = vgt;
 	decode_data.ring_id = ring_id;
+	instr_gma_set(&decode_data, instr_gma);
+
 	vgt_cmd_printk("ring buffer scan start\n");
-	while(instr != instr_end){
-		decode_data.instruction = (uint32_t*)instr;
-		vgt_cmd_printk("scan %s ip(%p) cmd %08x %08x %08x %08x\n",
+	while(instr_gma != instr_gma_end){
+		vgt_cmd_printk("scan %s ip(%lx) cmd %08x %08x %08x %08x\n",
 				decode_data.buffer_type == RING_BUFFER_INSTRUCTION ? "RING_BUFFER": "BATCH_BUFFER",
-				instr, instr_val(&decode_data,0), instr_val(&decode_data,1),
+				instr_gma, instr_val(&decode_data,0), instr_val(&decode_data,1),
 				instr_val(&decode_data,2), instr_val(&decode_data,3));
 
 		stat_nr_cmd_inc(&decode_data);
@@ -1313,14 +1316,14 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		}
 
 		/* next instruction*/
-		instr = (char*)decode_data.instruction;
+		instr_gma = decode_data.instr_gma;
 
 		if (decode_data.buffer_type == RING_BUFFER_INSTRUCTION){
 			/* handle the ring buffer wrap case */
-			ASSERT(instr <= va_bottom);
+			ASSERT(instr_gma <= instr_gma_bottom);
 
-			if (instr == va_bottom){
-				instr = va_base;
+			if (instr_gma == instr_gma_bottom){
+				instr_gma_set(&decode_data, base);
 			}
 		}
 	}

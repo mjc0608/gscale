@@ -135,6 +135,18 @@ unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma, bool ppgt
    return pa;
 }
 
+void* vgt_gma_to_va(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
+{
+	unsigned long gpa;
+
+	gpa = vgt_gma_2_gpa(vgt, gma, ppgtt);
+	if (gpa == INVALID_ADDR){
+		return NULL;
+	}
+
+	return vgt_vmem_gpa_2_va(vgt, gpa);
+}
+
 bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
