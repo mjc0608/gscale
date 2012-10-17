@@ -590,8 +590,9 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 		__vreg(vstate, vgt_iir(info->reg_base)),
 		__vreg(vstate, vgt_ier(info->reg_base)),
 		__vreg(vstate, _REG_DEIER));
-	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
-	    !test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
+	/* Rising edge ISR triggers IIR. so no need to touch ISR */
+//	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
+	if (!test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
 	    !test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
 	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))) &&
 	    test_bit(_REGSHIFT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
@@ -613,8 +614,10 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 		}
 	}
 
+#if 0
 	if (test_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))))
 		clear_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base)));
+#endif
 }
 
 /*
@@ -624,8 +627,9 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
 	int bit, struct vgt_irq_info *info)
 {
-	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
-	    !test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
+	/* Rising edge ISR triggers IIR. so no need to touch ISR */
+//	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
+	if (!test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
 	    !test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
 	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base)))) {
 		dprintk("vGT: set pch bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
@@ -639,8 +643,10 @@ void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
 			__vreg(vstate, vgt_ier(info->reg_base)));
 	}
 
+#if 0
 	if (test_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))))
 		clear_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base)));
+#endif
 }
 
 /*
@@ -829,12 +835,31 @@ static uint32_t vgt_keep_owner_bits(struct vgt_device *vgt,
 	return val;
 }
 
+static void vgt_check_pending_events(struct vgt_device *vgt)
+{
+	if (!(__vreg(vgt, _REG_DEIER) & _REGBIT_MASTER_INTERRUPT))
+		return;
+
+	/*
+	 * Here we only check IIR/IER. IMR/ISR is not checked
+	 * because only rising-edge of ISR is captured as an event,
+	 * so that current value of vISR doesn't matter.
+	 */
+	if ((__vreg(vgt, _REG_DEIIR) & __vreg(vgt, _REG_DEIER)) ||
+	    (__vreg(vgt, _REG_GTIIR) & __vreg(vgt, _REG_GTIER)) ||
+	    (__vreg(vgt, _REG_PMIIR) & __vreg(vgt, _REG_PMIER))) {
+		dprintk("vGT-IRQ: catch pending iir\n");
+		vgt_set_irq_pending(vgt);
+		vgt_inject_virtual_interrupt(vgt);
+	}
+}
+
 /* write handler for imr */
 bool vgt_reg_imr_handler(struct vgt_device *state,
 	unsigned int reg, void *p_data, unsigned int bytes)
 {
 	uint32_t changed, masked, unmasked;
-	uint32_t enabled, disabled, ier, iir, isr, val;
+	uint32_t enabled, disabled, ier, val;
 	unsigned long imr = *(unsigned long *)p_data;
 	struct pgt_device *pdev = state->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
@@ -865,20 +890,7 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 		changed, masked, unmasked, enabled, disabled);
 	__vreg(state, reg) = imr;
 
-	/* handle pending virtual events */
-	if (enabled) {
-		isr = vgt_imr_to_isr(state, reg);
-		if (isr & ~imr) {
-			vgt_imr_to_iir(state, reg) |= isr & ~imr;
-			iir = vgt_imr_to_iir(state, reg);
-			vgt_imr_to_isr(state, reg) &= ~(isr & ~imr);
-			if (iir & ier) {
-				dprintk("vGT-IRQ: catch pending iir (%x)\n", iir);
-				vgt_set_irq_pending(state);
-				vgt_inject_virtual_interrupt(state);
-			}
-		}
-	}
+	vgt_check_pending_events(state);
 
 	if (pdev->is_sandybridge)
 		pch_irq_mask = _REGBIT_PCH;
@@ -957,7 +969,7 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 bool vgt_reg_ier_handler(struct vgt_device *state,
 	unsigned int reg, void *p_data, unsigned int bytes)
 {
-	uint32_t changed, imr, iir;
+	uint32_t changed, imr;
 	uint32_t enabled, disabled, ier_enabled, ier_disabled;
 	unsigned long ier = *(unsigned long *)p_data;
 	struct pgt_device *pdev = state->pdev;
@@ -989,15 +1001,7 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 		changed, ier_enabled, ier_disabled, enabled, disabled);
 	__vreg(state, reg) = ier;
 
-	/* handle pending virtual events */
-	if (enabled) {
-		iir = vgt_ier_to_iir(state, reg);
-		if (iir & ier) {
-			dprintk("vGT-IRQ: catch pending iir (%x)\n", iir);
-			vgt_set_irq_pending(state);
-			vgt_inject_virtual_interrupt(state);
-		}
-	}
+	vgt_check_pending_events(state);
 
 	if (pdev->is_sandybridge)
 		pch_irq_mask = _REGBIT_PCH;
