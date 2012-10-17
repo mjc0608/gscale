@@ -1303,13 +1303,22 @@ out:
 static struct vgt_device *next_vgt(
 	struct list_head *head, struct vgt_device *vgt)
 {
-	struct list_head *next;
+	struct list_head *next = &vgt->list;
+	struct vgt_device *next_vgt = NULL;
 
-	next = vgt->list.next;
-	/* wrap the list */
-	if (next == head)
-		next = head->next;
-	return list_entry(next, struct vgt_device, list);
+	do {
+		next = next->next;
+		/* wrap the list */
+		if (next == head)
+			next = head->next;
+		next_vgt = list_entry(next, struct vgt_device, list);
+
+		if (vgt->force_removal ||
+		    !bitmap_empty(next_vgt->started_rings, MAX_ENGINES))
+			break;
+	} while (next_vgt != vgt);
+
+	return next_vgt;
 }
 
 /* update the tail pointer after all the context is restored */
@@ -2855,6 +2864,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 			current_display_owner(pdev) = vgt;
 	}
 	bitmap_zero(vgt->enabled_rings, MAX_ENGINES);
+	bitmap_zero(vgt->started_rings, MAX_ENGINES);
 
 	/* create debugfs per vgt */
 	if (vgt_create_debugfs(vgt)) {

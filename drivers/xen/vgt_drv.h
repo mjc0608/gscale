@@ -342,6 +342,7 @@ struct vgt_device {
 	bool ppgtt_initialized;
 	bool need_ppgtt_setup;
 	DECLARE_BITMAP(enabled_rings, MAX_ENGINES);
+	DECLARE_BITMAP(started_rings, MAX_ENGINES);
 	struct mmio_hash_table	*wp_table[MHASH_SIZE];	/* hash for WP pages */
 	vgt_ppgtt_pde_t	shadow_pde_table[VGT_PPGTT_PDE_ENTRIES];	 /* current max PDE entries should be 512 for 2G mapping */
 	vgt_ppgtt_pte_t shadow_pte_table[1024];

@@ -360,6 +360,10 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 			vgt_scan_vring(vgt, ring_id);
 		t1 = get_cycles();
 		ring_tail_mmio_wcycles += (t1-t0);
+		if (sring->tail &&
+		    !test_and_set_bit(ring_id, (void *)&vgt->started_rings))
+			printk("Ring-%d starts work for vgt-%d\n",
+				ring_id, vgt->vgt_id);
 		break;
 	case RB_OFFSET_HEAD:
 		//debug
