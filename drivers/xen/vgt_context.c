@@ -1195,7 +1195,7 @@ static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, bool ctx_s
 	}
 
 	if (count > 2000 || count > max)
-		printk("vGT(%s): ring (%d) has timeout (%lldus), max(%lldus)\n",
+		dprintk("vGT(%s): ring (%d) has timeout (%lldus), max(%lldus)\n",
 			ctx_switch ? "ctx-switch" : "wait-empty",
 			ring_id, count, max);
 
@@ -1275,7 +1275,7 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 	 * Virtual interrupts pending right after display switch
 	 * Need send to both prev and next owner.
 	 */
-	if (pdev->request & VGT_REQUEST_IRQ) {
+	if (test_bit(VGT_REQUEST_IRQ, (void*)&pdev->request)) {
 		printk("vGT: handle pending interrupt in the display context switch time\n");
 		clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 		vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
@@ -1601,8 +1601,8 @@ int vgt_thread(void *priv)
 		}
 		spin_unlock_irq(&pdev->lock);
 		/* Virtual interrupts pending right after render switch */
-		if (pdev->request & VGT_REQUEST_IRQ) {
-			printk("vGT: handle pending interrupt in the render context switch time\n");
+		if (test_bit(VGT_REQUEST_IRQ, (void*)&pdev->request)) {
+			dprintk("vGT: handle pending interrupt in the render context switch time\n");
 			spin_lock_irq(&pdev->lock);
 			clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
