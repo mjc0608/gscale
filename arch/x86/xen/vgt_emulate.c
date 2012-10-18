@@ -888,4 +888,6 @@ int xen_register_vgt_driver(vgt_ops_t *ops)
 /* for vGT driver */
 EXPORT_SYMBOL(xen_register_vgt_driver);
 EXPORT_SYMBOL(xen_vgt_dom0_ready);
-
+EXPORT_SYMBOL(vgt_ops);
+EXPORT_SYMBOL(hcall_mmio_write);
+EXPORT_SYMBOL(hcall_mmio_read);

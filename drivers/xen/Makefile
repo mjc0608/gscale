@@ -45,8 +45,9 @@ obj-$(CONFIG_XEN_SCSI_BACKEND)		+= xen-scsiback.o
 
 ccflags-$(CONFIG_XEN_VGT_I915)	+= -Wall -Werror
 
-obj-$(CONFIG_XEN_VGT_I915)		+= $(VGT_SOURCE)
- 
+xen_vgt-y				:= $(VGT_SOURCE)
+obj-$(CONFIG_XEN_VGT_I915)		+= xen_vgt.o
+
 xen-evtchn-y				:= evtchn.o
 xen-gntdev-y				:= gntdev.o
 xen-gntalloc-y				:= gntalloc.o

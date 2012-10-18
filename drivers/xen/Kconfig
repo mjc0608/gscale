@@ -254,7 +254,7 @@ config XEN_EFI
 	depends on X86_64 && EFI
 
 config XEN_VGT_I915
-	bool "Xen vGT i915 driver"
+	tristate "Xen vGT i915 driver"
 	depends on X86 && XEN
 	select XEN_VGT_EMULATOR
 	default y

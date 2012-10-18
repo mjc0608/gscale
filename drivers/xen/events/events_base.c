@@ -1710,3 +1710,4 @@ int resend_irq_on_evtchn(unsigned int irq)
 }
 
 EXPORT_SYMBOL(resend_irq_on_evtchn);
+EXPORT_SYMBOL(bind_virq_to_irq);
