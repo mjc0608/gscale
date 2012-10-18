@@ -235,42 +235,6 @@ static struct dentry *vgt_debugfs_create_blob(const char *name, mode_t mode,
 	return debugfs_create_file(name, mode, parent, p, &u32_array_fops);
 }
 
-static int vgt_show_untracked_regs(struct seq_file *m, void *data)
-{
-	int i, accessed, untracked;
-	struct pgt_device *pdev = (struct pgt_device *)m->private;
-
-	accessed = 0;
-	untracked = 0;
-	seq_printf(m, "--------Untracked Regs--------\n");
-	for (i = 0; i < pdev->mmio_size; i +=  REG_SIZE) {
-		if (!reg_is_accessed(pdev, i))
-			continue;
-
-		accessed++;
-		if (!reg_is_tracked(pdev, i)) {
-			untracked++;
-			seq_printf(m, "0x%x\n", i);
-		}
-	}
-	seq_printf(m, "-------------------\n");
-	seq_printf(m, "Total %d untracked out of %d accessed\n",
-		   untracked, accessed);
-	return 0;
-}
-
-static int vgt_untracked_reg_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, vgt_show_untracked_regs, inode->i_private);
-}
-
-static const struct file_operations untracked_fops = {
-	.open = vgt_untracked_reg_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
-
 static inline char *reg_show_reg_owner(struct pgt_device *pdev, int i)
 {
 	char *str;
@@ -375,11 +339,6 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 			printk(KERN_ERR "Failed to create debugfs node %s\n",
 				stat_info[i].node_name);
 	}
-
-	temp_d = debugfs_create_file("untracked_regs", 0444, d_vgt_debug,
-			 pdev, &untracked_fops);
-	if (!temp_d)
-		return NULL;
 
 	temp_d = debugfs_create_file("reginfo", 0444, d_vgt_debug,
 			 pdev, &reginfo_fops);
