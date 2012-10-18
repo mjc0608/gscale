@@ -1,12 +1,28 @@
 #!/usr/bin/python
 
 import os, sys, re
+from optparse import OptionParser
 
-if len(sys.argv) == 2:
-	path = sys.argv[1]
-else:
-	path = "drivers/xen/vgt_reg.h"
-fi = open(path, "r")
+parser = OptionParser()
+parser.add_option("-i", "--info", dest="reginfo", action="store_true",
+		   help="show info/stat for accessed registers", default=True)
+parser.add_option("-r", "--regname", dest="regname", action="store_true",
+		   help="show the list of register names")
+parser.add_option("-f", "--file", dest="filename", metavar="FILE",
+		   default="drivers/xen/vgt_reg.h",
+		   help="the location of vgt_reg.h (default drivers/xen/vgt_reg.h)")
+parser.add_option("-u", "--untracked", dest="untrack", action="store_true",
+		   help="show the list of untracked registers")
+parser.add_option("-v", "--verbose", dest="verbose",
+		   help="pring status message", action="store_true")
+
+(options, args) = parser.parse_args()
+if options.verbose:
+	print (options, args)
+
+if options.verbose:
+	print "Use %s as the reg file" % options.filename
+fi = open(options.filename, "r")
 s = fi.read()
 fi.close()
 
@@ -26,7 +42,8 @@ for line in s.split("\n"):
 		reginfo[offset]["name"] = m.group("name")
 	elif reginfo[offset]["name"].find(m.group("name")) == -1:
 		reginfo[offset]["name"] += " | " + m.group("name")
-		print "find multiple names for regs", hex(offset), reginfo[offset]["name"]
+		if options.verbose:
+			print "find multiple names for regs", hex(offset), reginfo[offset]["name"]
 	#print hex(offset), reginfo[offset]["name"]
 
 # get info for each access reg
@@ -78,11 +95,6 @@ for line in info.split("\n"):
 		reginfo[reg]["Untracked"] = True;
 	reginfo[reg]["Flags"] = flags;
 
-def show_untracked():
-	fi = open("/sys/kernel/debug/vgt/untracked_regs", "r")
-	info = fi.read()
-	fi.close()
-
 def get_reg_attr(reg):
 	out = ""
 	if "AddressFix" in reg:
@@ -119,9 +131,46 @@ def show_reginfo():
 	print "\n%10s: %5s|%5s|%12s|%8s|%-8s" % ("Reg", "Owner", "Type", "Attributes", "State", "Name")
 	print "------------------------------------"
 
+	i = 0
 	for reg in sorted(reginfo):
 		if not "Accessed" in reginfo[reg]:
 			continue
-		print "%10s: %5s|%5s|%12s|%8s|%s  (%s)" % (hex(reg), reginfo[reg]["Owner"], reginfo[reg]["Type"], get_reg_attr(reginfo[reg]), get_reg_state(reginfo[reg]), reginfo[reg]["name"], hex(reg))
+		print "%10s: %5s|%5s|%12s|%8s|%s" % (hex(reg), reginfo[reg]["Owner"], reginfo[reg]["Type"], get_reg_attr(reginfo[reg]), get_reg_state(reginfo[reg]), reginfo[reg]["name"])
+		i += 1
+	print "Total %d registers" % i
+	print "===================================="
 
-show_reginfo()
+def show_regname():
+	print "=============Reg Name==============="
+	print "\"A\": the reg is accessed"
+	print "------------------------------------"
+	i = 0
+	for reg in sorted(reginfo):
+		if "Accessed" in reginfo[reg]:
+			ac = "A"
+		else:
+			ac = " "
+		print "%10s(%s): %s" % (hex(reg), ac, reginfo[reg]["name"])
+		i += 1
+	print "Total %d registers" % i
+	print "===================================="
+
+def show_untracked():
+	print "===========Untracked Regs==========="
+	i = 0
+	for reg in sorted(reginfo):
+		if not "Accessed" in reginfo[reg]:
+			continue;
+
+		if "Untracked" in reginfo[reg]:
+			print "%10s: %s" %(hex(reg), reginfo[reg]["name"])
+			i += 1
+	print "Total %d registers" % i
+	print "===================================="
+
+if options.regname:
+	show_regname()
+elif options.untrack:
+	show_untracked()
+else:
+	show_reginfo()
