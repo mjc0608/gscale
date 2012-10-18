@@ -1406,6 +1406,7 @@ int vgt_thread(void *priv)
 	long wait = 0;
 	int ring_id;
 	cycles_t t0, t1, t2, t3;
+	bool check_irq = false;
 
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
@@ -1572,6 +1573,8 @@ int vgt_thread(void *priv)
 				//show_seqno(pdev);
 				vgt_resume_ringbuffers(next);
 
+				/* request to check IRQ when ctx switch happens */
+				check_irq = true;
 				if (prev->force_removal ||
 				    bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
 					printk("Disable render for vgt(%d) from kthread\n",
@@ -1583,6 +1586,8 @@ int vgt_thread(void *priv)
 						if (waitqueue_active(&pdev->destroy_wq))
 							wake_up(&pdev->destroy_wq);
 					}
+					/* no need to check if prev is to be destroyed */
+					check_irq = false;
 				}
 
 				rdtsc_barrier();
@@ -1601,8 +1606,9 @@ int vgt_thread(void *priv)
 		}
 		spin_unlock_irq(&pdev->lock);
 		/* Virtual interrupts pending right after render switch */
-		if (test_bit(VGT_REQUEST_IRQ, (void*)&pdev->request)) {
+		if (check_irq && test_bit(VGT_REQUEST_IRQ, (void*)&pdev->request)) {
 			dprintk("vGT: handle pending interrupt in the render context switch time\n");
+			check_irq = false;
 			spin_lock_irq(&pdev->lock);
 			clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
