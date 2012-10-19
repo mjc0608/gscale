@@ -1476,6 +1476,7 @@ int vgt_thread(void *priv)
 
 		wait = period;
 
+		check_irq = false;
 		if (!(vgt_ctx_check(pdev) % threshold))
 			printk("vGT: %lldth checks, %lld switches\n",
 				vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
@@ -1600,7 +1601,6 @@ int vgt_thread(void *priv)
 		/* Virtual interrupts pending right after render switch */
 		if (check_irq && test_bit(VGT_REQUEST_IRQ, (void*)&pdev->request)) {
 			dprintk("vGT: handle pending interrupt in the render context switch time\n");
-			check_irq = false;
 			spin_lock_irq(&pdev->lock);
 			clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
@@ -2894,6 +2894,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 		printk("switch display ownership back to dom0\n");
 		next_display_owner = vgt_dom0;
 		do_vgt_display_switch(pdev);
+		previous_display_owner(pdev) = NULL;
 	} else if (next_display_owner == vgt) {
 		/* clear possible pending display_owner switch request. */
 		next_display_owner = NULL;
@@ -2918,6 +2919,8 @@ void vgt_release_instance(struct vgt_device *vgt)
 		vgt->force_removal = true;
 		vgt_raise_request(pdev, VGT_REQUEST_SCHED);
 	}
+	if (previous_render_owner(pdev) == vgt)
+		previous_render_owner(pdev) = NULL;
 
 	spin_unlock_irq(&pdev->lock);
 	if (vgt->force_removal)

@@ -1701,7 +1701,8 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 		 * need to inject into both the prev and curr owner
 		 */
 		if (!physical &&
-		    vgt_get_event_owner_type(dev, entry->event) == o_type) {
+		    vgt_get_event_owner_type(dev, entry->event) == o_type &&
+		    vgt_get_previous_owner(dev, o_type) != NULL) {
 			dprintk("vGT: inject event (%s) to previous owner (%d)\n",
 				vgt_irq_name[entry->event],
 				vgt_get_previous_owner(dev, o_type)->vgt_id);
