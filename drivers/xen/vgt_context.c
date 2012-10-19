@@ -3109,17 +3109,28 @@ bool initial_phys_states(struct pgt_device *pdev)
 	return true;
 }
 
-static void vgt_set_device_type(struct pgt_device *pdev)
+static bool vgt_set_device_type(struct pgt_device *pdev)
 {
-	pdev->is_sandybridge = _is_sandybridge(pdev->pdev->device);
-	if ( pdev->is_sandybridge )
+	if (_is_sandybridge(pdev->pdev->device)) {
+		pdev->is_sandybridge = 1;
 		printk("Detected Sandybridge\n");
-	pdev->is_ivybridge = _is_ivybridge(pdev->pdev->device);
-	if ( pdev->is_ivybridge )
+		return true;
+	}
+
+	if (_is_ivybridge(pdev->pdev->device)) {
+		pdev->is_ivybridge = 1;
 		printk("Detected Ivybridge\n");
-	pdev->is_haswell = _is_haswell(pdev->pdev->device);
-	if ( pdev->is_haswell )
+		return true;
+	}
+
+	if (_is_haswell(pdev->pdev->device)) {
+		pdev->is_haswell = 1;
 		printk("Detected Haswell\n");
+		return true;
+	}
+
+	printk(KERN_ERR "Unknown chip 0x%x\n", pdev->pdev->device);
+	return false;
 }
 
 static void vgt_init_reserved_aperture(struct pgt_device *pdev)
@@ -3149,7 +3160,8 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	pdev->pdev = dev;
 	pdev->pbus = dev->bus;
 
-	vgt_set_device_type(pdev);
+	if (!vgt_set_device_type(pdev))
+		return false;
 
 	/* check PPGTT enabling. now always enable on IVB. */
 	if (pdev->is_ivybridge)
