@@ -64,6 +64,7 @@ static inline int _is_haswell(int devid)
 	case 0x0c0a:
 	case 0x0c1a:
 	case 0x0c2a:
+	case 0x0d26:
             ret = 1;
             break;
         default:
