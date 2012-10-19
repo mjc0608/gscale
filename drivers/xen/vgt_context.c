@@ -1476,17 +1476,6 @@ int vgt_thread(void *priv)
 
 		wait = period;
 
-		if (!vgt_ctx_switch) {
-			/* Without this invoking do_vgt_display_switch, we can't switch
-			 * back to Dom0 in the case of hvm_owner
-			 */
-			spin_lock_irq(&pdev->lock);
-			if (next_display_owner != NULL)
-				do_vgt_display_switch(pdev);
-			spin_unlock_irq(&pdev->lock);
-			continue;
-		}
-
 		if (!(vgt_ctx_check(pdev) % threshold))
 			printk("vGT: %lldth checks, %lld switches\n",
 				vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
@@ -1511,12 +1500,6 @@ int vgt_thread(void *priv)
 			if ( next != current_render_owner(pdev) )
 			{
 				context_switch_num ++;
-				/* FIXME: add display switch here
-				 * when fully display switch enabled, it may not stay here
-				 */
-				if (next_display_owner != NULL)
-					do_vgt_display_switch(pdev);
-
 				rdtsc_barrier();
 				t1 = get_cycles();
 				rdtsc_barrier();

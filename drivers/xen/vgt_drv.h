@@ -628,6 +628,8 @@ extern struct list_head pgt_devices;
 #define previous_mgmt_owner(d)		(vgt_get_previous_owner(d, VGT_OT_MGMT))
 #define vgt_ctx_check(d)		(d->ctx_check)
 #define vgt_ctx_switch(d)		(d->ctx_switch)
+extern void do_vgt_display_switch(struct pgt_device *pdev);
+extern struct vgt_device *next_display_owner;
 
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
 #define reg_hw_status(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_STATUS)

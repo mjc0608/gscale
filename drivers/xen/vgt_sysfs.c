@@ -116,23 +116,23 @@ static ssize_t vgt_display_owner_show(struct kobject *kobj, struct kobj_attribut
 }
 
 struct vgt_device *vmid_2_vgt_device(int vmid);
-extern struct vgt_device *next_display_owner;
 static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
             const char *buf, size_t count)
 {
 	unsigned long flags;
 	int ret = count;
-    int vmid;
-    struct vgt_device *next_vgt;
+	int vmid;
+	struct vgt_device *next_vgt;
+	struct pgt_device *pdev;
 
-    if (sscanf(buf, "%d", &vmid) != 1)
+	if (sscanf(buf, "%d", &vmid) != 1)
 		return -EINVAL;
 
 	//TODO: vgt_kobj_priv is the same as pdev now. make it per-pdev???
 	spin_lock_irqsave(&vgt_kobj_priv->lock, flags);
 
-    next_vgt = vmid_2_vgt_device(vmid);
-    if (next_vgt == NULL) {
+	next_vgt = vmid_2_vgt_device(vmid);
+	if (next_vgt == NULL) {
 		printk("vGT: can not find the vgt instance of dom%d!\n", vmid);
 		ret = -ENODEV;
 		goto out;
@@ -144,10 +144,12 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 		goto out;
 	}
 
-	if (current_display_owner(next_vgt->pdev) == next_vgt)
-        goto out;
+	pdev = next_vgt->pdev;
+	if (current_display_owner(pdev) == next_vgt)
+		goto out;
 
 	next_display_owner = next_vgt;
+	do_vgt_display_switch(pdev);
 out:
 	spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
 	return ret;
