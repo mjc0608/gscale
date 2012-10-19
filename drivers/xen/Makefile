@@ -20,6 +20,7 @@ obj-$(CONFIG_XEN_DOM0)			+= $(dom0-y)
 
 VGT_SOURCE := vgt.o vgt_context.o vgt_mmio.o vgt-interrupt.o vgt-snb.o \
 	vgt-parser.o vgt_sysfs.o vgt_suspend.o vgt_debugfs.o vgt_edid.o vgt_gtt.o \
+	vgt_klog.o \
 	#vgt_mmio_gpio.o
 
 obj-$(CONFIG_BLOCK)			+= biomerge.o

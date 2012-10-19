@@ -1914,6 +1914,11 @@ extern int vgt_create_debugfs(struct vgt_device *vgt);
  * can update surface base frequently, for performance
  * concern by default we disable dumping framebuffer.
  */
+
+/* klog facility for buck printk */
+extern int vgt_klog_init(void);
+extern void vgt_klog_cleanup(void);
+extern void klog_printk(const char *fmt, ...);
 #undef VGT_DEBUGFS_DUMP_FB
 
 typedef struct {

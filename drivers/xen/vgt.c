@@ -110,6 +110,8 @@ static int __init vgt_init_module(void)
 	if(rc < 0)
 		return 0;
 
+	vgt_klog_init();
+
 	rc = xen_register_vgt_driver(&vgt_xops);
 
 
@@ -129,6 +131,7 @@ static void __exit vgt_exit_module(void)
 	// fill other exit works here
 	vgt_destroy();
 	vgt_cmd_parser_exit();
+	vgt_klog_cleanup();
 	printk("VGT module exit %d\n", rc);
 	return;
 }
