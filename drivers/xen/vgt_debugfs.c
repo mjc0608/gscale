@@ -314,6 +314,39 @@ static const struct file_operations reginfo_fops = {
 	.release = single_release,
 };
 
+/*
+ * It's always dangerious to read from pReg directly, since some
+ * read has side effect e.g. read-to-clear bit.
+ *
+ * So use it with caution only when debugging hard GPU hang problem
+ */
+static int vgt_show_pregs(struct seq_file *m, void *data)
+{
+	u64 i;
+	struct pgt_device *pdev = (struct pgt_device *)m->private;
+
+	seq_printf(m, "Use this interface with caution b/c side effect may be caused by reading hw status\n");
+	for(i = 0; i < pdev->reg_num; i++) {
+		if (!(i % 16))
+			seq_printf(m, "\n%8llx:", i * REG_SIZE);
+		seq_printf(m, " %x", VGT_MMIO_READ(pdev, i * REG_SIZE));
+	}
+
+	seq_printf("\n");
+	return 0;
+}
+
+static int vgt_preg_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vgt_show_pregs, inode->i_private);
+}
+
+static const struct file_operations preg_fops = {
+	.open = vgt_preg_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
 /* TODO: initialize vGT debufs top directory */
 /* FIXME: how about the second graphics card */
 struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
@@ -342,6 +375,11 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 
 	temp_d = debugfs_create_file("reginfo", 0444, d_vgt_debug,
 			 pdev, &reginfo_fops);
+	if (!temp_d)
+		return NULL;
+
+	temp_d = debugfs_create_file("preg", 0444, d_vgt_debug,
+			 pdev, &preg_fops);
 	if (!temp_d)
 		return NULL;
 
