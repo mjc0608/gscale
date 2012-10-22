@@ -3163,8 +3163,8 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	if (!vgt_set_device_type(pdev))
 		return false;
 
-	/* check PPGTT enabling. now always enable on IVB. */
-	if (pdev->is_ivybridge)
+	/* check PPGTT enabling. */
+	if (pdev->is_ivybridge || pdev->is_haswell)
 		pdev->enable_ppgtt = 1;
 
 	INIT_LIST_HEAD(&pdev->rendering_runq_head);
