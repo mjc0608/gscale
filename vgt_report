@@ -18,6 +18,8 @@ parser.add_option("-d", "--vdiff", dest="vdiff", action="store_true",
 		   help="show the list of registers with different vreg values among VMs")
 parser.add_option("-s", "--sdiff", dest="sdiff", action="store_true",
 		   help="show the list of registers with different sreg values among VMs")
+parser.add_option("-p", "--preg", dest="preg", action="store_true",
+		   help="dump the physical HW registers with --vdiff and --sdiff")
 parser.add_option("-v", "--verbose", dest="verbose",
 		   help="pring status message", action="store_true")
 
@@ -32,6 +34,7 @@ s = fi.read()
 fi.close()
 
 path_reginfo = "/sys/kernel/debug/vgt/reginfo"
+path_preg = "/sys/kernel/debug/vgt/preg"
 path_debugfs = "/sys/kernel/debug/vgt/"
 path_vreg = "/virtual_mmio_space"
 path_sreg = "/shadow_mmio_space"
@@ -178,6 +181,26 @@ def show_untracked():
 	print "Total %d registers" % i
 	print "===================================="
 
+def get_reginfo(output):
+	info = {}
+	for line in output.stdout.read().split("\n"):
+		if not line:
+			continue
+
+		if line.find(":") < 0:
+			continue
+
+		reg_base = line.split(":")[0]
+		vars = line.split(":")[1].strip().split(" ")
+		if len(vars) != 16:
+			print "messed values:", vars, line
+			continue
+
+		for i in range(16):
+			reg = int(reg_base, 16) + i*4
+			info[reg] = vars[i]
+	return info
+
 def show_diff(path_reg):
 	print "=============Diff List=============="
 	print "Collecting VM vReg information..."
@@ -185,6 +208,8 @@ def show_diff(path_reg):
 	#print dirinfo.stdout.read().split("\n")
 	vminfo = {}
 	num = 0
+	outputs = {}
+	preginfo = {}
 	for node in dirinfo.stdout.read().split("\n"):
 		m = re.search("^(?P<vmid>vm[0-9]+)$", node)
 		if not m:
@@ -195,28 +220,27 @@ def show_diff(path_reg):
 			vminfo[vmid] = {}
 		else:
 			print "Found dupliacted vm instance: " + vmid
+		outputs[vmid] = Popen(["cat", path_debugfs + vmid + path_reg], stdout=PIPE)
 
-		vreg = Popen(["cat", path_debugfs + vmid + path_reg], stdout=PIPE)
-		for line in vreg.stdout.read().split("\n"):
-			if not line:
-				continue
-
-			reg_base = line.split(":")[0]
-			vars = line.split(":")[1].split(" ")
-			if len(vars) != 16:
-				print "messed values:" + vars
-				continue
-
-			for i in range(16):
-				reg = int(reg_base, 16) + i*4
-				vminfo[vmid][reg] = vars[i]
+	if options.preg:
+		print "Get preg info..."
+		p_output = Popen(["cat", path_preg], stdout=PIPE)
 
 	num = len(vminfo)
+	for vmid in outputs.keys():
+		print "Analyze %s..." % vmid
+		vminfo[vmid] = get_reginfo(outputs[vmid])
+	if options.preg:
+		print "Analyze preg info..."
+		preginfo = get_reginfo(p_output)
+
 	print "Calculating difference among %d vm instances." % num
 	print "------------------------------------"
 	title = "%10s: |" % "Reg"
 	for i in range(num):
 		title += "   vm%-4s |" % i
+	if options.preg:
+		title += "   preg   |"
 	title += " %-8s" % "Name"
 	print title
 
@@ -233,6 +257,8 @@ def show_diff(path_reg):
 			line = "%10x: |" % reg
 			for i in sorted(vminfo.keys()):
 				line += " %8s |" % vminfo[i][reg]
+			if options.preg:
+				line += " %8s |" % preginfo[reg]
 			if reg in reginfo:
 				line += " %-8s" % reginfo[reg]["name"]
 			print line
