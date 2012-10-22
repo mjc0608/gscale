@@ -2,6 +2,7 @@
 
 import os, sys, re
 from optparse import OptionParser
+from subprocess import *
 
 parser = OptionParser()
 parser.add_option("-i", "--info", dest="reginfo", action="store_true",
@@ -13,6 +14,10 @@ parser.add_option("-f", "--file", dest="filename", metavar="FILE",
 		   help="the location of vgt_reg.h (default drivers/xen/vgt_reg.h)")
 parser.add_option("-u", "--untracked", dest="untrack", action="store_true",
 		   help="show the list of untracked registers")
+parser.add_option("-d", "--vdiff", dest="vdiff", action="store_true",
+		   help="show the list of registers with different vreg values among VMs")
+parser.add_option("-s", "--sdiff", dest="sdiff", action="store_true",
+		   help="show the list of registers with different sreg values among VMs")
 parser.add_option("-v", "--verbose", dest="verbose",
 		   help="pring status message", action="store_true")
 
@@ -25,6 +30,11 @@ if options.verbose:
 fi = open(options.filename, "r")
 s = fi.read()
 fi.close()
+
+path_reginfo = "/sys/kernel/debug/vgt/reginfo"
+path_debugfs = "/sys/kernel/debug/vgt/"
+path_vreg = "/virtual_mmio_space"
+path_sreg = "/shadow_mmio_space"
 
 # Collect reg name
 reginfo = {}
@@ -47,7 +57,7 @@ for line in s.split("\n"):
 	#print hex(offset), reginfo[offset]["name"]
 
 # get info for each access reg
-fi = open("/sys/kernel/debug/vgt/reginfo", "r")
+fi = open(path_reginfo, "r")
 info = fi.read()
 fi.close()
 for line in info.split("\n"):
@@ -168,9 +178,74 @@ def show_untracked():
 	print "Total %d registers" % i
 	print "===================================="
 
+def show_diff(path_reg):
+	print "=============Diff List=============="
+	print "Collecting VM vReg information..."
+	dirinfo = Popen(["ls", path_debugfs], stdout=PIPE)
+	#print dirinfo.stdout.read().split("\n")
+	vminfo = {}
+	num = 0
+	for node in dirinfo.stdout.read().split("\n"):
+		m = re.search("^(?P<vmid>vm[0-9]+)$", node)
+		if not m:
+			continue
+		vmid = m.group("vmid")
+		if not vmid in vminfo:
+			print "Found %s..." % vmid
+			vminfo[vmid] = {}
+		else:
+			print "Found dupliacted vm instance: " + vmid
+
+		vreg = Popen(["cat", path_debugfs + vmid + path_reg], stdout=PIPE)
+		for line in vreg.stdout.read().split("\n"):
+			if not line:
+				continue
+
+			reg_base = line.split(":")[0]
+			vars = line.split(":")[1].split(" ")
+			if len(vars) != 16:
+				print "messed values:" + vars
+				continue
+
+			for i in range(16):
+				reg = int(reg_base, 16) + i*4
+				vminfo[vmid][reg] = vars[i]
+
+	num = len(vminfo)
+	print "Calculating difference among %d vm instances." % num
+	print "------------------------------------"
+	title = "%10s: |" % "Reg"
+	for i in range(num):
+		title += "   vm%-4s |" % i
+	title += " %-8s" % "Name"
+	print title
+
+	vm0 = vminfo.keys()[0]
+	cnt = 0
+	for reg in sorted(vminfo[vm0]):
+		val = vminfo[vm0][reg]
+		found = False
+		for vm in vminfo.keys():
+			if val != vminfo[vm][reg]:
+				found = True
+		if found:
+			cnt += 1
+			line = "%10x: |" % reg
+			for i in sorted(vminfo.keys()):
+				line += " %8s |" % vminfo[i][reg]
+			if reg in reginfo:
+				line += " %-8s" % reginfo[reg]["name"]
+			print line
+	print "Total %d registers found." % cnt
+	print "===================================="
+
 if options.regname:
 	show_regname()
 elif options.untrack:
 	show_untracked()
+elif options.vdiff:
+	show_diff(path_vreg)
+elif options.sdiff:
+	show_diff(path_sreg)
 else:
 	show_reginfo()
