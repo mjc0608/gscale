@@ -332,7 +332,7 @@ static int vgt_show_pregs(struct seq_file *m, void *data)
 		seq_printf(m, " %x", VGT_MMIO_READ(pdev, i * REG_SIZE));
 	}
 
-	seq_printf("\n");
+	seq_printf(m, "\n");
 	return 0;
 }
 
