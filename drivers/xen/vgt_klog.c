@@ -181,7 +181,7 @@ static int subbuf_start_handler(struct rchan_buf *buf,
 				size_t prev_padding)
 {
 	if (prev_subbuf)
-		*((unsigned *)prev_subbuf) = prev_padding;
+		*((size_t *)prev_subbuf) = prev_padding;
 
 	if (relay_buf_full(buf)) {
 		if (!suspended) {
@@ -195,7 +195,7 @@ static int subbuf_start_handler(struct rchan_buf *buf,
 		printk("cpu %d buffer no longer full.\n", smp_processor_id());
 	}
 
-	subbuf_start_reserve(buf, sizeof(unsigned int));
+	subbuf_start_reserve(buf, sizeof(size_t));
 
 	return 1;
 }
@@ -611,7 +611,8 @@ static ssize_t produced_read(struct file *filp, char __user *buffer,
 struct file_operations produced_fops = {
 	.owner =	THIS_MODULE,
 	.open =		produced_open,
-	.read =		produced_read
+	.read =		produced_read,
+	.llseek = default_llseek,
 };
 
 static int consumed_open(struct inode *inode, struct file *filp)
@@ -711,4 +712,6 @@ struct file_operations consumed_fops = {
 	.open =		consumed_open,
 	.read =		consumed_read,
 	.write =	consumed_write,
+	.llseek = default_llseek,
 };
+

@@ -90,7 +90,7 @@ static int process_subbufs(unsigned int cpu)
 	size_t i, start_subbuf, end_subbuf, subbuf_idx, subbufs_consumed = 0;
 	size_t subbufs_ready = status[cpu].produced - status[cpu].consumed;
 	char *subbuf_ptr;
-	unsigned padding;
+	size_t padding;
 	int len;
 
 	start_subbuf = status[cpu].consumed % n_subbufs;
@@ -98,7 +98,7 @@ static int process_subbufs(unsigned int cpu)
 	for (i = start_subbuf; i < end_subbuf; i++) {
 		subbuf_idx = i % n_subbufs;
 		subbuf_ptr = relay_buffer[cpu] + subbuf_idx * subbuf_size;
-		padding = *((unsigned *)subbuf_ptr);
+		padding = *((size_t *)subbuf_ptr);
 		subbuf_ptr += sizeof(padding);
 		len = (subbuf_size - sizeof(padding)) - padding;
 		if (write(out_file[cpu], subbuf_ptr, len) < 0) {
