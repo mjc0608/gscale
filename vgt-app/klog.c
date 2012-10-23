@@ -50,8 +50,8 @@ char *percpu_out_basename = "cpu";
 #define NR_CPUS 256
 
 /* internal variables */
-static size_t subbuf_size = 262144;
-static size_t n_subbufs = 4;
+static size_t subbuf_size = 524288; /* 512K */
+static size_t n_subbufs = 8;
 static unsigned int ncpus;
 static int processing;
 static pthread_mutex_t processing_mutex;
