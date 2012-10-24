@@ -2499,6 +2499,20 @@ static bool vga_control_w (struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static bool err_int_r(struct vgt_device *vgt, unsigned int offset,
+    void *p_data, unsigned int bytes)
+{
+	bool rc = default_mmio_read(vgt, offset, p_data, bytes);
+	return rc;
+}
+
+static bool err_int_w(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc = default_mmio_write(vgt, offset, p_data, bytes);
+	return rc;
+}
+
 /*
  * TODO:
  * We'd like to whitelist all regs requiring special handling
@@ -3036,7 +3050,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_GTDRIVER_MAILBOX_INTERFACE, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GTDRIVER_MAILBOX_DATA0, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GTDRIVER_MAILBOX_DATA1, 4, F_WA, 0, D_ALL, NULL, NULL},
-
+{_REG_GTT_FAULT_STATUS, 4, F_WA, 0, D_ALL, err_int_r, err_int_w},
 };
 
 static void vgt_set_reg_attr(struct pgt_device *pdev,
