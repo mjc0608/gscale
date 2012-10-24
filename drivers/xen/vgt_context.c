@@ -3226,6 +3226,24 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	return true;
 }
 
+u32 __inline dma_addr_to_pte_uc(struct pgt_device *pdev, dma_addr_t addr)
+{
+	u32 pte;
+
+	if (pdev->is_haswell) {
+		/* Haswell has new cache control bits */
+		pte = addr & ~0xfff;
+		pte |= (addr >> 28) & 0x7f0;
+		pte |= 1; /* valid */
+	} else {
+		pte = addr & ~0xfff;
+		pte |= (addr >> 28) & 0xff0;
+		pte |= (1 << 1); /* UC */
+		pte |= 1; /* valid */
+	}
+	return pte;
+}
+
 /* FIXME: allocate instead of static */
 #define VGT_APERTURE_PAGES	(VGT_RSVD_APERTURE_SZ >> GTT_PAGE_SHIFT)
 static struct page *pages[VGT_APERTURE_PAGES];
@@ -3237,6 +3255,7 @@ static int setup_gtt(struct pgt_device *pdev)
 	struct page *page;
 	int i, ret, index;
 	dma_addr_t dma_addr;
+	u32 pte;
 
 	check_gtt(pdev);
 	printk("vGT: clear all GTT entries.\n");
@@ -3250,8 +3269,7 @@ static int setup_gtt(struct pgt_device *pdev)
 	if (pci_dma_mapping_error(pdev->pdev, dma_addr))
 		return -EINVAL;
 
-	dma_addr |= (dma_addr >> 28) & 0xff0;
-	dma_addr |= 0x1;	/* UC, valid */
+	pte = dma_addr_to_pte_uc(pdev, dma_addr);
 	printk("....dummy page (0x%llx, 0x%llx)\n", page_to_phys(dummy_page), dma_addr);
 	dummy_addr = dma_addr;
 
@@ -3260,7 +3278,7 @@ static int setup_gtt(struct pgt_device *pdev)
 
 	/* clear all GM space, instead of only aperture */
 	for (i = 0; i < gm_pages(pdev); i++)
-		vgt_write_gtt(pdev, i, dma_addr);
+		vgt_write_gtt(pdev, i, pte);
 
 	dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
 	dprintk("content at 0x64000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x64000));
@@ -3288,7 +3306,7 @@ static int setup_gtt(struct pgt_device *pdev)
 		/* dom0 needs DMAR anyway */
 		dma_addr = pci_map_page(pdev->pdev, page, 0, PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
 		if (pci_dma_mapping_error(pdev->pdev, dma_addr)) {
-			dprintk("vGT: Failed to do pci_dma_mapping while handling 0x%llx\n", dma_addr);
+			dprintk("vGT: Failed to do pci_dma_mapping while handling %d 0x%llx\n", i, dma_addr);
 			/* FIXME: A workaround here for Haswell booting */
 			if (!pdev->is_haswell) {
 				ret = -EINVAL;
@@ -3296,9 +3314,8 @@ static int setup_gtt(struct pgt_device *pdev)
 			}
 		}
 
-		dma_addr |= (dma_addr >> 28) & 0xff0;
-		dma_addr |= 0x1;	/* UC, valid */
-		vgt_write_gtt(pdev, index + i, dma_addr);
+		pte = dma_addr_to_pte_uc(pdev, dma_addr);
+		vgt_write_gtt(pdev, index + i, pte);
 
 		if (!(i % 1024))
 			printk("vGT: write GTT-%x phys: %llx, dma: %llx\n",
