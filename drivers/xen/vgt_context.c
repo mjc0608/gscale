@@ -3089,10 +3089,17 @@ bool initial_phys_states(struct pgt_device *pdev)
 
 #else
 	for (i = 0; i < pdev->reg_num; i++) {
-		/* XXX We need to skip some reserved space, or known forbidden
+		/* XXX Hardware workaround was applied here.
+		 * We need to skip some reserved space, or known forbidden
 		 * space for access, otherwise it may cause hang */
-		if (i >= (0x5180 >> 2) && i < (0x6000 >> 2))
-			continue;
+		if (_is_ivybridge(pdev->pdev->device)) {
+			if (i >= (0x5180 >> 2) && i < (0x6000 >> 2))
+				continue;
+		} else if (_is_haswell(pdev->pdev->device) &&
+				(pdev->pdev->device < 0x0d26)) {
+			if (i >= (0x5300 >> 2) && i < (0x44010 >> 2))
+				continue;
+		}
 		pdev->initial_mmio_state[i] = *((vgt_reg_t *)pdev->gttmmio_base_va + i);
 	}
 #endif
