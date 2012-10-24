@@ -29,6 +29,136 @@
 #include "i915_drv.h"
 #include "i915_trace.h"
 #include "intel_drv.h"
+#include <xen/vgt-if.h>
+
+struct _balloon_info_ {
+	/*
+	 * There are up to 2 regions per aperture/gmadr that 
+	 * might be ballooned, per assigned aperture/gmadr.
+	 * Here, ballooned gmadr doesn't include the
+	 * might-be overlap aperture areas, and index 0/1 is for 
+	 * aperture, 2/3 for gmadr.
+	 */
+	struct drm_mm_node space[4];
+} bl_info;
+
+static int i915_balloon_space (
+			struct drm_mm *mm,
+			struct drm_mm_node *node,
+			unsigned long start,
+			unsigned long end)
+{
+	unsigned long  size = end - start;
+
+	if (start == end)
+		return -EEXIST;
+
+	printk("i915_balloon_space: range [ 0x%lx - 0x%lx ] %lu KB.\n",
+			start, end, size / 1024);
+
+	return drm_mm_insert_node_in_range_generic(mm, node, size, 0, 0, start, end,
+						  DRM_MM_SEARCH_DEFAULT,
+						  DRM_MM_CREATE_DEFAULT);
+}
+
+static void i915_deballoon(struct drm_i915_private *dev_priv)
+{
+	int	i;
+
+        printk("i915_deballoon...\n");
+	for (i=0; i < 4; i++) {
+		if ( bl_info.space[i].allocated)
+			drm_mm_remove_node(&bl_info.space[i]);
+	}
+	memset (&bl_info, 0, sizeof(bl_info));
+}
+
+/*
+ *  return vgt version if it is, otherwise 0.
+ */
+int is_vgt(struct drm_i915_private *dev_priv)
+{
+	uint64_t	magic;
+	uint32_t	version;
+
+	magic = I915_READ64(vgt_info_off(magic));
+	if (magic != VGT_MAGIC)
+		return 0;
+
+	version = (I915_READ16(vgt_info_off(version_major)) << 16) |
+			I915_READ16(vgt_info_off(version_minor));
+
+	return version;
+}
+
+static int i915_balloon(struct drm_i915_private *dev_priv)
+{
+        unsigned long 	apert_base, apert_size;
+        unsigned long	gmadr_base, gmadr_size;
+	int	fail = 0;
+
+	if ( is_vgt(dev_priv) != VGT_IF_VERSION )
+		return 0;
+	printk("i915_balloon...\n");
+
+	apert_base = I915_READ(vgt_info_off(avail_rs.low_gmadr.my_base));
+	apert_size = I915_READ(vgt_info_off(avail_rs.low_gmadr.my_size));
+	gmadr_base = I915_READ(vgt_info_off(avail_rs.high_gmadr.my_base));
+	gmadr_size = I915_READ(vgt_info_off(avail_rs.high_gmadr.my_size));
+
+	printk("Balooning configuration: %lx %lx, %lx %lx\n",
+			apert_base, apert_size, gmadr_base, gmadr_size);
+	if (apert_base < dev_priv->gtt.base.start ||
+		(apert_base + apert_size) > dev_priv->gtt.mappable_end ||
+		gmadr_base < dev_priv->gtt.base.start ||
+		(gmadr_base + gmadr_size) > dev_priv->gtt.base.start + dev_priv->gtt.base.total) {
+		printk("Invalid ballooning configuration: %lx %lx, %lx %lx\n",
+			apert_base, apert_size, gmadr_base, gmadr_size);
+		return 0;
+	}
+
+	memset (&bl_info, 0, sizeof(bl_info));
+	/* Aperture ballooning */
+	if ( apert_base > dev_priv->gtt.base.start ) {
+	        fail |= i915_balloon_space(
+			&dev_priv->gtt.base.mm,
+			&bl_info.space[0],
+			dev_priv->gtt.base.start, apert_base);
+	}
+
+	if ( apert_base + apert_size < dev_priv->gtt.mappable_end ) {
+	        fail |= i915_balloon_space(
+			&dev_priv->gtt.base.mm,
+			&bl_info.space[1],
+			apert_base + apert_size,
+			dev_priv->gtt.mappable_end);
+	}
+
+	/* GMADR ballooning */
+	if ( gmadr_base > dev_priv->gtt.mappable_end ) {
+	        fail |= i915_balloon_space(
+			&dev_priv->gtt.base.mm,
+			&bl_info.space[2],
+			dev_priv->gtt.mappable_end, gmadr_base);
+	}
+
+	if ( gmadr_base + gmadr_size < dev_priv->gtt.base.start + dev_priv->gtt.base.total) {
+	        fail |= i915_balloon_space(
+			&dev_priv->gtt.base.mm,
+			&bl_info.space[3],
+			gmadr_base + gmadr_size,
+			dev_priv->gtt.base.start + dev_priv->gtt.base.total);
+	}
+
+	/* Fence register ballooning */
+
+	if ( fail ) {
+		i915_deballoon(dev_priv);
+		return 0;
+	}
+	printk("balloon successfully\n");
+	return 1;
+}
 
 static void bdw_setup_private_ppat(struct drm_i915_private *dev_priv);
 static void chv_setup_private_ppat(struct drm_i915_private *dev_priv);
@@ -1718,6 +1848,8 @@ static int i915_gem_setup_global_gtt(struct drm_device *dev,
 		ggtt_vm->clear_range(ggtt_vm, hole_start,
 				     hole_end - hole_start, true);
 	}
+
+	i915_balloon(dev_priv);
 
 	/* And finally clear the reserved guard page */
 	ggtt_vm->clear_range(ggtt_vm, end - PAGE_SIZE, PAGE_SIZE, true);
