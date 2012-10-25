@@ -122,12 +122,11 @@ unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma, bool ppgt
        BUG();
    } else {
        /* Global GTT */
+		if (!g_gm_is_visible(vgt, gma) && !g_gm_is_hidden(vgt, gma)) {
+			printk(KERN_ERR "invalid gma %lx\n", gma);
+			return INVALID_ADDR;
+		}
        gtt_index = gma >> GTT_PAGE_SHIFT;
-       if (gtt_index * GTT_ENTRY_SIZE >= vgt->vgtt_sz){
-           printk(KERN_ERR "invalid gma %lx\n", gma);
-		   return INVALID_ADDR;
-       }
-
        gtt_pte_make(&pte, vgt->vgtt[gtt_index]);
        pfn = gtt_pte_get_pfn(&pte);
        pa = (pfn << PAGE_SHIFT) + (gma & ~PAGE_MASK);
