@@ -3092,10 +3092,10 @@ bool initial_phys_states(struct pgt_device *pdev)
 		/* XXX Hardware workaround was applied here.
 		 * We need to skip some reserved space, or known forbidden
 		 * space for access, otherwise it may cause hang */
-		if (_is_ivybridge(pdev->pdev->device)) {
+		if (pdev->is_ivybridge) {
 			if (i >= (0x5180 >> 2) && i < (0x6000 >> 2))
 				continue;
-		} else if (_is_haswell(pdev->pdev->device) &&
+		} else if (pdev->is_haswell &&
 				(pdev->pdev->device < 0x0d26)) {
 			if (i >= (0x5300 >> 2) && i < (0x44010 >> 2))
 				continue;
