@@ -1362,51 +1362,54 @@ void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int value, unsigned 
 	}
 }
 
+/*
+ * TODO: It's said that CRT hotplug detection through below method does not
+ * always work. For example in Linux i915 not hotplug handler is installed
+ * for CRT (likely through some other polling method). But let's use this
+ * as the example for how hotplug event is generally handled here.
+ */
 void vgt_handle_crt_hotplug(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt)
 {
-    vgt_reg_t sde_isr, adpa_ctrl, hpd_ch_status;
+	vgt_reg_t adpa_ctrl;
 	struct pgt_device *pdev = vgt->pdev;
+	enum vgt_uevent_type uevent = UEVENT_MAX;
 
-	/* send out udev events when handling physical interruts */
-	if (physical == true) {
-		/* Consume irq to prevent virtual irq triggered */
-		//vgt_sde_iir(dev) &= ~_REGBIT_CRT_HOTPLUG;
-		need_scan_attached_ports = true;
+	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured CRT hotplug event!!!\n")
 
-		/* Check plugged in or out */
-		sde_isr = VGT_MMIO_READ(dev, _REG_SDEISR);
-		if (sde_isr & _REGBIT_CRT_HOTPLUG) {
-			printk("%s: %d: vGT: detect crt insert uevent!\n", __func__, __LINE__);
-			vgt_set_uevent(vgt, CRT_HOTPLUG_IN);
-			adpa_ctrl = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
-			hpd_ch_status = adpa_ctrl & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-			if (hpd_ch_status != 0) {
-				set_bit(VGT_CRT, dev->port_detect_status);
-				vgt_set_all_vreg_bit(pdev, hpd_ch_status, _REG_PCH_ADPA);
-			}
+	if (physical) {
+		pdev->probe_ports = true;
 
+		adpa_ctrl = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
+		if (!(adpa_ctrl & _REGBIT_ADPA_DAC_ENABLE))
+			printk("vGT: captured CRT hotplug event when CRT is disabled\n");
+
+		/* write back value to clear channel status */
+		VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, adpa_ctrl);
+
+		/* check blue/green channel status for attachment status */
+		if (adpa_ctrl & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) {
+			printk("%s: %d: vGT: detect crt insert event!\n", __func__, __LINE__);
+
+			if (!test_and_set_bit(VGT_CRT, dev->port_detect_status))
+				uevent = CRT_HOTPLUG_IN;
+			else
+				printk("vGT: capture CRT hot-plug when it's attached!\n");
 		} else {
-			printk("%s: %d: vGT: detect crt evict uevent!\n", __func__, __LINE__);
-			vgt_set_uevent(vgt, CRT_HOTPLUG_OUT);
-			clear_bit(VGT_CRT, dev->port_detect_status);
-			vgt_clear_all_vreg_bit(pdev, _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK, _REG_PCH_ADPA);
+			printk("%s: %d: vGT: detect crt removal event!\n", __func__, __LINE__);
+
+			if (test_and_clear_bit(VGT_CRT, dev->port_detect_status))
+				uevent = CRT_HOTPLUG_OUT;
+			else
+				printk("vGT: capture CRT hot-removal when it's disattached!\n");
 		}
 
-		/* FIXME: since raise VGT_REQUEST_IRQ in physical handling */
-		vgt_raise_request(dev, VGT_REQUEST_UEVENT);
-		//vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
-	} else {
-#if 0
-		int i;
-		/* broadcast hotplug interrupts to all domains (dom0 + hvms) */
-		for (i = 0; i < VGT_MAX_VMS; i++) {
-			if (pdev->device[i])
-				info->propogate_virtual_event(pdev->device[i], bit, info);
-		}
-#endif
-
+		vgt_event_state(pdev, entry->event).val = adpa_ctrl;
+		/* send out udev events when handling physical interruts */
+		if (uevent != UEVENT_MAX)
+			vgt_raise_request(dev, VGT_REQUEST_UEVENT);
+		return;
 	}
 }
 

@@ -3341,6 +3341,7 @@ int vgt_initialize(struct pci_dev *dev)
 
 	/* initialize EDID data */
 	vgt_probe_edid(pdev, -1);
+	pdev->probe_ports = true;
 
 	/* create debugfs interface */
 	if (!vgt_init_debugfs(pdev)) {

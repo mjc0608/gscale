@@ -714,6 +714,7 @@ struct pgt_device {
 	u8 is_haswell : 1;
 	u8 enable_ppgtt : 1;
 	u8 in_ctx_switch : 1;
+	u8 probe_ports : 1;
 
 	vgt_aux_entry_t vgt_aux_table[VGT_AUX_TABLE_NUM];
 	int at_index;
@@ -1571,9 +1572,7 @@ struct vgt_irq_ops {
 
 union vgt_event_state {
 	/* common state for bit based status */
-	struct {
-		vgt_reg_t val;
-	} status;
+	vgt_reg_t val;
 
 	/* command stream error */
 	struct {

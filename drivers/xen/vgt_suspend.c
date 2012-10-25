@@ -3573,7 +3573,6 @@ static void vgt_scan_ports_for_all_domains(struct pgt_device *pdev)
 	}
 }
 
-bool need_scan_attached_ports = true;
 bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 		struct vgt_device *next_vgt)
 {
@@ -3581,6 +3580,7 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 	struct vgt_port_struct *port_struct;
 	struct vgt_port_dsp_set_funcs *dsp_set_funcs;
 	enum vgt_pipe pipe;
+	struct pgt_device *pdev = cur_vgt->pdev;
 
 	ASSERT((cur_vgt && next_vgt));
 
@@ -3589,8 +3589,8 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 
 	/* the early version refered bool drm_crtc_helper_set_mode()
 	 */
-	if (need_scan_attached_ports) {
-		vgt_scan_ports_for_all_domains(cur_vgt->pdev);
+	if (pdev->probe_ports) {
+		vgt_scan_ports_for_all_domains(pdev);
 		//need_scan_attached_ports = false;
 	}
 
