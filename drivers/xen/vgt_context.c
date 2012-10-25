@@ -1476,6 +1476,9 @@ int vgt_thread(void *priv)
 
 		wait = period;
 
+		if (!vgt_ctx_switch)
+			continue;
+
 		check_irq = false;
 		if (!(vgt_ctx_check(pdev) % threshold))
 			printk("vGT: %lldth checks, %lld switches\n",
