@@ -1886,7 +1886,8 @@ int vgt_irq_init(struct pgt_device *dev)
 	struct vgt_irq_host_state *irq_hstate;
 
 	irq_hstate = kzalloc(sizeof(struct vgt_irq_host_state), GFP_KERNEL);
-	ASSERT(irq_hstate);
+	if (irq_hstate == NULL)
+		return -ENOMEM;
 
 	dev->irq_hstate = irq_hstate;
 
@@ -1903,6 +1904,8 @@ int vgt_irq_init(struct pgt_device *dev)
 	/* Initialize ownership table, based on a default policy table */
 	o_table = kmalloc(IRQ_MAX * sizeof(enum vgt_owner_type), GFP_KERNEL);
 	if (!o_table) {
+		kfree(dev->irq_hstate);
+		dev->irq_hstate = NULL;
 		dprintk("vGT: no enough memory for owner table\n");
 		return -ENOMEM;
 	}
@@ -1932,7 +1935,10 @@ void vgt_irq_exit(struct pgt_device *dev)
 	/* TODO: recover i915 handler? */
 	//unbind_from_irq(vgt_i915_irq(dev));
 	ops->exit(dev);
-	kfree(vgt_event_owner_table(dev));
+	if (dev->irq_hstate != NULL) {
+		kfree(vgt_event_owner_table(dev));
+		kfree(dev->irq_hstate);
+	}
 }
 
 int vgt_vstate_irq_init(struct vgt_device *vgt)
@@ -1960,6 +1966,7 @@ int vgt_vstate_irq_init(struct vgt_device *vgt)
 void vgt_vstate_irq_exit(struct vgt_device *vgt)
 {
 	hrtimer_cancel(&vgt_dpy_timer(vgt).timer);
+	kfree(vgt->irq_vstate);
 }
 
 void vgt_install_irq(struct pci_dev *pdev)

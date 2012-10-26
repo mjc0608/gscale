@@ -2271,8 +2271,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 
 		if (gmbus_port || aux_ch_addr) {
 			if (!*pedid) {
-				*pedid = kmalloc(sizeof(vgt_edid_data_t),
-							GFP_KERNEL);
+				*pedid = kmalloc(sizeof(vgt_edid_data_t), GFP_ATOMIC);
 				if (*pedid == NULL) {
 					printk("ERROR: Insufficient memory in %s\n",
 							__FUNCTION__);
@@ -2422,8 +2421,7 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 			printk ("EDID_PROPAGATE: Propagate EDID %d\n", i);
 			if (!vgt->vgt_edids[i]) {
 				vgt->vgt_edids[i] = kmalloc(
-						sizeof(vgt_edid_data_t),
-						GFP_KERNEL);
+						sizeof(vgt_edid_data_t), GFP_ATOMIC);
 				if (vgt->vgt_edids[i] == NULL) {
 					printk("ERROR: Insufficient memory in %s\n",
 							__FUNCTION__);

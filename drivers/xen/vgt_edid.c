@@ -206,7 +206,7 @@ vgt_edid_data_t *vgt_create_edid(void)
 	 *   the issue, although it is not a big problem.
 	 */
 
-	edid = kmalloc(sizeof(vgt_edid_data_t), GFP_KERNEL);
+	edid = kmalloc(sizeof(vgt_edid_data_t), GFP_ATOMIC);
 	if (!edid) {
 		EDID_MSG(VGT_EDID_ERROR, false,
 				"Failed to allocate edid memory!\n");

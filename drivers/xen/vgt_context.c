@@ -2740,7 +2740,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	else
 		vgt->vgtt_sz = (vgt->gm_sz >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
 	printk("vGT:   Virtual GTT size: 0x%lx\n", (long)vgt->vgtt_sz);
-	vgt->vgtt = kzalloc(vgt->vgtt_sz, GFP_KERNEL);
+	vgt->vgtt = vzalloc(vgt->vgtt_sz);
 	if (!vgt->vgtt) {
 		printk("vGT: failed to allocate virtual GTT table\n");
 		goto err;
@@ -2869,9 +2869,10 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	return 0;
 err:
+	kfree(vgt->irq_vstate);
 	if ( vgt->aperture_base > 0)
 		free_vm_aperture_gm_and_fence(vgt);
-	kfree(vgt->vgtt);
+	vfree(vgt->vgtt);
 	vfree(vgt->state.vReg);
 	vfree(vgt->state.sReg);
 	if (vgt->vgt_id >= 0)
@@ -2954,7 +2955,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	free_vm_aperture_gm_and_fence(vgt);
 	free_vm_rsvd_aperture(vgt);
 	vgt_vmem_destroy(vgt);
-	kfree(vgt->vgtt);
+	vfree(vgt->vgtt);
 	vfree(vgt->state.vReg);
 	vfree(vgt->state.sReg);
 	free_vgt_id(vgt->vgt_id);
@@ -3078,7 +3079,7 @@ bool initial_phys_states(struct pgt_device *pdev)
 	printk("gmadr_va: 0x%llx\n", (uint64_t)pdev->gmadr_va);
 #endif
 
-	pdev->initial_mmio_state = kzalloc(pdev->mmio_size, GFP_KERNEL);
+	pdev->initial_mmio_state = vzalloc(pdev->mmio_size);
 	if (!pdev->initial_mmio_state) {
 		printk("vGT: failed to allocate initial_mmio_state\n");
 		return false;
@@ -3211,8 +3212,7 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 		return false;
 	}
 
-	pdev->reg_info = kzalloc (pdev->reg_num * sizeof(reg_info_t),
-				GFP_KERNEL);
+	pdev->reg_info = vzalloc (pdev->reg_num * sizeof(reg_info_t));
 	if (!pdev->reg_info) {
 		printk("vGT: failed to allocate reg_info\n");
 		return false;
@@ -3492,8 +3492,8 @@ void vgt_destroy(void)
 		}
 	}
 	free_mtable();
-	kfree(pdev->reg_info);
-	kfree(pdev->initial_mmio_state);
+	vfree(pdev->reg_info);
+	vfree(pdev->initial_mmio_state);
 
 	for (i = 0; i < EDID_NUM; ++ i) {
 		if (pdev->pdev_edids[i]) {

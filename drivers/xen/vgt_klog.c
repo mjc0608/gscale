@@ -161,11 +161,12 @@ static int create_channel_controls(struct dentry *parent,
 			goto cleanup_control_files;
 		}
 	}
-
+	kfree(tmpname);
 	return 0;
 
 cleanup_control_files:
 	remove_channel_controls();
+	kfree(tmpname);
 	return -ENOMEM;
 }
 
