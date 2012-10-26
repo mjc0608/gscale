@@ -1411,6 +1411,12 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 			vgt_raise_request(dev, VGT_REQUEST_UEVENT);
 		return;
 	}
+
+	/* update channel status */
+	__vreg(vgt, _REG_PCH_ADPA) &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+	__vreg(vgt, _REG_PCH_ADPA) |= vgt_event_state(pdev, entry->event).val &
+				      _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+	info->propogate_virtual_event(vgt, bit, info);
 }
 
 void vgt_handle_sdvo_b_hotplug(struct pgt_device *dev,
@@ -1880,31 +1886,24 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 		vgt_hotplug_cmd_t  hotplug_cmd)
 {
 	int i;
+	enum vgt_event_type event = IRQ_MAX;
+	edid_index_t edid_idx = EDID_VGA; // which default value to set?
+
+	if (get_env_and_edid_info(hotplug_cmd, &event, &edid_idx))
+		return;
+
 	/* Default: send hotplug virtual interrupts to all VMs currently.
 	 * Since 'vmid' has no concern with vgt_id, e.g.  if you have a HVM
 	 * with vmid = 1 and after destroy & recreate it, its vmid become 2
 	 * we need to use vmid_2_vgt_device() to map vmid to vgt_device if
 	 * we need to send these hotplug virtual interrupts to a specific vm
 	 */
+	spin_lock_irq(&dev->lock);
 	for (i = 0; i < VGT_MAX_VMS; ++ i) {
-		int bit;
-		struct vgt_irq_info *info;
-		struct vgt_irq_ops *ops;
-		enum vgt_event_type event = 0;
-		edid_index_t edid_idx = 0;
 		struct vgt_device *vgt = dev->device[i];
 
 		if (!vgt)
 			continue;
-
-		if (get_env_and_edid_info(hotplug_cmd, &event, &edid_idx)) {
-			continue;
-		}
-
-		ops = vgt_get_irq_ops(dev);
-		info = ops->get_irq_info_from_event(dev, event);
-		ASSERT(info);
-		bit = ops->get_bit_from_event(dev, event, info);
 
 		if (hotplug_cmd.action == 0x1) {
 			/* plug in */
@@ -1914,10 +1913,10 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 			vgt_clear_edid(vgt, edid_idx);
 		}
 
-		info->propogate_virtual_event(vgt, bit, info);
+		vgt_trigger_virtual_event(vgt, event, true);
 	}
 
-	vgt_raise_request(dev, VGT_REQUEST_IRQ);
+	spin_unlock_irq(&dev->lock);
 	return;
 }
 
