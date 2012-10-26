@@ -991,6 +991,11 @@ static inline bool g_gm_is_hidden(struct vgt_device *vgt, uint64_t g_addr)
 		(g_addr <= vgt_guest_hidden_gm_end(vgt));
 }
 
+static inline bool g_gm_is_valid(struct vgt_device *vgt, uint64_t g_addr)
+{
+	return g_gm_is_visible(vgt, g_addr) || g_gm_is_hidden(vgt, g_addr);
+}
+
 /* check whether a host GM address is within the CPU visible range */
 static inline bool h_gm_is_visible(struct vgt_device *vgt, uint64_t h_addr)
 {
@@ -1003,6 +1008,11 @@ static inline bool h_gm_is_hidden(struct vgt_device *vgt, uint64_t h_addr)
 {
 	return (h_addr >= vgt_hidden_gm_base(vgt)) &&
 		(h_addr <= vgt_hidden_gm_end(vgt));
+}
+
+static inline bool h_gm_is_valid(struct vgt_device *vgt, uint64_t h_addr)
+{
+	return h_gm_is_visible(vgt, h_addr) || h_gm_is_hidden(vgt, h_addr);
 }
 
 /* for a guest GM address, return the offset within the CPU visible range */
@@ -1034,7 +1044,7 @@ static inline uint64_t g2h_gm(struct vgt_device *vgt, uint64_t g_addr)
 {
 	uint64_t h_addr;
 
-	ASSERT_NUM(g_gm_is_visible(vgt, g_addr) || g_gm_is_hidden(vgt, g_addr), g_addr);
+	ASSERT_NUM(g_gm_is_valid(vgt, g_addr), g_addr);
 
 	if (g_gm_is_visible(vgt, g_addr))	/* aperture */
 		h_addr = vgt_visible_gm_base(vgt) +
@@ -1051,7 +1061,7 @@ static inline uint64_t h2g_gm(struct vgt_device *vgt, uint64_t h_addr)
 {
 	uint64_t g_addr;
 
-	ASSERT_NUM(h_gm_is_visible(vgt, h_addr) || h_gm_is_hidden(vgt, h_addr), h_addr);
+	ASSERT_NUM(h_gm_is_valid(vgt, h_addr), h_addr);
 
 	if (h_gm_is_visible(vgt, h_addr))
 		g_addr = vgt_guest_visible_gm_base(vgt) +

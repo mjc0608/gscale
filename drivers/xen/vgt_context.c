@@ -647,7 +647,7 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	 * vm's range. In such case fake a valid address since the value there
 	 * doesn't matter.
 	 */
-	if (!h_gm_is_visible(vgt, h_value & mask) && !h_gm_is_hidden(vgt, h_value & mask)) {
+	if (!h_gm_is_valid(vgt, h_value & mask)) {
 		dprintk("!!!vGT: reg (%lx) doesn't contain a valid host address (%x)\n", reg, h_value);
 		h_value = (vgt_visible_gm_base(vgt) & mask) | (h_value & ~mask);
 	}

@@ -164,14 +164,14 @@ static void inline address_fixup(struct vgt_cmd_data *d, int index)
 
 	uint32_t val = *addr;
 
-	if (h_gm_is_visible(d->vgt,val) || h_gm_is_hidden(d->vgt, val)){
+	if (h_gm_is_valid(d->vgt,val)) {
 		/* address already translated before, do nothing but return */
 		klog_printk("vgt: address 0x%x in %p already translated\n",
 				val, addr);
 		return 0;
 	}
 
-	if (g_gm_is_visible(d->vgt, val) || g_gm_is_hidden(d->vgt, val)){
+	if (g_gm_is_valid(d->vgt, val)) {
 		/* valid guest gm address */
 		vgt_addr_fix_save(addr, val);
 		*addr = g2h_gm(d->vgt, val);

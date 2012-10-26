@@ -122,7 +122,7 @@ unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma, bool ppgt
        BUG();
    } else {
        /* Global GTT */
-		if (!g_gm_is_visible(vgt, gma) && !g_gm_is_hidden(vgt, gma)) {
+		if (!g_gm_is_valid(vgt, gma)) {
 			printk(KERN_ERR "invalid gma %lx\n", gma);
 			return INVALID_ADDR;
 		}
@@ -192,7 +192,7 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 	g_addr = g_gtt_index << GTT_PAGE_SHIFT;
 	/* the VM may configure the whole GM space when ballooning is used */
-	if (!g_gm_is_visible(vgt, g_addr) && !g_gm_is_hidden(vgt, g_addr)) {
+	if (!g_gm_is_valid(vgt, g_addr)) {
 		static int count = 0;
 
 		/* print info every 32MB */
