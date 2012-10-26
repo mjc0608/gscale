@@ -1667,6 +1667,9 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 	int bit;
 	struct vgt_irq_info_entry *entry;
 
+	ASSERT((physical && !spin_is_locked(&dev->lock)) ||
+		(!physical && spin_is_locked(&dev->lock)));
+
 	for_each_set_bit(bit, iir, info->table_size) {
 		/* clear cached pending bits */
 		if (!physical)
@@ -1712,6 +1715,54 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 			vgt_get_event_owner(dev, entry->event));
 #endif
 	}
+}
+
+/*
+ * Trigger a virtual event which comes from other requests like hotplug agent
+ * instead of from pirq.
+ */
+void vgt_trigger_virtual_event(struct vgt_device *vgt,
+	enum vgt_event_type event, bool check)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_irq_info *info;
+	struct vgt_irq_info_entry *entry;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
+	int bit;
+
+	ASSERT(spin_is_locked(&pdev->lock));
+
+	info = ops->get_irq_info_from_event(pdev, event);
+	ASSERT(info);
+	bit = ops->get_bit_from_event(pdev, event, info);
+	entry = info->table + bit;
+
+	/* invoke the event handler indicating a virtual event */
+	if (entry->event_handler)
+		entry->event_handler(pdev, bit, entry, info, false,
+			vgt_get_event_owner(pdev, entry->event));
+	else {
+		printk("vGT: trigger a virtual event w/o handler. Use default\n");
+
+		vgt_default_event_handler(pdev, bit, entry, info, false,
+			vgt_get_event_owner(pdev, entry->event));
+	}
+
+	/* forward to DE if any PCH event pending */
+	if (VGT_PCH_EVENT(event) &&
+	    vgt_has_pch_irq_pending(vgt)) {
+		int bit_de;
+		struct vgt_irq_info *info_de;
+
+		vgt_clear_pch_irq_pending(vgt);
+		info_de = ops->get_irq_info_from_event(pdev, IRQ_PCH_IRQ);
+		ASSERT(info_de);
+		bit_de = ops->get_bit_from_event(pdev, IRQ_PCH_IRQ, info);
+		vgt_propogate_virtual_event(vgt, bit_de, info_de);
+	}
+
+	if (check && vgt_has_irq_pending(vgt))
+		vgt_inject_virtual_interrupt(vgt);
 }
 
 /*

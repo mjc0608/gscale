@@ -1788,6 +1788,8 @@ void vgt_propogate_emulated_event(struct vgt_device *vstate,
 void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 	struct vgt_irq_info *info, bool physical,
 	enum vgt_owner_type o_type);
+void vgt_trigger_virtual_event(struct vgt_device *vgt,
+	enum vgt_event_type event, bool check);
 void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type type);
 void vgt_default_event_handler(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
