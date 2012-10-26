@@ -662,6 +662,7 @@
 #define _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER (1 << 16)
 #define _REGBIT_ADPA_VSYNC_ACTIVE_HIGH (1 << 4)
 #define _REGBIT_ADPA_HSYNC_ACTIVE_HIGH (1 << 3)
+#define _REGBIT_ADPA_CONTROL_MASK	\
 
 /* CPT(bits definitions belonging to adpa/lvds)
  * FIXME: fix the naming for these bits ?

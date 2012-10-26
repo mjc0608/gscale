@@ -1101,61 +1101,118 @@ bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset,
     return rc;
 }
 
+/*
+ * TODO:
+ * DAC_CTL is special regarding to that its bits containing multiple
+ * policies:
+ * 	- CRT control bits like enabling, transcoder selection belong
+ * 	  to display owner
+ * 	- hotplug status bits are fully virtualized like other interrupt
+ * 	  status bits
+ * 	- force hotplug trigger bit needs be emulated
+ *
+ * Let's take this as one example how this category may be abstracted
+ * in the future
+ */
 bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
-	vgt_reg_t reg_data;
-	bool rc;
-	struct pgt_device *pdev = vgt->pdev;
+	bool rc = true;
 
 	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 	reg = offset & ~(bytes - 1);
 
-	rc = default_mmio_read(vgt, offset, p_data, bytes);
-	reg_data = *(vgt_reg_t *)p_data;
-	if (reg_hw_access(vgt, reg)) {
-		if (reg_data & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK)
-			set_bit(VGT_CRT, pdev->port_detect_status);
-		else
-			clear_bit(VGT_CRT, pdev->port_detect_status);
+	/*
+	 * the channel status bit is updated by interrupt handler,
+	 * or the write handler. so in most time we simply return
+	 * vreg value back. The only exception is when force hotplug
+	 * trigger bit is set at driver init time when hotplug irq
+	 * is disabled. At that time we need to read back hw status
+	 * if vgt is the display owner.
+	 */
+	if (__vreg(vgt, reg) & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER) {
+		ASSERT(!(__vreg(vgt, reg) & _REGBIT_ADPA_DAC_ENABLE));
+
+		if (reg_hw_access(vgt, reg)) {
+			rc = default_mmio_read(vgt, offset, p_data, bytes);
+
+			/*
+			 * update port detect status accordingly. since hotplug
+			 * irq is disabled, no virtual event is triggered.
+			 */
+			if (__vreg(vgt, reg) & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK)
+				set_bit(VGT_CRT, vgt->pdev->port_detect_status);
+			else
+				clear_bit(VGT_CRT, vgt->pdev->port_detect_status);
+		}
+
+		/* clear trigger bit to indicate end of emulation */
+		__vreg(vgt, reg) &= ~_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER;
 	}
-	return rc;
+
+	memcpy(p_data, (char *)vgt->state.vReg + offset, bytes);
+
+	return true;
 }
 
 bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
-	vgt_reg_t wr_data, vreg_data;
+	unsigned long wr_data;
+	vgt_reg_t old, new, vreg_data;
 	bool rc;
 	struct pgt_device *pdev = vgt->pdev;
 
 	ASSERT(bytes == 4 && (offset & 0x3) == 0);
-
 	reg = offset & ~(bytes - 1);
-	wr_data = *(vgt_reg_t *)p_data;
 
-	/* FIXME: suppose the CRT has been plugged in
-	 * Actually we need dom0 to tell hvm such info
+	new = wr_data = *(vgt_reg_t *)p_data;
+	old = __vreg(vgt, reg);
+	/* clear channel status when writing 1 */
+	old &= ~(new & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK);
+
+	/* go to general write handler leaving channel status handling aside */
+	wr_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+	rc = default_mmio_write(vgt, offset, &wr_data, bytes);
+	vreg_data = __vreg(vgt, reg);
+
+	/* mash new channel status bits with other bits */
+	vreg_data = (vreg_data & ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) |
+		(old & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK);
+
+	/*
+	 * emulate 'force hotplug trigger' which detect the channel status
+	 * even when hotplug enable bit is not set.
 	 */
-	rc = default_mmio_write(vgt, offset, p_data, bytes);
-	vreg_data = wr_data;
-	/* Tell VM if CRT monitor physically plugged in */
-	if (test_bit(VGT_CRT, pdev->port_detect_status)) {
-		/* Emulation: trap hotplug force trigger */
-		if ((wr_data & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER) && !(wr_data & _REGBIT_ADPA_DAC_ENABLE)) {
-			/* clear the force trigger and set read only bits */
-			vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER;
-		}
-		/* FIXME: sometimes only one channel is OK ??? (blue and green channel) */
-		vreg_data |= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+	if (new & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER) {
+		/*
+		 * TODO: need consider whether to trigger virtual hotplug event
+		 * when hotplug is already enabled. Not sure how HW will behave.
+		 */
+		ASSERT(!(new & _REGBIT_ADPA_DAC_ENABLE));
 
-	} else
-		vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+		/*
+		 * if vgt is the owner, the force trigger bit is forwarded
+		 * to hw so that channel status will be detected in the read handler.
+		 * Or else we emulate channel detection based on port_detect_status.
+		 *
+		 * TODO: this trick can be eliminated if XenGT detects ports directly
+		 */
+		if (!reg_hw_access(vgt, reg)) {
+			/* FIXME: sometimes only one channel is OK ??? */
+			if (test_bit(VGT_CRT, pdev->port_detect_status))
+				vreg_data |= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+			else
+				vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+		}
+
+		/* delay clear of this bit to the 1st read after this write */
+		//vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER;
+	}
 
 	__vreg(vgt, reg) = vreg_data;
-
 	return rc;
 }
 

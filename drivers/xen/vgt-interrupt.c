@@ -1392,17 +1392,15 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 		if (adpa_ctrl & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) {
 			printk("%s: %d: vGT: detect crt insert event!\n", __func__, __LINE__);
 
-			if (!test_and_set_bit(VGT_CRT, dev->port_detect_status))
-				uevent = CRT_HOTPLUG_IN;
-			else
+			if (test_and_set_bit(VGT_CRT, dev->port_detect_status))
 				printk("vGT: capture CRT hot-plug when it's attached!\n");
+			uevent = CRT_HOTPLUG_IN;
 		} else {
 			printk("%s: %d: vGT: detect crt removal event!\n", __func__, __LINE__);
 
-			if (test_and_clear_bit(VGT_CRT, dev->port_detect_status))
-				uevent = CRT_HOTPLUG_OUT;
-			else
+			if (!test_and_clear_bit(VGT_CRT, dev->port_detect_status))
 				printk("vGT: capture CRT hot-removal when it's disattached!\n");
+			uevent = CRT_HOTPLUG_OUT;
 		}
 
 		vgt_event_state(pdev, entry->event).val = adpa_ctrl;
