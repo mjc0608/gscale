@@ -1876,89 +1876,82 @@ u64 mmio_wcycles=0;
 
 void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 {
-    int i, sign;
-    char *cfg_space = &vgt->state.cfg_space[0];
-    uint64_t  base = * (uint64_t *) (cfg_space + VGT_REG_CFG_SPACE_BAR0);
-    uint64_t  tmp;
-    cycles_t t0, t1;
+	int i, sign;
+	void *gva;
+	unsigned long gpa;
+	char *cfg_space = &vgt->state.cfg_space[0];
+	uint64_t base = * (uint64_t *) (cfg_space + VGT_REG_CFG_SPACE_BAR0);
+	uint64_t tmp;
+	cycles_t t0, t1;
 
-    sign = req->df ? -1 : 1;
+	sign = req->df ? -1 : 1;
 
-    if (req->dir == IOREQ_READ) {
-	t0 = get_cycles();
-	mmio_rcnt++;
-        /* MMIO READ */
-        if (!req->data_is_ptr) {
-            ASSERT (req->count == 1);
+	if (req->dir == IOREQ_READ) {
+		t0 = get_cycles();
+		mmio_rcnt++;
+		/* MMIO READ */
+		if (!req->data_is_ptr) {
+			ASSERT (req->count == 1);
 
-            dprintk("HVM_MMIO_read: target register (%lx).\n", (unsigned long)req->addr);
-            vgt_emulate_read(vgt,
-                        req->addr,
-                        &req->data,
-                        req->size);
-        }
-        else {
-	    ASSERT (req->addr + sign * req->count * req->size >= base);
-	    ASSERT (req->addr + sign * req->count * req->size <
-                            base + vgt->state.bar_size[0]);
-            dprintk("HVM_MMIO_read: rep %d target memory %lx, slow!\n",
-                         req->count, (unsigned long)req->addr);
-            for (i=0; i<req->count; i++) {
-                tmp = 0;
-                vgt_emulate_read(vgt,
-                        req->addr + sign * i * req->size,
-                        &tmp,
-                        req->size);
-                /*
-                 *  TODO: Hypercall to write data (tmp) to
-                 *      req->data + sign * i * req->size
-                 *  We can use a hypercall or entire/cache foreign map.
-                 *  Refer to IOCTL_PRIVCMD_MMAPBATCH_V2.
-                 */
-            }
-        }
-	t1 = get_cycles();
-	t1 -= t0;
-	mmio_rcycles += (u64) t1;
-    }
-    else {   /* MMIO Write */
-	t0 = get_cycles();
-	mmio_wcnt++;
-        if (!req->data_is_ptr) {
-            ASSERT (req->count == 1);
+			dprintk("HVM_MMIO_read: target register (%lx).\n",
+				(unsigned long)req->addr);
+			vgt_emulate_read(vgt, req->addr, &req->data, req->size);
+		}
+		else {
+			ASSERT (req->addr + sign * req->count * req->size >= base);
+			ASSERT (req->addr + sign * req->count * req->size <
+				base + vgt->state.bar_size[0]);
+			dprintk("HVM_MMIO_read: rep %d target memory %lx, slow!\n",
+				req->count, (unsigned long)req->addr);
 
-            dprintk("HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
-            vgt_emulate_write(vgt,
-                        req->addr,
-                        &req->data,
-                        req->size);
-        }
-        else {
-	    ASSERT (req->addr + sign * req->count * req->size >= base);
-	    ASSERT (req->addr + sign * req->count * req->size <
-                            base + vgt->state.bar_size[0]);
-            dprintk("HVM_MMIO_write: rep %d target memory %lx, slow!\n",
-                         req->count, (unsigned long)req->addr);
+			for (i = 0; i < req->count; i++) {
+				vgt_emulate_read(vgt, req->addr + sign * i * req->size,
+					&tmp, req->size);
+				gpa = req->data + sign * i * req->size;
+				gva = vgt_vmem_gpa_2_va(vgt, gpa);
+				// XXX: FIXME: on the SNB laptop, writing tmp to gva can
+				//cause bug 119. So let's do the writing only on HSW for now.
+				if (gva != NULL && vgt->pdev->is_haswell)
+					memcpy(gva, &tmp, req->size);
+				else
+					dprintk("vGT: can not write gpa = 0x%lx!!!\n", gpa);
+			}
+		}
+		t1 = get_cycles();
+		t1 -= t0;
+		mmio_rcycles += (u64) t1;
+	}
+	else {   /* MMIO Write */
+		t0 = get_cycles();
+		mmio_wcnt++;
+		if (!req->data_is_ptr) {
+			ASSERT (req->count == 1);
+			dprintk("HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
+			vgt_emulate_write(vgt, req->addr, &req->data, req->size);
+		}
+		else {
+			ASSERT (req->addr + sign * req->count * req->size >= base);
+			ASSERT (req->addr + sign * req->count * req->size <
+				base + vgt->state.bar_size[0]);
+			dprintk("HVM_MMIO_write: rep %d target memory %lx, slow!\n",
+				req->count, (unsigned long)req->addr);
 
-            for (i=0; i<req->count; i++) {
-                tmp = 0;
-                /*
-                 *  TODO: Hypercall to read data (tmp) from
-                 *      req->data + sign * i * req->size
-                 *  We can use a hypercall or entire/cache foreign map.
-                 *  Refer to IOCTL_PRIVCMD_MMAPBATCH_V2.
-                 */
-                vgt_emulate_write(vgt,
-                        req->addr + sign * i * req->size,
-                        &tmp,
-                        req->size);
-            }
-
-        }
-	t1 = get_cycles();
-	t1 -= t0;
-	mmio_wcycles += (u64) t1;
-    }
+			for (i = 0; i < req->count; i++) {
+				gpa = req->data + sign * i * req->size;
+				gva = vgt_vmem_gpa_2_va(vgt, gpa);
+				if (gva != NULL)
+					memcpy(&tmp, gva, req->size);
+				else {
+					tmp = 0;
+					dprintk("vGT: can not read gpa = 0x%lx!!!\n", gpa);
+				}
+				vgt_emulate_write(vgt, req->addr + sign * i * req->size, &tmp, req->size);
+			}
+		}
+		t1 = get_cycles();
+		t1 -= t0;
+		mmio_wcycles += (u64) t1;
+	}
 }
 
 void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
