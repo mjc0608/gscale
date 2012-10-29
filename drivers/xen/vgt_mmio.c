@@ -2627,10 +2627,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_BCS_PP_DIR_BASE, 4, F_RDR_ADRFIX, 0xFFFF0000, D_ALL, NULL, NULL},
 {_REG_RBSYNC, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_BRSYNC, 4, F_RDR, 0, D_ALL, NULL, NULL},
-/* HSW */
-{0x120010, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x9008, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{_REG_GFX_FLSH_CNT, 4, F_WA, 0, D_HSW, NULL, NULL},
 
 	/* -------display regs---------- */
 {_REG_DEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
@@ -3062,6 +3058,9 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_GTDRIVER_MAILBOX_DATA1, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GTT_FAULT_STATUS, 4, F_WA, 0, D_ALL, err_int_r, err_int_w},
 /* HSW */
+{0x120010, 4, F_WA, 0, D_HSW, NULL, NULL},	/* For eLLC detect */
+{0x9008, 4, F_WA, 0, D_HSW, NULL, NULL},	/* For eLLC detect */
+{_REG_GFX_FLSH_CNT, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_GEN7_COMMON_SLICE_CHICKEN1, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_GEN7_L3CNTLREG1, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_GEN7_L3_CHICKEN_MODE_REGISTER, 4, F_WA, 0, D_HSW, NULL, NULL},
