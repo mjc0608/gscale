@@ -74,6 +74,109 @@ extern bool hvm_super_owner;
 
 typedef uint32_t vgt_reg_t;
 
+enum vgt_event_type {
+
+	// GT
+	IRQ_RCS_MI_USER_INTERRUPT = 0,
+	IRQ_RCS_DEBUG,
+	IRQ_RCS_MMIO_SYNC_FLUSH,
+	IRQ_RCS_CMD_STREAMER_ERR,
+	IRQ_RCS_PIPE_CONTROL,
+	IRQ_RCS_L3_PARITY_ERR,		/* IVB */
+	IRQ_RCS_WATCHDOG_EXCEEDED,
+	IRQ_RCS_PAGE_DIRECTORY_FAULT,
+	IRQ_RCS_AS_CONTEXT_SWITCH,
+	IRQ_RCS_MONITOR_BUFF_HALF_FULL,	/* IVB */
+
+	IRQ_VCS_MI_USER_INTERRUPT,
+	IRQ_VCS_MMIO_SYNC_FLUSH,
+	IRQ_VCS_CMD_STREAMER_ERR,
+	IRQ_VCS_MI_FLUSH_DW,
+	IRQ_VCS_WATCHDOG_EXCEEDED,
+	IRQ_VCS_PAGE_DIRECTORY_FAULT,
+	IRQ_VCS_AS_CONTEXT_SWITCH,
+
+	IRQ_BCS_MI_USER_INTERRUPT,
+	IRQ_BCS_MMIO_SYNC_FLUSH,
+	IRQ_BCS_CMD_STREAMER_ERR,
+	IRQ_BCS_MI_FLUSH_DW,
+	IRQ_BCS_PAGE_DIRECTORY_FAULT,
+	IRQ_BCS_AS_CONTEXT_SWITCH,
+
+	// DISPLAY
+	IRQ_PIPE_A_FIFO_UNDERRUN,
+	IRQ_PIPE_A_CRC_ERR,
+	IRQ_PIPE_A_CRC_DONE,
+	IRQ_PIPE_A_VSYNC,
+	IRQ_PIPE_A_LINE_COMPARE,
+	IRQ_PIPE_A_ODD_FIELD,
+	IRQ_PIPE_A_EVEN_FIELD,
+	IRQ_PIPE_A_VBLANK,
+	IRQ_PIPE_B_FIFO_UNDERRUN,	// This is an active high level for the duration of the Pipe B FIFO underrun
+	IRQ_PIPE_B_CRC_ERR,	// This is an active high pulse on the Pipe B CRC error
+	IRQ_PIPE_B_CRC_DONE,	// This is an active high pulse on the Pipe B CRC done
+	IRQ_PIPE_B_VSYNC,	// This is an active high level for the duration of the Pipe B vertical sync
+	IRQ_PIPE_B_LINE_COMPARE,	// This is an active high level for the duration of the selected Pipe B scan lines
+	IRQ_PIPE_B_ODD_FIELD,	// This is an active high level for the duration of the Pipe B interlaced odd field
+	IRQ_PIPE_B_EVEN_FIELD,	// This is an active high level for the duration of the Pipe B interlaced even field
+	IRQ_PIPE_B_VBLANK,	// This is an active high level for the duration of the Pipe B vertical blank
+	IRQ_DPST_PHASE_IN,	// This is an active high pulse on the DPST phase in event
+	IRQ_DPST_HISTOGRAM,	// This is an active high pulse on the AUX A done event.
+	IRQ_GSE,
+	IRQ_DP_A_HOTPLUG,
+	IRQ_AUX_CHANNEL_A,	// This is an active high pulse on the AUX A done event.
+	IRQ_PCH_IRQ,	// Only the rising edge of the PCH Display interrupt will cause the IIR to be set here
+	IRQ_PERF_COUNTER,	// This is an active high pulse when the performance counter reaches the threshold value programmed in the Performance Counter Source register
+	IRQ_POISON,		// This is an active high pulse on receiving the poison message
+	IRQ_GTT_FAULT,	// This is an active high level while either of the GTT Fault Status register bits are set
+	IRQ_PRIMARY_A_FLIP_DONE,
+	IRQ_PRIMARY_B_FLIP_DONE,	// This is an active high pulse when a primary plane B flip is done
+	IRQ_SPRITE_A_FLIP_DONE,
+	IRQ_SPRITE_B_FLIP_DONE,	// This is an active high pulse when a sprite plane B flip is done
+	IRQ_PIPE_C_VBLANK,		/* IVB DE */
+	IRQ_PIPE_C_VSYNC,
+	IRQ_PIPE_C_LINE_COMPARE,
+	IRQ_PRIMARY_C_FLIP_DONE,
+	IRQ_SPRITE_C_FLIP_DONE,
+	IRQ_ERROR_INTERRUPT_COMBINED,
+
+	// PM
+	IRQ_GV_DOWN_INTERVAL,
+	IRQ_GV_UP_INTERVAL,
+	IRQ_RP_DOWN_THRESHOLD,
+	IRQ_RP_UP_THRESHOLD,
+	IRQ_FREQ_DOWNWARD_TIMEOUT_RC6,
+	IRQ_PCU_THERMAL,
+	IRQ_PCU_PCODE2DRIVER_MAILBOX,
+
+	// PCH
+	IRQ_FDI_RX_INTERRUPTS_TRANSCODER_A,	// This is an active high level while any of the FDI_RX_ISR bits are set for transcoder A
+	IRQ_AUDIO_CP_CHANGE_TRANSCODER_A,	// This is an active high level while any of the FDI_RX_ISR bits are set for transcoder A
+	IRQ_AUDIO_CP_REQUEST_TRANSCODER_A,	// This is an active high level indicating content protection is requested by audio azalia verb programming for transcoder A
+	IRQ_FDI_RX_INTERRUPTS_TRANSCODER_B,
+	IRQ_AUDIO_CP_CHANGE_TRANSCODER_B,
+	IRQ_AUDIO_CP_REQUEST_TRANSCODER_B,
+	IRQ_FDI_RX_INTERRUPTS_TRANSCODER_C,
+	IRQ_AUDIO_CP_CHANGE_TRANSCODER_C,
+	IRQ_AUDIO_CP_REQUEST_TRANSCODER_C,
+	IRQ_ERR_AND_DBG,
+	IRQ_GMBUS,
+	IRQ_SDVO_B_HOTPLUG,
+	IRQ_CRT_HOTPLUG,
+	IRQ_DP_B_HOTPLUG,
+	IRQ_DP_C_HOTPLUG,
+	IRQ_DP_D_HOTPLUG,
+	IRQ_AUX_CHENNEL_B,
+	IRQ_AUX_CHENNEL_C,
+	IRQ_AUX_CHENNEL_D,
+	IRQ_AUDIO_POWER_STATE_CHANGE_B,
+	IRQ_AUDIO_POWER_STATE_CHANGE_C,
+	IRQ_AUDIO_POWER_STATE_CHANGE_D,
+
+	IRQ_RESERVED,
+	IRQ_MAX,
+};
+
 /*
  * Define registers of a ring buffer per hardware  register layout.
  */
@@ -287,8 +390,11 @@ struct vgt_statistics {
 	u64	schedule_in_time;	/* TSC time when it is last scheduled in */
 	u64	allocated_cycles;
 	u64	used_cycles;
-	u64	pirq_num;
-	u64	virq_num;
+	u64	irq_num;
+	u64	events[IRQ_MAX];
+	u64	last_propogation;
+	u64	last_blocked_propogation;
+	u64	last_injection;
 };
 
 /* per-VM structure */
@@ -508,6 +614,16 @@ int init_vgt_port_struct(struct vgt_device *vgt,
 		enum vgt_plane plane,
 		enum vgt_output_type otype);
 
+struct pgt_statistics {
+	u64	irq_num;
+	u64	last_pirq;
+	u64	last_virq;
+	u64	pirq_cycles;
+	u64	virq_cycles;
+	u64	irq_delay_cycles;
+	u64	events[IRQ_MAX];
+};
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list;
@@ -598,6 +714,8 @@ struct pgt_device {
 
 	vgt_aux_entry_t vgt_aux_table[VGT_AUX_TABLE_NUM];
 	int at_index;
+
+	struct pgt_statistics stat;
 };
 
 extern struct list_head pgt_devices;
@@ -1369,109 +1487,6 @@ static inline void vgt_pci_bar_write_32(struct vgt_device *vgt, uint32_t bar_off
 		VGT_POST_READ(pdev, reg);		\
 	} while (0)
 
-enum vgt_event_type {
-
-	// GT
-	IRQ_RCS_MI_USER_INTERRUPT = 0,
-	IRQ_RCS_DEBUG,
-	IRQ_RCS_MMIO_SYNC_FLUSH,
-	IRQ_RCS_CMD_STREAMER_ERR,
-	IRQ_RCS_PIPE_CONTROL,
-	IRQ_RCS_L3_PARITY_ERR,		/* IVB */
-	IRQ_RCS_WATCHDOG_EXCEEDED,
-	IRQ_RCS_PAGE_DIRECTORY_FAULT,
-	IRQ_RCS_AS_CONTEXT_SWITCH,
-	IRQ_RCS_MONITOR_BUFF_HALF_FULL,	/* IVB */
-
-	IRQ_VCS_MI_USER_INTERRUPT,
-	IRQ_VCS_MMIO_SYNC_FLUSH,
-	IRQ_VCS_CMD_STREAMER_ERR,
-	IRQ_VCS_MI_FLUSH_DW,
-	IRQ_VCS_WATCHDOG_EXCEEDED,
-	IRQ_VCS_PAGE_DIRECTORY_FAULT,
-	IRQ_VCS_AS_CONTEXT_SWITCH,
-
-	IRQ_BCS_MI_USER_INTERRUPT,
-	IRQ_BCS_MMIO_SYNC_FLUSH,
-	IRQ_BCS_CMD_STREAMER_ERR,
-	IRQ_BCS_MI_FLUSH_DW,
-	IRQ_BCS_PAGE_DIRECTORY_FAULT,
-	IRQ_BCS_AS_CONTEXT_SWITCH,
-
-	// DISPLAY
-	IRQ_PIPE_A_FIFO_UNDERRUN,
-	IRQ_PIPE_A_CRC_ERR,
-	IRQ_PIPE_A_CRC_DONE,
-	IRQ_PIPE_A_VSYNC,
-	IRQ_PIPE_A_LINE_COMPARE,
-	IRQ_PIPE_A_ODD_FIELD,
-	IRQ_PIPE_A_EVEN_FIELD,
-	IRQ_PIPE_A_VBLANK,
-	IRQ_PIPE_B_FIFO_UNDERRUN,	// This is an active high level for the duration of the Pipe B FIFO underrun
-	IRQ_PIPE_B_CRC_ERR,	// This is an active high pulse on the Pipe B CRC error
-	IRQ_PIPE_B_CRC_DONE,	// This is an active high pulse on the Pipe B CRC done
-	IRQ_PIPE_B_VSYNC,	// This is an active high level for the duration of the Pipe B vertical sync
-	IRQ_PIPE_B_LINE_COMPARE,	// This is an active high level for the duration of the selected Pipe B scan lines
-	IRQ_PIPE_B_ODD_FIELD,	// This is an active high level for the duration of the Pipe B interlaced odd field
-	IRQ_PIPE_B_EVEN_FIELD,	// This is an active high level for the duration of the Pipe B interlaced even field
-	IRQ_PIPE_B_VBLANK,	// This is an active high level for the duration of the Pipe B vertical blank
-	IRQ_DPST_PHASE_IN,	// This is an active high pulse on the DPST phase in event
-	IRQ_DPST_HISTOGRAM,	// This is an active high pulse on the AUX A done event.
-	IRQ_GSE,
-	IRQ_DP_A_HOTPLUG,
-	IRQ_AUX_CHANNEL_A,	// This is an active high pulse on the AUX A done event.
-	IRQ_PCH_IRQ,	// Only the rising edge of the PCH Display interrupt will cause the IIR to be set here
-	IRQ_PERF_COUNTER,	// This is an active high pulse when the performance counter reaches the threshold value programmed in the Performance Counter Source register
-	IRQ_POISON,		// This is an active high pulse on receiving the poison message
-	IRQ_GTT_FAULT,	// This is an active high level while either of the GTT Fault Status register bits are set
-	IRQ_PRIMARY_A_FLIP_DONE,
-	IRQ_PRIMARY_B_FLIP_DONE,	// This is an active high pulse when a primary plane B flip is done
-	IRQ_SPRITE_A_FLIP_DONE,
-	IRQ_SPRITE_B_FLIP_DONE,	// This is an active high pulse when a sprite plane B flip is done
-	IRQ_PIPE_C_VBLANK,		/* IVB DE */
-	IRQ_PIPE_C_VSYNC,
-	IRQ_PIPE_C_LINE_COMPARE,
-	IRQ_PRIMARY_C_FLIP_DONE,
-	IRQ_SPRITE_C_FLIP_DONE,
-	IRQ_ERROR_INTERRUPT_COMBINED,
-
-	// PM
-	IRQ_GV_DOWN_INTERVAL,
-	IRQ_GV_UP_INTERVAL,
-	IRQ_RP_DOWN_THRESHOLD,
-	IRQ_RP_UP_THRESHOLD,
-	IRQ_FREQ_DOWNWARD_TIMEOUT_RC6,
-	IRQ_PCU_THERMAL,
-	IRQ_PCU_PCODE2DRIVER_MAILBOX,
-
-	// PCH
-	IRQ_FDI_RX_INTERRUPTS_TRANSCODER_A,	// This is an active high level while any of the FDI_RX_ISR bits are set for transcoder A
-	IRQ_AUDIO_CP_CHANGE_TRANSCODER_A,	// This is an active high level while any of the FDI_RX_ISR bits are set for transcoder A
-	IRQ_AUDIO_CP_REQUEST_TRANSCODER_A,	// This is an active high level indicating content protection is requested by audio azalia verb programming for transcoder A
-	IRQ_FDI_RX_INTERRUPTS_TRANSCODER_B,
-	IRQ_AUDIO_CP_CHANGE_TRANSCODER_B,
-	IRQ_AUDIO_CP_REQUEST_TRANSCODER_B,
-	IRQ_FDI_RX_INTERRUPTS_TRANSCODER_C,
-	IRQ_AUDIO_CP_CHANGE_TRANSCODER_C,
-	IRQ_AUDIO_CP_REQUEST_TRANSCODER_C,
-	IRQ_ERR_AND_DBG,
-	IRQ_GMBUS,
-	IRQ_SDVO_B_HOTPLUG,
-	IRQ_CRT_HOTPLUG,
-	IRQ_DP_B_HOTPLUG,
-	IRQ_DP_C_HOTPLUG,
-	IRQ_DP_D_HOTPLUG,
-	IRQ_AUX_CHENNEL_B,
-	IRQ_AUX_CHENNEL_C,
-	IRQ_AUX_CHENNEL_D,
-	IRQ_AUDIO_POWER_STATE_CHANGE_B,
-	IRQ_AUDIO_POWER_STATE_CHANGE_C,
-	IRQ_AUDIO_POWER_STATE_CHANGE_D,
-
-	IRQ_RESERVED,
-	IRQ_MAX,
-};
-
 #define VGT_FIRST_RCS_EVENT	IRQ_RCS_MI_USER_INTERRUPT
 #define VGT_LAST_RCS_EVENT	IRQ_RCS_MONITOR_BUFF_HALF_FULL
 #define VGT_RCS_EVENT(e)	(e >= VGT_FIRST_RCS_EVENT && e <= VGT_LAST_RCS_EVENT)
@@ -1643,10 +1658,6 @@ struct vgt_irq_virt_state {
 	struct vgt_watchdog_timer watchdog_timer;
 	bool irq_pending;
 	bool pch_irq_pending;
-	u64 irq_cnt;
-	u64 deiir_cnt;
-	u64 gtiir_cnt;
-	u64 event_cnt[IRQ_MAX];
 };
 
 #define vgt_event_owner_table(d)	(d->irq_hstate->event_owner_table)
@@ -1674,9 +1685,6 @@ struct vgt_irq_virt_state {
 #define vgt_state_enabled_events(s)	(s->irq_vstate->enabled_events)
 #define vgt_dpy_timer(s)		(s->irq_vstate->dpy_timer)
 #define vgt_event_cnt(s, e)		(s->irq_vstate->event_cnt[e])
-#define vgt_irq_cnt(s)			(s->irq_vstate->irq_cnt)
-#define vgt_gtiir_cnt(s)			(s->irq_vstate->gtiir_cnt)
-#define vgt_deiir_cnt(s)			(s->irq_vstate->deiir_cnt)
 
 #define vgt_event_owner_is_core(d, e)	\
 	(vgt_core_event_handlers(d) && (vgt_core_event_handlers(d))[e])

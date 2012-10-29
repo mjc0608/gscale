@@ -374,19 +374,9 @@ static void vgt_run_emul(struct vgt_device *vstate,
 
 void vgt_show_irq_state(struct vgt_device *vgt)
 {
-	enum vgt_event_type event;
 	struct pgt_device *pdev = vgt->pdev;
 
 	printk("--------------------\n");
-	printk("irq statistics for vgt-%d\n", vgt->vgt_id);
-	printk("total injected irqs: %lld(gtiir:%lld, deiir:%lld)\n",
-		vgt_irq_cnt(vgt), vgt_gtiir_cnt(vgt), vgt_deiir_cnt(vgt));
-	for (event = VGT_FIRST_EVENT; event <= VGT_LAST_EVENT; event++) {
-		if (vgt_event_cnt(vgt, event))
-			printk("%d: %8lld (%s)\n", event,
-				vgt_event_cnt(vgt, event),
-				vgt_irq_name[event]);
-	}
 
 	printk("....vreg (deier: %x, deiir: %x, deimr: %x, deisr: %x)\n",
 			__vreg(vgt, _REG_DEIER),
@@ -600,7 +590,8 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 			dprintk("vGT: set bit (%d) for (%s) for VM (%d)\n",
 				bit, info->name, vstate->vgt_id);
 		vgt_set_irq_pending(vstate);
-		vgt_event_cnt(vstate, info->table[bit].event)++;
+		vstate->stat.last_propogation = get_cycles();
+		vstate->stat.events[info->table[bit].event]++;
 	} else {
 		if (vstate->vgt_id) {
 			dprintk("vGT: propogate bit (%d) for (%s) for VM (%d) w/o injection\n",
@@ -612,6 +603,7 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 				__vreg(vstate, vgt_ier(info->reg_base)),
 				__vreg(vstate, _REG_DEIER));
 		}
+		vstate->stat.last_blocked_propogation = get_cycles();
 	}
 
 #if 0
@@ -714,7 +706,8 @@ static int vgt_inject_virtual_interrupt(struct vgt_device *vstate)
 	vgt_clear_irq_pending(vstate);
 #endif
 
-	vgt_irq_cnt(vstate)++;
+	vstate->stat.irq_num++;
+	vstate->stat.last_injection = get_cycles();
 	return 0;
 }
 
@@ -1103,11 +1096,6 @@ bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 		__vreg(vgt, reg), __vreg(vgt, reg) & (~iir));
 	/* write to clear IIR */
 	__vreg(vgt, reg) &= ~iir;
-	if (reg == _REG_DEIIR)
-		vgt_deiir_cnt(vgt)++;
-	if (reg == _REG_GTIIR)
-		vgt_gtiir_cnt(vgt)++;
-
 	return true;
 }
 
@@ -1690,6 +1678,7 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 			return;
 		}
 
+		dev->stat.events[entry->event]++;
 #ifndef VGT_IRQ_DEFAULT_HANDLER
 		if (unlikely(!entry->event_handler)) {
 			VGT_IRQ_WARN(info, entry->event, "No handler!!!\n");
@@ -1730,7 +1719,16 @@ void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type t
 {
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 	int i;
+	cycles_t delay;
 
+	pdev->stat.last_virq = get_cycles();
+	delay = pdev->stat.last_virq - pdev->stat.last_pirq;
+	/*
+	 * it's possible a new pirq coming before last request is handled.
+	 * or the irq may come before kthread is ready. So skip the 1st 5.
+	 */
+	if (delay > 0 && pdev->stat.irq_num > 5)
+		pdev->stat.irq_delay_cycles += delay;
 	ops->handle_virtual_interrupt(pdev, type);
 
 	/* check pending virtual interrupt for active VMs. */
@@ -1738,6 +1736,7 @@ void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type t
 		if (pdev->device[i] && vgt_has_irq_pending(pdev->device[i]))
 			vgt_inject_virtual_interrupt(pdev->device[i]);
 	}
+	pdev->stat.virq_cycles += get_cycles() - pdev->stat.last_virq;
 }
 
 /*
@@ -1752,6 +1751,8 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	irqreturn_t ret;
 	u32 de_ier;
 
+	dev->stat.irq_num++;
+	dev->stat.last_pirq = get_cycles();
 	dprintk("vGT: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
 		VGT_MMIO_READ(dev, _REG_DEIIR),
 		VGT_MMIO_READ(dev, _REG_GTIIR),
@@ -1781,6 +1782,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 		printk("vGT: no owner for this interrupt \n");
 #endif
 
+	dev->stat.pirq_cycles += get_cycles() - dev->stat.last_pirq;
 	return IRQ_HANDLED;
 }
 

@@ -347,6 +347,75 @@ static const struct file_operations preg_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
+
+static int vgt_show_irqinfo(struct seq_file *m, void *data)
+{
+	struct pgt_device *pdev = (struct pgt_device *)m->private;
+	struct pgt_statistics *pstat = &pdev->stat;
+	struct vgt_statistics *vstat;
+	int i, j;
+
+	if (!pstat->irq_num) {
+		seq_printf(m, "No irq logged\n");
+		return 0;
+	}
+	seq_printf(m, "--------------------------\n");
+	seq_printf(m, "Total %lld interrupts logged:\n", pstat->irq_num);
+	for (i = 0; i < IRQ_MAX; i++) {
+		if (!pstat->events[i])
+			continue;
+		seq_printf(m, "\t%16lld: %s\n", pstat->events[i],
+				vgt_irq_name[i]);
+	}
+	seq_printf(m, "%16lld: Last pirq\n", pstat->last_pirq);
+	seq_printf(m, "%16lld: Last virq\n", pstat->last_virq);
+	seq_printf(m, "%16lld: Average pirq cycles\n",
+		pstat->pirq_cycles / pstat->irq_num);
+	seq_printf(m, "%16lld: Average virq cycles\n",
+		pstat->virq_cycles / pstat->irq_num);
+	seq_printf(m, "%16lld: Average delay between pirq/virq handling\n",
+		pstat->irq_delay_cycles / pstat->irq_num);
+	/* TODO: hold lock */
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		if (!pdev->device[i])
+			continue;
+
+		seq_printf(m, "\n-->vgt-%d:\n", pdev->device[i]->vgt_id);
+		vstat = &pdev->device[i]->stat;
+
+		seq_printf(m, "%16lld: Last virq propogation\n",
+			vstat->last_propogation);
+		seq_printf(m, "%16lld: Last blocked virq propogation\n",
+			vstat->last_blocked_propogation);
+		seq_printf(m, "%16lld: Last injection\n",
+			vstat->last_injection);
+
+		if (!vstat->irq_num)
+			continue;
+
+		seq_printf(m, "Total %lld virtual irq injection:\n",
+			vstat->irq_num);
+		for (j = 0; j < IRQ_MAX; j++) {
+			if (!vstat->events[j])
+				continue;
+			seq_printf(m, "\t%16lld: %s\n", vstat->events[j],
+					vgt_irq_name[j]);
+		}
+	}
+	return 0;
+}
+
+static int vgt_irqinfo_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vgt_show_irqinfo, inode->i_private);
+}
+
+static const struct file_operations irqinfo_fops = {
+	.open = vgt_irqinfo_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
 /* TODO: initialize vGT debufs top directory */
 /* FIXME: how about the second graphics card */
 struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
@@ -380,6 +449,11 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 
 	temp_d = debugfs_create_file("preg", 0444, d_vgt_debug,
 			 pdev, &preg_fops);
+	if (!temp_d)
+		return NULL;
+
+	temp_d = debugfs_create_file("irqinfo", 0444, d_vgt_debug,
+			 pdev, &irqinfo_fops);
 	if (!temp_d)
 		return NULL;
 
@@ -606,8 +680,6 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		debugfs_create_u64_node ("schedule_in_time", 0444, perf_dir_entry, &(vgt->stat.schedule_in_time));
 		debugfs_create_u64_node ("allocated_cycles", 0444, perf_dir_entry, &(vgt->stat.allocated_cycles));
 		//debugfs_create_u64_node ("used_cycles", 0444, perf_dir_entry, &(vgt->stat.used_cycles));
-		//debugfs_create_u64_node ("pirq_num", 0444, perf_dir_entry, &(vgt->stat.pirq_num));
-		//debugfs_create_u64_node ("virq_num", 0444, perf_dir_entry, &(vgt->stat.virq_num));
 
 		/* cmd statistics for ring/batch buffers */
 		cmdstat_dir_entry = debugfs_create_dir("ring", perf_dir_entry);
