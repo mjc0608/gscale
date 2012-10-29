@@ -1170,15 +1170,25 @@ bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 	new = wr_data = *(vgt_reg_t *)p_data;
 	old = __vreg(vgt, reg);
-	/* clear channel status when writing 1 */
-	old &= ~(new & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK);
+
+	/* This can verify that bspec was wrong that: channel status
+	 * can be cleared by writing back the status bits
+	 * */
+#if 0
+	if ((wr_data & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK)) {
+		VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, wr_data);
+		pdata = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
+		if ((pdata & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK))
+			printk("vGT: xuanhua failed to clear channel status\n");
+	}
+#endif
 
 	/* go to general write handler leaving channel status handling aside */
 	wr_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 	rc = default_mmio_write(vgt, offset, &wr_data, bytes);
 	vreg_data = __vreg(vgt, reg);
 
-	/* mash new channel status bits with other bits */
+	/* keep channel status bits read-only, it can only be updated by hw */
 	vreg_data = (vreg_data & ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) |
 		(old & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK);
 
