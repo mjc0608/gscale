@@ -109,7 +109,7 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 	gmadr_base = I915_READ(vgt_info_off(avail_rs.high_gmadr.my_base));
 	gmadr_size = I915_READ(vgt_info_off(avail_rs.high_gmadr.my_size));
 
-	printk("Balooning configuration: aperture_base 0x%lx aperture_size %lxKB, gmaddr_base 0x%lx gmaddr_size %lxKB\n",
+	printk("Balooning configuration: aperture_base 0x%lx aperture_size %ldKB, gmaddr_base 0x%lx gmaddr_size %ldKB\n",
 			apert_base, apert_size/1024, gmadr_base, gmadr_size/1024);
 	if (apert_base < dev_priv->gtt.base.start ||
 		(apert_base + apert_size) > dev_priv->gtt.mappable_end ||
