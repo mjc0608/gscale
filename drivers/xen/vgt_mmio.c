@@ -2627,6 +2627,10 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_BCS_PP_DIR_BASE, 4, F_RDR_ADRFIX, 0xFFFF0000, D_ALL, NULL, NULL},
 {_REG_RBSYNC, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_BRSYNC, 4, F_RDR, 0, D_ALL, NULL, NULL},
+/* HSW */
+{0x120010, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{0x9008, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{_REG_GFX_FLSH_CNT, 4, F_WA, 0, D_HSW, NULL, NULL},
 
 	/* -------display regs---------- */
 {_REG_DEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
@@ -2875,6 +2879,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_HDCP_PCH_BOOT_AUTH_STATUS_REG, 4, F_DPY, 0, D_ALL,
 	      hdcp_pch_boot_auth_mmio_read, NULL},
 {_REG_SHOTPLUG_CTL, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_LCPLL_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_HSW_FUSE_STRAP, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
 	/* -------pm regs---------- */
 {_REG_PMIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
@@ -2893,6 +2899,10 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_ECOBUS, 4, F_PM, 0, D_ALL, NULL, NULL},
 {_REG_RC_STATE_CTRL_1, 4, F_VIRT, 0, D_ALL, NULL, rc_state_ctrl_1_mmio_write},
 {_REG_RC_STATE_CTRL_2, 4, F_VIRT, 0, D_ALL, NULL, rc_state_ctrl_1_mmio_write},
+{_REG_HSW_PWR_WELL_CTL1, 4, F_PM, 0, D_HSW, NULL, NULL},
+{_REG_HSW_PWR_WELL_CTL2, 4, F_PM, 0, D_HSW, NULL, NULL},
+{_REG_HSW_PWR_WELL_CTL3, 4, F_PM, 0, D_HSW, NULL, NULL},
+{_REG_HSW_PWR_WELL_CTL4, 4, F_PM, 0, D_HSW, NULL, NULL},
 
 	/* -------miscellaneous regs-------- */
 {_REG_GEN6_GDRST, 4, F_VIRT, 0, D_ALL, NULL, gen6_gdrst_mmio_write},
@@ -3051,6 +3061,12 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_GTDRIVER_MAILBOX_DATA0, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GTDRIVER_MAILBOX_DATA1, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GTT_FAULT_STATUS, 4, F_WA, 0, D_ALL, err_int_r, err_int_w},
+/* HSW */
+{_REG_GEN7_COMMON_SLICE_CHICKEN1, 4, F_WA, 0, D_HSW, NULL, NULL},
+{_REG_GEN7_L3CNTLREG1, 4, F_WA, 0, D_HSW, NULL, NULL},
+{_REG_GEN7_L3_CHICKEN_MODE_REGISTER, 4, F_WA, 0, D_HSW, NULL, NULL},
+{_REG_GEN7_SQ_CHICKEN_MBCUNIT_CONFIG, 4, F_WA, 0, D_HSW, NULL, NULL},
+{_REG_WM_DBG, 4, F_WA, 0, D_HSW, NULL, NULL},
 };
 
 static void vgt_set_reg_attr(struct pgt_device *pdev,

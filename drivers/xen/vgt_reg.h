@@ -154,6 +154,7 @@
 #define _REG_VCS_HWS_PGA	0x4180
 #define _REG_BCS_HWS_PGA	0x24080
 #define _REG_BCS_HWS_PGA_GEN7	0x4280
+#define _REG_VEBOX_HWS_PGA_GEN7	0x4380
 
 #define _REG_RCS_EXCC		0x2028
 #define _REG_VCS_EXCC		0x12028
@@ -1351,5 +1352,21 @@ enum vgt_port_type {
  * Configuration register definition for BDF: 0:0:0.
  */
 #define _REG_GMCH_CONTRL	0x50
+
+/* HSW */
+#define _REG_LCPLL_CTL		0x130040
+#define _REG_HSW_FUSE_STRAP	0x42014
+#define _REG_GFX_FLSH_CNT	0x101008
+
+#define _REG_HSW_PWR_WELL_CTL1	0x45400
+#define _REG_HSW_PWR_WELL_CTL2	0x45404
+#define _REG_HSW_PWR_WELL_CTL3	0x45408
+#define _REG_HSW_PWR_WELL_CTL4	0x4540C
+
+#define _REG_GEN7_COMMON_SLICE_CHICKEN1		0x7010
+#define _REG_GEN7_L3CNTLREG1			0xB01C
+#define _REG_GEN7_L3_CHICKEN_MODE_REGISTER	0xB030
+#define _REG_GEN7_SQ_CHICKEN_MBCUNIT_CONFIG	0x9030
+#define _REG_WM_DBG				0x45280
 
 #endif	/* _VGT_REG_H_ */
