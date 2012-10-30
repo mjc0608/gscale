@@ -1374,7 +1374,6 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 {
 	vgt_reg_t adpa_ctrl;
 	struct pgt_device *pdev = vgt->pdev;
-	enum vgt_uevent_type uevent = UEVENT_MAX;
 
 	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured CRT hotplug event!!!\n")
 
@@ -1394,19 +1393,18 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 
 			if (test_and_set_bit(VGT_CRT, dev->port_detect_status))
 				printk("vGT: capture CRT hot-plug when it's attached!\n");
-			uevent = CRT_HOTPLUG_IN;
+			vgt_set_uevent(vgt, CRT_HOTPLUG_IN);
 		} else {
 			printk("%s: %d: vGT: detect crt removal event!\n", __func__, __LINE__);
 
 			if (!test_and_clear_bit(VGT_CRT, dev->port_detect_status))
 				printk("vGT: capture CRT hot-removal when it's disattached!\n");
-			uevent = CRT_HOTPLUG_OUT;
+			vgt_set_uevent(vgt, CRT_HOTPLUG_OUT);
 		}
 
 		vgt_event_state(pdev, entry->event).val = adpa_ctrl;
 		/* send out udev events when handling physical interruts */
-		if (uevent != UEVENT_MAX)
-			vgt_raise_request(dev, VGT_REQUEST_UEVENT);
+		vgt_raise_request(dev, VGT_REQUEST_UEVENT);
 		return;
 	}
 
@@ -1743,13 +1741,11 @@ void vgt_trigger_virtual_event(struct vgt_device *vgt,
 
 	/* invoke the event handler indicating a virtual event */
 	if (entry->event_handler)
-		entry->event_handler(pdev, bit, entry, info, false,
-			vgt_get_event_owner(pdev, entry->event));
+		entry->event_handler(pdev, bit, entry, info, false, vgt);
 	else {
 		printk("vGT: trigger a virtual event w/o handler. Use default\n");
 
-		vgt_default_event_handler(pdev, bit, entry, info, false,
-			vgt_get_event_owner(pdev, entry->event));
+		vgt_default_event_handler(pdev, bit, entry, info, false, vgt);
 	}
 
 	/* forward to DE if any PCH event pending */
@@ -1761,7 +1757,7 @@ void vgt_trigger_virtual_event(struct vgt_device *vgt,
 		vgt_clear_pch_irq_pending(vgt);
 		info_de = ops->get_irq_info_from_event(pdev, IRQ_PCH_IRQ);
 		ASSERT(info_de);
-		bit_de = ops->get_bit_from_event(pdev, IRQ_PCH_IRQ, info);
+		bit_de = ops->get_bit_from_event(pdev, IRQ_PCH_IRQ, info_de);
 		vgt_propogate_virtual_event(vgt, bit_de, info_de);
 	}
 

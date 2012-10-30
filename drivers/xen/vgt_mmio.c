@@ -2463,9 +2463,9 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 
 /* vgt_propagate_edid
  *
- * Propagate the EDID information stored in pdev to vdev device.
+ * Propagate the EDID information stored in pdev to vgt device.
  * Right now the vgt uses the same EDID. In future, there could be
- * policy to change the EDID that is used by vdev instances.
+ * policy to change the EDID that is used by vgt instances.
  */
 void vgt_propagate_edid(struct vgt_device *vgt, int index)
 {
