@@ -1841,7 +1841,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 }
 
 
-static inline int get_env_and_edid_info(vgt_hotplug_cmd_t cmd,
+static inline int get_event_and_edid_info(vgt_hotplug_cmd_t cmd,
 				enum vgt_event_type *pevent,
 				edid_index_t *pedid_idx)
 {
@@ -1852,8 +1852,10 @@ static inline int get_env_and_edid_info(vgt_hotplug_cmd_t cmd,
 		*pevent = IRQ_CRT_HOTPLUG;
 		break;
 	case 1:
-		printk("vGT: Not supported hot plug type: DP_A!\n");
-		ret = -1;
+		*pedid_idx = EDID_MAX;
+		*pevent = IRQ_MAX;
+		printk("vGT: No support for hot plug type: DP_A!\n");
+		ret = -EINVAL;
 		break;
 	case 2:
 		*pedid_idx = EDID_DPB;
@@ -1868,9 +1870,11 @@ static inline int get_env_and_edid_info(vgt_hotplug_cmd_t cmd,
 		*pevent = IRQ_DP_D_HOTPLUG;
 		break;
 	default:
+		*pedid_idx = EDID_MAX;
+		*pevent = IRQ_MAX;
 		printk("vGT: Not supported hot plug type: 0x%x!\n",
 			cmd.port_sel);
-		ret = -1;
+		ret = -EINVAL;
 		break;
 	}
 	return ret;
@@ -1881,9 +1885,9 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 {
 	int i;
 	enum vgt_event_type event = IRQ_MAX;
-	edid_index_t edid_idx = EDID_VGA; // which default value to set?
+	edid_index_t edid_idx = EDID_MAX;
 
-	if (get_env_and_edid_info(hotplug_cmd, &event, &edid_idx))
+	if (get_event_and_edid_info(hotplug_cmd, &event, &edid_idx) < 0)
 		return;
 
 	/* Default: send hotplug virtual interrupts to all VMs currently.

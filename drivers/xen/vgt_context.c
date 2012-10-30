@@ -2951,7 +2951,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	/* already idle */
 	list_del(&vgt->list);
 
-	for (i = 0; i < EDID_NUM; ++ i) {
+	for (i = 0; i < EDID_MAX; ++ i) {
 		if (vgt->vgt_edids[i]) {
 			kfree(vgt->vgt_edids[i]);
 		}
@@ -3472,7 +3472,7 @@ void vgt_destroy(void)
 	vfree(pdev->reg_info);
 	vfree(pdev->initial_mmio_state);
 
-	for (i = 0; i < EDID_NUM; ++ i) {
+	for (i = 0; i < EDID_MAX; ++ i) {
 		if (pdev->pdev_edids[i]) {
 			kfree(pdev->pdev_edids[i]);
 			pdev->pdev_edids[i] = NULL;

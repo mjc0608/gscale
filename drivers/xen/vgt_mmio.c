@@ -2278,7 +2278,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 
 	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
 
-	for (i = 0; i < EDID_NUM; ++ i) {
+	for (i = 0; i < EDID_MAX; ++ i) {
 		int gmbus_port = 0;
 		unsigned int aux_ch_addr = 0;
 		vgt_edid_data_t **pedid = &(pdev->pdev_edids[i]);
@@ -2471,7 +2471,7 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 {
 	int i;
 
-	for (i = 0; i < EDID_NUM; ++ i) {
+	for (i = 0; i < EDID_MAX; ++ i) {
 		vgt_edid_data_t	*edid = vgt->pdev->pdev_edids[i];
 
 		if ((i != index) && (index != -1)) {
@@ -2523,7 +2523,7 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 {
 	int i;
 
-	for (i = 0; i < EDID_NUM; ++ i) {
+	for (i = 0; i < EDID_MAX; ++ i) {
 		if ((i == index) || (index == -1)) {
 			if (vgt->vgt_edids[i]) {
 				printk("EDID_CLEAR: Clear EDID[0x%x] of vgt %d\n",

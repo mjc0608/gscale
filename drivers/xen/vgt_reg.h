@@ -1207,7 +1207,6 @@ enum vgt_pch {
 #define VGT_PLANE_NAME(p)	((p) == PLANE_A ? "Plane A" : ((p) == PLANE_B ? "Plane B" : "Plane C"))
 #define VGT_PIPE_NAME(p)	((p) == PIPE_A ? "Pipe A" : ((p) == PIPE_B ? "Pipe B" : "Pipe C"))
 
-#define EDID_NUM	8
 typedef enum {
 	EDID_VGA = 0,
 	EDID_LVDS,
@@ -1216,7 +1215,8 @@ typedef enum {
 	EDID_HDMID,
 	EDID_DPB,
 	EDID_DPC,
-	EDID_DPD
+	EDID_DPD,
+	EDID_MAX
 }edid_index_t;
 
 enum vgt_port_type {

@@ -409,7 +409,7 @@ struct vgt_device {
 
 	struct vgt_port_struct *attached_port[I915_MAX_PIPES]; /* one port per PIPE */
 	vgt_i2c_bus_t		vgt_i2c_bus;	/* i2c bus state emulaton for reading EDID */
-	vgt_edid_data_t		*vgt_edids[EDID_NUM];	/* per display EDID information */
+	vgt_edid_data_t		*vgt_edids[EDID_MAX];	/* per display EDID information */
 
 	uint64_t	aperture_base;
 	void		*aperture_base_va;
@@ -663,7 +663,7 @@ struct pgt_device {
 	u32 ring_mi_mode[MAX_ENGINES];
 	submit_context_command_t submit_context_command[MAX_ENGINES];
 
-	vgt_edid_data_t		*pdev_edids[EDID_NUM];	/* per display EDID information */
+	vgt_edid_data_t		*pdev_edids[EDID_MAX];	/* per display EDID information */
 
 	 /* 1 bit corresponds to 1MB in the GM space */
 	DECLARE_BITMAP(gm_bitmap, VGT_GM_BITMAP_BITS);
