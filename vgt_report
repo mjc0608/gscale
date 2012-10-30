@@ -20,6 +20,8 @@ parser.add_option("-s", "--sdiff", dest="sdiff", action="store_true",
 		   help="show the list of registers with different sreg values among VMs")
 parser.add_option("-p", "--preg", dest="preg", action="store_true",
 		   help="dump the physical HW registers with --vdiff and --sdiff")
+parser.add_option("-c", "--ctxswitch", dest="ctxswitch", action="store_true",
+		   help="show the list of registers saved/restored at ctx switch time")
 parser.add_option("-v", "--verbose", dest="verbose",
 		   help="pring status message", action="store_true")
 
@@ -106,6 +108,8 @@ for line in info.split("\n"):
 		reginfo[reg]["ModeMask"] = True;
 	if (flags & (1 << 10) == 0):
 		reginfo[reg]["Untracked"] = True;
+	if (flags & (1 << 13)):
+		reginfo[reg]["Saved"] = True;
 	reginfo[reg]["Flags"] = flags;
 
 def get_reg_attr(reg):
@@ -265,6 +269,20 @@ def show_diff(path_reg):
 	print "Total %d registers found." % cnt
 	print "===================================="
 
+def show_saved():
+	print "=========Saved/Restored Regs========"
+	i = 0
+	print "%10s: %5s: %s" % ("Reg", "Owner", "Name")
+	for reg in sorted(reginfo):
+		if not "Accessed" in reginfo[reg]:
+			continue;
+
+		if "Saved" in reginfo[reg]:
+			print "%10s: %5s: %s" %(hex(reg), reginfo[reg]["Owner"], reginfo[reg]["name"])
+			i += 1
+	print "Total %d registers" % i
+	print "===================================="
+
 if options.regname:
 	show_regname()
 elif options.untrack:
@@ -273,5 +291,7 @@ elif options.vdiff:
 	show_diff(path_vreg)
 elif options.sdiff:
 	show_diff(path_sreg)
+elif options.ctxswitch:
+	show_saved()
 else:
 	show_reginfo()

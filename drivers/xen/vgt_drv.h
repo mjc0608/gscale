@@ -1311,7 +1311,7 @@ static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
 }
 
 static inline void __REG_WRITE(struct pgt_device *pdev,
-	unsigned long preg, unsigned long val, int bytes)
+	unsigned long reg, unsigned long val, int bytes)
 {
 	int ret;
 
@@ -1326,32 +1326,32 @@ static inline void __REG_WRITE(struct pgt_device *pdev,
 	 * for accurate tracking purpose.
 	 */
 	if (pdev->in_ctx_switch)
-		reg_set_saved(pdev, preg);
+		reg_set_saved(pdev, reg);
 	/* TODO: any license issue? */
-	ret = hcall_mmio_write(preg, bytes, val);
+	ret = hcall_mmio_write(_vgt_mmio_pa(pdev, reg), bytes, val);
 	//ASSERT(ret == X86EMUL_OKAY);
 }
 
 static inline unsigned long __REG_READ(struct pgt_device *pdev,
-	unsigned long preg, int bytes)
+	unsigned long reg, int bytes)
 {
 	unsigned long data;
 	int ret;
 
 	if (pdev->in_ctx_switch)
-		reg_set_saved(pdev, preg);
+		reg_set_saved(pdev, reg);
 	/* TODO: any license issue? */
-	ret = hcall_mmio_read(preg, bytes, &data);
+	ret = hcall_mmio_read(_vgt_mmio_pa(pdev, reg), bytes, &data);
 	//ASSERT(ret == X86EMUL_OKAY);
 
 	return data;
 }
 
 #define VGT_MMIO_READ_BYTES(pdev, mmio_offset, bytes)	\
-		__REG_READ(pdev, _vgt_mmio_pa(pdev, mmio_offset), bytes)
+		__REG_READ(pdev, mmio_offset, bytes)
 
 #define VGT_MMIO_WRITE_BYTES(pdev, mmio_offset, val, bytes)	\
-		__REG_WRITE(pdev, _vgt_mmio_pa(pdev, mmio_offset), val,  bytes)
+		__REG_WRITE(pdev, mmio_offset, val,  bytes)
 
 #define VGT_MMIO_WRITE(pdev, mmio_offset, val)	\
 		VGT_MMIO_WRITE_BYTES(pdev, mmio_offset, (unsigned long)val, REG_SIZE)
@@ -1360,10 +1360,10 @@ static inline unsigned long __REG_READ(struct pgt_device *pdev,
 		((vgt_reg_t)VGT_MMIO_READ_BYTES(pdev, mmio_offset, REG_SIZE))
 
 #define VGT_MMIO_WRITE64(pdev, mmio_offset, val)	\
-		__REG_WRITE(pdev, _vgt_mmio_pa(pdev, mmio_offset), val, 8)
+		__REG_WRITE(pdev, mmio_offset, val, 8)
 
 #define VGT_MMIO_READ64(pdev, mmio_offset, val)		\
-		__REG_READ(pdev, _vgt_mmio_pa(pdev, mmio_offset), 8)
+		__REG_READ(pdev, mmio_offset, 8)
 
 #define VGT_REG_IS_ALIGNED(reg, bytes) (!((reg)&((bytes)-1)))
 #define VGT_REG_ALIGN(reg, bytes) ((reg) & ~((bytes)-1))
