@@ -1258,6 +1258,7 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 
 	ASSERT(spin_is_locked(&pdev->lock));
 	dprintk("before irq save\n");
+	pdev->in_ctx_switch = 1;
 	vgt_irq_save_context(current_display_owner(pdev),
 			VGT_OT_DISPLAY);
 	dprintk("after irq save\n");
@@ -1271,6 +1272,7 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 	vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
 	dprintk("after irq restore\n");
 
+	pdev->in_ctx_switch = 0;
 	/*
 	 * Virtual interrupts pending right after display switch
 	 * Need send to both prev and next owner.
@@ -2148,10 +2150,16 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
 
+	/*
+	 * both save/restore refer to the same array, so it's
+	 * enough to track only save part
+	 */
+	pdev->in_ctx_switch = 1;
 	if (pdev->is_sandybridge)
 		__vgt_rendering_save(vgt, ARRAY_NUM(vgt_render_regs), &vgt_render_regs[0]);
 	else if (pdev->is_ivybridge || pdev->is_haswell)
 		__vgt_rendering_save(vgt, ARRAY_NUM(vgt_gen7_render_regs), &vgt_gen7_render_regs[0]);
+	pdev->in_ctx_switch = 0;
 }
 
 static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs, vgt_reg_t *render_regs)

@@ -497,6 +497,8 @@ enum vgt_owner_type {
 #define VGT_REG_ACCESSED	(1 << 11)
 /* Virtualized, but accessible by dom0 at boot time */
 #define VGT_REG_BOOTTIME	(1 << 12)
+/* This reg is saved/restored at context switch time */
+#define VGT_REG_SAVED		(1 << 13)
 /* index into another auxillary table. Maximum 256 entries now */
 #define VGT_REG_INDEX_SHIFT	16
 #define VGT_REG_INDEX_MASK	(0xFFFF << VGT_REG_INDEX_SHIFT)
@@ -711,6 +713,7 @@ struct pgt_device {
 	u8 is_ivybridge : 1;
 	u8 is_haswell : 1;
 	u8 enable_ppgtt : 1;
+	u8 in_ctx_switch : 1;
 
 	vgt_aux_entry_t vgt_aux_table[VGT_AUX_TABLE_NUM];
 	int at_index;
@@ -758,6 +761,7 @@ extern struct vgt_device *next_display_owner;
 #define reg_is_tracked(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_TRACKED)
 #define reg_is_accessed(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ACCESSED)
 #define reg_boottime(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_BOOTTIME)
+#define reg_is_saved(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_SAVED)
 #define reg_get_owner(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_OWNER)
 #define reg_invalid(pdev, reg)		(!pdev->reg_info[REG_INDEX(reg)])
 #define reg_aux_index(pdev, reg)	\
@@ -847,6 +851,12 @@ static inline void reg_set_accessed(struct pgt_device *pdev,
 	vgt_reg_t reg)
 {
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_ACCESSED;
+}
+
+static inline void reg_set_saved(struct pgt_device *pdev,
+	vgt_reg_t reg)
+{
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_SAVED;
 }
 
 static inline void reg_update_handlers(struct pgt_device *pdev,
@@ -1300,20 +1310,36 @@ static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
 	return &(vgt->hvm_info->iopage->vcpu_ioreq[vcpu]);
 }
 
-static inline void __REG_WRITE(unsigned long preg, unsigned long val, int bytes)
+static inline void __REG_WRITE(struct pgt_device *pdev,
+	unsigned long preg, unsigned long val, int bytes)
 {
 	int ret;
 
+	/*
+	 * TODO: a simple mechanism to capture registers being
+	 * saved/restored at render/display context switch time.
+	 * It's not accurate, since vGT's normal mmio access
+	 * within that window also falls here. But suppose that
+	 * set is small for now.
+	 *
+	 * In the future let's wrap interface like vgt_restore_vreg
+	 * for accurate tracking purpose.
+	 */
+	if (pdev->in_ctx_switch)
+		reg_set_saved(pdev, preg);
 	/* TODO: any license issue? */
 	ret = hcall_mmio_write(preg, bytes, val);
 	//ASSERT(ret == X86EMUL_OKAY);
 }
 
-static inline unsigned long __REG_READ(unsigned long preg, int bytes)
+static inline unsigned long __REG_READ(struct pgt_device *pdev,
+	unsigned long preg, int bytes)
 {
 	unsigned long data;
 	int ret;
 
+	if (pdev->in_ctx_switch)
+		reg_set_saved(pdev, preg);
 	/* TODO: any license issue? */
 	ret = hcall_mmio_read(preg, bytes, &data);
 	//ASSERT(ret == X86EMUL_OKAY);
@@ -1322,10 +1348,10 @@ static inline unsigned long __REG_READ(unsigned long preg, int bytes)
 }
 
 #define VGT_MMIO_READ_BYTES(pdev, mmio_offset, bytes)	\
-		__REG_READ(_vgt_mmio_pa(pdev, mmio_offset), bytes)
+		__REG_READ(pdev, _vgt_mmio_pa(pdev, mmio_offset), bytes)
 
 #define VGT_MMIO_WRITE_BYTES(pdev, mmio_offset, val, bytes)	\
-		__REG_WRITE(_vgt_mmio_pa(pdev, mmio_offset), val,  bytes)
+		__REG_WRITE(pdev, _vgt_mmio_pa(pdev, mmio_offset), val,  bytes)
 
 #define VGT_MMIO_WRITE(pdev, mmio_offset, val)	\
 		VGT_MMIO_WRITE_BYTES(pdev, mmio_offset, (unsigned long)val, REG_SIZE)
@@ -1334,10 +1360,10 @@ static inline unsigned long __REG_READ(unsigned long preg, int bytes)
 		((vgt_reg_t)VGT_MMIO_READ_BYTES(pdev, mmio_offset, REG_SIZE))
 
 #define VGT_MMIO_WRITE64(pdev, mmio_offset, val)	\
-		__REG_WRITE(_vgt_mmio_pa(pdev, mmio_offset), val, 8)
+		__REG_WRITE(pdev, _vgt_mmio_pa(pdev, mmio_offset), val, 8)
 
 #define VGT_MMIO_READ64(pdev, mmio_offset, val)		\
-		__REG_READ(_vgt_mmio_pa(pdev, mmio_offset), 8)
+		__REG_READ(pdev, _vgt_mmio_pa(pdev, mmio_offset), 8)
 
 #define VGT_REG_IS_ALIGNED(reg, bytes) (!((reg)&((bytes)-1)))
 #define VGT_REG_ALIGN(reg, bytes) ((reg) & ~((bytes)-1))
