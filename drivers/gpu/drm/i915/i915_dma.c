@@ -611,6 +611,8 @@ static void intel_device_info_runtime_init(struct drm_device *dev)
  *   - allocate initial config memory
  *   - setup the DRM framebuffer with the allocated memory
  */
+struct drm_i915_private *gpu_perf_dev_priv;
+
 int i915_driver_load(struct drm_device *dev, unsigned long flags)
 {
 	struct drm_i915_private *dev_priv;
@@ -635,7 +637,8 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 	if (dev_priv == NULL)
 		return -ENOMEM;
 
-	dev->dev_private = dev_priv;
+	dev->dev_private = (void *)dev_priv;
+	gpu_perf_dev_priv = (void *)dev_priv;
 	dev_priv->dev = dev;
 
 	/* Setup the write-once "constant" device info */
