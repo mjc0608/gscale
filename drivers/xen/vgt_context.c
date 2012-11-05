@@ -3290,12 +3290,9 @@ static int setup_gtt(struct pgt_device *pdev)
 		/* dom0 needs DMAR anyway */
 		dma_addr = pci_map_page(pdev->pdev, page, 0, PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
 		if (pci_dma_mapping_error(pdev->pdev, dma_addr)) {
-			dprintk("vGT: Failed to do pci_dma_mapping while handling %d 0x%llx\n", i, dma_addr);
-			/* FIXME: A workaround here for Haswell booting */
-			if (!pdev->is_haswell) {
-				ret = -EINVAL;
-				goto err_out;
-			}
+			printk(KERN_ERR "vGT: Failed to do pci_dma_mapping while handling %d 0x%llx\n", i, dma_addr);
+			ret = -EINVAL;
+			goto err_out;
 		}
 
 		pte = dma_addr_to_pte_uc(pdev, dma_addr);
