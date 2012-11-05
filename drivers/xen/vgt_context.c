@@ -3087,36 +3087,7 @@ bool initial_phys_states(struct pgt_device *pdev)
 	printk("gmadr_va: 0x%llx\n", (uint64_t)pdev->gmadr_va);
 #endif
 
-	pdev->initial_mmio_state = vzalloc(pdev->mmio_size);
-	if (!pdev->initial_mmio_state) {
-		printk("vGT: failed to allocate initial_mmio_state\n");
-		return false;
-	}
-
-#if 0
-	/* TODO: Extend VCPUOP_request_io_emulation hypercall to handle
-	 * trunk data read request, and use hypercall here.
-	 * Or enable "rep movsx" support.
-	 */
-	memcpy (pdev->initial_mmio_state, pdev->gttmmio_base_va,
-			pdev->mmio_size);
-
-#else
-	for (i = 0; i < pdev->reg_num; i++) {
-		/* XXX Hardware workaround was applied here.
-		 * We need to skip some reserved space, or known forbidden
-		 * space for access, otherwise it may cause hang */
-		if (pdev->is_ivybridge) {
-			if (i >= (0x5180 >> 2) && i < (0x6000 >> 2))
-				continue;
-		} else if (pdev->is_haswell &&
-				(pdev->pdev->device < 0x0d26)) {
-			if (i >= (0x5300 >> 2) && i < (0x44010 >> 2))
-				continue;
-		}
-		pdev->initial_mmio_state[i] = *((vgt_reg_t *)pdev->gttmmio_base_va + i);
-	}
-#endif
+	vgt_initial_mmio_setup(pdev);
 
 	/* FIXME: GMBUS2 has an in-use bit as the hw semaphore, and we should recover
 	 * it after the snapshot. Remove this workaround after GMBUS virtualization

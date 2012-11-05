@@ -3180,3 +3180,40 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 #endif
 	return true;
 }
+
+static void __vgt_initial_mmio_space (struct pgt_device *pdev,
+				      reg_attr_t *info, int num)
+{
+	int i, j;
+	reg_attr_t *attr;
+
+	attr = info;
+
+	for (i = 0; i < num; i++, attr++) {
+		if (!vgt_match_device_attr(pdev, attr))
+			continue;
+
+		for (j = 0; j < attr->size; j += 4) {
+			pdev->initial_mmio_state[REG_INDEX(attr->reg + j)] =
+				readl(pdev->gttmmio_base_va + attr->reg + j);
+		}
+	}
+
+}
+
+bool vgt_initial_mmio_setup (struct pgt_device *pdev)
+{
+	pdev->initial_mmio_state = vzalloc(pdev->mmio_size);
+	if (!pdev->initial_mmio_state) {
+		printk("vGT: failed to allocate initial_mmio_state\n");
+		return false;
+	}
+
+	__vgt_initial_mmio_space(pdev, vgt_base_reg_info, ARRAY_NUM(vgt_base_reg_info));
+
+#if 0
+	__vgt_initial_mmio_space(pdev, vgt_temp_reg_info, ARRAY_NUM(vgt_temp_reg_info));
+#endif
+
+	return true;
+}

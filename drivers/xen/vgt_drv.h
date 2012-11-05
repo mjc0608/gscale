@@ -991,6 +991,8 @@ extern bool fastpath_dpy_switch;
 extern void vgt_toggle_ctx_switch(bool enable);
 extern void vgt_setup_reg_info(struct pgt_device *pdev);
 extern bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev);
+extern bool vgt_initial_mmio_setup (struct pgt_device *pdev);
+
 /* definitions for physical aperture/GM space */
 #define phys_aperture_sz(pdev)		(pdev->bar_size[1])
 #define phys_aperture_pages(pdev)	(phys_aperture_sz(pdev) >> GTT_PAGE_SHIFT)
