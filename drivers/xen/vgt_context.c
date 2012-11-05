@@ -757,7 +757,7 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 		if (rc < 0) {
 			printk("failed to translate\n");
 		} else {
-			mfn = gtt_pte_get_pfn((gtt_pte_t *)&h_val);
+			mfn = gtt_pte_get_pfn(pdev, h_val);
 			printk("MACH: %x %llx\n", h_val, mfn);
 		}
 		printk("Actual pGTT: %x\n",

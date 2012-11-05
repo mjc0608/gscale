@@ -303,7 +303,6 @@ static int vgt_cmd_handler_mi_update_gtt(struct vgt_cmd_data *data)
 {
 	uint32_t entry_num, *entry;
 	int rc, i;
-	gtt_pte_t pte, *p_pte;
 
 	/*TODO: remove this assert when PPGTT support is added */
 	ASSERT(instr_val(data,0) & USE_GLOBAL_GTT_MASK);
@@ -313,7 +312,6 @@ static int vgt_cmd_handler_mi_update_gtt(struct vgt_cmd_data *data)
 
 	entry_num = instr_val(data,0) & ((1U<<8) - 1); /* bit 7:0 */
 	entry = v_aperture(data->vgt->pdev, instr_val(data,1));
-	p_pte = &pte;
 	for (i=0; i<entry_num; i++){
 		dprintk("vgt: update GTT entry %d\n", i);
 		/*TODO: optimize by batch g2m translation*/

@@ -1263,50 +1263,6 @@ static inline uint32_t h2g_gtt_index(struct vgt_device *vgt, uint32_t h_index)
 	return (uint32_t)(h2g_gm(vgt, h_addr) >> GTT_PAGE_SHIFT);
 }
 
-#define GTT_MAX_PFN (1UL << 28)
-#define GTT_PFN_HIGH_SHIFT 20
-#define GTT_PFN_LOW_MASK ((1U << GTT_PFN_HIGH_SHIFT) - 1)
-
-typedef union{
-	uint32_t val;
-	struct{
-		uint32_t valid:1;		/* Valid PTE */
-		uint32_t l3cc:1;		/* L3 Cacheability Control */
-		uint32_t llccc:1;		/* LLC Cacheability Control */
-		uint32_t gfdt:1;		/* Graphics Data Type */
-		uint32_t pfn_high:8;	/* Physical Start Address Extension */
-		uint32_t pfn_low:20;
-	}u;
-} gtt_pte_t;
-
-static inline void gtt_pte_make(gtt_pte_t *p_pte, uint32_t val)
-{
-	p_pte->val = val;
-}
-
-static inline unsigned long gtt_pte_get_pfn(gtt_pte_t *p_pte)
-{
-	return p_pte->u.pfn_low + (p_pte->u.pfn_high << GTT_PFN_HIGH_SHIFT);
-}
-
-static inline uint32_t gtt_pte_get_val(gtt_pte_t *p_pte)
-{
-	return p_pte->val;
-}
-
-static inline void gtt_pte_set_pfn(gtt_pte_t *p_pte, uint32_t pfn)
-{
-	ASSERT(pfn < GTT_MAX_PFN);
-
-	p_pte->u.pfn_low = pfn & GTT_PFN_LOW_MASK;
-	p_pte->u.pfn_high = pfn >> GTT_PFN_HIGH_SHIFT;
-}
-
-static inline int gtt_pte_valid(gtt_pte_t *p_pte)
-{
-	return p_pte->u.valid;
-}
-
 static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
 {
 	return &(vgt->hvm_info->iopage->vcpu_ioreq[vcpu]);
@@ -1940,6 +1896,8 @@ extern int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_v
 extern unsigned long g2m_pfn(int vm_id, unsigned long g_pfn);
 
 extern void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
+
+extern unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte);
 
 #define INVALID_MFN  (~0UL)
 

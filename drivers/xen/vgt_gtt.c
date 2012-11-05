@@ -76,6 +76,38 @@ unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
 	return pfn_list[0];
 }
 
+unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
+{
+	u64 addr = 0;
+
+	if (pdev->is_sandybridge || pdev->is_ivybridge)
+		addr = (u64)((pte & 0xff0) << 28) | (u64)(pte & 0xfffff000);
+	else if (pdev->is_haswell)
+		addr = (u64)((pte & 0x7f0) << 28) | (u64)(pte & 0xfffff000);
+
+	return (addr >> GTT_PAGE_SHIFT);
+}
+
+static u32 gtt_pte_update(struct pgt_device *pdev, unsigned long pfn, u32 old_pte)
+{
+	u64 addr = pfn << GTT_PAGE_SHIFT;
+	u32 pte, addr_mask = 0, ctl_mask = 0;
+
+	if (pdev->is_sandybridge || pdev->is_ivybridge) {
+		addr_mask = 0xff0;
+		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7;
+	} else if (pdev->is_haswell) {
+		addr_mask = 0x7f0;
+		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7_5;
+	}
+
+	pte = (addr & ~0xfff) | ((addr >> 28) & addr_mask);
+	pte |= (old_pte & ctl_mask);
+	pte |= _REGBIT_PTE_VALID;
+
+	return pte;
+}
+
 /*
  * IN:  p_gtt_val - guest GTT entry
  * OUT: m_gtt_val - translated machine GTT entry from guest GTT entry
@@ -84,26 +116,22 @@ unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
  */
 int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val)
 {
-	gtt_pte_t pte, *p_pte;
 	unsigned long g_pfn, mfn;
 
-	p_pte = &pte;
-	gtt_pte_make(p_pte, p_gtt_val);
-
-	if (!gtt_pte_valid(p_pte)){
+	if (!(p_gtt_val & _REGBIT_PTE_VALID)) {
 		*m_gtt_val = p_gtt_val;
 		return 0;
 	}
 
-	g_pfn = gtt_pte_get_pfn(p_pte);
+	g_pfn = gtt_pte_get_pfn(vgt->pdev, p_gtt_val);
+
 	mfn = g2m_pfn(vgt->vm_id, g_pfn);
 	if (mfn == INVALID_MFN){
 		printk(KERN_ERR "Invalid gtt entry 0x%x\n", p_gtt_val);
 		return -EINVAL;
 	}
-	gtt_pte_set_pfn(p_pte, mfn);
 
-	*m_gtt_val = gtt_pte_get_val(p_pte);
+	*m_gtt_val = gtt_pte_update(vgt->pdev, mfn, p_gtt_val);
 
 	return 0;
 }
@@ -113,7 +141,6 @@ int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val)
  */
 unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
 {
-   gtt_pte_t pte;
    uint32_t gtt_index;
    unsigned long pfn, pa;
 
@@ -127,8 +154,7 @@ unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma, bool ppgt
 			return INVALID_ADDR;
 		}
        gtt_index = gma >> GTT_PAGE_SHIFT;
-       gtt_pte_make(&pte, vgt->vgtt[gtt_index]);
-       pfn = gtt_pte_get_pfn(&pte);
+       pfn = gtt_pte_get_pfn(vgt->pdev, vgt->vgtt[gtt_index]);
        pa = (pfn << PAGE_SHIFT) + (gma & ~PAGE_MASK);
    }
    return pa;
