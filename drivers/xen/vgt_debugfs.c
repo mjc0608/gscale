@@ -77,6 +77,8 @@ static debug_statistics_t  stat_info [] = {
 	{ "ring_tail_mmio_wcycles", &ring_tail_mmio_wcycles },
 	{ "context_switch_cycles", &context_switch_cost },
 	{ "context_switch_num", &context_switch_num },
+	{ "ring_0_busy", &ring_0_busy },
+	{ "ring_0_idle", &ring_0_idle },
 	{ "", NULL}
 };
 

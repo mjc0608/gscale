@@ -62,6 +62,9 @@ static bool vgt_restore_context (struct vgt_device *vgt);
 static bool vgt_save_context (struct vgt_device *vgt);
 u64	context_switch_cost = 0;
 u64	context_switch_num = 0;
+u64	ring_0_idle = 0;
+u64	ring_0_busy = 0;
+static struct pgt_device *perf_pgt = NULL;
 
 bool hvm_render_owner = false;
 static int __init hvm_render_setup(char *str)
@@ -3207,6 +3210,7 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	}
 
 	vgt_init_reserved_aperture(pdev);
+	perf_pgt = pdev;
 	return true;
 }
 
@@ -3425,6 +3429,7 @@ void vgt_destroy(void)
 	struct pgt_device *pdev = &default_device;
 	int i;
 
+	perf_pgt = NULL;
 	list_del(&pdev->list);
 
 	/* do we need the thread actually stopped? */
@@ -3480,4 +3485,16 @@ void vgt_destroy(void)
 	}
 }
 
+void vgt_gpu_perf_sample(void)
+{
+	int	ring_id = 0;
+
+	if ( perf_pgt ) {
+		if ( is_rendering_engine_empty(perf_pgt, ring_id) )
+			ring_0_idle ++;
+		else
+			ring_0_busy ++;
+	}
+}
+EXPORT_SYMBOL_GPL(vgt_gpu_perf_sample);
 
