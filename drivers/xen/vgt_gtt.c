@@ -283,7 +283,7 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 
 	pte = kmap_atomic(vgt->shadow_pte_table[i].pte_page);
 	pte[index] = (h_addr & ~0xfff) | ((h_addr >> 28) & addr_mask);
-	pte[index] |= g_val & ctl_mask;
+	pte[index] |= (g_val & ctl_mask);
 	pte[index] |= _REGBIT_PTE_VALID;
 	clflush((u8 *)pte + index * 4);
 	kunmap_atomic(pte);
@@ -444,16 +444,26 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 
 bool vgt_setup_ppgtt(struct vgt_device *vgt)
 {
+	struct pgt_device *pdev = vgt->pdev;
 	u32 base = vgt->rb[0].sring_ppgtt_info.base;
 	int i;
 	u32 pde, shadow_pde;
 	dma_addr_t pte_phy;
 	u32 gtt_base;
 	unsigned int index, h_index;
+	u32 addr_mask = 0, ctl_mask = 0;
 
 	printk(KERN_INFO "vgt_setup_ppgtt on vm %d: PDE base 0x%x\n", vgt->vm_id, base);
 
 	gtt_base = base >> PAGE_SHIFT;
+
+	if (pdev->is_ivybridge) {
+		addr_mask = 0xff0;
+		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7;
+	} else if (pdev->is_haswell) {
+		addr_mask = 0x7f0;
+		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7_5;
+	}
 
 	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
 		index = gtt_base + i;
@@ -461,15 +471,17 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		/* Just use guest virtual value instead of real machine address */
 		pde = vgt->vgtt[index];
 
-		if (!(pde & _REGBIT_PDE_VALID))
+		if (!(pde & _REGBIT_PDE_VALID)) {
+			printk("zhen: PDE %d not valid!\n", i);
 			continue;
+		}
 
 		if ((pde & _REGBIT_PDE_PAGE_32K)) {
 			printk("zhen: 32K page in PDE!\n");
 			continue;
 		}
-		pde &= ~0xf;
-		pte_phy = (u64)(pde & 0xff0) << 28 | (u64)(pde & 0xfffff000);
+
+		pte_phy = (u64)(pde & addr_mask) << 28 | (u64)(pde & 0xfffff000);
 
 		vgt->shadow_pde_table[i].virtual_phyaddr = pte_phy;
 
@@ -480,7 +492,8 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		vgt_set_wp_page(vgt, pte_phy >> PAGE_SHIFT);
 
 		shadow_pde = vgt->shadow_pde_table[i].shadow_pte_maddr & ~0xfff;
-		shadow_pde |= (vgt->shadow_pde_table[i].shadow_pte_maddr >> 28) & 0xff0;
+		shadow_pde |= ((vgt->shadow_pde_table[i].shadow_pte_maddr >> 28) & addr_mask);
+		shadow_pde |= (pde & ctl_mask);
 		shadow_pde |= _REGBIT_PDE_VALID;
 
 		h_index = g2h_gtt_index(vgt, index);
