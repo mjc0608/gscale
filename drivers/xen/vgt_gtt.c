@@ -81,9 +81,9 @@ unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
 	u64 addr = 0;
 
 	if (pdev->is_sandybridge || pdev->is_ivybridge)
-		addr = (u64)((pte & 0xff0) << 28) | (u64)(pte & 0xfffff000);
+		addr = (((u64)pte & 0xff0) << 28) | (u64)(pte & 0xfffff000);
 	else if (pdev->is_haswell)
-		addr = (u64)((pte & 0x7f0) << 28) | (u64)(pte & 0xfffff000);
+		addr = (((u64)pte & 0x7f0) << 28) | (u64)(pte & 0xfffff000);
 
 	return (addr >> GTT_PAGE_SHIFT);
 }
