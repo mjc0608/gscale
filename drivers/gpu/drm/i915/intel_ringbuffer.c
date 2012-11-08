@@ -2738,8 +2738,8 @@ static bool is_rendering_engine_empty(struct drm_i915_private *dev_priv, int rin
 }
 
 extern struct drm_i915_private *gpu_perf_dev_priv;
-u64	ring_0_idle = 0;
-u64	ring_0_busy = 0;
+u64	i915_ring_0_idle = 0;
+u64	i915_ring_0_busy = 0;
 void gpu_perf_sample(void)
 {
 	struct drm_i915_private *dev_priv = gpu_perf_dev_priv;
@@ -2752,9 +2752,9 @@ void gpu_perf_sample(void)
 		if ( spin_is_locked (&dev_priv->uncore.lock) )
 			return;
 		if ( is_rendering_engine_empty(dev_priv, ring_id) )
-			ring_0_idle ++;
+			i915_ring_0_idle++;
 		else
-			ring_0_busy ++;
+			i915_ring_0_busy++;
 	}
 }
 EXPORT_SYMBOL_GPL(gpu_perf_sample);

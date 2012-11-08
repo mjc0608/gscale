@@ -649,8 +649,8 @@ static int i915_gem_seqno_info(struct seq_file *m, void *data)
 	return 0;
 }
 
-extern u64 ring_0_idle;
-extern u64 ring_0_busy;
+extern u64 i915_ring_0_idle;
+extern u64 i915_ring_0_busy;
 static int i915_ring_info(struct seq_file *m, void *data)
 {
 	struct drm_info_node *node = (struct drm_info_node *) m->private;
@@ -661,9 +661,9 @@ static int i915_ring_info(struct seq_file *m, void *data)
 	if (ret)
 		return ret;
 
-	seq_printf(m, "ring_0_idle %08lx busy %08lx\n",
-			(unsigned long) ring_0_idle,
-			(unsigned long) ring_0_busy);
+	seq_printf(m, "i915_ring_0_idle %08lx busy %08lx\n",
+			(unsigned long) i915_ring_0_idle,
+			(unsigned long) i915_ring_0_busy);
 
 	mutex_unlock(&dev->struct_mutex);
 
