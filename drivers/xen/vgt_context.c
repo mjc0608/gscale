@@ -142,6 +142,14 @@ static int __init mode_setup(char *str)
 }
 __setup("vgt_fastmode", mode_setup);
 
+static int disable_ppgtt;
+static int __init disable_ppgtt_setup(char *str)
+{
+	disable_ppgtt = 1;
+	return 1;
+}
+__setup("disable_ppgtt", disable_ppgtt_setup);
+
 /*
  * FIXME: now video ring switch has weird issue. The cmd
  * parser may enter endless loop even when head/tail is
@@ -3159,7 +3167,7 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 		return false;
 
 	/* check PPGTT enabling. */
-	if (pdev->is_ivybridge || pdev->is_haswell)
+	if (!disable_ppgtt && (pdev->is_ivybridge || pdev->is_haswell))
 		pdev->enable_ppgtt = 1;
 
 	INIT_LIST_HEAD(&pdev->rendering_runq_head);
