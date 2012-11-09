@@ -1384,8 +1384,8 @@ int vgt_thread(void *priv)
 				//printk("vGT: take %lld cycles\n", t2 - t1);
 			} else {
 				printk("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
-					vgt_ctx_switch(pdev), ring_id,
-					current_render_owner(pdev)->vgt_id);
+					vgt_ctx_switch(pdev),
+					current_render_owner(pdev)->vgt_id, ring_id);
 				show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
 			}
 		}
