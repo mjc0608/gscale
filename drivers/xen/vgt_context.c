@@ -2611,6 +2611,11 @@ static void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev)
 	ASSERT(gm_sz(pdev) % SIZE_1MB == 0);
 	ASSERT(phys_aperture_sz(pdev) <= gm_sz(pdev) && gm_sz(pdev) <= VGT_MAX_GM_SIZE);
 
+	// mark the non-available space as non-available.
+	if (gm_sz(pdev) < VGT_MAX_GM_SIZE)
+		bitmap_set(gm_bitmap, gm_sz(pdev)/SIZE_1MB,
+			(VGT_MAX_GM_SIZE-gm_sz(pdev))/SIZE_1MB);
+
 	pdev->rsvd_aperture_sz = VGT_RSVD_APERTURE_SZ;
 	pdev->rsvd_aperture_base = phys_aperture_base(pdev) + hidden_gm_base(pdev) -
 								pdev->rsvd_aperture_sz;
@@ -3063,16 +3068,16 @@ bool initial_phys_states(struct pgt_device *pdev)
 
 	bar0 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
 	bar1 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR1];
-	dprintk("bar0: 0x%llx, Bar1: 0x%llx\n", bar0, bar1);
+	printk("bar0: 0x%llx, Bar1: 0x%llx\n", bar0, bar1);
 
 	ASSERT ((bar0 & 7) == 4);
 	/* memory, 64 bits bar0 */
 	pdev->gttmmio_base = bar0 & ~0xf;
 	pdev->mmio_size = VGT_MMIO_SPACE_SZ;
 	pdev->reg_num = pdev->mmio_size/REG_SIZE;
-	ASSERT(pdev->mmio_size + pdev->gtt_size == pdev->bar_size[0]);
 	printk("mmio size: %x, gtt size: %x\n", pdev->mmio_size,
 		pdev->gtt_size);
+	ASSERT(pdev->mmio_size + pdev->gtt_size <= pdev->bar_size[0]);
 
 	ASSERT ((bar1 & 7) == 4);
 	/* memory, 64 bits bar */
