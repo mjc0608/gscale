@@ -2575,6 +2575,7 @@ static bool err_int_w(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+#if 0
 /*
  * TODO:
  * We'd like to whitelist all regs requiring special handling
@@ -2610,6 +2611,7 @@ reg_attr_t vgt_temp_reg_info[] = {
 	/* FDI PLL control */
 {0xEE000, 0x8, F_DPY, 0, D_ALL, NULL, NULL},
 };
+#endif
 
 /*
  * Base reg information which is common on all platforms
@@ -3294,10 +3296,12 @@ void vgt_setup_reg_info(struct pgt_device *pdev)
 	vgt_initialize_reg_attr(pdev, vgt_base_reg_info,
 		ARRAY_NUM(vgt_base_reg_info), true);
 
+#if 0
 	/* FIXME */
 	printk("vGT: (!!!!) setup catch-all ranges (predicated)\n");
 	vgt_initialize_reg_attr(pdev, vgt_temp_reg_info,
 		ARRAY_NUM(vgt_temp_reg_info), false);
+#endif
 }
 
 bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
