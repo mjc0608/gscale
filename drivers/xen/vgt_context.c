@@ -974,6 +974,8 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 
 	ASSERT (reg_is_mmio(pdev, offset + bytes));
 
+	WARN_ON(!reg_is_tracked(pdev, offset));
+
 	mht = lookup_mtable(offset);
 	if ( mht && mht->read )
 		mht->read(vgt, offset, p_data, bytes);
@@ -1088,6 +1090,8 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		old_vreg = __vreg(vgt, offset);
 		old_sreg = __sreg(vgt, offset);
 	}
+
+	WARN_ON(!reg_is_tracked(pdev, offset));
 
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
