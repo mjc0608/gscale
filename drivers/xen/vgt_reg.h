@@ -502,6 +502,8 @@
 #define  _REGBIT_DREF_SSC4_DISABLE                      (0)
 #define  _REGBIT_DREF_SSC4_ENABLE                       (1)
 
+#define _REG_PCH_RAWCLK_FREQ         0xc6204
+
 /*
  * digital port hotplug
  */
@@ -846,7 +848,9 @@ union _TRANS_CONFIG
 	};
 };
 
+#define _REG_TRANSA_CHICKEN1    0xf0060
 #define _REG_TRANSA_CHICKEN2	 0xf0064
+#define _REG_TRANSB_CHICKEN1    0xf1060
 #define _REG_TRANSB_CHICKEN2	 0xf1064
 #define VGT_TRANS_CHICKEN2(pipe) _VGT_PIPE(pipe, _REG_TRANSA_CHICKEN2, _REG_TRANSB_CHICKEN2)
 #define _REGBIT_TRANS_AUTOTRAIN_GEN_STALL_DISABLE	(1<<31)
