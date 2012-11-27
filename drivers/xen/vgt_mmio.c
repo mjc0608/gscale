@@ -2575,6 +2575,13 @@ static bool err_int_w(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+static bool vgt_cxt_size_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	*((u32 *)p_data) = 0;
+	return true;
+}
+
 #if 0
 /*
  * TODO:
@@ -2645,6 +2652,15 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_RCS_BB_PREEMPT_ADDR, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_CCID, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_VCS_NEXT_CCID, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
+
+/* TODO: now let's return 0 for read and ignore write, so i915's
+ * get_context_size() gets 0 and i915_switch_context() is actually disabled,
+ * otherwise, creating 3.7 linux vgt guest can make vgt_thred() hang in
+ * ring_wait_for_empty(pdev, ring_id, true, "ctx-switch"): Bug 133.
+ */
+{_REG_CXT_SIZE, 4, F_VIRT, 0, D_ALL, vgt_cxt_size_read, NULL},
+{_REG_GEN7_CXT_SIZE, 4, F_VIRT, 0, D_ALL, vgt_cxt_size_read, NULL},
+
 {_REG_RCS_FBC_RT_BASE_ADDR, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_RCS_TAIL, 4, F_RDR, 0, D_ALL, ring_mmio_read, ring_mmio_write},
 {_REG_RCS_HEAD, 4, F_RDR, 0, D_ALL, ring_mmio_read, ring_mmio_write},
@@ -3145,8 +3161,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x2020, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_IER, 4, F_WA, 0, D_HSW, NULL, NULL},
 {0x20e8, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x21a0, 4, F_WA, 0, D_SNB, NULL, NULL},
-{0x21a8, 4, F_WA, 0, D_HSW, NULL, NULL},
 {0x2214, 4, F_WA, 0, D_HSW, NULL, NULL},
 {0x2358, 4, F_WA, 0, D_HSW, NULL, NULL},
 {0x8000, 4, F_WA, 0, D_HSW, NULL, NULL},
