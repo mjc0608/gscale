@@ -502,10 +502,8 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 			continue;
 		}
 
-		if ((pde & _REGBIT_PDE_PAGE_32K)) {
-			printk("zhen: 32K page in PDE!\n");
-			continue;
-		}
+		if ((pde & _REGBIT_PDE_PAGE_32K))
+			dprintk("vGT(%d): 32K page in PDE!\n", vgt->vgt_id);
 
 		pte_phy = (u64)(pde & addr_mask) << 28 | (u64)(pde & 0xfffff000);
 
