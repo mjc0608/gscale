@@ -265,7 +265,6 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 	int index, i;
 	u32 *pte;
 	unsigned long g_val = 0, g_addr = 0, h_addr = 0;
-	u32 addr_mask = 0, ctl_mask = 0;
 
 	dprintk("PTE WP handler: offset 0x%x data 0x%lx bytes %d\n", offset, *(unsigned long *)p_data, bytes);
 
@@ -290,27 +289,16 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 
 	index = (offset & (PAGE_SIZE - 1)) >> 2;
 
-	if (pdev->is_ivybridge) {
-		addr_mask = 0xff0;
-		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7;
-	} else if (pdev->is_haswell) {
-		addr_mask = 0x7f0;
-		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7_5;
-	}
+	g_addr = gtt_pte_get_pfn(pdev, g_val);
 
-	g_addr = (unsigned long)(g_val & addr_mask) << 28 | (unsigned long)(g_val & 0xfffff000);
-
-	h_addr = g2m_pfn(vgt->vm_id, (g_addr >> PAGE_SHIFT));
+	h_addr = g2m_pfn(vgt->vm_id, g_addr);
 	if (h_addr == INVALID_MFN) {
 		printk(KERN_ERR "Failed to convert WP page at 0x%lx\n", g_addr);
 		return false;
 	}
-	h_addr <<= PAGE_SHIFT;
 
 	pte = kmap_atomic(vgt->shadow_pte_table[i].pte_page);
-	pte[index] = (h_addr & ~0xfff) | ((h_addr >> 28) & addr_mask);
-	pte[index] |= (g_val & ctl_mask);
-	pte[index] |= _REGBIT_PTE_VALID;
+	pte[index] = gtt_pte_update(pdev, h_addr, g_val);
 	clflush((u8 *)pte + index * 4);
 	kunmap_atomic(pte);
 
@@ -415,14 +403,12 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 	u32 *ent;
 	u32 *shadow_ent;
 	dma_addr_t addr, s_addr;
-	u32 addr_mask = 0, ctl_mask = 0;
 	struct pgt_device *pdev = vgt->pdev;
 
 	if (!p->pte_page) {
 		printk(KERN_ERR "Uninitialized shadow PTE page at index %d?\n", idx);
 		return -1;
 	}
-	vgt->shadow_pde_table[idx].shadow_pte_maddr = p->shadow_addr;
 
 	/* access VM's pte page */
 	p->guest_pte_vm = vgt_ppgtt_map_guest_pte_page(vgt, virt_pte);
@@ -432,14 +418,6 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 	}
 	ent = p->guest_pte_vm->addr;
 
-	if (pdev->is_ivybridge) {
-		addr_mask = 0xff0;
-		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7;
-	} else if (pdev->is_haswell) {
-		addr_mask = 0x7f0;
-		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7_5;
-	}
-
 	shadow_ent = kmap_atomic(p->pte_page);
 
 	/* for each PTE entry */
@@ -448,20 +426,18 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 		if ((ent[i] & _REGBIT_PTE_VALID) == 0)
 			continue;
 		/* get page physical address */
-		addr = (u64)(ent[i] & addr_mask) << 28 | (u64)(ent[i] & 0xfffff000);
+		addr = gtt_pte_get_pfn(pdev, ent[i]);
 
 		/* get real physical address for that page */
-		s_addr = g2m_pfn(vgt->vm_id, (addr >> PAGE_SHIFT));
+		s_addr = g2m_pfn(vgt->vm_id, addr);
 		if (s_addr == INVALID_MFN) {
-			printk("vGT[%d]: Failed to get machine address for 0x%lx\n", vgt->vm_id, (unsigned long)addr);
+			printk("vGT[%d]: Failed to get machine address for 0x%lx\n",
+			       vgt->vm_id, (unsigned long)addr);
 			return -1;
 		}
-		s_addr <<= PAGE_SHIFT;
 
 		/* update shadow PTE entry with targe page address */
-		shadow_ent[i] = (s_addr & ~0xfff) | ((s_addr >> 28) & addr_mask);
-		shadow_ent[i] |= ent[i] & ctl_mask;
-		shadow_ent[i] |= _REGBIT_PTE_VALID;
+		shadow_ent[i] = gtt_pte_update(pdev, s_addr, ent[i]);
 	}
 	kunmap_atomic(shadow_ent);
 	/* XXX unmap guest VM page? */
@@ -477,19 +453,10 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 	dma_addr_t pte_phy;
 	u32 gtt_base;
 	unsigned int index, h_index;
-	u32 addr_mask = 0, ctl_mask = 0;
 
 	printk(KERN_INFO "vgt_setup_ppgtt on vm %d: PDE base 0x%x\n", vgt->vm_id, base);
 
 	gtt_base = base >> PAGE_SHIFT;
-
-	if (pdev->is_ivybridge) {
-		addr_mask = 0xff0;
-		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7;
-	} else if (pdev->is_haswell) {
-		addr_mask = 0x7f0;
-		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7_5;
-	}
 
 	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
 		index = gtt_base + i;
@@ -498,14 +465,15 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		pde = vgt->vgtt[index];
 
 		if (!(pde & _REGBIT_PDE_VALID)) {
-			printk("zhen: PDE %d not valid!\n", i);
+			dprintk("vGT(%d): PDE %d not valid!\n", vgt->vgt_id, i);
 			continue;
 		}
 
 		if ((pde & _REGBIT_PDE_PAGE_32K))
 			dprintk("vGT(%d): 32K page in PDE!\n", vgt->vgt_id);
 
-		pte_phy = (u64)(pde & addr_mask) << 28 | (u64)(pde & 0xfffff000);
+		pte_phy = gtt_pte_get_pfn(pdev, pde);
+		pte_phy <<= PAGE_SHIFT;
 
 		vgt->shadow_pde_table[i].virtual_phyaddr = pte_phy;
 
@@ -515,10 +483,8 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		/* WP original PTE page */
 		vgt_set_wp_page(vgt, pte_phy >> PAGE_SHIFT);
 
-		shadow_pde = vgt->shadow_pde_table[i].shadow_pte_maddr & ~0xfff;
-		shadow_pde |= ((vgt->shadow_pde_table[i].shadow_pte_maddr >> 28) & addr_mask);
-		shadow_pde |= (pde & ctl_mask);
-		shadow_pde |= _REGBIT_PDE_VALID;
+		shadow_pde = gtt_pte_update(pdev,
+				vgt->shadow_pde_table[i].shadow_pte_maddr >> GTT_PAGE_SHIFT, pde);
 
 		h_index = g2h_gtt_index(vgt, index);
 
@@ -551,7 +517,7 @@ bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 	/* each PDE entry has one shadow PTE page */
 	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
 		p = &vgt->shadow_pte_table[i];
-		p->pte_page = alloc_page(GFP_KERNEL);
+		p->pte_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
 		if (!p->pte_page) {
 			printk(KERN_ERR "Init shadow PTE page failed!\n");
 			return false;
@@ -564,6 +530,7 @@ bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 		}
 
 		p->shadow_addr = dma_addr;
+		vgt->shadow_pde_table[i].shadow_pte_maddr = p->shadow_addr;
 	}
 	return true;
 }

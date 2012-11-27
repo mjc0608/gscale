@@ -451,7 +451,7 @@ struct vgt_device {
 	DECLARE_BITMAP(started_rings, MAX_ENGINES);
 	struct mmio_hash_table	*wp_table[MHASH_SIZE];	/* hash for WP pages */
 	vgt_ppgtt_pde_t	shadow_pde_table[VGT_PPGTT_PDE_ENTRIES];	 /* current max PDE entries should be 512 for 2G mapping */
-	vgt_ppgtt_pte_t shadow_pte_table[1024];
+	vgt_ppgtt_pte_t shadow_pte_table[VGT_PPGTT_PDE_ENTRIES]; /* Current PTE number is same as PDE entries */
 
 	/* force removal from the render run queue */
 	bool force_removal;
