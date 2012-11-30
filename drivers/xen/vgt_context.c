@@ -974,13 +974,19 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 
 	ASSERT (reg_is_mmio(pdev, offset + bytes));
 
-	WARN_ON(!reg_is_tracked(pdev, offset));
-
 	mht = lookup_mtable(offset);
 	if ( mht && mht->read )
 		mht->read(vgt, offset, p_data, bytes);
 	else {
 		default_mmio_read(vgt, offset, p_data, bytes);
+	}
+
+	if (!reg_is_tracked(pdev, offset)) {
+		printk("vGT: vgt_emulate_read: vm_id(%d), offset=0x%x,"
+			"len=%d, val=0x%x!!!\n",
+			vgt->vm_id,	offset, bytes, *(u32 *)p_data);
+
+		WARN_ON(vgt->vm_id == 0); /* The call stack is meaningless for HVM */
 	}
 
 	reg_set_accessed(pdev, offset);
@@ -1091,7 +1097,13 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		old_sreg = __sreg(vgt, offset);
 	}
 
-	WARN_ON(!reg_is_tracked(pdev, offset));
+	if (!reg_is_tracked(pdev, offset)) {
+		printk("vGT: vgt_emulate_write: vm_id(%d), offset=0x%x,"
+			"len=%d, val=0x%x!!!\n",
+			vgt->vm_id,	offset, bytes, *(u32 *)p_data);
+
+		WARN_ON(vgt->vm_id == 0); /* The call stack is meaningless for HVM */
+	}
 
 	mht = lookup_mtable(offset);
 	if ( mht && mht->write )
