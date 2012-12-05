@@ -788,8 +788,6 @@ union PCH_PP_CONTROL
 	};
 };
 
-#define _REG_PCH_PP_STATUS		0xc7200
-
 union PCH_PP_STAUTS
 {
 	uint32_t data;
@@ -935,13 +933,11 @@ union _TRANS_CONFIG
 #define _REG_PIPEACONF		0x70008
 #define _REG_PIPEASTAT		0x70024
 #define _REG_DSPARB			0x70030
-#define _REG_PIPEA_FRMCOUNT 0x70040
 
 /* Pipe B */
 #define _REG_PIPEBDSL		0x71000
 #define _REG_PIPEBCONF		0x71008
 #define _REG_PIPEBSTAT		0x71024
-#define _REG_PIPEB_FRMCOUNT 0x71040
 
 /* bit fields of pipeconf */
 #define _REGBIT_PIPE_ENABLE    (1 << 31)
@@ -1097,7 +1093,6 @@ union _TRANS_CONFIG
 #define _REG_CACHE_MODE_1	0x02124
 #define _REG_GEN3_MI_ARB_STATE	0x020e4 /* 915+ only */
 
-#define _REG_SWF		0x4f000
 #define _REG_SWF		0x4f000
 
 #define _REG_DP_BUFTRANS	0xe4f00
@@ -1299,9 +1294,6 @@ enum vgt_port_type {
 #define		_REGBIT_DP_D_PULSE_DURATION		(3 << 18)
 #define		_REGBIT_DP_D_ENABLE			(1 << 20)
 
-#define _REG_RCS_IMR		0x20A8
-#define _REG_VCS_IMR		0x120A8
-#define _REG_BCS_IMR		0x220A8
 #define RING_IMR(ring)	(0x20a8 + 0x10000 * ring)
 
 #define _REG_RCS_WATCHDOG_CTL	0x2178
