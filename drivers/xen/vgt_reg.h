@@ -130,6 +130,7 @@
 #define _REG_CACHE_MODE_0_IVB	0x7000
 #define _REG_CACHE_MODE_1_IVB	0x7004
 #define _REG_GT_MODE_IVB	0x7008
+#define _REG_VEBOX_MODE		0x1A29C
 
 /* PPGTT entry */
 #define _REGBIT_PDE_VALID	(1<<0)
@@ -189,6 +190,8 @@
 #define _REG_BCS_PP_DCLV		0x22220
 #define _REG_VCS_PP_DIR_BASE		0x12228
 #define _REG_VCS_PP_DCLV		0x12220
+#define _REG_VECS_PP_DIR_BASE		0x1A228
+#define _REG_VECS_PP_DCLV		0x1A220
 
 #define _REG_RBSYNC		0x2044
 #define _REG_BRSYNC		0x22040

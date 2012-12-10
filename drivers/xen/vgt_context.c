@@ -3215,6 +3215,14 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	pdev->submit_context_command[RING_BUFFER_BCS] =
 		default_submit_context_command;
 
+	if (pdev->is_haswell) {
+		pdev->max_engines = 4;
+		pdev->ring_mmio_base[RING_BUFFER_VECS] = _REG_VECS_TAIL;
+		/* PSMI for VEBOX? */
+		pdev->submit_context_command[RING_BUFFER_VECS] =
+			default_submit_context_command;
+	}
+
 	/* clean port status, 0 means not plugged in */
 	memset(pdev->port_detect_status, 0, sizeof(pdev->port_detect_status));
 

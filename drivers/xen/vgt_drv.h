@@ -456,6 +456,14 @@ struct vgt_device {
 
 	/* force removal from the render run queue */
 	bool force_removal;
+
+	/* Temporary flag for VEBOX guest driver support.
+	 * Linux VM will have official VEBOX support until kernel 3.9.
+	 * Windows driver already enables VEBOX support now.
+	 * So in order to determine whether VM has turned on VEBOX on HSW, this
+	 * flag is used. Will remove in future when VM drivers all have VEBOX
+	 * support. */
+	bool vebox_support;
 };
 
 extern struct vgt_device *vgt_dom0;

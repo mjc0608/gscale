@@ -507,10 +507,17 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 	/* Rewrite PP_DIR_BASE to let HW reload PDs in internal cache */
 	VGT_MMIO_WRITE(vgt->pdev, _REG_RCS_PP_DCLV, 0xffffffff);
 	VGT_MMIO_WRITE(vgt->pdev, _REG_RCS_PP_DIR_BASE_IVB, base);
+
 	VGT_MMIO_WRITE(vgt->pdev, _REG_BCS_PP_DCLV, 0xffffffff);
 	VGT_MMIO_WRITE(vgt->pdev, _REG_BCS_PP_DIR_BASE, base);
+
 	VGT_MMIO_WRITE(vgt->pdev, _REG_VCS_PP_DCLV, 0xffffffff);
 	VGT_MMIO_WRITE(vgt->pdev, _REG_VCS_PP_DIR_BASE, base);
+
+	if (vgt->pdev->is_haswell && vgt->vebox_support) {
+		VGT_MMIO_WRITE(vgt->pdev, _REG_VECS_PP_DCLV, 0xffffffff);
+		VGT_MMIO_WRITE(vgt->pdev, _REG_VECS_PP_DIR_BASE, base);
+	}
 
 	vgt->ppgtt_initialized = true;
 
