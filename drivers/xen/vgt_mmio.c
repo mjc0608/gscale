@@ -720,11 +720,6 @@ static int ring_pp_dir_base_write(struct vgt_device *vgt, int ring_id, u32 off, 
 	v_info->base = base;
 	s_info->base = mmio_g2h_gmadr(vgt, off, v_info->base);
 
-	if (reg_hw_access(vgt, off)) {
-		dprintk("PP_DIR_BASE off 0x%x write 0x%x\n", off, s_info->base);
-		VGT_MMIO_WRITE(vgt->pdev, off, s_info->base);
-	}
-
 	vgt->rb[ring_id].has_ppgtt_base_set = 1;
 
 	vgt_try_setup_ppgtt(vgt);
@@ -806,6 +801,26 @@ bool vcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
+bool pp_dclv_read(struct vgt_device *vgt, unsigned int off,
+			  void *p_data, unsigned int bytes)
+{
+	ASSERT(bytes == 4);
+
+	*(u32 *)p_data = 0xFFFFFFFF;
+	return true;
+}
+
+bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
+			   void *p_data, unsigned int bytes)
+{
+	u32 dclv = *(u32 *)p_data;
+
+	ASSERT(bytes == 4);
+
+	dprintk("PP_DCLV write: 0x%x\n", dclv);
+	return true;
+}
+
 bool rcs_gfx_mode_read(struct vgt_device *vgt, unsigned int off,
 		       void *p_data, unsigned int bytes)
 {
@@ -851,7 +866,7 @@ int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
 	s_info->mode = mode;
 
 	if (reg_hw_access(vgt, off)) {
-		dprintk("RING mode: off 0x%x write 0x%x\n", off, s_info->mode);
+		dprintk("RING mode: offset 0x%x write 0x%x\n", off, s_info->mode);
 		VGT_MMIO_WRITE(vgt->pdev, off, s_info->mode);
 	}
 
@@ -3340,6 +3355,14 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 				bcs_pp_dir_base_read, bcs_pp_dir_base_write);
 		reg_update_handlers(pdev, _REG_VCS_PP_DIR_BASE, 4,
 				vcs_pp_dir_base_read, vcs_pp_dir_base_write);
+
+		reg_update_handlers(pdev, _REG_RCS_PP_DCLV, 4,
+				pp_dclv_read, pp_dclv_write);
+		reg_update_handlers(pdev, _REG_BCS_PP_DCLV, 4,
+				pp_dclv_read, pp_dclv_write);
+		reg_update_handlers(pdev, _REG_VCS_PP_DCLV, 4,
+				pp_dclv_read, pp_dclv_write);
+
 		/* XXX cache register? */
 		/* PPGTT enable register */
 		reg_update_handlers(pdev, _REG_RCS_GFX_MODE_IVB, 4,
