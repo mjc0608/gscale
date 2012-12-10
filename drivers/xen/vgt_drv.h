@@ -1898,7 +1898,7 @@ extern bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
 #define INVALID_ADDR (~0UL)
-extern unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma, bool ppgtt);
+extern unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma);
 
 extern void* vgt_gma_to_va(struct vgt_device *vgt, unsigned long gma, bool ppgtt);
 

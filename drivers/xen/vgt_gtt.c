@@ -139,33 +139,48 @@ int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val)
 /*  translate gma (graphics memory address) to guest phyiscal address
  *  by walking guest GTT table
  */
-unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
+unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma)
 {
-   uint32_t gtt_index;
-   unsigned long pfn, pa;
+	uint32_t gtt_index;
+	unsigned long pfn, pa;
 
-   if (ppgtt){
-       /*TODO: add PPGTT support */
-       BUG();
-   } else {
-       /* Global GTT */
-		if (!g_gm_is_valid(vgt, gma)) {
-			printk(KERN_ERR "invalid gma %lx\n", gma);
-			return INVALID_ADDR;
-		}
-       gtt_index = gma >> GTT_PAGE_SHIFT;
-       pfn = gtt_pte_get_pfn(vgt->pdev, vgt->vgtt[gtt_index]);
-       pa = (pfn << PAGE_SHIFT) + (gma & ~PAGE_MASK);
-   }
-   return pa;
+	/* Global GTT */
+	if (!g_gm_is_valid(vgt, gma)) {
+		printk(KERN_ERR "invalid gma %lx\n", gma);
+		return INVALID_ADDR;
+	}
+	gtt_index = gma >> GTT_PAGE_SHIFT;
+	pfn = gtt_pte_get_pfn(vgt->pdev, vgt->vgtt[gtt_index]);
+	pa = (pfn << PAGE_SHIFT) + (gma & ~PAGE_MASK);
+	return pa;
 }
 
 void* vgt_gma_to_va(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
 {
 	unsigned long gpa;
 
-	gpa = vgt_gma_2_gpa(vgt, gma, ppgtt);
-	if (gpa == INVALID_ADDR){
+	if (!ppgtt) {
+		gpa = vgt_gma_2_gpa(vgt, gma);
+	} else {
+		vgt_ppgtt_pte_t *p;
+		u32 *e, pte;
+
+		p = &vgt->shadow_pte_table[((gma >> 22) & 0x3ff)];
+
+		/* gpa is physical pfn from shadow page table, we need VM's
+		 * pte page entry */
+		if (!p->guest_pte_vm) {
+			printk(KERN_WARNING "No guest pte mapping? index %lu\n",(gma >> 22) & 0x3ff);
+			return NULL;
+		}
+
+		e = (u32 *)p->guest_pte_vm->addr;
+		pte = *((u32*)(e + ((gma >> 12) & 0x3ff)));
+		gpa = (gtt_pte_get_pfn(vgt->pdev, pte) << PAGE_SHIFT) + (gma & ~PAGE_MASK);
+	}
+
+	if (gpa == INVALID_ADDR) {
+		printk(KERN_WARNING "invalid gpa! gma 0x%lx, ppgtt %s\n", gma, ppgtt ? "yes":"no");
 		return NULL;
 	}
 
@@ -303,6 +318,12 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 	if (h_addr == INVALID_MFN) {
 		printk(KERN_ERR "Failed to convert WP page at 0x%lx\n", g_addr);
 		return false;
+	}
+
+	if (vgt->shadow_pte_table[i].guest_pte_vm) {
+		u32 *guest_pte;
+		guest_pte = vgt->shadow_pte_table[i].guest_pte_vm->addr;
+		guest_pte[index] = gtt_pte_update(pdev, g_addr, g_val);
 	}
 
 	pte = kmap_atomic(vgt->shadow_pte_table[i].pte_page);
