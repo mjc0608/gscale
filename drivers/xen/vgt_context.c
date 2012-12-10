@@ -982,7 +982,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 	}
 
 	if (!reg_is_tracked(pdev, offset)) {
-		printk("vGT: vgt_emulate_read: vm_id(%d), offset=0x%x,"
+		printk("vGT: untracked MMIO: vm_id(%d), offset=0x%x,"
 			"len=%d, val=0x%x!!!\n",
 			vgt->vm_id,	offset, bytes, *(u32 *)p_data);
 
@@ -1098,7 +1098,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	}
 
 	if (!reg_is_tracked(pdev, offset)) {
-		printk("vGT: vgt_emulate_write: vm_id(%d), offset=0x%x,"
+		printk("vGT: untracked MMIO : vm_id(%d), offset=0x%x,"
 			"len=%d, val=0x%x!!!\n",
 			vgt->vm_id,	offset, bytes, *(u32 *)p_data);
 
