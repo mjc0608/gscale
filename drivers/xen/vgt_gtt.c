@@ -231,6 +231,14 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 		goto out;
 	}
 
+	if (vgt->ppgtt_initialized &&
+			g_gtt_index >= vgt->ppgtt_base &&
+			g_gtt_index < vgt->ppgtt_base + VGT_PPGTT_PDE_ENTRIES) {
+		printk("vGT(%d): Change PPGTT PDE %d!\n", vgt->vgt_id, g_gtt_index);
+		ASSERT(0);
+		goto out;
+	}
+
 	rc = gtt_p2m(vgt, g_gtt_val, &h_gtt_val);
 	if (rc < 0){
 		printk("vGT(%d): failed to translate g_gtt_val(%x)\n", vgt->vgt_id, g_gtt_val);
@@ -457,6 +465,8 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 	printk(KERN_INFO "vgt_setup_ppgtt on vm %d: PDE base 0x%x\n", vgt->vm_id, base);
 
 	gtt_base = base >> PAGE_SHIFT;
+
+	vgt->ppgtt_base = gtt_base;
 
 	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
 		index = gtt_base + i;

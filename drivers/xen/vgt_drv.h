@@ -445,6 +445,7 @@ struct vgt_device {
 	/* PPGTT info: currently not per-ring but assume three rings share same
 	 * table.
 	 */
+	u32 ppgtt_base;
 	bool ppgtt_initialized;
 	bool need_ppgtt_setup;
 	DECLARE_BITMAP(enabled_rings, MAX_ENGINES);
