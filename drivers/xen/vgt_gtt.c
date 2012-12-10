@@ -480,9 +480,10 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		}
 
 		if ((pde & _REGBIT_PDE_PAGE_32K)) {
-			printk("zhen: 32K page in PDE!\n");
-			continue;
-		}
+			printk("vGT(%d): 32K page in PDE!\n", vgt->vgt_id);
+			vgt->shadow_pde_table[i].big_page = true;
+		} else
+			vgt->shadow_pde_table[i].big_page = false;
 
 		pte_phy = gtt_pte_get_pfn(pdev, pde);
 		pte_phy <<= PAGE_SHIFT;
@@ -497,6 +498,14 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 
 		shadow_pde = gtt_pte_update(pdev,
 				vgt->shadow_pde_table[i].shadow_pte_maddr >> GTT_PAGE_SHIFT, pde);
+
+		if (vgt->shadow_pde_table[i].big_page) {
+			/* For 32K page, even HVM thinks it's continual, it's
+			 * really not on physical pages. But fallback to 4K
+			 * addressing can still provide correct page reference.
+			 */
+			shadow_pde &= ~_REGBIT_PDE_PAGE_32K;
+		}
 
 		h_index = g2h_gtt_index(vgt, index);
 
