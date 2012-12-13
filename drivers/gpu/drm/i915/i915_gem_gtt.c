@@ -120,6 +120,11 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 		return 0;
 	}
 
+	dev_priv->mm.vgt_apert_base = apert_base;
+	dev_priv->mm.vgt_apert_size = apert_size;
+	dev_priv->mm.vgt_gmaddr_base = gmadr_base;
+	dev_priv->mm.vgt_gmaddr_size = gmadr_size;
+
 	memset (&bl_info, 0, sizeof(bl_info));
 	/* Aperture ballooning */
 	if ( apert_base > dev_priv->gtt.base.start ) {

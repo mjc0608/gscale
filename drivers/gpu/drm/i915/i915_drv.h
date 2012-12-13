@@ -1200,6 +1200,12 @@ struct i915_gem_mm {
 	spinlock_t object_stat_lock;
 	size_t object_memory;
 	u32 object_count;
+
+	/* VGT balloon info */
+	unsigned long vgt_apert_base;
+	unsigned long vgt_apert_size;
+	unsigned long vgt_gmaddr_base;
+	unsigned long vgt_gmaddr_size;
 };
 
 struct drm_i915_error_state_buf {
