@@ -473,6 +473,24 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 	return 0;
 }
 
+static void vgt_init_ppgtt_hw(struct vgt_device *vgt, u32 base)
+{
+	/* Rewrite PP_DIR_BASE to let HW reload PDs in internal cache */
+	VGT_MMIO_WRITE(vgt->pdev, _REG_RCS_PP_DCLV, 0xffffffff);
+	VGT_MMIO_WRITE(vgt->pdev, _REG_RCS_PP_DIR_BASE_IVB, base);
+
+	VGT_MMIO_WRITE(vgt->pdev, _REG_BCS_PP_DCLV, 0xffffffff);
+	VGT_MMIO_WRITE(vgt->pdev, _REG_BCS_PP_DIR_BASE, base);
+
+	VGT_MMIO_WRITE(vgt->pdev, _REG_VCS_PP_DCLV, 0xffffffff);
+	VGT_MMIO_WRITE(vgt->pdev, _REG_VCS_PP_DIR_BASE, base);
+
+	if (vgt->pdev->is_haswell && vgt->vebox_support) {
+		VGT_MMIO_WRITE(vgt->pdev, _REG_VECS_PP_DCLV, 0xffffffff);
+		VGT_MMIO_WRITE(vgt->pdev, _REG_VECS_PP_DIR_BASE, base);
+	}
+}
+
 bool vgt_setup_ppgtt(struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -488,6 +506,12 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 	gtt_base = base >> PAGE_SHIFT;
 
 	vgt->ppgtt_base = gtt_base;
+
+	/* dom0 already does mapping for PTE page itself and PTE entry target
+	 * page. So we're just ready to go.
+	 */
+	if (vgt->vm_id == 0)
+		goto finish;
 
 	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
 		index = gtt_base + i;
@@ -534,20 +558,8 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		vgt_write_gtt(vgt->pdev, h_index, shadow_pde);
 	}
 
-	/* Rewrite PP_DIR_BASE to let HW reload PDs in internal cache */
-	VGT_MMIO_WRITE(vgt->pdev, _REG_RCS_PP_DCLV, 0xffffffff);
-	VGT_MMIO_WRITE(vgt->pdev, _REG_RCS_PP_DIR_BASE_IVB, base);
-
-	VGT_MMIO_WRITE(vgt->pdev, _REG_BCS_PP_DCLV, 0xffffffff);
-	VGT_MMIO_WRITE(vgt->pdev, _REG_BCS_PP_DIR_BASE, base);
-
-	VGT_MMIO_WRITE(vgt->pdev, _REG_VCS_PP_DCLV, 0xffffffff);
-	VGT_MMIO_WRITE(vgt->pdev, _REG_VCS_PP_DIR_BASE, base);
-
-	if (vgt->pdev->is_haswell && vgt->vebox_support) {
-		VGT_MMIO_WRITE(vgt->pdev, _REG_VECS_PP_DCLV, 0xffffffff);
-		VGT_MMIO_WRITE(vgt->pdev, _REG_VECS_PP_DIR_BASE, base);
-	}
+finish:
+	vgt_init_ppgtt_hw(vgt, base);
 
 	vgt->ppgtt_initialized = true;
 

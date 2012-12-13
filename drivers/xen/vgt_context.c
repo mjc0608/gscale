@@ -1057,7 +1057,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	vgt_reg_t old_vreg=0, old_sreg=0;
 
 	/* XXX PPGTT PTE WP comes here too. */
-	if (pdev->enable_ppgtt) {
+	if (pdev->enable_ppgtt && vgt->vm_id != 0 && vgt->ppgtt_initialized) {
 		mht = vgt_hash_lookup_mtable(vgt, VGT_HASH_WP_PAGE, pa >> PAGE_SHIFT);
 		if (mht && mht->write) {
 			/* XXX lock? */
