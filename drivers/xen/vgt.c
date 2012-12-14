@@ -45,45 +45,6 @@ static vgt_ops_t vgt_xops = {
     .boot_time = 1,
 };
 
-/*
- * Issue a hypercall with target domain ID, and PIRQ of the device.
- * Expect hypervisor to do pirq->vector translation, and then injects
- * into the target domain.
- *
- * P.S. this is only applicable to MSI type w/o need to touch virtual
- * routing information
- */
-int hvm_inject_virtual_interrupt(struct vgt_device *vstate)
-{
-//	HYPERVISOR_physdev_op(PHYSDEVOP_kick_vector,
-//			vstate->vm_id, vgt_pirq(vstate->pdev));
-	return 0;
-}
-
-/*
- * At i915 driver initialization time, we rebind PIRQ to vGT
- * driver, while instead allcoates a VIRQ to the i915 driver.
- */
-int initdom_inject_virtual_interrupt(struct vgt_device *vstate)
-{
-//	resend_irq_on_evtchn(vgt_i915_irq(vstate->pdev));
-	return 0;
-}
-
-/* invoke from i915 driver */
-void vgt_setup_irq(int pirq)
-{
-#if 0
-	int irq;
-
-	irq = bind_virq_to_irq_handler(VIRQ_GFX, 0, handler, IRQF_DISABLED, "vGFX", NULL);
-	ASSERT(irq >=0);
-
-	vgt_i915_irq(dev) = irq;
-	vgt_pirq(dev) = pirq;
-#endif
-}
-
 /* for GFX driver */
 int xen_start_vgt(struct pci_dev *pdev)
 {
