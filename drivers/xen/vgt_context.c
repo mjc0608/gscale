@@ -227,20 +227,6 @@ static int __init dom0_fence_sz_setup(char *str)
 }
 __setup("dom0_fence_sz=", dom0_fence_sz_setup);
 
-/* Before using the bitmap to manage the allocation of GM space dynamically
- * (hence Dom0's aperture starts at 0 of GM space, we used static fixed
- * allocation and Dom0's aperture starts at 128MB of GM space.
- * If you want to switch to the old 128MB location anyway, enable this kernel
- * parameter.
- */
-static int dom0_aperture_starts_at_128MB;
-static int __init dom0_aperture_starts_at_128MB_setup(char *str)
-{
-	dom0_aperture_starts_at_128MB = 1;
-	return 1;
-}
-__setup("dom0_aperture_starts_at_128MB", dom0_aperture_starts_at_128MB_setup);
-
 int vgt_ctx_switch = 1;
 
 /*
@@ -2473,13 +2459,6 @@ static int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_
 	ASSERT(vgt->aperture_base == 0); /* not allocated yet*/
 	ASSERT(vp.aperture_sz > 0 && vp.aperture_sz <= vp.gm_sz);
 	ASSERT(vp.fence_sz > 0);
-
-	if (vgt->vm_id == 0) {
-		if (dom0_aperture_starts_at_128MB)
-			aperture_search_start = 128;
-		printk("vGT: dom0 aperture starts at %ldMB.\n",
-			aperture_search_start);
-	}
 
 	visable_gm_start = bitmap_find_next_zero_area(gm_bitmap, guard,
 				aperture_search_start, vp.aperture_sz, 0);
