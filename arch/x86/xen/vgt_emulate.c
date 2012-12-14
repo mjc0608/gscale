@@ -862,7 +862,6 @@ static int xen_vgt_handler(struct pt_regs *regs, long error_code)
  */
 int xen_register_vgt_driver(vgt_ops_t *ops)
 {
-	vgt_ops = ops;
 	if (!register_gp_prehandler(xen_vgt_handler)) {
 		trap_req.nr_pio_frags = 1;
 		trap_req.pio_frags[0].s = 0x3B0;
@@ -879,8 +878,12 @@ int xen_register_vgt_driver(vgt_ops_t *ops)
 				(long)trap_req.mmio_frags[0].e
 				);
 		}
-	} else
+	} else {
 		printk("vGT: fail to install GP handler\n");
+		return -EINVAL;
+	}
+
+	vgt_ops = ops;
 	return 0;
 }
 
