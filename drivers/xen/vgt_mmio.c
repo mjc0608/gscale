@@ -493,14 +493,14 @@ bool rc_state_ctrl_1_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	data = *(uint32_t*)p_data;
 	printk("VM%d write register RC_STATE_CTRL_1 with 0x%x\n", vgt->vm_id, data);
 
-	__vreg(vgt, _REG_RC_STATE_CTRL_1) = data;
 	if ( (data & _REGBIT_RC_HW_CTRL_ENABLE) && (data & (_REGBIT_RC_RC6_ENABLE
 					| _REGBIT_RC_DEEPEST_RC6_ENABLE	| _REGBIT_RC_DEEP_RC6_ENABLE) ) )
 		set_vRC_to_C6(vgt);
 	else
 		set_vRC_to_C0(vgt);
 
-	return true;
+	return default_mmio_write(vgt, offset, p_data, bytes);
+
 }
 
 bool rc_state_ctrl_2_mmio_write(struct vgt_device *vgt, unsigned int offset,
@@ -513,7 +513,7 @@ bool rc_state_ctrl_2_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	data = *(uint32_t*)p_data;
 	printk("VM%d write register RC_STATE_CTRL_2 with 0x%x\n", vgt->vm_id, data);
 
-	__vreg(vgt, _REG_RC_STATE_CTRL_2) = data;
+	__vreg(vgt, offset) = data;
 
 	/* bits 16:18 */
 	data = (data >> 16) & 7;
@@ -3049,8 +3049,36 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_MUL_FORCEWAKE_ACK, 4, F_VIRT, 0, D_SNB|D_IVB, mul_force_wake_ack_read, NULL},
 {_REG_FORCEWAKE_ACK_HSW, 4, F_VIRT, 0, D_HSW, mul_force_wake_ack_read, NULL},
 {_REG_ECOBUS, 4, F_PM, 0, D_ALL, NULL, NULL},
-{_REG_RC_STATE_CTRL_1, 4, F_VIRT, 0, D_ALL, NULL, rc_state_ctrl_1_mmio_write},
-{_REG_RC_STATE_CTRL_2, 4, F_VIRT, 0, D_ALL, NULL, rc_state_ctrl_1_mmio_write},
+{_REG_RC_CONTROL, 4, F_PM, 0, D_ALL, NULL, rc_state_ctrl_1_mmio_write},
+{_REG_RC_STATE, 4, F_PM, 0, D_ALL, NULL, rc_state_ctrl_1_mmio_write},
+{_REG_RPNSWREQ, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC_VIDEO_FREQ, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_DOWN_TIMEOUT, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_INTERRUPT_LIMITS, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RPSTAT1, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_CONTROL, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_UP_THRESHOLD, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_DOWN_THRESHOLD, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_CUR_UP_EI, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_CUR_UP, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_PREV_UP, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_CUR_DOWN_EI, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_CUR_DOWN, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_PREV_DOWN, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_UP_EI, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_DOWN_EI, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RP_IDLE_HYSTERSIS, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC1_WAKE_RATE_LIMIT, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC6_WAKE_RATE_LIMIT, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC6pp_WAKE_RATE_LIMIT, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC_EVALUATION_INTERVAL, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC_IDLE_HYSTERSIS, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC_SLEEP, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC1e_THRESHOLD, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC6_THRESHOLD, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC6p_THRESHOLD, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_RC6pp_THRESHOLD, 4, F_PM, 0, D_ALL, NULL, NULL},
+{_REG_PMINTRMSK, 4, F_PM, 0, D_ALL, NULL, NULL},
 {_REG_HSW_PWR_WELL_CTL1, 4, F_PM, 0, D_HSW, NULL, NULL},
 {_REG_HSW_PWR_WELL_CTL2, 4, F_PM, 0, D_HSW, NULL, NULL},
 {_REG_HSW_PWR_WELL_CTL3, 4, F_PM, 0, D_HSW, NULL, NULL},
