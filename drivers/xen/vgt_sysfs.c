@@ -44,6 +44,7 @@
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
 #include <xen/vgt.h>
+#include <asm/xen/x86_emulate.h> /* only for X86EMUL_OKAY */
 #include "vgt_drv.h"
 
 struct kobject *vgt_ctrl_kobj;
@@ -455,6 +456,72 @@ static struct kobj_type vgt_ctrl_ktype = {
     .default_attrs = vgt_ctrl_attrs,
 };
 
+static ssize_t
+igd_mmio_read(struct file *filp, struct kobject *kobj,
+		struct bin_attribute *bin_attr,
+		char *buf, loff_t off, size_t count)
+{
+	struct pgt_device *pdev = vgt_kobj_priv;
+	size_t init_count = count, len;
+	unsigned long data;
+
+	if (!count || off < 0 || off + count > bin_attr->size || (off & 0x3))
+		return -EINVAL;
+
+	while (count > 0) {
+		len = (count > sizeof(unsigned long)) ? sizeof(unsigned long) :
+				count;
+
+		if (hcall_mmio_read(_vgt_mmio_pa(pdev, off), len, &data) !=
+				X86EMUL_OKAY)
+			return -EIO;
+
+		memcpy(buf, &data, len);
+		buf += len;
+		count -= len;
+	}
+
+	return init_count;
+}
+
+static ssize_t
+igd_mmio_write(struct file* filp, struct kobject *kobj,
+		 struct bin_attribute *bin_attr,
+		 char *buf, loff_t off, size_t count)
+{
+	struct pgt_device *pdev = vgt_kobj_priv;
+	size_t init_count = count, len;
+	unsigned long data;
+
+	if (!count || off < 0 || off + count > bin_attr->size || (off & 0x3))
+		return -EINVAL;
+
+	while (count > 0) {
+		len = (count > sizeof(unsigned long)) ? sizeof(unsigned long) :
+				count;
+
+		memcpy(&data, buf, len);
+		if (hcall_mmio_write(_vgt_mmio_pa(pdev, off), len, data) !=
+				X86EMUL_OKAY)
+			return -EIO;
+
+		buf += len;
+		count -= len;
+	}
+
+	return init_count;
+}
+
+static struct bin_attribute igd_mmio_attr = {
+	.attr =	{
+		.name = "igd_mmio",
+		.mode = 0660
+	},
+	.size = VGT_MMIO_SPACE_SZ,
+	.read = igd_mmio_read,
+	.write = igd_mmio_write,
+};
+
 
 static int vgt_add_state_sysfs(vgt_params_t vp)
 {
@@ -510,6 +577,7 @@ static int vgt_del_state_sysfs(vgt_params_t vp)
 }
 
 
+//TODO: add the Remove logic and check the return value...
 int vgt_init_sysfs(struct pgt_device *pdev)
 {
     int retval;
@@ -529,6 +597,10 @@ int vgt_init_sysfs(struct pgt_device *pdev)
         kobject_put(vgt_ctrl_kobj);
         return -EINVAL;
     }
+
+	retval = sysfs_create_bin_file(vgt_ctrl_kobj, &igd_mmio_attr);
+	if (retval < 0)
+		return retval;
 
     vgt_kobj_priv = pdev;
     return 0;
