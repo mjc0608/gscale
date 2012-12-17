@@ -36,6 +36,7 @@
 #include "vgt_edid.h"
 #include "vgt_reg.h"
 #include <xen/vgt-if.h>
+#include <linux/hashtable.h>
 
 struct pgt_device;
 extern struct vgt_device *dom0_vgt;
@@ -297,19 +298,21 @@ typedef bool (*vgt_mmio_read)(struct vgt_device *vgt, unsigned int offset,
 	 void *p_data, unsigned int bytes);
 typedef bool (*vgt_mmio_write)(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes);
-struct mmio_hash_table	{
-	struct mmio_hash_table	*next;
-	int	mmio_base;		/* 4 byte aligned */
+
+struct vgt_mmio_entry {
+	struct hlist_node hlist;
+	unsigned int base;
 	vgt_mmio_read	read;
 	vgt_mmio_write	write;
 };
-#define		MHASH_SIZE_SHIFT	6
-#define		MHASH_SIZE	(1<<MHASH_SIZE_SHIFT)
-#define		mhash(x)	hash_32(x & ~3, MHASH_SIZE_SHIFT);
-//#define mhash(x)	(((x >> 2) & ~(x>>8) & ~(x>>14) ) & (MHASH_SIZE-1))
 
-#define VGT_HASH_MMIO		0
-#define VGT_HASH_WP_PAGE	1
+struct vgt_wp_page_entry {
+	struct hlist_node hlist;
+	unsigned int pfn;
+	int idx;	/* shadow PTE index */
+};
+
+#define	VGT_HASH_BITS	6
 
 /*
  * Ring ID definition.
@@ -362,7 +365,7 @@ extern void vgt_destroy(void);
 extern void vgt_destroy_debugfs(struct vgt_device *vgt);
 extern void vgt_release_debugfs(void);
 extern int vgt_initialize(struct pci_dev *dev);
-extern bool vgt_register_mmio_handler(int start, int bytes,
+extern bool vgt_register_mmio_handler(unsigned int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write);
 
 extern bool need_scan_attached_ports;
@@ -451,7 +454,7 @@ struct vgt_device {
 	bool need_ppgtt_setup;
 	DECLARE_BITMAP(enabled_rings, MAX_ENGINES);
 	DECLARE_BITMAP(started_rings, MAX_ENGINES);
-	struct mmio_hash_table	*wp_table[MHASH_SIZE];	/* hash for WP pages */
+	DECLARE_HASHTABLE(wp_table, VGT_HASH_BITS);
 	vgt_ppgtt_pde_t	shadow_pde_table[VGT_PPGTT_PDE_ENTRIES];	 /* current max PDE entries should be 512 for 2G mapping */
 	vgt_ppgtt_pte_t shadow_pte_table[VGT_PPGTT_PDE_ENTRIES]; /* Current PTE number is same as PDE entries */
 
@@ -1912,15 +1915,14 @@ extern unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte);
 
 #define INVALID_MFN  (~0UL)
 
-/* new hash function */
-extern void vgt_hash_register_entry(struct vgt_device *vgt, int table, struct mmio_hash_table *mht);
-extern void vgt_hash_remove_entry(struct vgt_device *vgt, int table, int key);
-extern void vgt_hash_free_mtable(struct vgt_device *vgt, int table);
-extern struct mmio_hash_table *vgt_hash_lookup_mtable(struct vgt_device *vgt, int table, int item);
+extern void vgt_add_wp_page_entry(struct vgt_device *vgt, struct vgt_wp_page_entry *e);
+extern void vgt_del_wp_page_entry(struct vgt_device *vgt, unsigned int pfn);
 
 extern bool vgt_init_shadow_ppgtt(struct vgt_device *vgt);
 extern bool vgt_setup_ppgtt(struct vgt_device *vgt);
 extern void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt);
+extern bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e,
+			     unsigned int offset, void *p_data, unsigned int bytes);
 
 extern struct dentry *vgt_init_debugfs(struct pgt_device *pdev);
 extern int vgt_create_debugfs(struct vgt_device *vgt);

@@ -395,145 +395,91 @@ static void update_context(struct vgt_device *vgt, uint64_t context)
 
 struct vgt_device *next_display_owner;
 struct vgt_device *vgt_dom0;
-struct mmio_hash_table	*mtable[MHASH_SIZE];
 
-static void vgt_hash_add_mtable(struct vgt_device *vgt, int table, int index, struct mmio_hash_table *mht)
+DEFINE_HASHTABLE(vgt_mmio_table, VGT_HASH_BITS);
+
+void vgt_add_mmio_entry(struct vgt_mmio_entry *e)
 {
-	struct mmio_hash_table **t = NULL;
-
-	switch(table) {
-	case VGT_HASH_MMIO:
-		t = &mtable[index];
-		break;
-	case VGT_HASH_WP_PAGE:
-		t = &vgt->wp_table[index];
-		break;
-	}
-
-	if (!*t) {
-		*t = mht;
-		mht->next = NULL;
-	} else {
-		mht->next = *t;
-		*t = mht;
-	}
+	hash_add(vgt_mmio_table, &e->hlist, e->base);
 }
 
-struct mmio_hash_table *vgt_hash_lookup_mtable(struct vgt_device *vgt, int table, int item)
+struct vgt_mmio_entry * vgt_find_mmio_entry(unsigned int base)
 {
-	int index;
-	struct mmio_hash_table *mht = NULL;
+	struct vgt_mmio_entry *e;
+	struct hlist_node *node;
 
-	index = mhash(item);
-
-	switch(table) {
-	case VGT_HASH_MMIO:
-		mht = mtable[index];
-		item &= ~3;
-		break;
-	case VGT_HASH_WP_PAGE:
-		mht = vgt->wp_table[index];
-		break;
-	}
-
-	while (mht) {
-		if (mht->mmio_base == item)
-			return mht;
-		else
-			mht = mht->next;
+	hash_for_each_possible(vgt_mmio_table, e, node, hlist, base) {
+		if (base == e->base)
+			return e;
 	}
 	return NULL;
 }
 
-static void free_mtable_chain(struct mmio_hash_table *chain)
+void vgt_del_mmio_entry(unsigned int base)
 {
-	if (!chain) {
-		free_mtable_chain(chain->next);
-		kfree(chain);
+	struct vgt_mmio_entry *e;
+
+	if ((e = vgt_find_mmio_entry(base))) {
+		hash_del(&e->hlist);
 	}
 }
 
-void vgt_hash_free_mtable(struct vgt_device *vgt, int table)
+void vgt_clear_mmio_table(void)
 {
 	int i;
+	struct hlist_node *node, *tmp;
+	struct vgt_mmio_entry *e;
 
-	if (table == VGT_HASH_MMIO) {
-		for (i = 0; i < MHASH_SIZE; i++)
-			free_mtable_chain(mtable[i]);
-		memset(mtable, 0, sizeof(mtable));
-	} else if (table == VGT_HASH_WP_PAGE) {
-		for (i = 0; i < MHASH_SIZE; i++)
-			free_mtable_chain(vgt->wp_table[i]);
-		memset(vgt->wp_table, 0, sizeof(vgt->wp_table));
+	hash_for_each_safe(vgt_mmio_table, i, node, tmp, e, hlist)
+		kfree(e);
+
+	hash_init(vgt_mmio_table);
+}
+
+void vgt_add_wp_page_entry(struct vgt_device *vgt, struct vgt_wp_page_entry *e)
+{
+	hash_add((vgt->wp_table), &e->hlist, e->pfn);
+}
+
+struct vgt_wp_page_entry * vgt_find_wp_page_entry(struct vgt_device *vgt, unsigned int pfn)
+{
+	struct vgt_wp_page_entry *e;
+	struct hlist_node *node;
+
+	hash_for_each_possible((vgt->wp_table), e, node, hlist, pfn) {
+		if (pfn == e->pfn)
+			return e;
+	}
+	return NULL;
+}
+
+void vgt_del_wp_page_entry(struct vgt_device *vgt, unsigned int pfn)
+{
+	struct vgt_wp_page_entry *e;
+
+	if ((e = vgt_find_wp_page_entry(vgt, pfn))) {
+		hash_del(&e->hlist);
+		kfree(e);
 	}
 }
 
-void vgt_hash_register_entry(struct vgt_device *vgt, int table, struct mmio_hash_table *mht)
+void vgt_clear_wp_table(struct vgt_device *vgt)
 {
-	int index = mhash(mht->mmio_base);
+	int i;
+	struct hlist_node *node, *tmp;
+	struct vgt_wp_page_entry *e;
 
-	if (table == VGT_HASH_MMIO)
-		ASSERT ((mht->mmio_base & 3) == 0);
-	vgt_hash_add_mtable(vgt, table, index, mht);
+	hash_for_each_safe((vgt->wp_table), i, node, tmp, e, hlist)
+		kfree(e);
+
+	hash_init((vgt->wp_table));
 }
 
-void vgt_hash_remove_entry(struct vgt_device *vgt, int table, int key)
-{
-	int index;
-	struct mmio_hash_table *mht, *p;
-
-	index = mhash(key);
-	mht = NULL;
-
-	switch(table) {
-	case VGT_HASH_MMIO:
-		mht = mtable[index];
-		break;
-	case VGT_HASH_WP_PAGE:
-		mht = vgt->wp_table[index];
-		break;
-	}
-
-	p = mht;
-	while(mht) {
-		if (mht->mmio_base == key) {
-			p = mht->next;
-			kfree(mht);
-			break;
-		} else {
-			p = mht;
-			mht = mht->next;
-		}
-	}
-}
-
-#if 0
-static void _add_mtable(int index, struct mmio_hash_table *mht)
-{
-	vgt_hash_add_mtable(NULL, VGT_HASH_MMIO, index, mht);
-}
-#endif
-
-static struct mmio_hash_table *lookup_mtable(int mmio_base)
-{
-	return vgt_hash_lookup_mtable(NULL, VGT_HASH_MMIO, mmio_base);
-}
-
-static void free_mtable(void)
-{
-	vgt_hash_free_mtable(NULL, VGT_HASH_MMIO);
-}
-
-static void register_mhash_entry(struct mmio_hash_table *mht)
-{
-	vgt_hash_register_entry(NULL, VGT_HASH_MMIO, mht);
-}
-
-bool vgt_register_mmio_handler(int start, int bytes,
+bool vgt_register_mmio_handler(unsigned int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write)
 {
 	int i, end;
-	struct mmio_hash_table *mht;
+	struct vgt_mmio_entry *mht;
 
 	end = start + bytes -1;
 
@@ -546,13 +492,13 @@ bool vgt_register_mmio_handler(int start, int bytes,
 		mht = kmalloc(sizeof(*mht), GFP_KERNEL);
 		if (mht == NULL) {
 			printk("Insufficient memory in %s\n", __FUNCTION__);
-			free_mtable();
 			return false;
 		}
-		mht->mmio_base = i;
+		mht->base = i;
 		mht->read = read;
 		mht->write = write;
-		register_mhash_entry(mht);
+		INIT_HLIST_NODE(&mht->hlist);
+		vgt_add_mmio_entry(mht);
 	}
 	return true;
 }
@@ -942,7 +888,7 @@ static inline unsigned int vgt_pa_to_mmio_offset(struct vgt_device *vgt, unsigne
  * */
 bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int bytes)
 {
-	struct mmio_hash_table *mht;
+	struct vgt_mmio_entry *mht;
 	struct pgt_device *pdev = vgt->pdev;
 	unsigned int offset;
 	unsigned long flags;
@@ -974,7 +920,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 
 	ASSERT (reg_is_mmio(pdev, offset + bytes));
 
-	mht = lookup_mtable(offset);
+	mht = vgt_find_mmio_entry(offset);
 	if ( mht && mht->read )
 		mht->read(vgt, offset, p_data, bytes);
 	else {
@@ -1051,17 +997,18 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	void *p_data, int bytes)
 {
 	struct pgt_device *pdev = vgt->pdev;
-	struct mmio_hash_table *mht;
+	struct vgt_mmio_entry *mht;
 	unsigned int offset;
 	unsigned long flags;
 	vgt_reg_t old_vreg=0, old_sreg=0;
 
 	/* XXX PPGTT PTE WP comes here too. */
 	if (pdev->enable_ppgtt && vgt->vm_id != 0 && vgt->ppgtt_initialized) {
-		mht = vgt_hash_lookup_mtable(vgt, VGT_HASH_WP_PAGE, pa >> PAGE_SHIFT);
-		if (mht && mht->write) {
+		struct vgt_wp_page_entry *wp;
+		wp = vgt_find_wp_page_entry(vgt, pa >> PAGE_SHIFT);
+		if (wp) {
 			/* XXX lock? */
-			mht->write(vgt, pa, p_data, bytes);
+			vgt_ppgtt_handle_pte_wp(vgt, wp, pa, p_data, bytes);
 			return true;
 		}
 	}
@@ -1105,7 +1052,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		WARN_ON(vgt->vm_id == 0); /* The call stack is meaningless for HVM */
 	}
 
-	mht = lookup_mtable(offset);
+	mht = vgt_find_mmio_entry(offset);
 	if ( mht && mht->write )
 		mht->write(vgt, offset, p_data, bytes);
 	else {
@@ -2875,8 +2822,10 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 			(rc = vgt_hvm_io_init(vgt)) < 0 ||
 			(rc = vgt_hvm_enable(vgt)) < 0)
 			goto err;
-		if (pdev->enable_ppgtt)
+		if (pdev->enable_ppgtt) {
+			hash_init((vgt->wp_table));
 			vgt_init_shadow_ppgtt(vgt);
+		}
 	}
 
 	if (vgt->vm_id) {
@@ -3367,8 +3316,6 @@ int vgt_initialize(struct pci_dev *dev)
 
 	spin_lock_init(&pdev->lock);
 
-	memset (mtable, 0, sizeof(mtable));
-
 	if (!vgt_initialize_pgt_device(dev, pdev))
 		goto err;
 
@@ -3502,7 +3449,7 @@ void vgt_destroy(void)
 			vgt_release_instance(vgt);
 		}
 	}
-	free_mtable();
+	vgt_clear_mmio_table();
 	vfree(pdev->reg_info);
 	vfree(pdev->initial_mmio_state);
 

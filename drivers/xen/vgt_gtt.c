@@ -282,7 +282,8 @@ out:
  */
 
 /* Handle write protect fault on virtual PTE page */
-bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes)
+bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e,
+			     unsigned int offset, void *p_data, unsigned int bytes)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	int index, i;
@@ -291,20 +292,7 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 
 	dprintk("PTE WP handler: offset 0x%x data 0x%lx bytes %d\n", offset, *(unsigned long *)p_data, bytes);
 
-	/* need to know: fault pfn, write fault address, write fault data */
-
-	/* find shadow PTE */
-	/* XXX search PDE table for PTE table index */
-	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
-		if ((vgt->shadow_pde_table[i].virtual_phyaddr & PAGE_MASK) == (offset & PAGE_MASK)) {
-			dprintk(KERN_INFO "zhen: Found PTE page at 0x%lx (%d)\n", offset & PAGE_MASK, i);
-			break;
-		}
-	}
-	if (i == VGT_PPGTT_PDE_ENTRIES) {
-		printk(KERN_ERR "Failed to find PTE page at 0x%x\n", offset);
-		return false;
-	}
+	i = e->idx;
 
 	g_val = *(unsigned long*)p_data;
 
@@ -338,7 +326,8 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, unsigned int offset, void *
 
 /* handler to set page wp */
 
-int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
+int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages,
+		     int *idx)
 {
 	xen_hvm_vgt_wp_pages_t req;
 	int i, rc = 0;
@@ -360,24 +349,24 @@ int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
 		printk(KERN_ERR "Set WP pages failed!\n");
 	else {
 		/* Add pages in hash table */
-		struct mmio_hash_table *mht;
+		struct vgt_wp_page_entry *mht;
 
 		for (i = 0; i < nr; i++) {
-			mht = kmalloc(sizeof(struct mmio_hash_table), GFP_KERNEL);
+			mht = kmalloc(sizeof(*mht), GFP_KERNEL);
 			if (!mht)
 				break; /* XXX */
-			mht->mmio_base = *p++;
-			mht->write = vgt_ppgtt_handle_pte_wp;
-			vgt_hash_register_entry(vgt, VGT_HASH_WP_PAGE, mht);
+			mht->pfn = *p++;
+			mht->idx = *idx++;
+			vgt_add_wp_page_entry(vgt, mht);
 		}
 	}
 
 	return rc;
 }
 
-int vgt_set_wp_page(struct vgt_device *vgt, unsigned long pfn)
+int vgt_set_wp_page(struct vgt_device *vgt, unsigned long pfn, int idx)
 {
-	return vgt_set_wp_pages(vgt, 1, &pfn);
+	return vgt_set_wp_pages(vgt, 1, &pfn, &idx);
 }
 
 int vgt_unset_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
@@ -402,7 +391,7 @@ int vgt_unset_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
 		printk(KERN_ERR "Unset WP pages failed!\n");
 	else {
 		for (i = 0; i < nr; i++)
-			vgt_hash_remove_entry(vgt, VGT_HASH_WP_PAGE, *p++);
+			vgt_del_wp_page_entry(vgt, *p++);
 	}
 
 	return rc;
@@ -539,7 +528,7 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		vgt_ppgtt_shadow_pte_init(vgt, i, pte_phy);
 
 		/* WP original PTE page */
-		vgt_set_wp_page(vgt, pte_phy >> PAGE_SHIFT);
+		vgt_set_wp_page(vgt, pte_phy >> PAGE_SHIFT, i);
 
 		shadow_pde = gtt_pte_update(pdev,
 				vgt->shadow_pde_table[i].shadow_pte_maddr >> GTT_PAGE_SHIFT, pde);
