@@ -56,6 +56,9 @@
  *
  */
 
+#ifndef _VGT_H_
+#define _VGT_H_
+
 // structures
 struct vgt_device;
 typedef struct {
@@ -110,3 +113,4 @@ extern int hcall_mmio_write(
 
 // MMIO definitions
 
+#endif /* _VGT_H */

@@ -65,7 +65,7 @@ static int __init vgt_init_module(void)
 	int rc;
 
 	if (!xen_initial_domain())
-		return 1;
+		return 0;
 
 	rc  = vgt_cmd_parser_init();
 	if(rc < 0)

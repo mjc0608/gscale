@@ -29,8 +29,8 @@
 #include "i915_drv.h"
 #include "i915_trace.h"
 #include "intel_drv.h"
-#include <xen/vgt-if.h>
 
+#ifdef DRM_I915_VGT_SUPPORT
 struct _balloon_info_ {
 	/*
 	 * There are up to 2 regions per aperture/gmadr that 
@@ -168,6 +168,7 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 	printk("balloon successfully\n");
 	return 1;
 }
+#endif
 
 static void bdw_setup_private_ppat(struct drm_i915_private *dev_priv);
 static void chv_setup_private_ppat(struct drm_i915_private *dev_priv);
@@ -1857,6 +1858,10 @@ static int i915_gem_setup_global_gtt(struct drm_device *dev,
 	dev_priv->gtt.base.start = start;
 	dev_priv->gtt.base.total = end - start;
 
+#ifdef DRM_I915_VGT_SUPPORT
+	i915_balloon(dev_priv);
+#endif
+
 	/* Clear any non-preallocated blocks */
 	drm_mm_for_each_hole(entry, &ggtt_vm->mm, hole_start, hole_end) {
 		DRM_DEBUG_KMS("clearing unused GTT space: [%lx, %lx]\n",
@@ -1864,8 +1869,6 @@ static int i915_gem_setup_global_gtt(struct drm_device *dev,
 		ggtt_vm->clear_range(ggtt_vm, hole_start,
 				     hole_end - hole_start, true);
 	}
-
-	i915_balloon(dev_priv);
 
 	/* And finally clear the reserved guard page */
 	ggtt_vm->clear_range(ggtt_vm, end - PAGE_SIZE, PAGE_SIZE, true);

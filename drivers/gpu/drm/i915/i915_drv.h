@@ -50,6 +50,15 @@
 #include <linux/kref.h>
 #include <linux/pm_qos.h>
 
+#if defined(CONFIG_XEN_VGT_I915) || defined(CONFIG_XEN_VGT_I915_MODULE)
+#define DRM_I915_VGT_SUPPORT	1
+#endif
+
+#ifdef DRM_I915_VGT_SUPPORT
+#include <xen/vgt.h>
+#include <xen/vgt-if.h>
+#endif
+
 /* General customization:
  */
 
@@ -1201,11 +1210,13 @@ struct i915_gem_mm {
 	size_t object_memory;
 	u32 object_count;
 
+#ifdef DRM_I915_VGT_SUPPORT
 	/* VGT balloon info */
 	unsigned long vgt_apert_base;
 	unsigned long vgt_apert_size;
 	unsigned long vgt_gmaddr_base;
 	unsigned long vgt_gmaddr_size;
+#endif
 };
 
 struct drm_i915_error_state_buf {
@@ -2940,9 +2951,11 @@ void gen6_gt_force_wake_get(struct drm_i915_private *dev_priv, int fw_engine);
 void gen6_gt_force_wake_put(struct drm_i915_private *dev_priv, int fw_engine);
 void assert_force_wake_inactive(struct drm_i915_private *dev_priv);
 
+#ifdef DRM_I915_VGT_SUPPORT
 #define VGT_IF_VERSION	0x10000		/* 1.0 */
-
-int is_vgt(struct drm_i915_private *dev_priv);
+extern void vgt_install_irq(struct pci_dev *pdev);
+extern int is_vgt(struct drm_i915_private *dev_priv);
+#endif
 
 int sandybridge_pcode_read(struct drm_i915_private *dev_priv, u32 mbox, u32 *val);
 int sandybridge_pcode_write(struct drm_i915_private *dev_priv, u32 mbox, u32 val);

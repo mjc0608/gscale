@@ -37,7 +37,6 @@
 #include <linux/swap.h>
 #include <linux/pci.h>
 #include <linux/dma-buf.h>
-#include <xen/vgt-if.h>
 
 static void i915_gem_object_flush_gtt_write_domain(struct drm_i915_gem_object *obj);
 static void i915_gem_object_flush_cpu_write_domain(struct drm_i915_gem_object *obj,
@@ -160,6 +159,7 @@ i915_gem_object_is_inactive(struct drm_i915_gem_object *obj)
 	return i915_gem_obj_bound_any(obj) && !obj->active;
 }
 
+#ifdef DRM_I915_VGT_SUPPORT
 /*
  * Get the number of assigned fence registers.
  * through the PV INFO page.
@@ -170,6 +170,7 @@ static inline int vgt_avail_fence_num(struct drm_i915_private *dev_priv)
 	avail_fences = I915_READ(vgt_info_off(avail_rs.fence_num));
 	return avail_fences;
 }
+#endif
 
 int
 i915_gem_get_aperture_ioctl(struct drm_device *dev, void *data,
@@ -5062,16 +5063,19 @@ i915_gem_load(struct drm_device *dev)
 	if (!drm_core_check_feature(dev, DRIVER_MODESET))
 		dev_priv->fence_reg_start = 3;
 
-	if (is_vgt(dev_priv) == VGT_IF_VERSION)
-		dev_priv->num_fence_regs = vgt_avail_fence_num(dev_priv);
-	else if (INTEL_INFO(dev)->gen >= 7 && !IS_VALLEYVIEW(dev))
+	if (INTEL_INFO(dev)->gen >= 7 && !IS_VALLEYVIEW(dev))
 		dev_priv->num_fence_regs = 32;
 	else if (INTEL_INFO(dev)->gen >= 4 || IS_I945G(dev) || IS_I945GM(dev) || IS_G33(dev))
 		dev_priv->num_fence_regs = 16;
 	else
 		dev_priv->num_fence_regs = 8;
 
+#ifdef DRM_I915_VGT_SUPPORT
+	if ( is_vgt(dev_priv) == VGT_IF_VERSION )
+		dev_priv->num_fence_regs = vgt_avail_fence_num(dev_priv);
 	printk("i915: the number of the fence registers (%d)\n", dev_priv->num_fence_regs);
+#endif
+
 	/* Initialize fence registers to zero */
 	INIT_LIST_HEAD(&dev_priv->mm.fence_list);
 	i915_gem_restore_fences(dev);
