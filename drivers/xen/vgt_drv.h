@@ -63,9 +63,22 @@ extern void show_debug(struct pgt_device *pdev, int ring_id);
 		}							\
 	} while (0);
 
+extern bool hvm_render_owner;
+extern bool hvm_dpy_owner;
+extern bool hvm_owner;
+extern bool hvm_super_owner;
+extern bool vgt_primary;
 extern bool vgt_debug;
 extern bool novgt;
-extern bool hvm_super_owner;
+extern bool fastpath_dpy_switch;
+extern int fastmode;
+extern int disable_ppgtt;
+extern int enable_video_switch;
+extern bool use_old_ctx_switch;
+extern int dom0_aperture_sz;
+extern int dom0_gm_sz;
+extern int dom0_fence_sz;
+extern bool bypass_scan;
 
 #define dprintk(fmt, a...)	\
 	do { if (vgt_debug) printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a); } while (0)
@@ -375,7 +388,6 @@ extern int vgt_hvm_info_init(struct vgt_device *vgt);
 extern int vgt_hvm_io_init(struct vgt_device *vgt);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
 extern int vgt_hvm_enable(struct vgt_device *vgt);
-extern bool hvm_render_owner;
 extern void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs);
 
 struct vgt_irq_virt_state;

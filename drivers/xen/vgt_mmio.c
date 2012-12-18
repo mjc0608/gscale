@@ -51,20 +51,6 @@
 #include <xen/vgt-parser.h>
 #include "vgt_drv.h"
 
-static bool bypass_scan = true;
-static int __init bypass_scan_setup(char *str)
-{
-	if (str != NULL){
-		if (strncmp(str, "off", 3) == 0)
-			bypass_scan = false;
-		if (strncmp(str, "on", 2) == 0)
-			bypass_scan = true;
-	}
-
-	return 1;
-}
-__setup("bypass_scan=", bypass_scan_setup);
-
 static bool vgt_error_handler(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {

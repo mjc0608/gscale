@@ -45,6 +45,64 @@ static vgt_ops_t vgt_xops = {
     .boot_time = 1,
 };
 
+bool hvm_render_owner = false;
+module_param_named(hvm_render_owner, hvm_render_owner, bool, 0600);
+MODULE_PARM_DESC(hvm_render_owner, "Make HVM to be render owner after create (default: false)");
+
+bool hvm_dpy_owner = false;
+module_param_named(hvm_dpy_owner, hvm_dpy_owner, bool, 0600);
+MODULE_PARM_DESC(hvm_dpy_owner, "Make HVM to be display owner after create (default: false)");
+
+bool hvm_owner = false;
+module_param_named(hvm_owner, hvm_owner, bool, 0600);
+MODULE_PARM_DESC(hvm_owner, "Make HVM to be GPU owner after create (default: false)");
+
+bool hvm_super_owner = false;
+module_param_named(hvm_super_owner, hvm_super_owner, bool, 0600);
+
+bool vgt_primary = false;
+module_param_named(vgt_primary, vgt_primary, bool, 0600);
+
+bool vgt_debug = false;
+module_param_named(vgt_debug, vgt_debug, bool, 0600);
+
+bool novgt = false;
+module_param_named(novgt, novgt, bool, 0400);
+
+bool fastpath_dpy_switch = false;
+module_param_named(fastpath_dpy_switch, fastpath_dpy_switch, bool, 0600);
+
+int fastmode = 1;
+module_param_named(fastmode, fastmode, int, 0600);
+
+int disable_ppgtt = 0;
+module_param_named(disable_ppgtt, disable_ppgtt, int, 0600);
+
+/*
+ * FIXME: now video ring switch has weird issue. The cmd
+ * parser may enter endless loop even when head/tail is
+ * zero. earlier posting read doesn't solve the issue.
+ * so disable it for now.
+ */
+int enable_video_switch = 0;
+module_param_named(enable_video_switch, enable_video_switch, int, 0600);
+
+/* enable this to use the old style switch context */
+bool use_old_ctx_switch = false;
+module_param_named(use_old_ctx_switch, use_old_ctx_switch , bool, 0600);
+
+int dom0_aperture_sz = 64;	//in MB.
+module_param_named(dom0_aperture_sz, dom0_aperture_sz, int, 0600);
+
+int dom0_gm_sz = 64;			//in MB. Dom0 has no hidden gm.
+module_param_named(dom0_gm_sz, dom0_gm_sz, int, 0600);
+
+int dom0_fence_sz = 4;
+module_param_named(dom0_fence_sz, dom0_fence_sz, int, 0600);
+
+bool bypass_scan = true;
+module_param_named(bypass_scan, bypass_scan, bool, 0600);
+
 /* for GFX driver */
 int xen_start_vgt(struct pci_dev *pdev)
 {
@@ -60,12 +118,34 @@ int xen_start_vgt(struct pci_dev *pdev)
 }
 EXPORT_SYMBOL(xen_start_vgt);
 
+static void vgt_param_check(void)
+{
+	if (hvm_owner || hvm_super_owner) {
+		hvm_dpy_owner = true;
+		hvm_render_owner = true;
+	}
+
+	if (dom0_aperture_sz > 256)
+		dom0_aperture_sz = 256;
+
+	if (dom0_gm_sz > 2048)
+		dom0_gm_sz = 2048;
+
+	if (dom0_gm_sz < dom0_aperture_sz)
+		dom0_gm_sz = dom0_aperture_sz;
+
+	if (dom0_fence_sz > 16)
+		dom0_fence_sz = 16;
+}
+
 static int __init vgt_init_module(void)
 {
 	int rc;
 
 	if (!xen_initial_domain())
 		return 0;
+
+	vgt_param_check();
 
 	rc  = vgt_cmd_parser_init();
 	if(rc)
