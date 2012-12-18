@@ -68,16 +68,12 @@ static int __init vgt_init_module(void)
 		return 0;
 
 	rc  = vgt_cmd_parser_init();
-	if(rc < 0)
-		return 0;
+	if(rc)
+		return rc;
 
 	vgt_klog_init();
 
-	rc = xen_register_vgt_driver(&vgt_xops);
-
-
-	// fill other initialization works here
-	return rc == 0;
+	return xen_register_vgt_driver(&vgt_xops);
 }
 module_init(vgt_init_module);
 
