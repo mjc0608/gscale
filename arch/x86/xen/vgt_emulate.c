@@ -636,6 +636,27 @@ int hcall_mmio_read(
     return X86EMUL_OKAY;
 }
 
+int hcall_vgt_ctrl(unsigned long ctrl_op)
+{
+	struct vcpu_emul_ioreq req;
+	int rc;
+
+	req.type = PV_IOREQ_TYPE_CTRL;
+	req.addr = ctrl_op;
+
+	/* guard check */
+	req.size = 0xdeadbeef;
+	req.dir = PV_IOREQ_WRITE;
+
+	rc = HYPERVISOR_vcpu_op(VCPUOP_request_io_emulation,
+				smp_processor_id(), &req);
+	if (rc < 0) {
+		printk("vgt control %lx fails, error code = %d\n",	ctrl_op, rc);
+	}
+	return rc;
+}
+
+
 static int emulate_read(
         enum x86_segment seg,
         unsigned long offset,

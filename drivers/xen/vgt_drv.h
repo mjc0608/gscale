@@ -480,6 +480,9 @@ struct vgt_device {
 	 * flag is used. Will remove in future when VM drivers all have VEBOX
 	 * support. */
 	bool vebox_support;
+
+	/* virtual force wake request */
+	struct list_head v_force_wake_req;
 };
 
 extern struct vgt_device *vgt_dom0;

@@ -45,6 +45,7 @@
 #include <xen/interface/hvm/hvm_op.h>
 #include <xen/interface/hvm/params.h>
 #include <xen/interface/hvm/ioreq.h>
+#include <xen/interface/vcpu.h>
 
 #include <xen/vgt.h>
 #include <xen/vgt-if.h>
@@ -418,6 +419,52 @@ static void set_vRC_to_C0(struct vgt_device *vgt)
 	set_vRC(vgt, 0);
 }
 
+static LIST_HEAD(v_force_wake_reqs); /* VMs' force wake requests */
+static DEFINE_SPINLOCK(v_force_wake_reqs_lock);
+
+static void v_force_wake_get(struct vgt_device *vgt)
+{
+	unsigned long flags;
+	int rc;
+
+	spin_lock_irqsave(&v_force_wake_reqs_lock, flags);
+
+	if (list_empty(&v_force_wake_reqs)){
+		rc =  hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_GET);
+		if (rc < 0){
+			printk("incompatible hypervisor, consider to update your hypervisor\n");
+			BUG();
+		}
+	}
+
+	if (list_empty(&vgt->v_force_wake_req)){
+		/* req is not get yet */
+		list_add(&vgt->v_force_wake_req, &v_force_wake_reqs);
+	}
+
+	spin_unlock_irqrestore(&v_force_wake_reqs_lock, flags);
+}
+
+static void v_force_wake_put(struct vgt_device *vgt)
+{
+    unsigned long flags;
+	int rc;
+
+    spin_lock_irqsave(&v_force_wake_reqs_lock, flags);
+
+    list_del_init(&vgt->v_force_wake_req);
+
+    if (list_empty(&v_force_wake_reqs)){
+		rc =  hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_PUT);
+		if (rc < 0){
+			printk("incompatible hypervisor, consider to update your hypervisor\n");
+			BUG();
+		}
+	}
+
+    spin_unlock_irqrestore(&v_force_wake_reqs_lock, flags);
+}
+
 bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -439,10 +486,14 @@ bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	}
 
 	__vreg(vgt, _REG_FORCEWAKE) = data;
-	if (data == 1)
+	if (data == 1){
 		set_vRC_to_C0(vgt);
-	else
+		v_force_wake_get(vgt);
+	}
+	else{
 		set_vRC_to_C6(vgt);
+		v_force_wake_put(vgt);
+	}
 
 	return true;
 }

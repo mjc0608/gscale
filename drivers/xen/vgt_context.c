@@ -2530,6 +2530,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt->force_removal = false;
 
 	INIT_LIST_HEAD(&vgt->list);
+	INIT_LIST_HEAD(&vgt->v_force_wake_req);
 
 	if ((rc = create_state_instance(vgt)) < 0)
 		goto err;
