@@ -480,6 +480,13 @@ static void vgt_init_ppgtt_hw(struct vgt_device *vgt, u32 base)
 	}
 }
 
+void vgt_ppgtt_switch(struct vgt_device *vgt)
+{
+	u32 base = vgt->rb[0].sring_ppgtt_info.base;
+	dprintk("vGT(%d): switch to ppgtt base 0x%x\n", vgt->vm_id, base);
+	vgt_init_ppgtt_hw(vgt, base);
+}
+
 bool vgt_setup_ppgtt(struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;

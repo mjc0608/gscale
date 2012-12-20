@@ -1935,6 +1935,7 @@ extern bool vgt_setup_ppgtt(struct vgt_device *vgt);
 extern void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt);
 extern bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e,
 			     unsigned int offset, void *p_data, unsigned int bytes);
+extern void vgt_ppgtt_switch(struct vgt_device *vgt);
 
 extern struct dentry *vgt_init_debugfs(struct pgt_device *pdev);
 extern int vgt_create_debugfs(struct vgt_device *vgt);

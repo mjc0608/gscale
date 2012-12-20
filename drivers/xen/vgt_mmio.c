@@ -712,6 +712,8 @@ static int ring_pp_dir_base_write(struct vgt_device *vgt, int ring_id, u32 off, 
 	 * is just base. */
 	v_info->base = base;
 	s_info->base = mmio_g2h_gmadr(vgt, off, v_info->base);
+	__vreg(vgt, off) = base;
+	__sreg(vgt, off) = s_info->base;
 
 	vgt->rb[ring_id].has_ppgtt_base_set = 1;
 
@@ -835,6 +837,8 @@ bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
 	u32 dclv = *(u32 *)p_data;
 
 	ASSERT(bytes == 4);
+	__vreg(vgt, off) = dclv;
+	__sreg(vgt, off) = dclv;
 
 	dprintk("PP_DCLV write: 0x%x\n", dclv);
 	return true;
@@ -895,6 +899,9 @@ int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
 
 	v_info->mode = mode;
 	s_info->mode = mode;
+
+	__sreg(vgt, off) = mode;
+	__vreg(vgt, off) = mode;
 
 	if (reg_hw_access(vgt, off)) {
 		dprintk("RING mode: offset 0x%x write 0x%x\n", off, s_info->mode);

@@ -1374,6 +1374,10 @@ int vgt_thread(void *priv)
 				current_render_owner(pdev) = next;
 				vgt_irq_restore_context(next, VGT_OT_RENDER);
 				//show_seqno(pdev);
+
+				if (pdev->enable_ppgtt && next->ppgtt_initialized)
+					vgt_ppgtt_switch(next);
+
 				vgt_resume_ringbuffers(next);
 
 				/* request to check IRQ when ctx switch happens */
