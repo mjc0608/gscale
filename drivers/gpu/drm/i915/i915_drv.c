@@ -1617,8 +1617,6 @@ static struct pci_driver i915_pci_driver = {
 
 static int __init i915_init(void)
 {
-printk("Eddie: i915_initi915_init\n");
-printk("Eddie: -------------\n");
 	driver.num_ioctls = i915_max_ioctl;
 
 	/*
