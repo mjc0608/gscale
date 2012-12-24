@@ -279,6 +279,17 @@ static int vgt_cmd_handler_mi_set_context(struct vgt_cmd_data *data)
 	return 0;
 }
 
+static int vgt_cmd_handler_pipeline_select(struct vgt_cmd_data *data)
+{
+	if ((instr_val(data, 0) & 3) == 1)
+		klog_printk("Switch to media pipeline\n");
+	else
+		klog_printk("Switch to 3D pipeline\n");
+
+	advance_ip(data, 1);
+	return 0;
+}
+
 static int vgt_cmd_handler_mi_math(struct vgt_cmd_data *data)
 {
 	length_fixup(data,8);
@@ -1011,7 +1022,7 @@ static int vgt_cmd_register_default(void)
 	"3DPRIMITIVE", vgt_cmd_handler_length_fixup_8);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_PIPELINE_SELECT,
-	"PIPELINE_SELECT", vgt_cmd_handler_noop);
+	"PIPELINE_SELECT", vgt_cmd_handler_pipeline_select);
 
 	vgt_cmd_handler_register(GEN_GFX_CMD_TYPE_GFXPIPE, OP_STATE_PREFETCH,
 	"STATE_PREFETCH", vgt_cmd_handler_state_prefetch);
@@ -1125,6 +1136,7 @@ static int vgt_cmd_handler_exec(struct vgt_cmd_data *decode_data)
 			opcode >= cmd_handlers[type].len ||
 			cmd_handlers[type].handlers[opcode].handler == NULL){
 		printk(KERN_ERR "vgt_cmd_handler_exec: unsupported command\n");
+		klog_printk("\nvgt_cmd_handler_exec: unsupported command\n");
 		show_instruction_info(decode_data);
 		return  -VGT_UNHANDLEABLE;
 	}
@@ -1154,6 +1166,7 @@ int vgt_cmd_parser_render(struct vgt_cmd_data* decode_data)
 
 		case GEN_GFX_CMD_TYPE_RENDER_MISC:
 			printk(KERN_ERR "vgt: unsupported command GEN_GFX_CMD_TYPE_RENDER_MISC\n");
+			klog_printk("vgt: unsupported command GEN_GFX_CMD_TYPE_RENDER_MISC\n");
 			show_instruction_info(decode_data);
 			ret = -VGT_UNHANDLEABLE;
 			break;
@@ -1205,10 +1218,16 @@ out:
 
 static void show_instruction_info(struct vgt_cmd_data *d)
 {
-	/* FIXME: for unknown command, the following info may be incorrect*/
-	printk(KERN_ERR "vgt%d ring%d instr_gma=0x%lx ", d->vgt->vm_id, d->ring_id, d->instr_gma);
-	printk(KERN_ERR "buffer_type=%d instruction=%08x type=0x%x sub_type=0x%x opcode=0x%x sub_opcode=0x%x\n",
-			d->buffer_type, instr_val(d,0), d->type, d->sub_type, d->opcode, d->sub_opcode);
+	printk(KERN_ERR "vgt%d ring%d instr_gma=0x%lx instr_gma_va=%p %s cmd=0x%x\n",
+			d->vgt->vm_id, d->ring_id, d->instr_gma, d->instr_va,
+			d->buffer_type == RING_BUFFER_INSTRUCTION ? "RB": "BB",
+			instr_val(d,0)
+			);
+	klog_printk("\nvgt%d ring%d instr_gma=0x%lx instr_gma_va=%p %s cmd=0x%x\n",
+			d->vgt->vm_id, d->ring_id, d->instr_gma, d->instr_va,
+			d->buffer_type == RING_BUFFER_INSTRUCTION ? "RB": "BB",
+			instr_val(d,0)
+			);
 }
 
 static inline void stat_nr_cmd_inc(struct vgt_cmd_data* d)
@@ -1260,6 +1279,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		if (ret < 0){
 			error_count++;
 			printk("error_count=%d\n", error_count);
+			klog_printk("error_count=%d\n", error_count);
 			break;
 		}
 	}
