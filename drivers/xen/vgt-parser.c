@@ -109,17 +109,32 @@ static int instr_gma_set(struct vgt_cmd_data *d, unsigned long instr_gma)
 	unsigned long gma_next_page;
 	ASSERT(VGT_REG_IS_ALIGNED(instr_gma, 4));
 
+	if( (d->buffer_type == RING_BUFFER_INSTRUCTION) &&
+			(instr_gma >= d->ring_start + d->ring_size) )
+	{
+		/* ring buffer wrap */
+		instr_gma = instr_gma - d->ring_size;
+	}
+
 	d->instr_gma = instr_gma;
 	d->instr_va = vgt_gma_to_va(d->vgt, instr_gma,
 			d->buf_addr_type == PPGTT_BUFFER);
 	ASSERT(d->instr_va);
 
-	gma_next_page = ((instr_gma >> PAGE_SHIFT) + 1) << PAGE_SHIFT;
+	d->instr_buf_len = (PAGE_SIZE - (instr_gma & (PAGE_SIZE-1)))
+		/ sizeof(uint32_t);
+
+	if( (d->buffer_type == RING_BUFFER_INSTRUCTION) &&
+			(instr_gma + PAGE_SIZE >= d->ring_start + d->ring_size))
+	{
+		/* ring buffer wrap */
+		gma_next_page = d->ring_start;
+	}else{
+		gma_next_page = ((instr_gma >> PAGE_SHIFT) + 1) << PAGE_SHIFT;
+	}
 	d->instr_va_next_page = vgt_gma_to_va(d->vgt, gma_next_page,
 			d->buf_addr_type == PPGTT_BUFFER);
 	ASSERT(d->instr_va_next_page);
-
-	d->instr_buf_len = (gma_next_page - instr_gma) / sizeof(uint32_t);
 
 	return 0;
 }
@@ -218,9 +233,9 @@ static int vgt_cmd_handler_length_fixup_16(struct vgt_cmd_data *data)
 
 static int vgt_cmd_handler_mi_batch_buffer_end(struct vgt_cmd_data *data)
 {
-	instr_gma_set(data, data->ret_instr_gma);
 	data->buffer_type = RING_BUFFER_INSTRUCTION;
 	data->buf_addr_type = GTT_BUFFER;
+	instr_gma_set(data, data->ret_instr_gma);
 	return 0;
 }
 
@@ -403,6 +418,7 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 
 	address_fixup(data, 1);
 
+	data->buffer_type = BATCH_BUFFER_INSTRUCTION;
 	rc = instr_gma_set(data, instr_val(data,1) & BATCH_BUFFER_ADDR_MASK);
 
 	if (rc < 0){
@@ -411,7 +427,6 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct vgt_cmd_data *data)
 		return 0;
 	}
 
-	data->buffer_type = BATCH_BUFFER_INSTRUCTION;
 	return 0;
 }
 
@@ -1191,6 +1206,7 @@ out:
 static void show_instruction_info(struct vgt_cmd_data *d)
 {
 	/* FIXME: for unknown command, the following info may be incorrect*/
+	printk(KERN_ERR "vgt%d ring%d instr_gma=0x%lx ", d->vgt->vm_id, d->ring_id, d->instr_gma);
 	printk(KERN_ERR "buffer_type=%d instruction=%08x type=0x%x sub_type=0x%x opcode=0x%x sub_opcode=0x%x\n",
 			d->buffer_type, instr_val(d,0), d->type, d->sub_type, d->opcode, d->sub_opcode);
 }
@@ -1211,28 +1227,31 @@ static inline void stat_nr_cmd_inc(struct vgt_cmd_data* d)
 static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head, vgt_reg_t tail, vgt_reg_t base, vgt_reg_t size)
 {
 	static int error_count=0;
-	unsigned long instr_gma, instr_gma_end, instr_gma_bottom;
+	unsigned long instr_gma_end;
 	struct vgt_cmd_data decode_data;
 	int ret=0;
 
 	if (error_count > 10)
 		return 0;
 
-	instr_gma = base + head;
+	/* ring base is page aligned */
+	ASSERT((base & (PAGE_SIZE-1)) == 0);
+
 	instr_gma_end = base + tail;
-	instr_gma_bottom = base + size;
 
 	decode_data.buffer_type = RING_BUFFER_INSTRUCTION;
 	decode_data.buf_addr_type = GTT_BUFFER;
 	decode_data.vgt = vgt;
 	decode_data.ring_id = ring_id;
-	instr_gma_set(&decode_data, instr_gma);
+	decode_data.ring_start = base;
+	decode_data.ring_size = size;
+	instr_gma_set(&decode_data, base + head);
 
 	klog_printk("ring buffer scan start\n");
-	while(instr_gma != instr_gma_end){
+	while(decode_data.instr_gma != instr_gma_end){
 		klog_printk("%s ip(%08lx): %08x %08x %08x %08x ",
 				decode_data.buffer_type == RING_BUFFER_INSTRUCTION ? "RB": "BB",
-				instr_gma, instr_val(&decode_data,0), instr_val(&decode_data,1),
+				decode_data.instr_gma, instr_val(&decode_data,0), instr_val(&decode_data,1),
 				instr_val(&decode_data,2), instr_val(&decode_data,3));
 
 		stat_nr_cmd_inc(&decode_data);
@@ -1242,18 +1261,6 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 			error_count++;
 			printk("error_count=%d\n", error_count);
 			break;
-		}
-
-		/* next instruction*/
-		instr_gma = decode_data.instr_gma;
-
-		if (decode_data.buffer_type == RING_BUFFER_INSTRUCTION){
-			/* handle the ring buffer wrap case */
-			ASSERT(instr_gma <= instr_gma_bottom);
-
-			if (instr_gma == instr_gma_bottom){
-				instr_gma_set(&decode_data, base);
-			}
 		}
 	}
 	klog_printk("ring buffer scan end\n");

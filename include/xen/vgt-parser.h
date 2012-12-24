@@ -81,6 +81,10 @@ struct vgt_cmd_data{
 
 	char* name;
 
+	/* graphics memory address of ring buffer start */
+	unsigned long ring_start;
+	unsigned long ring_size;
+
 	/* instruction graphics memory address */
 	unsigned long instr_gma;
 
