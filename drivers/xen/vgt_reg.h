@@ -193,8 +193,14 @@
 #define _REG_VECS_PP_DIR_BASE		0x1A228
 #define _REG_VECS_PP_DCLV		0x1A220
 
+#define _REG_RVSYNC		0x2040
 #define _REG_RBSYNC		0x2044
+
 #define _REG_BRSYNC		0x22040
+#define _REG_BVSYNC		0x22044
+
+#define _REG_VBSYNC		0x12040
+#define _REG_VRSYNC		0x12044
 
 #define _REG_FENCE_0_LOW	0x100000
 #define _REG_FENCE_0_HIGH	0x100004

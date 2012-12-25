@@ -1916,6 +1916,8 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_BCS_HWSTAM,
 	_REG_BCS_EXCC,
 	_REG_BCS_UHPTR,
+	_REG_BRSYNC,
+	_REG_BVSYNC,
 
 	_REG_RCS_MI_MODE,
 	_REG_RCS_GFX_MODE_IVB,
@@ -1923,6 +1925,8 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_RCS_HWSTAM,
 	_REG_RCS_EXCC,
 	_REG_RCS_UHPTR,
+	_REG_RBSYNC,
+	_REG_RVSYNC,
 
 	_REG_VCS_MI_MODE,
 	_REG_VCS_MFX_MODE_IVB,
@@ -1930,6 +1934,8 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_VCS_HWSTAM,
 	_REG_VCS_EXCC,
 	_REG_VCS_UHPTR,
+	_REG_VBSYNC,
+	_REG_VRSYNC,
 
 	_REG_TILECTL,
 };
