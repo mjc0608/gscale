@@ -155,6 +155,44 @@ unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma)
 	return pa;
 }
 
+static unsigned long vgt_gma_2_shadow_gpa(struct vgt_device *vgt, unsigned long gma)
+{
+	unsigned long gpa;
+	vgt_ppgtt_pte_t *p;
+	u32 *e, pte;
+
+	p = &vgt->shadow_pte_table[((gma >> 22) & 0x3ff)];
+
+	/* gpa is physical pfn from shadow page table, we need VM's
+	 * pte page entry */
+	if (!p->guest_pte_vm) {
+		printk(KERN_WARNING "No guest pte mapping? index %lu\n",(gma >> 22) & 0x3ff);
+		return INVALID_ADDR;
+	}
+
+	e = (u32 *)p->guest_pte_vm->addr;
+	pte = *((u32*)(e + ((gma >> 12) & 0x3ff)));
+	gpa = (gtt_pte_get_pfn(vgt->pdev, pte) << PAGE_SHIFT) + (gma & ~PAGE_MASK);
+	return gpa;
+}
+
+static unsigned long vgt_gma_2_dom0_ppgtt_gpa(struct vgt_device *vgt, unsigned long gma)
+{
+	/* dom0 has no shadow PTE */
+	uint32_t gtt_index;
+	unsigned long pfn, gpa;
+	u32 *ent, pte;
+
+	gtt_index = vgt->ppgtt_base + ((gma >> 22) & 0x3ff);
+	pfn = gtt_pte_get_pfn(vgt->pdev, vgt->vgtt[gtt_index]);
+
+	/* dom0 PTE page */
+	ent = (u32*)mfn_to_virt(pfn);
+	pte = *((u32*)(ent + ((gma >> 12) & 0x3ff)));
+	gpa = (gtt_pte_get_pfn(vgt->pdev, pte) << PAGE_SHIFT) + (gma & ~PAGE_MASK);
+	return gpa;
+}
+
 void* vgt_gma_to_va(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
 {
 	unsigned long gpa;
@@ -162,21 +200,10 @@ void* vgt_gma_to_va(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
 	if (!ppgtt) {
 		gpa = vgt_gma_2_gpa(vgt, gma);
 	} else {
-		vgt_ppgtt_pte_t *p;
-		u32 *e, pte;
-
-		p = &vgt->shadow_pte_table[((gma >> 22) & 0x3ff)];
-
-		/* gpa is physical pfn from shadow page table, we need VM's
-		 * pte page entry */
-		if (!p->guest_pte_vm) {
-			printk(KERN_WARNING "No guest pte mapping? index %lu\n",(gma >> 22) & 0x3ff);
-			return NULL;
-		}
-
-		e = (u32 *)p->guest_pte_vm->addr;
-		pte = *((u32*)(e + ((gma >> 12) & 0x3ff)));
-		gpa = (gtt_pte_get_pfn(vgt->pdev, pte) << PAGE_SHIFT) + (gma & ~PAGE_MASK);
+		if (vgt->vm_id != 0)
+			gpa = vgt_gma_2_shadow_gpa(vgt, gma);
+		else
+			gpa = vgt_gma_2_dom0_ppgtt_gpa(vgt, gma);
 	}
 
 	if (gpa == INVALID_ADDR) {
