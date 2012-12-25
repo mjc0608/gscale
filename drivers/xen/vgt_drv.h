@@ -1797,6 +1797,7 @@ static inline bool vgt_has_pch_irq_pending(struct vgt_device *vstate)
 	} while (0)
 
 extern struct vgt_irq_ops snb_irq_ops;
+void vgt_install_irq(struct pci_dev *pdev);
 void inject_hvm_virtual_interrupt(struct vgt_device *vgt);
 void inject_dom0_virtual_interrupt(struct vgt_device *vgt);
 int vgt_vstate_irq_init(struct vgt_device *vgt);

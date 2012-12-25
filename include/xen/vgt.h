@@ -85,9 +85,14 @@ bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int off, void *p_data
 // function prototype definitions
 // defined in arch specific file
 extern int xen_register_vgt_driver(vgt_ops_t *ops);
-extern int xen_start_vgt(struct pci_dev *pdev);
 extern void xen_vgt_dom0_ready(struct vgt_device *vgt);
 extern void xen_deregister_vgt_device(struct vgt_device *vgt);
+
+typedef int (*vgt_start_callback_t)(struct pci_dev *pdev);
+typedef void (*vgt_irq_callback_t) (struct pci_dev *pdev);
+
+extern vgt_start_callback_t cb_xen_start_vgt;
+extern vgt_irq_callback_t cb_vgt_install_irq;
 
 extern int hcall_mmio_read(
         unsigned long port,

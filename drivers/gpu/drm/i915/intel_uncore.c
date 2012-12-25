@@ -630,7 +630,7 @@ void assert_force_wake_inactive(struct drm_i915_private *dev_priv)
 
 /* We give fast paths for the really cool registers */
 #define NEEDS_FORCE_WAKE(dev_priv, reg) \
-	 (i915_enable_forcewake && (reg) < 0x40000 && (reg) != FORCEWAKE)
+	 ((reg) < 0x40000 && (reg) != FORCEWAKE)
 
 #define REG_RANGE(reg, start, end) ((reg) >= (start) && (reg) < (end))
 

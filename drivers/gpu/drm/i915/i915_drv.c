@@ -916,8 +916,10 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 #ifdef DRM_I915_VGT_SUPPORT
 	/* enforce dependancy and initialize the vGT driver */
-	xen_start_vgt(pdev);
-	printk("i915: xen_start_vgt done\n");
+	if (cb_xen_start_vgt) {
+		cb_xen_start_vgt(pdev);
+		printk("i915: xen_start_vgt done\n");
+	}
 #endif
 
 	return drm_get_pci_dev(pdev, ent, &driver);
