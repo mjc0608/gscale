@@ -655,6 +655,7 @@ int hcall_vgt_ctrl(unsigned long ctrl_op)
 	}
 	return rc;
 }
+EXPORT_SYMBOL(hcall_vgt_ctrl);
 
 
 static int emulate_read(
