@@ -214,7 +214,7 @@ typedef struct {
 #define SIZE_1MB			(1024UL*1024UL)
 
 /* Maximum VMs supported by vGT. Actual number is device specific */
-#define VGT_MAX_VMS			3
+#define VGT_MAX_VMS			4
 #define VGT_RSVD_APERTURE_SZ		(64*SIZE_1MB)	/* reserve 64MB for vGT itself */
 
 #define VGT_MAX_GM_SIZE			(2*SIZE_1MB*SIZE_1KB)
