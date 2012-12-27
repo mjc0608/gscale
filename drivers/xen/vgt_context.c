@@ -1261,16 +1261,6 @@ int vgt_thread(void *priv)
 			vgt_signal_uevent(pdev);
 		}
 
-		if (test_and_clear_bit(VGT_REQUEST_PPGTT_INIT, (void *)&pdev->request)) {
-			int i;
-			for (i = 0; i < VGT_MAX_VMS; i++) {
-				if (pdev->device[i] && pdev->device[i]->need_ppgtt_setup) {
-					vgt_setup_ppgtt(pdev->device[i]);
-					pdev->device[i]->need_ppgtt_setup = false;
-				}
-			}
-		}
-
 		/*
 		 * context switch timeout hasn't expired, or
 		 * on-demand scheule hasn't been requested

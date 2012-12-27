@@ -265,7 +265,7 @@ typedef struct {
 typedef struct {
 	dma_addr_t shadow_addr;
 	struct page	*pte_page;
-	struct vm_struct *guest_pte_vm;
+	void *guest_pte_va;
 } vgt_ppgtt_pte_t;
 
 typedef struct {
@@ -463,7 +463,6 @@ struct vgt_device {
 	 */
 	u32 ppgtt_base;
 	bool ppgtt_initialized;
-	bool need_ppgtt_setup;
 	DECLARE_BITMAP(enabled_rings, MAX_ENGINES);
 	DECLARE_BITMAP(started_rings, MAX_ENGINES);
 	DECLARE_HASHTABLE(wp_table, VGT_HASH_BITS);
@@ -899,8 +898,7 @@ static inline void reg_update_handlers(struct pgt_device *pdev,
 /* request types to wake up main thread */
 #define VGT_REQUEST_IRQ		0	/* a new irq pending from device */
 #define VGT_REQUEST_UEVENT	1
-#define VGT_REQUEST_PPGTT_INIT  2	/* shadow ppgtt init request */
-#define VGT_REQUEST_SCHED 	3	/* immediate reschedule requested */
+#define VGT_REQUEST_SCHED	2	/* immediate reschedule requested */
 
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {

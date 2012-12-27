@@ -165,12 +165,12 @@ static unsigned long vgt_gma_2_shadow_gpa(struct vgt_device *vgt, unsigned long 
 
 	/* gpa is physical pfn from shadow page table, we need VM's
 	 * pte page entry */
-	if (!p->guest_pte_vm) {
+	if (!p->guest_pte_va) {
 		printk(KERN_WARNING "No guest pte mapping? index %lu\n",(gma >> 22) & 0x3ff);
 		return INVALID_ADDR;
 	}
 
-	e = (u32 *)p->guest_pte_vm->addr;
+	e = (u32 *)p->guest_pte_va;
 	pte = *((u32*)(e + ((gma >> 12) & 0x3ff)));
 	gpa = (gtt_pte_get_pfn(vgt->pdev, pte) << PAGE_SHIFT) + (gma & ~PAGE_MASK);
 	return gpa;
@@ -335,9 +335,9 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e
 		return false;
 	}
 
-	if (vgt->shadow_pte_table[i].guest_pte_vm) {
+	if (vgt->shadow_pte_table[i].guest_pte_va) {
 		u32 *guest_pte;
-		guest_pte = vgt->shadow_pte_table[i].guest_pte_vm->addr;
+		guest_pte = (u32*)vgt->shadow_pte_table[i].guest_pte_va;
 		guest_pte[index] = gtt_pte_update(pdev, g_addr, g_val);
 	}
 
@@ -379,7 +379,7 @@ int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages,
 		struct vgt_wp_page_entry *mht;
 
 		for (i = 0; i < nr; i++) {
-			mht = kmalloc(sizeof(*mht), GFP_KERNEL);
+			mht = kmalloc(sizeof(*mht), GFP_ATOMIC);
 			if (!mht)
 				break; /* XXX */
 			mht->pfn = *p++;
@@ -455,13 +455,12 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 		return -1;
 	}
 
-	/* access VM's pte page */
-	p->guest_pte_vm = vgt_ppgtt_map_guest_pte_page(vgt, virt_pte);
-	if (p->guest_pte_vm == NULL) {
-		printk(KERN_ERR "Failed to map guest PTE page!\n");
+	p->guest_pte_va = vgt_vmem_gpa_2_va(vgt, virt_pte);
+	if (!p->guest_pte_va) {
+		printk(KERN_ERR "Failed to get guest PTE page memory access!\n");
 		return -1;
 	}
-	ent = p->guest_pte_vm->addr;
+	ent = p->guest_pte_va;
 
 	shadow_ent = kmap_atomic(p->pte_page);
 
@@ -629,9 +628,6 @@ void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt)
 
 		if (vgt->ppgtt_initialized) {
 			vgt_unset_wp_page(vgt, vgt->shadow_pde_table[i].virtual_phyaddr >> PAGE_SHIFT);
-
-			if (p->guest_pte_vm)
-				xen_unmap_domain_mfn_range_in_kernel(p->guest_pte_vm, 1, vgt->vm_id);
 		}
 		__free_page(p->pte_page);
 	}

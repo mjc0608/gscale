@@ -749,8 +749,7 @@ void vgt_try_setup_ppgtt(struct vgt_device *vgt)
 		}
 	}
 	dprintk("zhen: all rings are set PPGTT base and use single table!\n");
-	vgt->need_ppgtt_setup = true;
-	vgt_raise_request(vgt->pdev, VGT_REQUEST_PPGTT_INIT);
+	vgt_setup_ppgtt(vgt);
 }
 
 static int ring_pp_dir_base_write(struct vgt_device *vgt, int ring_id, u32 off, u32 base)
