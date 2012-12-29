@@ -508,28 +508,47 @@ bool mul_force_wake_ack_read(struct vgt_device *vgt, unsigned int offset,
 bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	uint32_t data;
+	uint32_t data, mask, wake, old_wake, new_wake;
+
 
 	if (bytes > 4){
 		printk("invalid force wake data\n");
 		return false;
 	}
 
-	data = (*(uint32_t*) p_data) & 1 ;
+	data = *(uint32_t*) p_data;
 
 	dprintk("VM%d write register FORCE_WAKE_MT with %x\n", vgt->vm_id, data);
 
-	if (vgt->pdev->is_haswell) {
-		__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = data;
-	} else {
-		__vreg(vgt, _REG_MUL_FORCEWAKE_ACK) = data;
+	if (!(__vreg(vgt, _REG_ECOBUS) & ECOBUS_FORCEWAKE_MT_ENABLE)){
+		__vreg(vgt, _REG_MUL_FORCEWAKE) = data;
+		return true;
 	}
 
-	__vreg(vgt, _REG_MUL_FORCEWAKE) = data;
-	if (data == 1)
+	/* bit 16-31: mask
+	   bit  0-15: force wake
+	   forcewake bit apply only if its mask bit is 1
+	 */
+	mask = data >> 16;
+	wake = data & 0xFFFF;
+	old_wake = __vreg(vgt, _REG_MUL_FORCEWAKE) & 0xFFFF;
+
+	new_wake = (old_wake & ~mask) + (wake & mask);
+	__vreg(vgt, _REG_MUL_FORCEWAKE) = (data & 0xFFFF0000) + new_wake;
+
+	if (new_wake){
+		if (vgt->pdev->is_haswell) {
+			__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = data;
+		} else {
+			/* IVB */
+			__vreg(vgt, _REG_MUL_FORCEWAKE_ACK) = data;
+		}
+		v_force_wake_get(vgt);
 		set_vRC_to_C0(vgt);
-	else
+	}else{
+		v_force_wake_put(vgt);
 		set_vRC_to_C6(vgt);
+	}
 
 	return true;
 }
