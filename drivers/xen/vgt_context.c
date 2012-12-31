@@ -2524,7 +2524,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt->force_removal = false;
 
 	INIT_LIST_HEAD(&vgt->list);
-	INIT_LIST_HEAD(&vgt->v_force_wake_req);
 
 	if ((rc = create_state_instance(vgt)) < 0)
 		goto err;
@@ -3009,6 +3008,9 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 		printk("vGT: failed to initialize irq\n");
 		return false;
 	}
+
+	bitmap_zero(pdev->v_force_wake_bitmap, VGT_MAX_VMS);
+	spin_lock_init(&pdev->v_force_wake_lock);
 
 	vgt_init_reserved_aperture(pdev);
 	perf_pgt = pdev;

@@ -479,9 +479,6 @@ struct vgt_device {
 	 * flag is used. Will remove in future when VM drivers all have VEBOX
 	 * support. */
 	bool vebox_support;
-
-	/* virtual force wake request */
-	struct list_head v_force_wake_req;
 };
 
 extern struct vgt_device *vgt_dom0;
@@ -700,6 +697,10 @@ struct pgt_device {
 
 	/* 1 bit corresponds to 1 PAGE(4K) in aperture */
 	DECLARE_BITMAP(rsvd_aperture_bitmap, VGT_RSVD_APERTURE_BITMAP_BITS);
+
+	/* 1 bit corresponds to 1 vgt virtual force wake request */
+	DECLARE_BITMAP(v_force_wake_bitmap, VGT_MAX_VMS);
+	spinlock_t v_force_wake_lock;
 
 	uint64_t rsvd_aperture_sz;
 	uint64_t rsvd_aperture_base;

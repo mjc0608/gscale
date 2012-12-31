@@ -419,17 +419,14 @@ static void set_vRC_to_C0(struct vgt_device *vgt)
 	set_vRC(vgt, 0);
 }
 
-static LIST_HEAD(v_force_wake_reqs); /* VMs' force wake requests */
-static DEFINE_SPINLOCK(v_force_wake_reqs_lock);
-
 static void v_force_wake_get(struct vgt_device *vgt)
 {
 	unsigned long flags;
 	int rc;
 
-	spin_lock_irqsave(&v_force_wake_reqs_lock, flags);
+	spin_lock_irqsave(&vgt->pdev->v_force_wake_lock, flags);
 
-	if (list_empty(&v_force_wake_reqs)){
+	if (bitmap_empty(vgt->pdev->v_force_wake_bitmap, VGT_MAX_VMS)){
 		rc =  hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_GET);
 		if (rc < 0){
 			printk("incompatible hypervisor, consider to update your hypervisor\n");
@@ -437,32 +434,29 @@ static void v_force_wake_get(struct vgt_device *vgt)
 		}
 	}
 
-	if (list_empty(&vgt->v_force_wake_req)){
-		/* req is not get yet */
-		list_add(&vgt->v_force_wake_req, &v_force_wake_reqs);
-	}
+	bitmap_set(vgt->pdev->v_force_wake_bitmap, vgt->vgt_id, VGT_MAX_VMS);
 
-	spin_unlock_irqrestore(&v_force_wake_reqs_lock, flags);
+	spin_unlock_irqrestore(&vgt->pdev->v_force_wake_lock, flags);
 }
 
 static void v_force_wake_put(struct vgt_device *vgt)
 {
-    unsigned long flags;
+	unsigned long flags;
 	int rc;
 
-    spin_lock_irqsave(&v_force_wake_reqs_lock, flags);
+	spin_lock_irqsave(&vgt->pdev->v_force_wake_lock, flags);
 
-    list_del_init(&vgt->v_force_wake_req);
-
-    if (list_empty(&v_force_wake_reqs)){
-		rc =  hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_PUT);
-		if (rc < 0){
-			printk("incompatible hypervisor, consider to update your hypervisor\n");
-			BUG();
+	if (test_and_clear_bit(vgt->vgt_id, vgt->pdev->v_force_wake_bitmap)){
+		if (bitmap_empty(vgt->pdev->v_force_wake_bitmap, VGT_MAX_VMS)){
+			rc =  hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_PUT);
+			if (rc < 0){
+				printk("incompatible hypervisor, consider to update your hypervisor\n");
+				BUG();
+			}
 		}
 	}
 
-    spin_unlock_irqrestore(&v_force_wake_reqs_lock, flags);
+	spin_unlock_irqrestore(&vgt->pdev->v_force_wake_lock, flags);
 }
 
 bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
