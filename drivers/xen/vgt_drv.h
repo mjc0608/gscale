@@ -205,8 +205,6 @@ typedef struct {
 #define _tail_reg_(ring_reg_off)	\
 		(ring_reg_off & ~(sizeof(vgt_ringbuffer_t)-1))
 
-#define  MAX_ENGINES		5
-
 #define _vgt_mmio_va(pdev, x)		((char*)pdev->gttmmio_base_va+x)	/* PA to VA */
 #define _vgt_mmio_pa(pdev, x)		(pdev->gttmmio_base+x)	/* PA to VA */
 #define sleep_ns(x)	{long y=1UL*x/2; while (y-- > 0) ;}
@@ -337,6 +335,8 @@ struct vgt_wp_page_entry {
 #define RING_BUFFER_BCS		2
 #define RING_BUFFER_VECS	3
 #define RING_BUFFER_VCS2	4
+
+#define  MAX_ENGINES		5
 
 typedef bool (*submit_context_command_t) (struct vgt_device *vgt,
 	int ring_id, rb_dword *cmds, int bytes);
@@ -1951,6 +1951,11 @@ extern int vgt_create_debugfs(struct vgt_device *vgt);
  * can update surface base frequently, for performance
  * concern by default we disable dumping framebuffer.
  */
+
+/* command parser interface */
+extern int vgt_cmd_parser_init(void);
+extern void vgt_cmd_parser_exit(void);
+extern int vgt_scan_vring(struct vgt_device *vgt, int ring_id);
 
 /* klog facility for buck printk */
 extern int vgt_klog_init(void);

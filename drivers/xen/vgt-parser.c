@@ -33,6 +33,11 @@
 #include <xen/vgt-parser.h>
 #include "vgt_drv.h"
 
+#ifdef VGT_PARSER_OLD
+
+/* FIXME: this is old cmd parser.
+   remove it when new parser (vgt_cmd_parser.c) is stable */
+
 #define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))
 #define BATCH_BUFFER_ADR_SPACE_BIT(x)	(((x)>>8) & 1U)
 #define BATCH_BUFFER_2ND_LEVEL_BIT(x)   ((x)>>22 & 1U)
@@ -1314,3 +1319,4 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 	return ret;
 }
 
+#endif

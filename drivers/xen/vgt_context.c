@@ -43,7 +43,6 @@
 #include <asm/xen/hypervisor.h>
 #include <asm/xen/page.h>
 #include <xen/vgt.h>
-#include <xen/vgt-parser.h>
 #include <xen/interface/xen.h>
 #include <xen/xen-ops.h>
 #include "vgt_drv.h"
@@ -2102,8 +2101,6 @@ static bool vgt_restore_context (struct vgt_device *vgt)
 
 	if (vgt == NULL)
 		return false;
-
-	vgt_addr_fix_restore();
 
 	for (i=0; i < pdev->max_engines; i++) {
 		rb = &vgt->rb[i];

@@ -306,13 +306,8 @@ extern void vgt_parser_restore_address(void);
 #define OP_PIPE_CONTROL					INDEX_3D_MEDIA( 0x3 ,0x2, 0x00 )
 #define OP_3DPRIMITIVE					INDEX_3D_MEDIA( 0x3 ,0x3, 0x00 )
 
-extern int vgt_cmd_parser_init(void);
-extern void vgt_cmd_parser_exit(void);
-
 extern int vgt_cmd_handler_register(unsigned int type, unsigned int opcode,
 		char* name, int (*handler)(struct vgt_cmd_data *data));
-
-extern int vgt_scan_vring(struct vgt_device *vgt, int ring_id);
 
 extern void vgt_addr_fix_save(uint32_t* addr, uint32_t data);
 

@@ -1,0 +1,293 @@
+/*
+ * vgt_cmd_parser.h: core header file for vGT command parser
+ *
+ * This file is provided under a dual BSD/GPLv2 license.  When using or
+ * redistributing this file, you may do so under either license.
+ *
+ * GPL LICENSE SUMMARY
+ *
+ * Copyright(c) 2011 Intel Corporation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of version 2 of the GNU General Public License as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
+ * The full GNU General Public License is included in this distribution
+ * in the file called LICENSE.GPL.
+ *
+ * BSD LICENSE
+ *
+ * Copyright(c) 2011 Intel Corporation. All rights reserved.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in
+ *     the documentation and/or other materials provided with the
+ *     distribution.
+ *   * Neither the name of Intel Corporation nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#define VGT_UNHANDLEABLE 1
+
+#define INVALID_OP    (~0U)
+
+/* Render Command Map */
+
+#define RCP_OP_LEN_MI       9
+#define RCP_OP_LEN_MISC     0
+#define RCP_OP_LEN_2D       10
+#define RCP_OP_LEN_3D_MEDIA 16
+
+/* MI_* command Opcode (28:23) */
+#define OP_MI_NOOP					0x0
+#define OP_MI_USER_INTERRUPT		0x2
+#define OP_MI_WAIT_FOR_EVENT		0x3
+#define OP_MI_FLUSH				0x4
+#define OP_MI_ARB_CHECK			0x5
+#define OP_MI_REPORT_HEAD			0x7
+#define OP_MI_ARB_ON_OFF			0x8
+#define OP_MI_BATCH_BUFFER_END		0xA
+#define OP_MI_SUSPEND_FLUSH		0xB
+#define OP_MI_DISPLAY_FLIP			0x14
+#define OP_MI_SEMAPHORE_MBOX		0x16
+#define OP_MI_SET_CONTEXT			0x18
+#define OP_MI_MATH					0x1A
+
+#define OP_MI_STORE_DATA_IMM		0x20
+#define OP_MI_STORE_DATA_INDEX		0x21
+#define OP_MI_LOAD_REGISTER_IMM	0x22
+#define OP_MI_UPDATE_GTT			0x23
+#define OP_MI_STORE_REGISTER_MEM	0x24
+#define OP_MI_FLUSH_DW				0x26
+#define OP_MI_CLFLUSH				0x27
+#define OP_MI_REPORT_PERF_COUNT	0x28
+#define OP_MI_BATCH_BUFFER_START	0x31
+#define OP_MI_CONDITIONAL_BATCH_BUFFER_END	0x36
+
+/* 2D command: Opcode (28:22) */
+#define OP_2D(x)    ((2<<7) | x)
+#define OP_XY_SETUP_BLT  OP_2D(0x1)
+#define OP_XY_SETUP_CLIP_BLT    OP_2D(0x3)
+#define OP_XY_SETUP_MONO_PATTERN_SL_BLT	OP_2D(0x11)
+#define OP_XY_PIXEL_BLT    OP_2D(0x24)
+#define OP_XY_SCANLINES_BLT    OP_2D(0x25)
+#define OP_XY_TEXT_BLT    OP_2D(0x26)
+#define OP_XY_TEXT_IMMEDIATE_BLT    OP_2D(0x31)
+#define OP_COLOR_BLT    OP_2D(0x40)
+#define OP_SRC_COPY_BLT    OP_2D(0x43)
+#define OP_XY_COLOR_BLT    OP_2D(0x50)
+#define OP_XY_PAT_BLT    OP_2D(0x51)
+#define OP_XY_MONO_PAT_BLT    OP_2D(0x52)
+#define OP_XY_SRC_COPY_BLT    OP_2D(0x53)
+#define OP_XY_MONO_SRC_COPY_BLT    OP_2D(0x54)
+#define OP_XY_FULL_BLT    OP_2D(0x55)
+#define OP_XY_FULL_MONO_SRC_BLT    OP_2D(0x56)
+#define OP_XY_FULL_MONO_PATTERN_BLT    OP_2D(0x57)
+#define OP_XY_FULL_MONO_PATTERN_MONO_SRC_BLT	OP_2D(0x58)
+#define OP_XY_MONO_PAT_FIXED_BLT    OP_2D(0x59)
+#define OP_XY_MONO_SRC_COPY_IMMEDIATE_BLT	OP_2D(0x71)
+#define OP_XY_PAT_BLT_IMMEDIATE    OP_2D(0x72)
+#define OP_XY_SRC_COPY_CHROMA_BLT    OP_2D(0x73)
+#define OP_XY_FULL_IMMEDIATE_PATTERN_BLT    OP_2D(0x74)
+#define OP_XY_FULL_MONO_SRC_IMMEDIATE_PATTERN_BLT    OP_2D(0x75)
+#define OP_XY_PAT_CHROMA_BLT    OP_2D(0x76)
+#define OP_XY_PAT_CHROMA_BLT_IMMEDIATE    OP_2D(0x77)
+
+/* 3D/Media Command: Pipeline Type(28:27) Opcode(26:24) Sub Opcode(23:16) */
+/* macro can not begin with number, so add prefix _ */
+#define OP_3D_MEDIA(sub_type, opcode, sub_opcode) ( (3<<13) | ((sub_type)<<11) | ((opcode) <<8) | (sub_opcode))
+
+#define OP_STATE_PREFETCH					OP_3D_MEDIA(0x0, 0x0, 0x03)
+#define OP_STATE_BASE_ADDRESS				OP_3D_MEDIA(0x0, 0x1, 0x01)
+#define OP_STATE_SIP						OP_3D_MEDIA(0x0, 0x1, 0x02)
+#define OP_3DSTATE_VF_STATISTICS_GM45		OP_3D_MEDIA(0x1, 0x0, 0x0B)
+#define OP_PIPELINE_SELECT					OP_3D_MEDIA(0x1, 0x1, 0x04)
+#define OP_MEDIA_INTERFACE_DESCRIPTOR_LOAD	OP_3D_MEDIA( 0x2, 0x0, 0x2)
+#define OP_MEDIA_GATEWAY_STATE				OP_3D_MEDIA( 0x2, 0x0, 0x3)
+#define OP_MEDIA_STATE_FLUSH				OP_3D_MEDIA( 0x2, 0x0, 0x4)
+#define OP_MEDIA_OBJECT					OP_3D_MEDIA( 0x2, 0x1, 0x0)
+#define OP_MEDIA_CURBE_LOAD				OP_3D_MEDIA( 0x2, 0x0, 0x1)
+#define OP_MEDIA_OBJECT_PRT				OP_3D_MEDIA( 0x2, 0x1, 0x2)
+#define OP_MEDIA_OBJECT_WALKER				OP_3D_MEDIA( 0x2, 0x1, 0x3)
+#define OP_MEDIA_VFE_STATE					OP_3D_MEDIA( 0x2, 0x0, 0x0)
+
+#define OP_3DSTATE_BINDING_TABLE_POINTERS	OP_3D_MEDIA(0x3, 0x0, 0x01)
+#define OP_3DSTATE_SAMPLER_STATE_POINTERS	OP_3D_MEDIA(0x3, 0x0, 0x02)
+#define OP_3DSTATE_URB					OP_3D_MEDIA(0x3, 0x0, 0x05)
+#define OP_3DSTATE_VERTEX_BUFFERS			OP_3D_MEDIA(0x3, 0x0, 0x08)
+#define OP_3DSTATE_VERTEX_ELEMENTS		OP_3D_MEDIA(0x3, 0x0, 0x09)
+#define OP_3DSTATE_INDEX_BUFFER			OP_3D_MEDIA(0x3, 0x0, 0x0A)
+#define OP_3DSTATE_VF_STATISTICS			OP_3D_MEDIA(0x3, 0x0, 0x0B)
+#define OP_3DSTATE_VIEWPORT_STATE_POINTERS	OP_3D_MEDIA(0x3, 0x0, 0x0D)
+#define OP_3DSTATE_CC_STATE_POINTERS		OP_3D_MEDIA( 0x3 ,0x0, 0x0E )
+#define OP_3DSTATE_SCISSOR_STATE_POINTERS	OP_3D_MEDIA( 0x3 ,0x0, 0x0F )
+#define OP_3DSTATE_VS						OP_3D_MEDIA( 0x3 ,0x0, 0x10)
+#define OP_3DSTATE_GS						OP_3D_MEDIA( 0x3 ,0x0, 0x11 )
+#define OP_3DSTATE_CLIP					OP_3D_MEDIA( 0x3 ,0x0, 0x12 )
+#define OP_3DSTATE_SF						OP_3D_MEDIA( 0x3 ,0x0, 0x13)
+#define OP_3DSTATE_WM						OP_3D_MEDIA( 0x3 ,0x0, 0x14 )
+#define OP_3DSTATE_CONSTANT_VS			OP_3D_MEDIA( 0x3 ,0x0, 0x15)
+#define OP_3DSTATE_CONSTANT_GS			OP_3D_MEDIA( 0x3 ,0x0, 0x16 )
+#define OP_3DSTATE_CONSTANT_PS			OP_3D_MEDIA( 0x3 ,0x0, 0x17 )
+#define OP_3DSTATE_SAMPLE_MASK			OP_3D_MEDIA( 0x3 ,0x0, 0x18 )
+#define OP_3DSTATE_DRAWING_RECTANGLE		OP_3D_MEDIA( 0x3 ,0x1, 0x00 )
+#define OP_3DSTATE_SAMPLER_PALETTE_LOAD0	OP_3D_MEDIA( 0x3 ,0x1, 0x02 )
+#define OP_3DSTATE_CHROMA_KEY				OP_3D_MEDIA( 0x3 ,0x1, 0x04 )
+#define OP_3DSTATE_DEPTH_BUFFER			OP_3D_MEDIA( 0x3 ,0x1, 0x05 )
+#define OP_3DSTATE_POLY_STIPPLE_OFFSET	OP_3D_MEDIA( 0x3 ,0x1, 0x06 )
+#define OP_3DSTATE_POLY_STIPPLE_PATTERN	OP_3D_MEDIA( 0x3 ,0x1, 0x07 )
+#define OP_3DSTATE_LINE_STIPPLE			OP_3D_MEDIA( 0x3 ,0x1, 0x08 )
+#define OP_3DSTATE_AA_LINE_PARAMS			OP_3D_MEDIA( 0x3 ,0x1, 0x0A )
+#define OP_3DSTATE_GS_SVB_INDEX			OP_3D_MEDIA( 0x3 ,0x1, 0x0B )
+#define OP_3DSTATE_SAMPLER_PALETTE_LOAD1	OP_3D_MEDIA( 0x3 ,0x1, 0x0C )
+#define OP_3DSTATE_MULTISAMPLE			OP_3D_MEDIA( 0x3 ,0x1, 0x0D )
+#define OP_3DSTATE_STENCIL_BUFFER			OP_3D_MEDIA( 0x3 ,0x1, 0x0E )
+#define OP_3DSTATE_HIER_DEPTH_BUFFER		OP_3D_MEDIA( 0x3 ,0x1, 0x0F )
+#define OP_3DSTATE_CLEAR_PARAMS			OP_3D_MEDIA( 0x3 ,0x1, 0x10 )
+#define OP_3DSTATE_MONOFILTER_SIZE		OP_3D_MEDIA( 0x3 ,0x1, 0x11 )
+#define OP_3DSTATE_SO_DECL_LIST			OP_3D_MEDIA( 0x3 ,0x1, 0x17 )
+#define OP_3DSTATE_SO_BUFFER				OP_3D_MEDIA( 0x3 ,0x1, 0x18 )
+#define OP_PIPE_CONTROL					OP_3D_MEDIA( 0x3 ,0x2, 0x00 )
+#define OP_3DPRIMITIVE					OP_3D_MEDIA( 0x3 ,0x3, 0x00 )
+#define OP_3DSTATE_BINDING_TABLE_POINTERS_VS	OP_3D_MEDIA(0x3, 0x0, 0x26)
+#define OP_3DSTATE_BINDING_TABLE_POINTERS_HS	OP_3D_MEDIA(0x3, 0x0, 0x27)
+#define OP_3DSTATE_BINDING_TABLE_POINTERS_DS	OP_3D_MEDIA(0x3, 0x0, 0x28)
+#define OP_3DSTATE_BINDING_TABLE_POINTERS_GS	OP_3D_MEDIA(0x3, 0x0, 0x29)
+#define OP_3DSTATE_BINDING_TABLE_POINTERS_PS	OP_3D_MEDIA(0x3, 0x0, 0x2A)
+
+/* VCCP Command Parser */
+
+#define VCCS_OP_LEN_MI       9
+#define VCCS_OP_LEN_MFX_VC   16
+
+extern int vgt_scan_vring_2(struct vgt_device *vgt, int ring_id);
+
+struct parser_exec_state;
+
+typedef int (*parser_cmd_handler)(struct parser_exec_state *s);
+
+#define VGT_CMD_HASH_BITS	7
+
+/* which DWords need address fix */
+#define ADDR_FIX_1(x1)	(1<<(x1))
+#define ADDR_FIX_2(x1,x2)	(ADDR_FIX_1(x1) | ADDR_FIX_1(x2))
+#define ADDR_FIX_3(x1,x2,x3)	(ADDR_FIX_1(x1) | ADDR_FIX_2(x2,x3))
+#define ADDR_FIX_4(x1,x2,x3,x4)	( ADDR_FIX_1(x1) | ADDR_FIX_3(x2,x3,x4))
+#define ADDR_FIX_5(x1,x2,x3,x4,x5)  (ADDR_FIX_1(x1) | ADDR_FIX_4(x2,x3,x4,x5))
+
+struct cmd_info{
+	char* name;
+	uint32_t opcode;
+
+#define F_LEN_MASK	(1U<<0)
+#define F_LEN_CONST  1U
+#define F_LEN_VAR    0U
+
+/* command has its own ip advance logic
+   e.g. MI_BATCH_START, MI_BATCH_END
+*/
+#define F_IP_ADVANCE_CUSTOM (1<<1)
+
+	uint32_t flag;
+
+#define R_RCS	(1 << RING_BUFFER_RCS )
+#define R_VCS	(1 << RING_BUFFER_VCS )
+#define R_BCS	(1 << RING_BUFFER_BCS )
+#define R_VECS	(1 << RING_BUFFER_VECS )
+#define R_VECS2	(1 << RING_BUFFER_VCS2 )
+#define R_ALL (R_RCS | R_VCS | R_BCS | R_VECS | R_VECS2 )
+	/* rings that support this cmd: BLT/RCS/VCS/VECS */
+	uint16_t rings;
+
+	/* devices that support this cmd: SNB/IVB/HSW/... */
+	uint16_t devices;
+
+	/* which DWords are address that need fix up */
+	uint16_t addr_bitmap;
+
+	/*	flag == F_LEN_CONST : command length
+		flag == F_LEN_VAR : lenght bias bits
+		Note: length is in DWord
+	 */
+	uint8_t	len;
+
+	parser_cmd_handler handler;
+};
+
+struct vgt_cmd_entry {
+	struct hlist_node hlist;
+	struct cmd_info* info;
+};
+
+typedef enum {
+	RING_BUFFER_INSTRUCTION,
+	BATCH_BUFFER_INSTRUCTION
+}cmd_buf_t;
+
+typedef enum{
+	GTT_BUFFER,
+	PPGTT_BUFFER
+}gtt_addr_t;
+
+struct parser_exec_state{
+	struct vgt_device *vgt;
+	int ring_id;
+
+	cmd_buf_t buf_type;
+
+	/* batch buffer address type */
+	gtt_addr_t buf_addr_type;
+
+	/* graphics memory address of ring buffer start */
+	unsigned long ring_start;
+	unsigned long ring_size;
+
+	/* instruction graphics memory address */
+	unsigned long ip_gma;
+
+	/* mapped va of the instr_gma */
+	uint32_t *ip_va;
+
+	/* length of free buffer in current page, in qword */
+	unsigned long ip_buf_len;
+
+	/* mapped va of the next page near instr_gma */
+	uint32_t *ip_va_next_page;
+
+	/* next instruction when return from  batch buffer to ring buffer */
+	unsigned long ret_instr_gma;
+
+	struct cmd_info* info;
+};
+
+extern uint32_t vgt_get_opcode(uint32_t cmd, int ring_id );
+extern void vgt_cmd_name(uint32_t cmd, int ring_id, int gen);

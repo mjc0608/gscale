@@ -49,7 +49,6 @@
 
 #include <xen/vgt.h>
 #include <xen/vgt-if.h>
-#include <xen/vgt-parser.h>
 #include "vgt_drv.h"
 
 static bool vgt_error_handler(struct vgt_device *vgt, unsigned int offset,
