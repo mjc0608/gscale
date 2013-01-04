@@ -490,6 +490,10 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 
 static void vgt_init_ppgtt_hw(struct vgt_device *vgt, u32 base)
 {
+	/* only change HW setting if vgt is current render owner.*/
+	if (current_render_owner(vgt->pdev) != vgt)
+		return;
+
 	/* Rewrite PP_DIR_BASE to let HW reload PDs in internal cache */
 	VGT_MMIO_WRITE(vgt->pdev, _REG_RCS_PP_DCLV, 0xffffffff);
 	VGT_MMIO_WRITE(vgt->pdev, _REG_RCS_PP_DIR_BASE_IVB, base);
