@@ -530,13 +530,14 @@ bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	new_wake = (old_wake & ~mask) + (wake & mask);
 	__vreg(vgt, _REG_MUL_FORCEWAKE) = (data & 0xFFFF0000) + new_wake;
 
+	if (vgt->pdev->is_haswell) {
+		__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = new_wake;
+	} else {
+		/* IVB */
+		__vreg(vgt, _REG_MUL_FORCEWAKE_ACK) = new_wake;
+	}
+
 	if (new_wake){
-		if (vgt->pdev->is_haswell) {
-			__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = data;
-		} else {
-			/* IVB */
-			__vreg(vgt, _REG_MUL_FORCEWAKE_ACK) = data;
-		}
 		v_force_wake_get(vgt);
 		set_vRC_to_C0(vgt);
 	}else{
