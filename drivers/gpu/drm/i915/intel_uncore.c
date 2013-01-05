@@ -458,6 +458,9 @@ void intel_uncore_forcewake_reset(struct drm_device *dev, bool restore)
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	unsigned long irqflags;
 
+	if (dev_priv->in_xen_vgt)
+		return;
+
 	if (del_timer_sync(&dev_priv->uncore.force_wake_timer))
 		gen6_force_wake_timer((unsigned long)dev_priv);
 
@@ -1144,6 +1147,8 @@ do { \
 	dev_priv->uncore.funcs.mmio_readq = x##_read64; \
 } while (0)
 
+static void null_force_wake(struct drm_i915_private *dev_priv) {};
+
 void intel_uncore_init(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
@@ -1245,6 +1250,10 @@ void intel_uncore_init(struct drm_device *dev)
 	}
 
 	i915_check_and_clear_faults(dev);
+	if (dev_priv->in_xen_vgt) {
+		dev_priv->gt.force_wake_get = null_force_wake;
+		dev_priv->gt.force_wake_put = null_force_wake;
+	}
 }
 #undef ASSIGN_WRITE_MMIO_VFUNCS
 #undef ASSIGN_READ_MMIO_VFUNCS
