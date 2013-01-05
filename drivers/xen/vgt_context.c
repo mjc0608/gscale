@@ -1883,6 +1883,13 @@ vgt_reg_t vgt_render_regs[] = {
 	_REG_VCS_UHPTR,
 
 	_REG_TILECTL,
+
+	_REG_BRSYNC,
+	_REG_BVSYNC,
+	_REG_RBSYNC,
+	_REG_RVSYNC,
+	_REG_VBSYNC,
+	_REG_VRSYNC,
 };
 
 vgt_reg_t vgt_gen7_render_regs[] = {
