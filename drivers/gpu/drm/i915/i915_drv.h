@@ -1789,6 +1789,8 @@ struct drm_i915_private {
 		void (*stop_ring)(struct intel_engine_cs *ring);
 	} gt;
 
+	bool in_xen_vgt;
+
 	/*
 	 * NOTE: This is the dri1/ums dungeon, don't add stuff here. Your patch
 	 * will be rejected. Instead look for a better place.
@@ -2954,7 +2956,7 @@ void assert_force_wake_inactive(struct drm_i915_private *dev_priv);
 #ifdef DRM_I915_VGT_SUPPORT
 #define VGT_IF_VERSION	0x10000		/* 1.0 */
 extern void vgt_install_irq(struct pci_dev *pdev);
-extern int is_vgt(struct drm_i915_private *dev_priv);
+extern void i915_check_vgt(struct drm_i915_private *dev_priv);
 #endif
 
 int sandybridge_pcode_read(struct drm_i915_private *dev_priv, u32 mbox, u32 *val);

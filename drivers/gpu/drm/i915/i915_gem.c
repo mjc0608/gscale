@@ -5071,7 +5071,7 @@ i915_gem_load(struct drm_device *dev)
 		dev_priv->num_fence_regs = 8;
 
 #ifdef DRM_I915_VGT_SUPPORT
-	if ( is_vgt(dev_priv) == VGT_IF_VERSION )
+	if (dev_priv->in_xen_vgt)
 		dev_priv->num_fence_regs = vgt_avail_fence_num(dev_priv);
 	printk("i915: the number of the fence registers (%d)\n", dev_priv->num_fence_regs);
 #endif

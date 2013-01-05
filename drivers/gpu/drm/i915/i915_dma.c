@@ -776,6 +776,10 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 		goto out_freewq;
 	}
 
+#ifdef DRM_I915_VGT_SUPPORT
+	i915_check_vgt(dev_priv);
+#endif
+
 	intel_irq_init(dev_priv);
 	intel_uncore_sanitize(dev);
 
