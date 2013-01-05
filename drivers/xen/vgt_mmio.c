@@ -1930,7 +1930,7 @@ static int xen_get_nr_vcpu(int vm_id)
 		return 1;
 	}
 
-	return arg.u.getdomaininfo.nr_online_vcpus;
+	return arg.u.getdomaininfo.max_vcpu_id + 1;
 }
 
 static int hvm_get_parameter_by_dom(domid_t domid, int idx, uint64_t *value)
