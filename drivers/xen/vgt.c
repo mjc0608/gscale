@@ -83,8 +83,13 @@ module_param_named(disable_ppgtt, disable_ppgtt, int, 0600);
  * parser may enter endless loop even when head/tail is
  * zero. earlier posting read doesn't solve the issue.
  * so disable it for now.
+ *
+ * Dexuan: let's enable VCS switch, because on HSW, win7 gfx drver's PAVP
+ * initialization uses VCS. Without enabling this option, win7 guest's gfx
+ * driver's initializtion will hang when we create the guest for the 2nd
+ * time(VCS.TAIL is 0x70, but VCS.HEAD is always 0x30).
  */
-int enable_video_switch = 0;
+int enable_video_switch = 1;
 module_param_named(enable_video_switch, enable_video_switch, int, 0600);
 
 /* enable this to use the old style switch context */
