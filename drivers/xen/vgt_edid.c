@@ -388,7 +388,9 @@ void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
 			EDID_MSG(VGT_EDID_WARN, gmbus_emulate,
 				"Slave that is not supported yet[addr:0x%x]!\n",
 				slave_addr);
-			dump_stack();
+
+			//This is pretty slow, and meanlingless for HVM guest.
+			//dump_stack();
 		}
 
 		i2c_bus->gmbus.cycle_type = ((value >> 25) & 0x7);
@@ -445,7 +447,9 @@ void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
 	} else {
 		EDID_MSG(VGT_EDID_WARN, gmbus_emulate,
 			"Other gmbus register access? addr: 0x%x\n", offset);
-		dump_stack();
+
+		//This is pretty slow, and meanlingless for HVM guest.
+		//dump_stack();
 	}
 
 	return;
