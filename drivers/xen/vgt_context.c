@@ -1433,9 +1433,9 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 static inline void stop_ring(struct pgt_device *pdev, int ring_id)
 {
 	/* wait for ring idle */
+	ring_wait_for_empty(pdev, ring_id, false, "stop-ring");
 	VGT_MMIO_WRITE(pdev, pdev->ring_mi_mode[ring_id],
 		       _REGBIT_MI_STOP_RINGS | (_REGBIT_MI_STOP_RINGS << 16));
-	ring_wait_for_empty(pdev, ring_id, false, "stop-ring");
 }
 
 static inline void resume_ring(struct pgt_device *pdev, int ring_id)
