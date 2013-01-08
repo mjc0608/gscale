@@ -97,10 +97,6 @@ MODULE_PARM_DESC(shadow_tail_based_qos, "Use Shadow tail based QoS scheduler (de
 int enable_video_switch = 1;
 module_param_named(enable_video_switch, enable_video_switch, int, 0600);
 
-/* enable this to use the old style switch context */
-bool use_old_ctx_switch = false;
-module_param_named(use_old_ctx_switch, use_old_ctx_switch , bool, 0600);
-
 int dom0_aperture_sz = 64;	//in MB.
 module_param_named(dom0_aperture_sz, dom0_aperture_sz, int, 0600);
 

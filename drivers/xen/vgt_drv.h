@@ -77,7 +77,6 @@ extern bool event_based_qos;
 extern int fastmode;
 extern int disable_ppgtt;
 extern int enable_video_switch;
-extern bool use_old_ctx_switch;
 extern int dom0_aperture_sz;
 extern int dom0_gm_sz;
 extern int dom0_fence_sz;
@@ -342,13 +341,6 @@ enum vgt_ring_id {
 };
 
 #define  MAX_ENGINES		5
-
-typedef bool (*submit_context_command_t) (struct vgt_device *vgt,
-	int ring_id, rb_dword *cmds, int bytes);
-bool rcs_submit_context_command (struct vgt_device *vgt,
-	int ring_id, rb_dword *cmds, int bytes);
-bool default_submit_context_command (struct vgt_device *vgt,
-	int ring_id, rb_dword *cmds, int bytes);
 
 extern enum vgt_pipe surf_used_pipe;
 
@@ -703,6 +695,9 @@ struct pgt_statistics {
 };
 
 struct vgt_mmio_dev;
+
+#include "vgt_ringbuffer.h"
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list; /* list node for 'pgt_devices' */
@@ -738,7 +733,6 @@ struct pgt_device {
 	u32 ring_mmio_base[MAX_ENGINES];
 	u32 ring_psmi[MAX_ENGINES];
 	u32 ring_mi_mode[MAX_ENGINES];
-	submit_context_command_t submit_context_command[MAX_ENGINES];
 
 	vgt_edid_data_t		*pdev_edids[EDID_MAX];	/* per display EDID information */
 
@@ -804,6 +798,8 @@ struct pgt_device {
 	struct pgt_statistics stat;
 
 	struct vgt_mmio_dev *mmio_dev;
+
+	struct vgt_ring_buffer *ring_buffer; /* vGT ring buffer */
 };
 
 extern struct list_head pgt_devices;
@@ -2165,5 +2161,17 @@ void vgt_cleanup_mmio_dev(struct pgt_device *pdev);
 int vgt_create_mmio_dev(struct vgt_device *vgt);
 void vgt_destroy_mmio_dev(struct vgt_device *vgt);
 
+#define _wait_for(COND, MS, W) ({	\
+	int ret__ = 0;					\
+	int ms__ = MS;					\
+									\
+	while (!(COND) && ms__--)		\
+		mdelay(1);					\
+									\
+	if (!ms__ && !(COND))			\
+		ret__ = -ETIMEDOUT;			\
+	ret__;							\
+})
+#define wait_for(COND, MS) _wait_for(COND, MS, 1)
 
 #endif	/* _VGT_DRV_H_ */
