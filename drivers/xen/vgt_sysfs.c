@@ -52,6 +52,7 @@ struct kset *vgt_kset;
 static struct pgt_device *vgt_kobj_priv;
 struct vgt_device *vmid_2_vgt_device(int vmid);
 static unsigned int query_reg;
+DEFINE_SPINLOCK(vgt_sysfs_lock);
 
 static void vgt_kobj_release(struct kobject *kobj)
 {
@@ -275,8 +276,8 @@ static ssize_t vgt_reg_owner_show(struct kobject *kobj, struct kobj_attribute *a
 	type = pdev->reg_info[REG_INDEX(reg)] & VGT_REG_OWNER;
 
 	for_each_set_bit(bit, &vgt_id_alloc_bitmap, (8 * sizeof(unsigned long))) {
-        vgt = pdev->device[bit];
-        if (vgt == vgt_get_owner(pdev, type)) {
+		vgt = pdev->device[bit];
+		if (vgt == vgt_get_owner(pdev, type)) {
 			found_owner = true;
 			break;
 		}
@@ -468,18 +469,24 @@ igd_mmio_read(struct file *filp, struct kobject *kobj,
 	if (!count || off < 0 || off + count > bin_attr->size || (off & 0x3))
 		return -EINVAL;
 
+	spin_lock_irq(&pdev->lock);
+
 	while (count > 0) {
 		len = (count > sizeof(unsigned long)) ? sizeof(unsigned long) :
 				count;
 
 		if (hcall_mmio_read(_vgt_mmio_pa(pdev, off), len, &data) !=
-				X86EMUL_OKAY)
+				X86EMUL_OKAY) {
+			spin_unlock_irq(&pdev->lock);
 			return -EIO;
+		}
 
 		memcpy(buf, &data, len);
 		buf += len;
 		count -= len;
 	}
+
+	spin_unlock_irq(&pdev->lock);
 
 	return init_count;
 }
@@ -496,18 +503,24 @@ igd_mmio_write(struct file* filp, struct kobject *kobj,
 	if (!count || off < 0 || off + count > bin_attr->size || (off & 0x3))
 		return -EINVAL;
 
+	spin_lock_irq(&pdev->lock);
+
 	while (count > 0) {
 		len = (count > sizeof(unsigned long)) ? sizeof(unsigned long) :
 				count;
 
 		memcpy(&data, buf, len);
 		if (hcall_mmio_write(_vgt_mmio_pa(pdev, off), len, data) !=
-				X86EMUL_OKAY)
+				X86EMUL_OKAY) {
+			spin_unlock_irq(&pdev->lock);
 			return -EIO;
+		}
 
 		buf += len;
 		count -= len;
 	}
+
+	spin_unlock_irq(&pdev->lock);
 
 	return init_count;
 }
@@ -541,7 +554,11 @@ static int vgt_add_state_sysfs(vgt_params_t vp)
 	if (vmid_2_vgt_device(vp.vm_id))
 		return -EINVAL;
 
-	if ((retval = create_vgt_instance(vgt_kobj_priv, &vgt, vp)) < 0)
+	spin_lock(&vgt_sysfs_lock);
+	retval = create_vgt_instance(vgt_kobj_priv, &vgt, vp);
+	spin_unlock(&vgt_sysfs_lock);
+
+	if (retval < 0)
 		return retval;
 
 	/* init kobject */

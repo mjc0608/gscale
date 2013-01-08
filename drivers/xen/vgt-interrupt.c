@@ -1439,8 +1439,7 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 	int bit;
 	struct vgt_irq_info_entry *entry;
 
-	ASSERT((physical && !spin_is_locked(&dev->lock)) ||
-		(!physical && spin_is_locked(&dev->lock)));
+	ASSERT(spin_is_locked(&dev->lock));
 
 	for_each_set_bit(bit, iir, info->table_size) {
 		/* clear cached pending bits */
@@ -1575,6 +1574,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	irqreturn_t ret;
 	u32 de_ier;
 
+	spin_lock(&dev->lock);
 	dev->stat.irq_num++;
 	dev->stat.last_pirq = get_cycles();
 	dprintk("vGT: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
@@ -1592,6 +1592,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	if (ret == IRQ_NONE) {
 		dprintk("Spurious interrupt received (or shared vector)\n");
 		VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);
+		spin_unlock(&dev->lock);
 		return IRQ_HANDLED;
 	}
 
@@ -1607,6 +1608,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 #endif
 
 	dev->stat.pirq_cycles += get_cycles() - dev->stat.last_pirq;
+	spin_unlock(&dev->lock);
 	return IRQ_HANDLED;
 }
 
@@ -1713,8 +1715,6 @@ int vgt_irq_init(struct pgt_device *dev)
 		return -ENOMEM;
 
 	dev->irq_hstate = irq_hstate;
-
-	spin_lock_init(&(dev->irq_hstate->lock));
 
 	/* FIXME IVB: check any difference */
 	if (dev->is_sandybridge || dev->is_ivybridge || dev->is_haswell)

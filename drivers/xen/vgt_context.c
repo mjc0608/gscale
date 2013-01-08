@@ -724,11 +724,6 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
-	/* for single-VM UP dom0 case, no nest is expected */
-	if (spin_is_locked(&pdev->lock))
-		dump_stack();
-	ASSERT(!spin_is_locked(&pdev->lock));
-
 	ASSERT (bytes <= 8);
 //	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 	if (!VGT_REG_IS_ALIGNED(offset, bytes)){
@@ -844,7 +839,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
-	ASSERT(!spin_is_locked(&pdev->lock));
 	/* at least FENCE registers are accessed in 8 bytes */
 	ASSERT (bytes <= 8);
 	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);

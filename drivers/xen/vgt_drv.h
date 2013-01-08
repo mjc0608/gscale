@@ -1620,7 +1620,6 @@ struct vgt_irq_host_state {
 	vgt_core_handler_t *core_handlers;
 	/* always emulated events */
 	DECLARE_BITMAP(emulated_events, IRQ_MAX);
-	spinlock_t lock;
 
 	struct vgt_irq_ops *ops;
 

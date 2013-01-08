@@ -785,19 +785,8 @@ static const struct x86_emulate_ops vgt_emu_ops = {
 	.invlpg = _un_invlpg,
 };
 
-static struct cpu_user_regs em_regs;
-static struct x86_emulate_ctxt ctxt = {
-	.force_writeback = 0,
-#ifdef __x86_64__
-	.addr_size = 64,
-	.sp_size = 64,
-#else
-	.addr_size = 32,
-	.sp_size = 32,
-#endif
-	.retire.byte = 0,
-	.regs = &em_regs,
-};
+static DEFINE_PER_CPU(struct cpu_user_regs, em_regs);
+static DEFINE_PER_CPU(struct x86_emulate_ctxt, ctxt);
 
 static void em_regs_2_pt_regs(
 	struct cpu_user_regs *src_regs,
@@ -868,10 +857,13 @@ static void pt_regs_2_em_regs(
 static int vgt_emulate_ins(struct pt_regs *regs)
 {
 	int rc;
+	unsigned cpu = smp_processor_id();
+	struct x86_emulate_ctxt *pctx = &per_cpu(ctxt, cpu);
+	struct cpu_user_regs *p_regs = pctx->regs;
 
-	pt_regs_2_em_regs(regs, &em_regs);
-	rc = x86_emulate (&ctxt, &vgt_emu_ops);
-	em_regs_2_pt_regs(&em_regs, regs);
+	pt_regs_2_em_regs(regs, p_regs);
+	rc = x86_emulate (pctx, &vgt_emu_ops);
+	em_regs_2_pt_regs(p_regs, regs);
 
 	return rc;
 }
@@ -884,12 +876,34 @@ static int xen_vgt_handler(struct pt_regs *regs, long error_code)
 	return vgt_emulate_ins(regs) == X86EMUL_OKAY;
 }
 
+static void init_per_cpu_context(void)
+{
+	unsigned cpu;
+	for_each_possible_cpu(cpu) {
+		struct x86_emulate_ctxt *pctx = &per_cpu(ctxt, cpu);
+		struct cpu_user_regs *p_regs = &per_cpu(em_regs, cpu);
+
+		pctx->force_writeback = 0;
+#ifdef __x86_64__
+		pctx->addr_size = 64;
+		pctx->sp_size = 64;
+#else
+		pctx->addr_size = 32;
+		pctx->sp_size = 32;
+#endif
+		pctx->retire.byte = 0;
+		pctx->regs = p_regs;
+	}
+}
+
 /*
  * State load of vgt driver.
  * (May extend with more communication parameters)
  */
 int xen_register_vgt_driver(vgt_ops_t *ops)
 {
+	init_per_cpu_context();
+
 	if (!register_gp_prehandler(xen_vgt_handler)) {
 		trap_req.nr_pio_frags = 1;
 		trap_req.pio_frags[0].s = 0x3B0;
