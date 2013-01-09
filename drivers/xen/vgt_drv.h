@@ -32,6 +32,8 @@
 #include <linux/interrupt.h>
 #include <linux/sched.h>
 #include <linux/wait.h>
+#include <linux/semaphore.h>
+#include <linux/cdev.h>
 #include <xen/interface/hvm/ioreq.h>
 #include "vgt_edid.h"
 #include "vgt_reg.h"
@@ -650,6 +652,7 @@ struct pgt_statistics {
 	u64	events[IRQ_MAX];
 };
 
+struct vgt_mmio_dev;
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list;
@@ -748,6 +751,8 @@ struct pgt_device {
 	int at_index;
 
 	struct pgt_statistics stat;
+
+	struct vgt_mmio_dev *mmio_dev;
 };
 
 extern struct list_head pgt_devices;
@@ -1981,5 +1986,19 @@ struct vgt_port_output_struct {
 	vgt_reg_t select_bitmask;
 	enum vgt_output_type output_type;
 };
+
+struct vgt_mmio_dev {
+	int devid_major;
+	char *dev_name;
+	struct class *class;
+	struct cdev cdev;
+	struct device *devnode[VGT_MAX_VMS];
+};
+#define VGT_MMIO_DEV_NAME "vgt_mmio"
+int vgt_init_mmio_device(struct pgt_device *pdev);
+void vgt_cleanup_mmio_dev(struct pgt_device *pdev);
+int vgt_create_mmio_dev(struct vgt_device *vgt);
+void vgt_destroy_mmio_dev(struct vgt_device *vgt);
+
 
 #endif	/* _VGT_DRV_H_ */

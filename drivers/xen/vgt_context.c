@@ -2671,6 +2671,12 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		goto err;
 	}
 
+	if (vgt_create_mmio_dev(vgt)) {
+		printk("vGT: failed to create mmio devnode for vgt-%d\n",
+				vgt->vgt_id);
+		goto err;
+	}
+
 	/* initialize i2c states */
 	vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
 	/* assign aux_ch vregs for aux_ch virtualization */
@@ -2701,6 +2707,10 @@ void vgt_release_instance(struct vgt_device *vgt)
 	struct vgt_device *v = NULL;
 
 	printk("prepare to destroy vgt (%d)\n", vgt->vgt_id);
+
+	/* destroy vgt_mmio_device */
+	vgt_destroy_mmio_dev(vgt);
+
 	vgt_destroy_debugfs(vgt);
 
 	spin_lock_irq(&pdev->lock);
@@ -3154,6 +3164,10 @@ int vgt_initialize(struct pci_dev *dev)
 		printk("vGT:failed to create debugfs\n");
 		goto err;
 	}
+
+	/* init all mmio_device */
+	vgt_init_mmio_device(pdev);
+
 	/* create domain 0 instance */
 	vp.vm_id = 0;
 	vp.aperture_sz = dom0_aperture_sz;
@@ -3230,6 +3244,8 @@ void vgt_destroy(void)
 	struct vgt_device *vgt;
 	struct pgt_device *pdev = &default_device;
 	int i;
+
+	vgt_cleanup_mmio_dev(pdev);
 
 	perf_pgt = NULL;
 	list_del(&pdev->list);
