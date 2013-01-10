@@ -1270,7 +1270,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	decode_data.ring_size = size;
 	instr_gma_set(&decode_data, base + head);
 
-	klog_printk("ring buffer scan start\n");
+	klog_printk("ring buffer scan start on ring %d\n", ring_id);
 	while(decode_data.instr_gma != instr_gma_end){
 		klog_printk("%s ip(%08lx): %08x %08x %08x %08x ",
 				decode_data.buffer_type == RING_BUFFER_INSTRUCTION ? "RB": "BB",
@@ -1287,7 +1287,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 			break;
 		}
 	}
-	klog_printk("ring buffer scan end\n");
+	klog_printk("ring buffer scan end on ring %d\n", ring_id);
 	return ret;
 }
 
