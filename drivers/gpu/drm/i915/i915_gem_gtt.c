@@ -174,6 +174,11 @@ static int sanitize_enable_ppgtt(struct drm_device *dev, int enable_ppgtt)
 {
 	bool has_aliasing_ppgtt;
 	bool has_full_ppgtt;
+	/* Disable ppgtt on SNB since it isn't supported by vgt on SNB */
+	drm_i915_private_t *dev_priv = dev->dev_private;
+	if (INTEL_INFO(dev)->gen == 6 && dev_priv->in_xen_vgt)
+		return false;
+
 
 	has_aliasing_ppgtt = INTEL_INFO(dev)->gen >= 6;
 	has_full_ppgtt = INTEL_INFO(dev)->gen >= 7;
