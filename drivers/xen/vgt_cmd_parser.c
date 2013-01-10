@@ -32,7 +32,6 @@
 #include <xen/vgt_cmd_parser.h>
 #include "vgt_drv.h"
 
-#ifndef VGT_PARSER_OLD
 /*
  * new cmd parser
  */
@@ -895,6 +894,3 @@ void vgt_cmd_parser_exit(void)
 {
 	vgt_clear_cmd_table();
 }
-
-
-#endif /* VGT_PARSER_OLD */
