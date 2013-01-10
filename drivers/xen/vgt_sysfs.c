@@ -1,8 +1,7 @@
 /*
  * vGT sysfs interface (the original code comes from samples/kobject-example.c)
  *
- * This file is provided under a dual BSD/GPLv2 license.  When using or
- * redistributing this file, you may do so under either license.
+ * This file is provided under GPLv2 license.
  *
  * GPL LICENSE SUMMARY
  *

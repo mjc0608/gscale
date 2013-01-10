@@ -3,6 +3,8 @@
  *
  * This is used for userland program to access MMIO of each vgt
  *
+ * This file is provided under a GPLv2 license.
+ *
  * GPL LICENSE SUMMARY
  *
  * Copyright(c) 2011 Intel Corporation. All rights reserved.

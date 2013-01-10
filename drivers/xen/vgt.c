@@ -1,8 +1,7 @@
 /*
  * vGT core module
  *
- * This file is provided under a dual BSD/GPLv2 license.  When using or
- * redistributing this file, you may do so under either license.
+ * This file is provided under GPLv2 license.
  *
  * GPL LICENSE SUMMARY
  *
@@ -34,7 +33,7 @@
 
 MODULE_AUTHOR("Intel Corporation");
 MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");
-MODULE_LICENSE("Dual BSD/GPL");
+MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 
 static vgt_ops_t vgt_xops = {
