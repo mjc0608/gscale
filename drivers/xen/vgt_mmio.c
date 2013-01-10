@@ -2023,16 +2023,16 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 		if (!req->data_is_ptr) {
 			ASSERT (req->count == 1);
 
-			dprintk("HVM_MMIO_read: target register (%lx).\n",
-				(unsigned long)req->addr);
+			//dprintk("HVM_MMIO_read: target register (%lx).\n",
+			//	(unsigned long)req->addr);
 			vgt_emulate_read(vgt, req->addr, &req->data, req->size);
 		}
 		else {
 			ASSERT (req->addr + sign * req->count * req->size >= base);
 			ASSERT (req->addr + sign * req->count * req->size <
 				base + vgt->state.bar_size[0]);
-			dprintk("HVM_MMIO_read: rep %d target memory %lx, slow!\n",
-				req->count, (unsigned long)req->addr);
+			//dprintk("HVM_MMIO_read: rep %d target memory %lx, slow!\n",
+			//	req->count, (unsigned long)req->addr);
 
 			for (i = 0; i < req->count; i++) {
 				vgt_emulate_read(vgt, req->addr + sign * i * req->size,
@@ -2056,15 +2056,15 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 		mmio_wcnt++;
 		if (!req->data_is_ptr) {
 			ASSERT (req->count == 1);
-			dprintk("HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
+			//dprintk("HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
 			vgt_emulate_write(vgt, req->addr, &req->data, req->size);
 		}
 		else {
 			ASSERT (req->addr + sign * req->count * req->size >= base);
 			ASSERT (req->addr + sign * req->count * req->size <
 				base + vgt->state.bar_size[0]);
-			dprintk("HVM_MMIO_write: rep %d target memory %lx, slow!\n",
-				req->count, (unsigned long)req->addr);
+			//dprintk("HVM_MMIO_write: rep %d target memory %lx, slow!\n",
+			//	req->count, (unsigned long)req->addr);
 
 			for (i = 0; i < req->count; i++) {
 				gpa = req->data + sign * i * req->size;
