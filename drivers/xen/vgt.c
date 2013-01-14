@@ -103,7 +103,7 @@ module_param_named(dom0_gm_sz, dom0_gm_sz, int, 0600);
 int dom0_fence_sz = 4;
 module_param_named(dom0_fence_sz, dom0_fence_sz, int, 0600);
 
-bool bypass_scan = true;
+bool bypass_scan = false;
 module_param_named(bypass_scan, bypass_scan, bool, 0600);
 
 /* for GFX driver */
