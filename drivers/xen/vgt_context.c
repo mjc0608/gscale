@@ -1286,10 +1286,11 @@ int vgt_thread(void *priv)
 		 */
 		spin_lock_irq(&pdev->lock);
 		next = next_vgt(&pdev->rendering_runq_head, current_render_owner(pdev));
-		dprintk("vGT: next vgt (%d)\n", next->vgt_id);
 		if ( next != current_render_owner(pdev) )
 		{
 			if (is_rendering_engines_empty(pdev, &ring_id)) {
+				dprintk("vGT: next vgt (%d)\n", next->vgt_id);
+
 				context_switch_num ++;
 				rdtsc_barrier();
 				t1 = get_cycles();
@@ -1389,8 +1390,7 @@ int vgt_thread(void *priv)
 				show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
 			}
 		}
-		else
-			dprintk("....no other instance\n");
+
 		spin_unlock_irq(&pdev->lock);
 		/* Virtual interrupts pending right after render switch */
 		if (check_irq && test_bit(VGT_REQUEST_IRQ, (void*)&pdev->request)) {
