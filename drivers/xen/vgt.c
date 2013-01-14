@@ -62,7 +62,7 @@ bool vgt_primary = false;
 module_param_named(vgt_primary, vgt_primary, bool, 0600);
 
 bool vgt_debug = false;
-module_param_named(vgt_debug, vgt_debug, bool, 0600);
+module_param_named(debug, vgt_debug, bool, 0600);
 
 bool novgt = false;
 module_param_named(novgt, novgt, bool, 0400);
