@@ -51,7 +51,7 @@ struct kset *vgt_kset;
 static struct pgt_device *vgt_kobj_priv;
 struct vgt_device *vmid_2_vgt_device(int vmid);
 static unsigned int query_reg;
-DEFINE_SPINLOCK(vgt_sysfs_lock);
+DEFINE_MUTEX(vgt_sysfs_lock);
 
 static void vgt_kobj_release(struct kobject *kobj)
 {
@@ -553,9 +553,9 @@ static int vgt_add_state_sysfs(vgt_params_t vp)
 	if (vmid_2_vgt_device(vp.vm_id))
 		return -EINVAL;
 
-	spin_lock(&vgt_sysfs_lock);
+	mutex_lock(&vgt_sysfs_lock);
 	retval = create_vgt_instance(vgt_kobj_priv, &vgt, vp);
-	spin_unlock(&vgt_sysfs_lock);
+	mutex_unlock(&vgt_sysfs_lock);
 
 	if (retval < 0)
 		return retval;
