@@ -3151,6 +3151,9 @@ int vgt_initialize(struct pci_dev *dev)
 	if (!vgt_initialize_pgt_device(dev, pdev))
 		goto err;
 
+	if (vgt_cmd_parser_init(pdev) < 0)
+		goto err;
+
 	/* initialize EDID data */
 	vgt_probe_edid(pdev, -1);
 	pdev->probe_ports = true;
@@ -3297,6 +3300,7 @@ void vgt_destroy(void)
 			pdev->pdev_edids[i] = NULL;
 		}
 	}
+	vgt_cmd_parser_exit();
 }
 
 void vgt_gpu_perf_sample(void)

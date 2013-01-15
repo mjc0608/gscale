@@ -142,16 +142,10 @@ static void vgt_param_check(void)
 
 static int __init vgt_init_module(void)
 {
-	int rc;
-
 	if (!xen_initial_domain())
 		return 0;
 
 	vgt_param_check();
-
-	rc  = vgt_cmd_parser_init();
-	if(rc)
-		return rc;
 
 	vgt_klog_init();
 
@@ -173,7 +167,6 @@ static void __exit vgt_exit_module(void)
 
 	// fill other exit works here
 	vgt_destroy();
-	vgt_cmd_parser_exit();
 	vgt_klog_cleanup();
 	printk("VGT module exit %d\n", rc);
 	return;

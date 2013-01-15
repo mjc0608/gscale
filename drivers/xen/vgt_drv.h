@@ -945,6 +945,7 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 #define D_IVB	(1 << 1)
 #define D_HSW	(1 << 2)
 #define D_GEN7PLUS (D_IVB | D_HSW)
+#define D_GEN75PLUS (D_HSW)
 #define D_ALL	(D_SNB | D_IVB | D_HSW)
 
 typedef struct {
@@ -957,16 +958,21 @@ typedef struct {
 	vgt_mmio_write		write;
 } reg_attr_t;
 
-static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *attr)
+static inline unsigned int vgt_gen_dev_type(struct pgt_device *pdev)
 {
 	if (pdev->is_sandybridge)
-		return attr->device & D_SNB;
+		return D_SNB;
 	if (pdev->is_ivybridge)
-		return attr->device & D_IVB;
+		return D_IVB;
 	if (pdev->is_haswell)
-		return attr->device & D_HSW;
+		return D_HSW;
 
-	return false;
+	return 0;
+}
+
+static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *attr)
+{
+	return attr->device & vgt_gen_dev_type(pdev);
 }
 
 /*
@@ -1952,7 +1958,7 @@ extern int vgt_create_debugfs(struct vgt_device *vgt);
  */
 
 /* command parser interface */
-extern int vgt_cmd_parser_init(void);
+extern int vgt_cmd_parser_init(struct pgt_device *pdev);
 extern void vgt_cmd_parser_exit(void);
 extern int vgt_scan_vring(struct vgt_device *vgt, int ring_id);
 

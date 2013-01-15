@@ -420,6 +420,25 @@ static int vgt_cmd_handler_state_base_address(struct parser_exec_state *s)
 	return 0;
 }
 
+static int vgt_cmd_handler_op_3dstate_constant_hs(struct parser_exec_state *s)
+{
+	address_fixup(s, 3); /* TODO: check INSTPM<CONSTANT_BUFFER Address Offset Disable */
+	address_fixup(s, 4);
+	address_fixup(s, 5);
+	address_fixup(s, 6);
+	return 0;
+}
+
+static int vgt_cmd_handler_op_3dstate_constant_ds(struct parser_exec_state *s)
+{
+	address_fixup(s, 3); /* TODO: check INSTPM<CONSTANT_BUFFER Address Offset Disable */
+	address_fixup(s, 4);
+	address_fixup(s, 5);
+	address_fixup(s, 6);
+	return 0;
+}
+
+
 #if 0
 	{"", OP_, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
 
@@ -567,7 +586,16 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_BINDING_TABLE_POINTERS", OP_3DSTATE_BINDING_TABLE_POINTERS,
 		F_LEN_VAR, R_RCS, D_SNB, 0, 8, NULL},
 
+	{"3DSTATE_VIEWPORT_STATE_POINTERS_SF_CLIP", OP_3DSTATE_VIEWPORT_STATE_POINTERS_SF_CLIP,
+		F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
+
 	{"3DSTATE_VIEWPORT_STATE_POINTERS_CC", OP_3DSTATE_VIEWPORT_STATE_POINTERS_CC,
+		F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_BLEND_STATE_POINTERS", OP_3DSTATE_BLEND_STATE_POINTERS,
+		F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_DEPTH_STENCIL_STATE_POINTERS", OP_3DSTATE_DEPTH_STENCIL_STATE_POINTERS,
 		F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
 
 	{"3DSTATE_BINDING_TABLE_POINTERS_VS", OP_3DSTATE_BINDING_TABLE_POINTERS_VS,
@@ -585,10 +613,31 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_BINDING_TABLE_POINTERS_PS", OP_3DSTATE_BINDING_TABLE_POINTERS_PS,
 		F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
 
-	{"3DSTATE_SAMPLER_STATE_POINTERS", OP_3DSTATE_SAMPLER_STATE_POINTERS,
-		F_LEN_VAR, R_RCS, D_ALL, 0, 8, NULL},
+	{"3DSTATE_SAMPLER_STATE_POINTERS_VS", OP_3DSTATE_SAMPLER_STATE_POINTERS_VS,
+		F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
 
-	{"3DSTATE_URB", OP_3DSTATE_URB, F_LEN_VAR, R_RCS, D_ALL, 0, 8, NULL},
+	{"3DSTATE_SAMPLER_STATE_POINTERS_GS", OP_3DSTATE_SAMPLER_STATE_POINTERS_GS,
+		F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_SAMPLER_STATE_POINTERS_PS", OP_3DSTATE_SAMPLER_STATE_POINTERS_PS,
+		F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_URB_VS", OP_3DSTATE_URB_VS, F_LEN_VAR, R_RCS, D_GEN7PLUS,
+		0, 8, NULL},
+
+	{"3DSTATE_URB_HS", OP_3DSTATE_URB_HS, F_LEN_VAR, R_RCS, D_GEN7PLUS,
+		0, 8, NULL},
+
+	{"3DSTATE_URB_DS", OP_3DSTATE_URB_DS, F_LEN_VAR, R_RCS, D_GEN7PLUS,
+		0, 8, NULL},
+
+	{"3DSTATE_URB_GS", OP_3DSTATE_URB_GS, F_LEN_VAR, R_RCS, D_GEN7PLUS,
+		0, 8, NULL},
+
+	{"3DSTATE_SAMPLER_STATE_POINTERS", OP_3DSTATE_SAMPLER_STATE_POINTERS,
+		F_LEN_VAR, R_RCS, D_SNB, 0, 8, NULL},
+
+	{"3DSTATE_URB", OP_3DSTATE_URB, F_LEN_VAR, R_RCS, D_SNB, 0, 8, NULL},
 
 	{"3DSTATE_VERTEX_BUFFERS", OP_3DSTATE_VERTEX_BUFFERS, F_LEN_VAR, R_RCS,
 		D_ALL, 0, 8, vgt_cmd_handler_3dstate_vertex_buffers},
@@ -601,6 +650,8 @@ static struct cmd_info cmd_info[] = {
 
 	{"3DSTATE_VF_STATISTICS", OP_3DSTATE_VF_STATISTICS, F_LEN_CONST,
 		R_RCS, D_ALL, 0, 1, NULL},
+
+	{"3DSTATE_VF", OP_3DSTATE_VF, F_LEN_VAR, R_RCS, D_GEN75PLUS, 0, 8, NULL},
 
 	{"3DSTATE_VIEWPORT_STATE_POINTERS", OP_3DSTATE_VIEWPORT_STATE_POINTERS,
 		F_LEN_VAR, R_RCS, D_ALL, 0, 8, NULL},
@@ -626,6 +677,25 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_SAMPLE_MASK", OP_3DSTATE_SAMPLE_MASK, F_LEN_VAR, R_RCS,
 		D_ALL, 0, 8, NULL},
 
+	{"3DSTATE_CONSTANT_HS", OP_3DSTATE_CONSTANT_HS, F_LEN_VAR, R_RCS,
+		D_GEN7PLUS, 0, 8, vgt_cmd_handler_op_3dstate_constant_hs},
+
+	{"3DSTATE_CONSTANT_DS", OP_3DSTATE_CONSTANT_DS, F_LEN_VAR, R_RCS,
+		D_GEN7PLUS, 0, 8, vgt_cmd_handler_op_3dstate_constant_ds},
+
+	{"3DSTATE_HS", OP_3DSTATE_HS, F_LEN_VAR, R_RCS,	D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_TE", OP_3DSTATE_TE, F_LEN_VAR, R_RCS,	D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_DS", OP_3DSTATE_DS, F_LEN_VAR, R_RCS,	D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_STREAMOUT", OP_3DSTATE_STREAMOUT, F_LEN_VAR, R_RCS,
+		D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_SBE", OP_3DSTATE_SBE, F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_PS", OP_3DSTATE_PS, F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
+
 	{"3DSTATE_DRAWING_RECTANGLE", OP_3DSTATE_DRAWING_RECTANGLE, F_LEN_VAR,
 		R_RCS, D_ALL, 0, 8, NULL},
 
@@ -636,7 +706,10 @@ static struct cmd_info cmd_info[] = {
 		0, 8, NULL},
 
 	{"3DSTATE_DEPTH_BUFFER", OP_3DSTATE_DEPTH_BUFFER, F_LEN_VAR, R_RCS,
-		D_ALL, ADDR_FIX_1(2), 8, NULL},
+		D_SNB, ADDR_FIX_1(2), 8, NULL},
+
+	{"GEN7_3DSTATE_DEPTH_BUFFER", OP_GEN7_3DSTATE_DEPTH_BUFFER, F_LEN_VAR, R_RCS,
+		D_GEN7PLUS, ADDR_FIX_1(2), 8, NULL},
 
 	{"3DSTATE_POLY_STIPPLE_OFFSET", OP_3DSTATE_POLY_STIPPLE_OFFSET,
 		F_LEN_VAR, R_RCS, D_ALL, 0, 8, NULL},
@@ -660,13 +733,28 @@ static struct cmd_info cmd_info[] = {
 		0, 8, NULL},
 
 	{"3DSTATE_STENCIL_BUFFER", OP_3DSTATE_STENCIL_BUFFER, F_LEN_VAR, R_RCS,
-		D_ALL, 0, 8, NULL},
+		D_SNB, ADDR_FIX_1(2), 8, NULL},
+
+	{"GEN7_3DSTATE_STENCIL_BUFFER", OP_GEN7_3DSTATE_STENCIL_BUFFER, F_LEN_VAR, R_RCS,
+		D_GEN7PLUS, ADDR_FIX_1(2), 8, NULL},
 
 	{"3DSTATE_HIER_DEPTH_BUFFER", OP_3DSTATE_HIER_DEPTH_BUFFER, F_LEN_VAR,
-		R_RCS, D_ALL, ADDR_FIX_1(2), 8, NULL},
+		R_RCS, D_SNB, ADDR_FIX_1(2), 8, NULL},
 
-	{"3DSTATE_CLEAR_PARAMS", OP_3DSTATE_CLEAR_PARAMS, F_LEN_VAR, R_RCS, D_ALL,
+	{"GEN7_3DSTATE_HIER_DEPTH_BUFFER", OP_GEN7_3DSTATE_HIER_DEPTH_BUFFER, F_LEN_VAR,
+		R_RCS, D_GEN7PLUS, ADDR_FIX_1(2), 8, NULL},
+
+	{"3DSTATE_CLEAR_PARAMS", OP_3DSTATE_CLEAR_PARAMS, F_LEN_VAR, R_RCS, D_SNB,
 		0, 8, NULL},
+
+	{"GEN7_3DSTATE_CLEAR_PARAMS", OP_GEN7_3DSTATE_CLEAR_PARAMS, F_LEN_VAR,
+		R_RCS, D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_PUSH_CONSTANT_ALLOC_VS", OP_3DSTATE_PUSH_CONSTANT_ALLOC_VS,
+		F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
+
+	{"3DSTATE_PUSH_CONSTANT_ALLOC_PS", OP_3DSTATE_PUSH_CONSTANT_ALLOC_PS,
+		F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
 
 	{"3DSTATE_MONOFILTER_SIZE", OP_3DSTATE_MONOFILTER_SIZE, F_LEN_VAR, R_RCS,
 		D_ALL, 0, 8, NULL},
@@ -725,28 +813,41 @@ static struct cmd_info cmd_info[] = {
 		R_ALL, D_ALL, 0, 1, NULL},
 };
 
-static int cmd_hash_init(void)
+static int cmd_hash_init(struct pgt_device *pdev)
 {
 	int i;
 	struct vgt_cmd_entry *e;
 	struct cmd_info	*info;
+	unsigned int gen_type;
+
+	gen_type = vgt_gen_dev_type(pdev);
 
 	for (i=0; i< ARRAY_SIZE(cmd_info); i++){
-		/* TODO: only register current GEN cmd */
+		if (!(cmd_info[i].devices & gen_type)){
+			printk("CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] not registered\n",
+					cmd_info[i].name, cmd_info[i].opcode, cmd_info[i].flag,
+					cmd_info[i].devices, cmd_info[i].rings);
+			continue;
+		}
+
 		e = kmalloc(sizeof(*e), GFP_KERNEL);
 		if (e == NULL) {
 			printk("Insufficient memory in %s\n", __FUNCTION__);
 			return -ENOMEM;
 		}
 		e->info = &cmd_info[i];
-		printk("register %s opcode=%x flag=%x\n", e->info->name, e->info->opcode, e->info->flag);
+
 		info = vgt_find_cmd_entry_any_ring(e->info->opcode, e->info->rings);
 		if (info){
 			printk("%s %s duplicated\n", e->info->name, info->name);
-			BUG();
+			return -EINVAL;
 		}
+
 		INIT_HLIST_NODE(&e->hlist);
 		vgt_add_cmd_entry(e);
+		printk("CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] registered\n",
+				e->info->name,e->info->opcode, e->info->flag, e->info->devices,
+				e->info->rings);
 	}
 	return 0;
 }
@@ -888,9 +989,9 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 	return ret;
 }
 
-int vgt_cmd_parser_init(void)
+int vgt_cmd_parser_init(struct pgt_device *pdev)
 {
-	return cmd_hash_init();
+	return cmd_hash_init(pdev);
 }
 
 void vgt_cmd_parser_exit(void)
