@@ -298,6 +298,8 @@ struct parser_exec_state{
 	/* graphics memory address of ring buffer start */
 	unsigned long ring_start;
 	unsigned long ring_size;
+	unsigned long ring_head;
+	unsigned long ring_tail;
 
 	/* instruction graphics memory address */
 	unsigned long ip_gma;
