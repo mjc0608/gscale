@@ -1112,8 +1112,16 @@ static enum hrtimer_restart vgt_dpy_timer_fn(struct hrtimer *data)
 	struct vgt_device *vstate = virq->vgt;
 	struct pgt_device *pdev = vstate->pdev;
 
-	spin_lock(&pdev->lock);
-	/* carry all display status events in one timer */
+	set_bit(vstate->vgt_id, pdev->dpy_emul_request);
+	vgt_raise_request(pdev, VGT_REQUEST_EMUL_DPY_IRQ);
+
+	hrtimer_add_expires_ns(&dpy_timer->timer, dpy_timer->period);
+	return HRTIMER_RESTART;
+}
+
+static void vgt_emul_dpy_virq(struct vgt_device *vstate)
+{
+/* carry all display status events in one timer */
 	if (test_bit(IRQ_PIPE_A_VSYNC, vgt_state_emulated_events(vstate)))
 		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_VSYNC);
 	if (test_bit(IRQ_PIPE_A_LINE_COMPARE, vgt_state_emulated_events(vstate)))
@@ -1145,11 +1153,21 @@ static enum hrtimer_restart vgt_dpy_timer_fn(struct hrtimer *data)
 	if (test_bit(IRQ_SPRITE_B_FLIP_DONE, vgt_state_emulated_events(vstate)))
 		vgt_propogate_emulated_event(vstate, IRQ_SPRITE_B_FLIP_DONE);
 
-	if (vgt_has_irq_pending(vstate))
-		vgt_inject_virtual_interrupt(vstate);
-	spin_unlock(&pdev->lock);
-	hrtimer_add_expires_ns(&dpy_timer->timer, dpy_timer->period);
-	return HRTIMER_RESTART;
+}
+
+void vgt_emul_and_inject_dpy_virq(struct pgt_device *pdev)
+{
+	struct vgt_device *vgt;
+	int i;
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		vgt = pdev->device[i];
+		if (vgt && test_and_clear_bit(vgt->vgt_id, pdev->dpy_emul_request)) {
+			vgt_emul_dpy_virq(vgt);
+			if (vgt_has_irq_pending(vgt))
+				vgt_inject_virtual_interrupt(vgt);
+		}
+
+	}
 }
 
 /*

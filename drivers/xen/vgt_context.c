@@ -1238,12 +1238,23 @@ int vgt_thread(void *priv)
 			continue;
 		}
 
+
 		/* Handle virtual interrupt injection to current owner */
 		if (test_and_clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request)) {
 			spin_lock_irq(&pdev->lock);
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_NONE);
 			spin_unlock_irq(&pdev->lock);
 		}
+
+		/* Emulate & inject virq to VMs which are not display owner.
+		 * This must be handled after "VGT_REQUEST_IRQ"
+		 */
+		if (test_and_clear_bit(VGT_REQUEST_EMUL_DPY_IRQ, (void *)&pdev->request)) {
+			spin_lock_irq(&pdev->lock);
+			vgt_emul_and_inject_dpy_virq(pdev);
+			spin_unlock_irq(&pdev->lock);
+		}
+
 
 		/* Send uevent to userspace */
 		if (test_and_clear_bit(VGT_REQUEST_UEVENT, (void *)&pdev->request)) {
@@ -2995,6 +3006,7 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 
 	/* clean port status, 0 means not plugged in */
 	memset(pdev->port_detect_status, 0, sizeof(pdev->port_detect_status));
+	bitmap_zero(pdev->dpy_emul_request, VGT_MAX_VMS);
 
 	if (!initial_phys_states(pdev)) {
 		printk("vGT: failed to initialize physical state\n");

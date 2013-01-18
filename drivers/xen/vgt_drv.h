@@ -732,6 +732,7 @@ struct pgt_device {
 	 */
 	DECLARE_BITMAP(port_detect_status, VGT_PORT_MAX);
 
+	DECLARE_BITMAP(dpy_emul_request, VGT_MAX_VMS);
 	/* Add workqueue to handle non-critical tasks
 	 * vgt_thread may be dedicated used for rendering context
 	 * switch. When subimit task that require access vreg/sreg/hwreg
@@ -904,6 +905,7 @@ static inline void reg_update_handlers(struct pgt_device *pdev,
 #define VGT_REQUEST_IRQ		0	/* a new irq pending from device */
 #define VGT_REQUEST_UEVENT	1
 #define VGT_REQUEST_SCHED	2	/* immediate reschedule requested */
+#define VGT_REQUEST_EMUL_DPY_IRQ 3
 
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {
@@ -1828,6 +1830,7 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 void vgt_trigger_virtual_event(struct vgt_device *vgt,
 	enum vgt_event_type event, bool check);
 void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type type);
+void vgt_emul_and_inject_dpy_virq(struct pgt_device *pdev);
 void vgt_default_event_handler(struct pgt_device *dev,
 	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
 	bool physical, struct vgt_device *vgt);
