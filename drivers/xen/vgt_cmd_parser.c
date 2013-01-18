@@ -549,6 +549,30 @@ static int vgt_cmd_handler_state_base_address(struct parser_exec_state *s)
 	return 0;
 }
 
+static inline int base_and_upper_addr_fix(struct parser_exec_state *s)
+{
+	address_fixup(s,1);
+	/* Zero Bound is ignore */
+	if (cmd_val(s,2) >> 12)
+		address_fixup(s,2);
+	return 0;
+}
+
+static int vgt_cmd_handler_3dstate_binding_table_pool_alloc(struct parser_exec_state *s)
+{
+	return base_and_upper_addr_fix(s);
+}
+
+static int vgt_cmd_handler_3dstate_gather_pool_alloc(struct parser_exec_state *s)
+{
+	return base_and_upper_addr_fix(s);
+}
+
+static int vgt_cmd_handler_3dstate_dx9_constant_buffer_pool_alloc(struct parser_exec_state *s)
+{
+	return base_and_upper_addr_fix(s);
+}
+
 static int vgt_cmd_handler_op_3dstate_constant_hs(struct parser_exec_state *s)
 {
 	address_fixup(s, 3); /* TODO: check INSTPM<CONSTANT_BUFFER Address Offset Disable */
@@ -567,7 +591,30 @@ static int vgt_cmd_handler_op_3dstate_constant_ds(struct parser_exec_state *s)
 	return 0;
 }
 
+static int vgt_cmd_handler_mfx_pipe_buf_addr_state(struct parser_exec_state *s)
+{
+	int i;
+	for (i=1; i<=23; i++){
+		address_fixup(s, i);
+	}
+	return 0;
+}
 
+static int vgt_cmd_handler_mfx_ind_obj_base_addr_state(struct parser_exec_state *s)
+{
+	int i;
+	for (i=1; i<=10; i++){
+		address_fixup(s, i);
+	}
+	return 0;
+}
+
+static int vgt_cmd_handler_mfx_crypto_copy_base_addr(struct parser_exec_state *s)
+{
+	base_and_upper_addr_fix(s);
+	address_fixup(s,2);
+	return 0;
+}
 #if 0
 	{"", OP_, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
 
@@ -598,6 +645,13 @@ static struct cmd_info cmd_info[] = {
 
 	{"MI_SUSPEND_FLUSH", OP_MI_SUSPEND_FLUSH, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
 
+	{"MI_PREDICATE", OP_MI_PREDICATE, F_LEN_CONST, R_ALL, D_GEN7PLUS, 0, 1, NULL},
+
+	{"MI_TOPOLOGY_FILTER", OP_MI_TOPOLOGY_FILTER, F_LEN_CONST, R_ALL,
+		D_GEN7PLUS, 0, 1, NULL},
+
+	{"MI_SET_APPID", OP_MI_SET_APPID, F_LEN_CONST, R_ALL, D_GEN7PLUS, 0, 1, NULL},
+
 	{"MI_DISPLAY_FLIP", OP_MI_DISPLAY_FLIP, F_LEN_VAR, R_ALL, D_ALL,
 		ADDR_FIX_1(2), 8, NULL},
 
@@ -607,6 +661,8 @@ static struct cmd_info cmd_info[] = {
 		ADDR_FIX_1(1), 8, NULL},
 
 	{"MI_MATH", OP_MI_MATH, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL},
+
+	{"MI_URB_CLEAR", OP_MI_URB_CLEAR, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL},
 
 	{"MI_STORE_DATA_IMM", OP_MI_STORE_DATA_IMM, F_LEN_VAR, R_ALL, D_ALL,
 		ADDR_FIX_1(2), 8, NULL},
@@ -630,6 +686,9 @@ static struct cmd_info cmd_info[] = {
 
 	{"MI_REPORT_PERF_COUNT", OP_MI_REPORT_PERF_COUNT, F_LEN_VAR, R_ALL, D_ALL,
 		ADDR_FIX_1(1), 6, NULL},
+
+	{"MI_LOAD_REGISTER_MEM", OP_MI_LOAD_REGISTER_MEM, F_LEN_VAR, R_ALL, D_GEN7PLUS,
+		ADDR_FIX_1(2), 8, NULL},
 
 	{"MI_BATCH_BUFFER_START", OP_MI_BATCH_BUFFER_START, F_IP_ADVANCE_CUSTOM|F_LEN_CONST,
 		R_ALL, D_ALL, 0, 2, vgt_cmd_handler_mi_batch_buffer_start},
@@ -903,6 +962,15 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_SO_BUFFER", OP_3DSTATE_SO_BUFFER, F_LEN_VAR, R_RCS, D_ALL,
 		ADDR_FIX_2(2,3), 8, NULL},
 
+	{"3DSTATE_BINDING_TABLE_POOL_ALLOC", OP_3DSTATE_BINDING_TABLE_POOL_ALLOC,
+		F_LEN_VAR, R_RCS, D_GEN75PLUS, 0, 8, vgt_cmd_handler_3dstate_binding_table_pool_alloc},
+
+	{"3DSTATE_GATHER_POOL_ALLOC", OP_3DSTATE_GATHER_POOL_ALLOC,
+		F_LEN_VAR, R_RCS, D_GEN75PLUS, 0, 8, vgt_cmd_handler_3dstate_gather_pool_alloc},
+
+	{"3DSTATE_DX9_CONSTANT_BUFFER_POOL_ALLOC", OP_3DSTATE_DX9_CONSTANT_BUFFER_POOL_ALLOC,
+		F_LEN_VAR, R_RCS, D_GEN75PLUS, 0, 8, vgt_cmd_handler_3dstate_dx9_constant_buffer_pool_alloc},
+
 	{"PIPE_CONTROL", OP_PIPE_CONTROL, F_LEN_VAR, R_RCS, D_ALL,
 		ADDR_FIX_1(2), 8, NULL},
 
@@ -949,6 +1017,121 @@ static struct cmd_info cmd_info[] = {
 
 	{"3DSTATE_VF_STATISTICS_GM45", OP_3DSTATE_VF_STATISTICS_GM45, F_LEN_CONST,
 		R_ALL, D_ALL, 0, 1, NULL},
+
+	{"MFX_PIPE_MODE_SELECT", OP_MFX_PIPE_MODE_SELECT, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_SURFACE_STATE", OP_MFX_SURFACE_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_PIPE_BUF_ADDR_STATE", OP_MFX_PIPE_BUF_ADDR_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, vgt_cmd_handler_mfx_pipe_buf_addr_state},
+
+	{"MFX_IND_OBJ_BASE_ADDR_STATE", OP_MFX_IND_OBJ_BASE_ADDR_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, vgt_cmd_handler_mfx_ind_obj_base_addr_state},
+
+	{"MFX_BSP_BUF_BASE_ADDR_STATE", OP_MFX_BSP_BUF_BASE_ADDR_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, ADDR_FIX_3(1,2,3), 12, NULL},
+
+	{"MFX_AES_STATE", OP_MFX_AES_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, ADDR_FIX_1(6), 12, NULL},
+
+	{"MFX_STATE_POINTER", OP_MFX_STATE_POINTER, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_QM_STATE", OP_MFX_QM_STATE, F_LEN_VAR,
+		R_VCS, D_GEN7PLUS, 0, 12, NULL},
+
+	{"MFX_FQM_STATE", OP_MFX_FQM_STATE, F_LEN_VAR,
+		R_VCS, D_GEN7PLUS, 0, 12, NULL},
+
+	{"MFX_PAK_INSERT_OBJECT", OP_MFX_PAK_INSERT_OBJECT, F_LEN_VAR,
+		R_VCS, D_GEN7PLUS, 0, 12, NULL},
+
+	{"MFX_STITCH_OBJECT", OP_MFX_STITCH_OBJECT, F_LEN_VAR,
+		R_VCS, D_GEN7PLUS, 0, 12, NULL},
+
+	{"MFD_IT_OBJECT", OP_MFD_IT_OBJECT, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_WAIT", OP_MFX_WAIT, F_LEN_VAR,
+		R_VCS, D_GEN7PLUS, 0, 6, NULL},
+
+	{"MFX_AVC_IMG_STATE", OP_MFX_AVC_IMG_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_AVC_QM_STATE", OP_MFX_AVC_QM_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	/* to check: is "Direct MV Buffer Base Address" GMA ? */
+	{"MFX_AVC_DIRECTMODE_STATE", OP_MFX_AVC_DIRECTMODE_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_AVC_SLICE_STATE", OP_MFX_AVC_SLICE_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_AVC_REF_IDX_STATE", OP_MFX_AVC_REF_IDX_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_AVC_WEIGHTOFFSET_STATE", OP_MFX_AVC_WEIGHTOFFSET_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFD_AVC_PICID_STATE", OP_MFD_AVC_PICID_STATE, F_LEN_VAR,
+		R_VCS, D_GEN75PLUS, 0, 12, NULL},
+
+	{"MFD_AVC_BSD_OBJECT", OP_MFD_AVC_BSD_OBJECT, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFC_AVC_FQM_STATE", OP_MFC_AVC_FQM_STATE, F_LEN_VAR,
+		R_VCS, D_SNB, 0, 12, NULL},
+
+	{"MFC_AVC_PAK_INSERT_OBJECT", OP_MFC_AVC_PAK_INSERT_OBJECT, F_LEN_VAR,
+		R_VCS, D_SNB, 0, 12, NULL},
+
+	{"MFC_AVC_PAK_OBJECT", OP_MFC_AVC_PAK_OBJECT, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_VC1_PIC_STATE", OP_MFX_VC1_PIC_STATE, F_LEN_VAR,
+		R_VCS, D_SNB, 0, 12, NULL},
+
+	{"MFX_VC1_PRED_PIPE_STATE", OP_MFX_VC1_PRED_PIPE_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_VC1_DIRECTMODE_STATE", OP_MFX_VC1_DIRECTMODE_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFD_VC1_SHORT_PIC_STATE", OP_MFD_VC1_SHORT_PIC_STATE, F_LEN_VAR,
+		R_VCS, D_GEN7PLUS, 0, 12, NULL},
+
+	{"MFD_VC1_LONG_PIC_STATE", OP_MFD_VC1_LONG_PIC_STATE, F_LEN_VAR,
+		R_VCS, D_GEN7PLUS, 0, 12, NULL},
+
+	{"MFD_VC1_BSD_OBJECT", OP_MFD_VC1_BSD_OBJECT, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_MPEG2_PIC_STATE", OP_MFX_MPEG2_PIC_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_MPEG2_QM_STATE", OP_MFX_MPEG2_QM_STATE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFD_MPEG2_BSD_OBJECT", OP_MFD_MPEG2_BSD_OBJECT, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 12, NULL},
+
+	{"MFX_CRYPTO_COPY_BASE_ADDR", OP_MFX_CRYPTO_COPY_BASE_ADDR, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 16, vgt_cmd_handler_mfx_crypto_copy_base_addr},
+
+	{"MFX_CRYPTO_KEY_EXCHANGE", OP_MFX_CRYPTO_KEY_EXCHANGE, F_LEN_VAR,
+		R_VCS, D_ALL, 0, 16, NULL},
+
+	{"MFX_JPEG_PIC_STATE", OP_MFX_JPEG_PIC_STATE, F_LEN_VAR,
+		R_VCS, D_GEN7PLUS, 0, 12, NULL},
+
+	{"MFX_JPEG_HUFF_TABLE_STATE", OP_MFX_JPEG_HUFF_TABLE_STATE, F_LEN_VAR,
+		R_VCS, D_GEN7PLUS, 0, 12, NULL},
+
+	{"MFD_JPEG_BSD_OBJECT", OP_MFD_JPEG_BSD_OBJECT, F_LEN_VAR,
+		R_VCS, D_GEN7PLUS, 0, 12, NULL},
 };
 
 static int cmd_hash_init(struct pgt_device *pdev)
@@ -1115,7 +1298,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		rc = vgt_cmd_parser_exec(&s);
 		if (rc < 0){
 			error_count++;
-			printk("error_count=%d\n", error_count);
+			printk(KERN_ERR"error_count=%d\n", error_count);
 			if (error_count >= MAX_PARSER_ERROR_NUM){
 				printk(KERN_ERR "Reach max error number,stop parsing\n");
 			}

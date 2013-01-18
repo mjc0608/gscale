@@ -90,10 +90,14 @@ struct decode_info{
 #define OP_MI_ARB_ON_OFF			0x8
 #define OP_MI_BATCH_BUFFER_END		0xA
 #define OP_MI_SUSPEND_FLUSH		0xB
+#define OP_MI_PREDICATE         0xC  /* IVB+ */
+#define OP_MI_TOPOLOGY_FILTER   0xD  /* IVB+ */
+#define OP_MI_SET_APPID         0xE  /* IVB+ */
 #define OP_MI_DISPLAY_FLIP			0x14
 #define OP_MI_SEMAPHORE_MBOX		0x16
 #define OP_MI_SET_CONTEXT			0x18
 #define OP_MI_MATH					0x1A
+#define OP_MI_URB_CLEAR				0x19
 
 #define OP_MI_STORE_DATA_IMM		0x20
 #define OP_MI_STORE_DATA_INDEX		0x21
@@ -103,6 +107,7 @@ struct decode_info{
 #define OP_MI_FLUSH_DW				0x26
 #define OP_MI_CLFLUSH				0x27
 #define OP_MI_REPORT_PERF_COUNT	0x28
+#define OP_MI_LOAD_REGISTER_MEM     0x29
 #define OP_MI_BATCH_BUFFER_START	0x31
 #define OP_MI_CONDITIONAL_BATCH_BUFFER_END	0x36
 
@@ -140,18 +145,23 @@ struct decode_info{
 #define OP_3D_MEDIA(sub_type, opcode, sub_opcode) ( (3<<13) | ((sub_type)<<11) | ((opcode) <<8) | (sub_opcode))
 
 #define OP_STATE_PREFETCH					OP_3D_MEDIA(0x0, 0x0, 0x03)
+
 #define OP_STATE_BASE_ADDRESS				OP_3D_MEDIA(0x0, 0x1, 0x01)
 #define OP_STATE_SIP						OP_3D_MEDIA(0x0, 0x1, 0x02)
+
 #define OP_3DSTATE_VF_STATISTICS_GM45		OP_3D_MEDIA(0x1, 0x0, 0x0B)
+
 #define OP_PIPELINE_SELECT					OP_3D_MEDIA(0x1, 0x1, 0x04)
+
+#define OP_MEDIA_VFE_STATE					OP_3D_MEDIA( 0x2, 0x0, 0x0)
+#define OP_MEDIA_CURBE_LOAD					OP_3D_MEDIA( 0x2, 0x0, 0x1)
 #define OP_MEDIA_INTERFACE_DESCRIPTOR_LOAD	OP_3D_MEDIA( 0x2, 0x0, 0x2)
 #define OP_MEDIA_GATEWAY_STATE				OP_3D_MEDIA( 0x2, 0x0, 0x3)
 #define OP_MEDIA_STATE_FLUSH				OP_3D_MEDIA( 0x2, 0x0, 0x4)
+
 #define OP_MEDIA_OBJECT					OP_3D_MEDIA( 0x2, 0x1, 0x0)
-#define OP_MEDIA_CURBE_LOAD				OP_3D_MEDIA( 0x2, 0x0, 0x1)
 #define OP_MEDIA_OBJECT_PRT				OP_3D_MEDIA( 0x2, 0x1, 0x2)
 #define OP_MEDIA_OBJECT_WALKER				OP_3D_MEDIA( 0x2, 0x1, 0x3)
-#define OP_MEDIA_VFE_STATE					OP_3D_MEDIA( 0x2, 0x0, 0x0)
 
 #define OP_3DSTATE_BINDING_TABLE_POINTERS	OP_3D_MEDIA(0x3, 0x0, 0x01)
 #define OP_3DSTATE_SAMPLER_STATE_POINTERS	OP_3D_MEDIA(0x3, 0x0, 0x02)
@@ -224,11 +234,98 @@ struct decode_info{
 #define OP_3DSTATE_PUSH_CONSTANT_ALLOC_PS	OP_3D_MEDIA(0x3, 0x1, 0x16) /* IVB+ */
 #define OP_3DSTATE_SO_DECL_LIST			OP_3D_MEDIA( 0x3 ,0x1, 0x17 )
 #define OP_3DSTATE_SO_BUFFER				OP_3D_MEDIA( 0x3 ,0x1, 0x18 )
+#define OP_3DSTATE_BINDING_TABLE_POOL_ALLOC OP_3D_MEDIA( 0x3 ,0x1, 0x19 ) /* HSW+ */
+#define OP_3DSTATE_GATHER_POOL_ALLOC		OP_3D_MEDIA( 0x3 ,0x1, 0x1A ) /* HSW+ */
+#define OP_3DSTATE_DX9_CONSTANT_BUFFER_POOL_ALLOC OP_3D_MEDIA( 0x3 ,0x1, 0x1B ) /* HSW+ */
+#define OP_3DSTATE_SAMPLE_PATTERN			OP_3D_MEDIA (0x3 ,0x1, 0x1C )
+#define OP_3DSTATE_URB_CLEAR				OP_3D_MEDIA (0x3 ,0x1, 0x1D )
+
 #define OP_PIPE_CONTROL					OP_3D_MEDIA( 0x3 ,0x2, 0x00 )
+
 #define OP_3DPRIMITIVE					OP_3D_MEDIA( 0x3 ,0x3, 0x00 )
 
-
 /* VCCP Command Parser */
+
+/*
+ * Below MFX and VBE cmd definition is from vaapi intel driver project (BSD License)
+ * git://anongit.freedesktop.org/vaapi/intel-driver
+ * src/i965_defines.h
+ *
+ */
+
+#define OP_MFX(pipeline, op, sub_opa, sub_opb)     \
+    (3 << 29 |                                  \
+     (pipeline) << 27 |                         \
+     (op) << 24 |                               \
+     (sub_opa) << 21 |                          \
+     (sub_opb) << 16)
+
+#define OP_MFX_PIPE_MODE_SELECT                    OP_MFX(2, 0, 0, 0)  /* ALL */
+#define OP_MFX_SURFACE_STATE                       OP_MFX(2, 0, 0, 1)  /* ALL */
+#define OP_MFX_PIPE_BUF_ADDR_STATE                 OP_MFX(2, 0, 0, 2)  /* ALL */
+#define OP_MFX_IND_OBJ_BASE_ADDR_STATE             OP_MFX(2, 0, 0, 3)  /* ALL */
+#define OP_MFX_BSP_BUF_BASE_ADDR_STATE             OP_MFX(2, 0, 0, 4)  /* ALL */
+#define OP_MFX_AES_STATE                           OP_MFX(2, 0, 0, 5)  /* ALL */
+#define OP_MFX_STATE_POINTER                       OP_MFX(2, 0, 0, 6)  /* ALL */
+#define OP_MFX_QM_STATE                            OP_MFX(2, 0, 0, 7)  /* IVB+ */
+#define OP_MFX_FQM_STATE                           OP_MFX(2, 0, 0, 8)  /* IVB+ */
+
+#define OP_MFX_PAK_INSERT_OBJECT                   OP_MFX(2, 0, 2, 8)  /* IVB+ */
+#define OP_MFX_STITCH_OBJECT                       OP_MFX(2, 0, 2, 0xA)  /* IVB+ */
+
+#define OP_MFD_IT_OBJECT                           OP_MFX(2, 0, 1, 9) /* ALL */
+
+#define OP_MFX_WAIT                                OP_MFX(1, 0, 0, 0) /* IVB+ */
+
+#define OP_MFX_AVC_IMG_STATE                       OP_MFX(2, 1, 0, 0) /* ALL */
+#define OP_MFX_AVC_QM_STATE                        OP_MFX(2, 1, 0, 1) /* ALL */
+#define OP_MFX_AVC_DIRECTMODE_STATE                OP_MFX(2, 1, 0, 2) /* ALL */
+#define OP_MFX_AVC_SLICE_STATE                     OP_MFX(2, 1, 0, 3) /* ALL */
+#define OP_MFX_AVC_REF_IDX_STATE                   OP_MFX(2, 1, 0, 4) /* ALL */
+#define OP_MFX_AVC_WEIGHTOFFSET_STATE              OP_MFX(2, 1, 0, 5) /* ALL */
+
+#define OP_MFD_AVC_PICID_STATE                     OP_MFX(2, 1, 1, 5) /* HSW+ */
+#define OP_MFD_AVC_BSD_OBJECT                      OP_MFX(2, 1, 1, 8) /* ALL */
+
+#define OP_MFC_AVC_FQM_STATE                       OP_MFX(2, 1, 2, 2) /* SNB */
+#define OP_MFC_AVC_PAK_INSERT_OBJECT               OP_MFX(2, 1, 2, 8) /* SNB */
+#define OP_MFC_AVC_PAK_OBJECT                      OP_MFX(2, 1, 2, 9) /* ALL */
+
+#define OP_MFX_VC1_PIC_STATE                       OP_MFX(2, 2, 0, 0) /* SNB */
+#define OP_MFX_VC1_PRED_PIPE_STATE                 OP_MFX(2, 2, 0, 1) /* ALL */
+#define OP_MFX_VC1_DIRECTMODE_STATE                OP_MFX(2, 2, 0, 2) /* ALL */
+
+#define OP_MFD_VC1_SHORT_PIC_STATE                 OP_MFX(2, 2, 1, 0) /* IVB+ */
+#define OP_MFD_VC1_LONG_PIC_STATE                  OP_MFX(2, 2, 1, 1) /* IVB+ */
+
+#define OP_MFD_VC1_BSD_OBJECT                      OP_MFX(2, 2, 1, 8) /* ALL */
+
+#define OP_MFX_MPEG2_PIC_STATE                     OP_MFX(2, 3, 0, 0) /* ALL */
+#define OP_MFX_MPEG2_QM_STATE                      OP_MFX(2, 3, 0, 1) /* ALL */
+
+#define OP_MFD_MPEG2_BSD_OBJECT                    OP_MFX(2, 3, 1, 8) /* ALL */
+
+#define OP_MFX_CRYPTO_COPY_BASE_ADDR               OP_MFX(2, 6, 0, 0) /* IVB+ */
+#define OP_MFX_CRYPTO_KEY_EXCHANGE                 OP_MFX(2, 6, 0, 9) /* IVB+ */
+
+#define OP_MFX_JPEG_PIC_STATE                      OP_MFX(2, 7, 0, 0)
+#define OP_MFX_JPEG_HUFF_TABLE_STATE               OP_MFX(2, 7, 0, 2)
+
+#define OP_MFD_JPEG_BSD_OBJECT                     OP_MFX(2, 7, 1, 8)
+
+#if 0
+/* copy from vaapi, but not found definition in PRM yet */
+#define OP_VEB(pipeline, op, sub_opa, sub_opb)     \
+     (3 << 29 |                                 \
+     (pipeline) << 27 |                         \
+     (op) << 24 |                               \
+     (sub_opa) << 21 |                          \
+     (sub_opb) << 16)
+
+#define OP_VEB_SURFACE_STATE                       OP_VEB(2, 4, 0, 0)
+#define OP_VEB_STATE                               OP_VEB(2, 4, 0, 2)
+#define OP_VEB_DNDI_IECP_STATE                     OP_VEB(2, 4, 0, 3)
+#endif
 
 extern int vgt_scan_vring_2(struct vgt_device *vgt, int ring_id);
 
