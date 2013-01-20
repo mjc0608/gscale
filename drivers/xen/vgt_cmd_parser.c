@@ -89,55 +89,158 @@ static int address_fixup(struct parser_exec_state *s, int index){
 
 #endif
 
-/* Render Command Parser */
-static unsigned int rcp_op_len[] = {
-	RCP_OP_LEN_MI,     /* type = 000 */
-	RCP_OP_LEN_MISC,   /* type = 001 */
-	RCP_OP_LEN_2D,     /* type = 010 */
-	RCP_OP_LEN_3D_MEDIA, /* type = 011 */
-	0,
-	0,
-	0,
-	0,
+/* ring ALL, type = 0 */
+static struct sub_op_bits sub_op_mi[]={
+	{31, 29},
+	{28, 23},
 };
 
-/* Video Codec Command Parser */
-static unsigned int vccp_op_len[] = {
-	VCCS_OP_LEN_MI,     /* type = 000 */
-	0,
-	0,
-	VCCS_OP_LEN_MFX_VC, /* type = 011 */
-	0,
-	0,
-	0,
-	0,
+static struct decode_info decode_info_mi = {
+	"MI",
+	OP_LEN_MI,
+	ARRAY_SIZE(sub_op_mi),
+	sub_op_mi,
 };
 
-static unsigned int* ring_opcode_len[MAX_ENGINES] = {
-	[RING_BUFFER_RCS] = rcp_op_len,
-	[RING_BUFFER_VCS] = vccp_op_len,
-	[RING_BUFFER_BCS] = rcp_op_len,
-	[RING_BUFFER_VECS] = vccp_op_len, /* FIXME: double check VECS decode */
-	[RING_BUFFER_VCS2] = vccp_op_len, /* FIXME: double check VCS2 decode */
+
+/* ring RCS, command type 2 */
+static struct sub_op_bits sub_op_2d[]={
+	{31, 29},
+	{28, 22},
+};
+
+static struct decode_info decode_info_2d = {
+	"2D",
+	OP_LEN_2D,
+	ARRAY_SIZE(sub_op_2d),
+	sub_op_2d,
+};
+
+/* ring RCS, command type 3 */
+static struct sub_op_bits sub_op_3d_media[]={
+	{31, 29},
+	{28, 27},
+	{26, 24},
+	{23, 16},
+};
+
+static struct decode_info decode_info_3d_media = {
+	"3D_Media",
+	OP_LEN_3D_MEDIA,
+	ARRAY_SIZE(sub_op_3d_media),
+	sub_op_3d_media,
+};
+
+/* ring VCS, command type 3 */
+static struct sub_op_bits sub_op_mfx_vc[]={
+	{31, 29},
+	{28, 27},
+	{26, 24},
+	{23, 21},
+	{20, 16},
+};
+
+static struct decode_info decode_info_mfx_vc = {
+	"MFX_VC",
+	OP_LEN_MFX_VC,
+	ARRAY_SIZE(sub_op_mfx_vc),
+	sub_op_mfx_vc,
+};
+
+static struct decode_info* ring_decode_info[MAX_ENGINES][8]=
+{
+	[RING_BUFFER_RCS] = {
+		&decode_info_mi,
+		NULL,
+		NULL,
+		&decode_info_3d_media,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+	},
+
+	[RING_BUFFER_VCS] = {
+		&decode_info_mi,
+		NULL,
+		NULL,
+		&decode_info_mfx_vc,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+	},
+
+	[RING_BUFFER_BCS] = {
+		&decode_info_mi,
+		NULL,
+		&decode_info_2d,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+	},
+
+	[RING_BUFFER_VECS] = {
+		NULL,
+		NULL,
+		NULL,
+		&decode_info_mfx_vc,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+	},
+
+	[RING_BUFFER_VCS2] = {
+		NULL,
+		NULL,
+		NULL,
+		&decode_info_mfx_vc,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+	},
 };
 
 uint32_t vgt_get_opcode(uint32_t cmd, int ring_id)
 {
-
-	unsigned int op_len;
-	unsigned int *len_table;
+	struct decode_info * d_info;
 
 	if (ring_id >= MAX_ENGINES)
 		return INVALID_OP;
 
-	len_table = ring_opcode_len[ring_id];
-
-	/* type - bits 31:29*/
-	op_len = len_table[cmd >> 29];
-	if (op_len == 0)
+	d_info = ring_decode_info[ring_id][CMD_TYPE(cmd)];
+	if (d_info == NULL)
 		return INVALID_OP;
 
-	return cmd >> (32-op_len);
+	return cmd >> (32 - d_info->op_len);
+}
+
+static inline uint32_t sub_op_val(uint32_t cmd, uint32_t hi, uint32_t low)
+{
+	return (cmd >> low) & ((1U << (hi-low+1)) - 1);
+}
+
+static void vgt_print_opcode(uint32_t cmd, int ring_id)
+{
+	struct decode_info * d_info;
+	int i;
+
+	if (ring_id >= MAX_ENGINES)
+		return;
+
+	d_info = ring_decode_info[ring_id][CMD_TYPE(cmd)];
+	if (d_info == NULL)
+		return;
+
+	printk("opcode=0x%x %s sub_ops:", cmd >> (32 - d_info->op_len), d_info->name);
+	for (i=0; i< d_info->nr_sub_op; i++){
+		printk("0x%x ", sub_op_val(cmd, d_info->sub_op[i].hi,  d_info->sub_op[i].low));
+	}
+	printk("\n");
 }
 
 static inline struct cmd_info* vgt_get_cmd_info(uint32_t cmd, int ring_id)
@@ -148,7 +251,6 @@ static inline struct cmd_info* vgt_get_cmd_info(uint32_t cmd, int ring_id)
 	if (opcode == INVALID_OP){
 		return NULL;
 	}
-
 
 	return vgt_find_cmd_entry(opcode, ring_id);
 }
@@ -180,8 +282,8 @@ static void parser_exec_state_dump(struct parser_exec_state *s)
 	}else{
 		printk("  ip_va=%p: %08x %08x %08x %08x \n",
 				s->ip_va, cmd_val(s,0), cmd_val(s,1),cmd_val(s,2), cmd_val(s,3));
+		vgt_print_opcode(cmd_val(s,0), s->ring_id);
 	}
-
 }
 #define RING_BUF_WRAP(s, ip)	(((s)->buf_type == RING_BUFFER_INSTRUCTION) && \
 		((ip_gma) >= (s)->ring_start + (s)->ring_size))

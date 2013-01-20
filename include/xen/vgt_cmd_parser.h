@@ -60,12 +60,25 @@
 
 #define INVALID_OP    (~0U)
 
-/* Render Command Map */
+#define OP_LEN_MI           9
+#define OP_LEN_2D           10
+#define OP_LEN_3D_MEDIA     16
+#define OP_LEN_MFX_VC       16
 
-#define RCP_OP_LEN_MI       9
-#define RCP_OP_LEN_MISC     0
-#define RCP_OP_LEN_2D       10
-#define RCP_OP_LEN_3D_MEDIA 16
+#define CMD_TYPE(cmd)	(((cmd) >> 29) & 7)
+
+struct sub_op_bits{
+	int hi;
+	int low;
+};
+struct decode_info{
+	char* name;
+	int op_len;
+	int nr_sub_op;
+	struct sub_op_bits *sub_op;
+};
+
+/* Render Command Map */
 
 /* MI_* command Opcode (28:23) */
 #define OP_MI_NOOP					0x0
@@ -213,9 +226,6 @@
 
 
 /* VCCP Command Parser */
-
-#define VCCS_OP_LEN_MI       9
-#define VCCS_OP_LEN_MFX_VC   16
 
 extern int vgt_scan_vring_2(struct vgt_device *vgt, int ring_id);
 
