@@ -236,11 +236,11 @@ static void vgt_print_opcode(uint32_t cmd, int ring_id)
 	if (d_info == NULL)
 		return;
 
-	printk("opcode=0x%x %s sub_ops:", cmd >> (32 - d_info->op_len), d_info->name);
+	printk(KERN_ERR"opcode=0x%x %s sub_ops:", cmd >> (32 - d_info->op_len), d_info->name);
 	for (i=0; i< d_info->nr_sub_op; i++){
-		printk("0x%x ", sub_op_val(cmd, d_info->sub_op[i].hi,  d_info->sub_op[i].low));
+		printk(KERN_ERR"0x%x ", sub_op_val(cmd, d_info->sub_op[i].hi,  d_info->sub_op[i].low));
 	}
-	printk("\n");
+	printk(KERN_ERR"\n");
 }
 
 static inline struct cmd_info* vgt_get_cmd_info(uint32_t cmd, int ring_id)
@@ -270,17 +270,17 @@ static inline uint32_t cmd_val(struct parser_exec_state *s, int index)
 
 static void parser_exec_state_dump(struct parser_exec_state *s)
 {
-	printk("  ring_start(%08lx) ring_end(%08lx) ring_head(%08lx) ring_tail(%08lx)\n",
-			s->ring_start, s->ring_start + s->ring_size, s->ring_head, s->ring_tail);
+	printk(KERN_ERR"  RING%d: ring_start(%08lx) ring_end(%08lx) ring_head(%08lx) ring_tail(%08lx)\n",
+			s->ring_id, s->ring_start, s->ring_start + s->ring_size, s->ring_head, s->ring_tail);
 
-	printk("  %s %s ip_gma(%08lx) ",
+	printk(KERN_ERR"  %s %s ip_gma(%08lx) ",
 			s->buf_type == RING_BUFFER_INSTRUCTION ? "RING_BUFFER": "BATCH_BUFFER",
 			s->buf_addr_type == GTT_BUFFER ? "GTT" : "PPGTT", s->ip_gma);
 
 	if (s->ip_va == NULL){
-		printk(" ip_va(NULL)\n");
+		printk(KERN_ERR" ip_va(NULL)\n");
 	}else{
-		printk("  ip_va=%p: %08x %08x %08x %08x \n",
+		printk(KERN_ERR"  ip_va=%p: %08x %08x %08x %08x \n",
 				s->ip_va, cmd_val(s,0), cmd_val(s,1),cmd_val(s,2), cmd_val(s,3));
 		vgt_print_opcode(cmd_val(s,0), s->ring_id);
 	}
