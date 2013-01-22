@@ -526,6 +526,13 @@ void vgt_initialize_ctx_scheduler(struct pgt_device *pdev)
 	/* If configured more than one,
 	 * choose the one that has highest priority
 	 */
+	if (hvm_render_owner) {
+		timer_based_qos = false;
+		event_based_qos = false;
+		shadow_tail_based_qos = false;
+		return;
+	}
+
 	if (shadow_tail_based_qos) {
 		vgt_hrtimer_init(pdev,
 				vgt_poll_rb_tail,
