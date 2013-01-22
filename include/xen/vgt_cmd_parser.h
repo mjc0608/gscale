@@ -213,12 +213,34 @@ struct decode_info{
 #define OP_3DSTATE_BINDING_TABLE_POINTERS_GS    OP_3D_MEDIA(0x3, 0x0, 0x29) /* IVB+ */
 #define OP_3DSTATE_BINDING_TABLE_POINTERS_PS    OP_3D_MEDIA(0x3, 0x0, 0x2A) /* IVB+ */
 #define OP_3DSTATE_SAMPLER_STATE_POINTERS_VS    OP_3D_MEDIA(0x3, 0x0, 0x2B) /* IVB+ */
+#define OP_3DSTATE_SAMPLER_STATE_POINTERS_HS    OP_3D_MEDIA(0x3, 0x0, 0x2C) /* IVB+ */
+#define OP_3DSTATE_SAMPLER_STATE_POINTERS_DS    OP_3D_MEDIA(0x3, 0x0, 0x2D) /* IVB+ */
 #define OP_3DSTATE_SAMPLER_STATE_POINTERS_GS    OP_3D_MEDIA(0x3, 0x0, 0x2E) /* IVB+ */
 #define OP_3DSTATE_SAMPLER_STATE_POINTERS_PS    OP_3D_MEDIA(0x3, 0x0, 0x2F) /* IVB+ */
 #define OP_3DSTATE_URB_VS                       OP_3D_MEDIA(0x3, 0x0, 0x30) /* IVB+ */
 #define OP_3DSTATE_URB_HS                       OP_3D_MEDIA(0x3, 0x0, 0x31) /* IVB+ */
 #define OP_3DSTATE_URB_DS                       OP_3D_MEDIA(0x3, 0x0, 0x32) /* IVB+ */
 #define OP_3DSTATE_URB_GS                       OP_3D_MEDIA(0x3, 0x0, 0x33) /* IVB+ */
+#define OP_3DSTATE_GATHER_CONSTANT_VS           OP_3D_MEDIA(0x3, 0x0, 0x34) /* HSW+ */
+#define OP_3DSTATE_GATHER_CONSTANT_GS           OP_3D_MEDIA(0x3, 0x0, 0x35) /* HSW+ */
+#define OP_3DSTATE_GATHER_CONSTANT_HS           OP_3D_MEDIA(0x3, 0x0, 0x36) /* HSW+ */
+#define OP_3DSTATE_GATHER_CONSTANT_DS           OP_3D_MEDIA(0x3, 0x0, 0x37) /* HSW+ */
+#define OP_3DSTATE_GATHER_CONSTANT_PS           OP_3D_MEDIA(0x3, 0x0, 0x38) /* HSW+ */
+#define OP_3DSTATE_DX9_CONSTANTF_VS             OP_3D_MEDIA(0x3, 0x0, 0x39) /* HSW+ */
+#define OP_3DSTATE_DX9_CONSTANTF_PS             OP_3D_MEDIA(0x3, 0x0, 0x3A) /* HSW+ */
+#define OP_3DSTATE_DX9_CONSTANTI_VS             OP_3D_MEDIA(0x3, 0x0, 0x3B) /* HSW+ */
+#define OP_3DSTATE_DX9_CONSTANTI_PS             OP_3D_MEDIA(0x3, 0x0, 0x3C) /* HSW+ */
+#define OP_3DSTATE_DX9_CONSTANTB_VS             OP_3D_MEDIA(0x3, 0x0, 0x3D) /* HSW+ */
+#define OP_3DSTATE_DX9_CONSTANTB_PS             OP_3D_MEDIA(0x3, 0x0, 0x3E) /* HSW+ */
+#define OP_3DSTATE_DX9_LOCAL_VALID_VS           OP_3D_MEDIA(0x3, 0x0, 0x3F) /* HSW+ */
+#define OP_3DSTATE_DX9_LOCAL_VALID_PS           OP_3D_MEDIA(0x3, 0x0, 0x40) /* HSW+ */
+#define OP_3DSTATE_DX9_GENERATE_ACTIVE_VS       OP_3D_MEDIA(0x3, 0x0, 0x41) /* HSW+ */
+#define OP_3DSTATE_DX9_GENERATE_ACTIVE_PS       OP_3D_MEDIA(0x3, 0x0, 0x42) /* HSW+ */
+#define OP_3DSTATE_BINDING_TABLE_EDIT_VS        OP_3D_MEDIA(0x3, 0x0, 0x43) /* HSW+ */
+#define OP_3DSTATE_BINDING_TABLE_EDIT_GS        OP_3D_MEDIA(0x3, 0x0, 0x44) /* HSW+ */
+#define OP_3DSTATE_BINDING_TABLE_EDIT_HS        OP_3D_MEDIA(0x3, 0x0, 0x45) /* HSW+ */
+#define OP_3DSTATE_BINDING_TABLE_EDIT_DS        OP_3D_MEDIA(0x3, 0x0, 0x46) /* HSW+ */
+#define OP_3DSTATE_BINDING_TABLE_EDIT_PS        OP_3D_MEDIA(0x3, 0x0, 0x47) /* HSW+ */
 
 #define OP_3DSTATE_DRAWING_RECTANGLE            OP_3D_MEDIA( 0x3 ,0x1, 0x00 )
 #define OP_3DSTATE_SAMPLER_PALETTE_LOAD0        OP_3D_MEDIA( 0x3 ,0x1, 0x02 )
