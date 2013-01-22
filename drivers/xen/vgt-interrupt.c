@@ -1561,6 +1561,9 @@ void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type t
 	int i;
 	cycles_t delay;
 
+	/* WARING: this should be under lock protection */
+	//raise_ctx_sched(vgt_dom0);
+
 	pdev->stat.last_virq = get_cycles();
 	delay = pdev->stat.last_virq - pdev->stat.last_pirq;
 	/*

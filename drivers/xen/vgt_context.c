@@ -734,6 +734,8 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 
 	spin_lock_irqsave(&pdev->lock, flags);
 
+	raise_ctx_sched(vgt);
+
 	if (reg_is_gtt(pdev, offset)) {
 		gtt_mmio_read(vgt, offset, p_data, bytes);
 		spin_unlock_irqrestore(&pdev->lock, flags);
@@ -758,6 +760,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 	}
 
 	reg_set_accessed(pdev, offset);
+
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	return true;
 }
@@ -852,6 +855,8 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 
 	spin_lock_irqsave(&pdev->lock, flags);
 
+	raise_ctx_sched(vgt);
+
 	if (reg_is_gtt(pdev, offset)) {
 		gtt_mmio_write(vgt, offset, p_data, bytes);
 		spin_unlock_irqrestore(&pdev->lock, flags);
@@ -879,6 +884,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	else {
 		default_mmio_write(vgt, offset, p_data, bytes);
 	}
+
 
 	if (offset == _REG_DSPASURF || offset == _REG_DSPBSURF) {
 		dprintk("vGT(%d): write to surface base (%x) with (%x), pReg(%x)\n",
@@ -1097,29 +1103,9 @@ out:
 	next_display_owner = NULL; /* mark the end of a display_owner switch */
 }
 
-static struct vgt_device *next_vgt(
-	struct list_head *head, struct vgt_device *vgt)
-{
-	struct list_head *next = &vgt->list;
-	struct vgt_device *next_vgt = NULL;
-
-	do {
-		next = next->next;
-		/* wrap the list */
-		if (next == head)
-			next = head->next;
-		next_vgt = list_entry(next, struct vgt_device, list);
-
-		if (vgt->force_removal ||
-		    !bitmap_empty(next_vgt->started_rings, MAX_ENGINES))
-			break;
-	} while (next_vgt != vgt);
-
-	return next_vgt;
-}
 
 /* update the tail pointer after all the context is restored */
-static void vgt_resume_ringbuffers(struct vgt_device *vgt)
+void vgt_resume_ringbuffers(struct vgt_device *vgt)
 {
 	int i;
 
@@ -1128,7 +1114,7 @@ static void vgt_resume_ringbuffers(struct vgt_device *vgt)
 			continue;
 
 		if (!(vgt->rb[i].sring.ctl & _RING_CTL_ENABLE)) {
-			printk("vGT: ring (%d) not enabled. exit resume\n", i);
+			dprintk("vGT: ring (%d) not enabled. exit resume\n", i);
 			continue;
 		}
 		VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(vgt->pdev, i), vgt->rb[i].sring.tail);
@@ -1165,8 +1151,6 @@ void vgt_toggle_ctx_switch(bool enable)
 		vgt_ctx_switch = 0;
 }
 
-static int period = HZ/5;	/* default slow mode in 200ms */
-
 /*
  * The thread to perform the VGT ownership switch.
  *
@@ -1176,6 +1160,7 @@ static int period = HZ/5;	/* default slow mode in 200ms */
  *   b) the GP handler to emulate MMIO for dom0
  *   c) the event handler to emulate MMIO for other VMs
  *   d) the interrupt handler to do interrupt virtualization
+ *   e) /sysfs interaction from userland program
  *
  * Now d) is removed from the race path, because we adopt a delayed
  * injection mechanism. Physical interrupt handler only saves pending
@@ -1208,32 +1193,25 @@ int vgt_thread(void *priv)
 {
 	struct vgt_device *next, *vgt = priv, *prev;
 	struct pgt_device *pdev = vgt->pdev;
-	int threshold = 2; /* print every 10s */
-	long wait = 0;
+	int threshold = 500; /* print every 500 times */
 	int ring_id;
-	cycles_t t0, t1, t2, t3;
+	cycles_t t0, t1, t2, t3;//t4 = 0, t5;
 	bool check_irq = false;
 
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
 	printk("vGT: dexuan: use %s style context switch\n", use_old_ctx_switch ? "old": "new");
-	if (fastmode) {
-		printk("vGT: fastmode switch (in 16ms)\n");
-		period = HZ/64;
-	}
 
-	threshold = (10 * HZ) /period;
-	wait = period;
 	while (!kthread_should_stop()) {
 		/*
 		 * TODO: Use high priority task and timeout based event
 		 * 	mechanism for QoS. schedule in 50ms now.
 		 */
-		wait = wait_event_timeout(pdev->event_wq,
-				pdev->request, wait);
+		/* vgt_thread can only be waken up when there is a request */
+		wait_event(pdev->event_wq, pdev->request);
 
-		t0 = get_cycles();
-		if (!pdev->request && wait) {
+		t0 = vgt_get_cycles();
+		if (!pdev->request) {
 			printk("vGT: main thread waken up by unknown reasons!\n");
 			continue;
 		}
@@ -1258,32 +1236,26 @@ int vgt_thread(void *priv)
 
 		/* Send uevent to userspace */
 		if (test_and_clear_bit(VGT_REQUEST_UEVENT, (void *)&pdev->request)) {
-			/* TODO: Give a new type of request when not all
-			 *	 uevents are for hotplug
-			 */
 			vgt_signal_uevent(pdev);
 		}
 
-		/*
-		 * context switch timeout hasn't expired, or
-		 * on-demand scheule hasn't been requested
-		 */
-		if (wait &&
-		    !test_and_clear_bit(VGT_REQUEST_SCHED, (void *)&pdev->request))
+		if (!test_and_clear_bit(VGT_REQUEST_CTX_SWITCH,
+					(void *)&pdev->request))
 			continue;
-
-		wait = period;
 
 		if (!vgt_ctx_switch)
 			continue;
 
 		check_irq = false;
+
 		if (!(vgt_ctx_check(pdev) % threshold))
 			printk("vGT: %lldth checks, %lld switches\n",
 				vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
 		vgt_ctx_check(pdev)++;
 
-		if (list_empty(&pdev->rendering_runq_head)) {
+		/* FIXME: this should be guaranteed by ctx scheduler.
+		 * But for robustness, let's keep it temporarily */
+		if (vgt_runq_is_empty(pdev)) {
 			/* Idle now, and no pending activity */
 			dprintk("....idle\n");
 			continue;
@@ -1296,16 +1268,23 @@ int vgt_thread(void *priv)
 		 * simply a spinlock is enough
 		 */
 		spin_lock_irq(&pdev->lock);
-		next = next_vgt(&pdev->rendering_runq_head, current_render_owner(pdev));
-		if ( next != current_render_owner(pdev) )
+
+		ASSERT(next_sched_vgt);
+		next = next_sched_vgt;
+
+		if ( next != (prev = current_render_owner(pdev)) )
 		{
 			if (is_rendering_engines_empty(pdev, &ring_id)) {
 				dprintk("vGT: next vgt (%d)\n", next->vgt_id);
 
+				/* variable exported by debugfs */
 				context_switch_num ++;
-				rdtsc_barrier();
-				t1 = get_cycles();
-				rdtsc_barrier();
+				t1 = vgt_get_cycles();
+				/* Records actual tsc when all rendering engines
+				 * are stopped */
+				if (event_based_qos) {
+					ctx_actual_end_time(current_render_owner(pdev)) = t1;
+				}
 				/*
 				 * FIXME: now acquire the lock with interrupt disabled.
 				 * So far vGT's own interrupt handler hasn't been
@@ -1317,7 +1296,7 @@ int vgt_thread(void *priv)
 				 * Later remove the irq disable when integrating
 				 * interrupt part.
 				 */
-				prev = current_render_owner(pdev);
+				//prev = current_render_owner(pdev);
 				if ( prev )
 					prev->stat.allocated_cycles +=
 						(t1 - prev->stat.schedule_in_time);
@@ -1389,11 +1368,15 @@ int vgt_thread(void *priv)
 					check_irq = false;
 				}
 
-				rdtsc_barrier();
-				t2 = get_cycles();
-				rdtsc_barrier();
+				t2 = vgt_get_cycles();
 				next->stat.schedule_in_time = t2;
 				//printk("vGT: take %lld cycles\n", t2 - t1);
+
+				/* setup countdown for next vgt context */
+				if (event_based_qos) {
+					vgt_setup_countdown(next);
+				}
+
 			} else {
 				printk("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
 					vgt_ctx_switch(pdev),
@@ -1403,6 +1386,7 @@ int vgt_thread(void *priv)
 		}
 
 		spin_unlock_irq(&pdev->lock);
+
 		/* Virtual interrupts pending right after render switch */
 		if (check_irq && test_bit(VGT_REQUEST_IRQ, (void*)&pdev->request)) {
 			dprintk("vGT: handle pending interrupt in the render context switch time\n");
@@ -1411,7 +1395,7 @@ int vgt_thread(void *priv)
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
 			spin_unlock_irq(&pdev->lock);
 		}
-		t3 = get_cycles();
+		t3 = vgt_get_cycles();
 		context_switch_cost += (t3-t0);
 	}
 	return 0;
@@ -1492,6 +1476,21 @@ void resume_rings(struct pgt_device *pdev)
 
 	for (i = 0; i < pdev->max_engines; i++)
 		resume_ring(pdev, i);
+}
+
+
+bool vgt_vrings_empty(struct vgt_device *vgt)
+{
+	int ring_id;
+	vgt_ringbuffer_t *vring;
+	for (ring_id = 0; ring_id < vgt->pdev->max_engines; ring_id++)
+		if (test_bit(ring_id, vgt->enabled_rings)) {
+			vring = &vgt->rb[ring_id].vring;
+			if (!RB_HEAD_TAIL_EQUAL(vring->head, vring->tail))
+				return false;
+		}
+
+	return true;
 }
 
 /*
@@ -2692,6 +2691,13 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	*ptr_vgt = vgt;
 
+	/* initialize context scheduler infor */
+	if (event_based_qos)
+		vgt_init_sched_info(vgt);
+
+	if (shadow_tail_based_qos)
+		vgt_init_rb_tailq(vgt);
+
 	return 0;
 err:
 	kfree(vgt->irq_vstate);
@@ -2750,7 +2756,9 @@ void vgt_release_instance(struct vgt_device *vgt)
 		printk("vgt(%d) is current owner, request reschedule\n",
 			vgt->vgt_id);
 		vgt->force_removal = true;
-		vgt_raise_request(pdev, VGT_REQUEST_SCHED);
+		next_sched_vgt = vgt_dom0;
+		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+		wmb();
 	}
 	if (previous_render_owner(pdev) == vgt)
 		previous_render_owner(pdev) = NULL;
@@ -2761,6 +2769,11 @@ void vgt_release_instance(struct vgt_device *vgt)
 		wait_event(pdev->destroy_wq, !vgt->force_removal);
 
 	printk("release display/render ownership... done\n");
+
+	/* FIXME: any conflicts between destroy_wq ? */
+	if (shadow_tail_based_qos)
+		vgt_destroy_rb_tailq(vgt);
+
 	/* FIXME: display switch will be
 	 * a disaster after this */
 	vgt_destroy_attached_port(vgt);
@@ -3212,12 +3225,15 @@ int vgt_initialize(struct pci_dev *dev)
 
 	init_waitqueue_head(&pdev->event_wq);
 	init_waitqueue_head(&pdev->destroy_wq);
+
 	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
 	if (!p_thread) {
 		goto err;
 	}
 	pdev->p_thread = p_thread;
 	show_debug(pdev, 0);
+
+	vgt_initialize_ctx_scheduler(pdev);
 
 	list_add(&pdev->list, &pgt_devices);
 
@@ -3260,6 +3276,8 @@ void vgt_destroy(void)
 
 	perf_pgt = NULL;
 	list_del(&pdev->list);
+
+	vgt_cleanup_ctx_scheduler(pdev);
 
 	/* do we need the thread actually stopped? */
 	kthread_stop(pdev->p_thread);

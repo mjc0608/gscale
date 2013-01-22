@@ -319,6 +319,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	int ring_id, rel_off;
 	vgt_ringbuffer_t	*vring;
 	vgt_ringbuffer_t	*sring;
+	struct vgt_tailq *tailq = NULL;
 	vgt_reg_t	oval;
 	cycles_t	t0, t1;
 	struct pgt_device *pdev = vgt->pdev;
@@ -333,6 +334,9 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	vring = &vgt->rb[ring_id].vring;
 	sring = &vgt->rb[ring_id].sring;
 
+	if (shadow_tail_based_qos)
+		tailq = &vgt->rb_tailq[ring_id];
+
 	if (ring_id == RING_BUFFER_VECS)
 		vgt->vebox_support = true;
 
@@ -343,15 +347,46 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	case RB_OFFSET_TAIL:
 		t0 = get_cycles();
 		ring_tail_mmio_wcnt++;
-		sring->tail = vring->tail;
+
+		/* enable hvm tailq after the ring enabled */
+		if (shadow_tail_based_qos) {
+			if (test_bit(ring_id, vgt->enabled_rings))
+				vgt_tailq_pushback(tailq, vring->tail, 0);
+		} else
+			sring->tail = vring->tail;
+
+#if 0
+		if (shadow_tail_based_qos) {
+			if (vgt->vgt_id > 0) {
+				if (enable_hvm_tailq && !vgt->force_removal)
+					vgt_tailq_pushback(tailq, vring->tail, 0);
+			} else
+				vgt_tailq_pushback(tailq, vring->tail, 0);
+		} else
+			sring->tail = vring->tail;
+#endif
+
+
 		if ( !bypass_scan )
 			vgt_scan_vring(vgt, ring_id);
 		t1 = get_cycles();
 		ring_tail_mmio_wcycles += (t1-t0);
-		if (sring->tail &&
-		    !test_and_set_bit(ring_id, (void *)&vgt->started_rings))
-			printk("Ring-%d starts work for vgt-%d\n",
-				ring_id, vgt->vgt_id);
+
+		if (shadow_tail_based_qos) {
+			if (vgt_tailq_last_stail(tailq)
+					&& !test_and_set_bit(ring_id, (void *)vgt->started_rings))
+				printk("Ring-%d starts work for vgt-%d\n",
+						ring_id, vgt->vgt_id);
+			/* When a ring is enabled, tail value
+			 * can never write to real hardware */
+			return true;
+		} else {
+			if (sring->tail &&
+					!test_and_set_bit(ring_id, (void *)vgt->started_rings))
+				printk("Ring-%d starts work for vgt-%d\n",
+						ring_id, vgt->vgt_id);
+		}
+
 		break;
 	case RB_OFFSET_HEAD:
 		//debug

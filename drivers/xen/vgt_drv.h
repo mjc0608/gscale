@@ -72,6 +72,8 @@ extern bool vgt_primary;
 extern bool vgt_debug;
 extern bool novgt;
 extern bool fastpath_dpy_switch;
+extern bool shadow_tail_based_qos;
+extern bool event_based_qos;
 extern int fastmode;
 extern int disable_ppgtt;
 extern int enable_video_switch;
@@ -329,11 +331,14 @@ struct vgt_wp_page_entry {
 /*
  * Ring ID definition.
  */
-#define RING_BUFFER_RCS		0
-#define RING_BUFFER_VCS		1
-#define RING_BUFFER_BCS		2
-#define RING_BUFFER_VECS	3
-#define RING_BUFFER_VCS2	4
+enum vgt_ring_id {
+	RING_BUFFER_RCS = 0,
+	RING_BUFFER_VCS,
+	RING_BUFFER_BCS,
+	RING_BUFFER_VECS,
+	RING_BUFFER_VCS2,
+	RING_BUFFER_MAX
+};
 
 #define  MAX_ENGINES		5
 
@@ -415,11 +420,44 @@ struct vgt_statistics {
 };
 
 /* per-VM structure */
+typedef cycles_t vgt_tslice_t;
+struct vgt_sched_info {
+	vgt_tslice_t start_time;
+	vgt_tslice_t end_time;
+	vgt_tslice_t actual_end_time;
+	vgt_tslice_t rb_empty_delay;		/* cost for "wait rendering engines empty"*/
+
+	int32_t priority;
+	int32_t weight;
+	int64_t time_slice;
+	/*TODO: more properties and policies should be added in*/
+};
+
+#define VGT_TBS_DEFAULT_PERIOD (15 * 1000000) /* 15 ms */
+
+struct vgt_hrtimer {
+	struct hrtimer timer;
+	u64 period;
+};
+
+#define VGT_TAILQ_RB_POLLING_PERIOD (2 * 1000000)
+#define VGT_TAILQ_SIZE (SIZE_1MB)
+#define VGT_TAILQ_MAX_ENTRIES ((VGT_TAILQ_SIZE)/sizeof(u32))
+#define VGT_TAILQ_IDX_MASK (VGT_TAILQ_MAX_ENTRIES - 1)
+/* Maximum number of tail can be cached is (VGT_TAILQ_MAX_ENTRIES - 1) */
+struct vgt_tailq {
+	u32 __head;
+	u32 __tail;
+	u32 *__buf_tail;  /* buffer to save tail value caught by tail-write */
+	u32 *__buf_cmdnr; /* buffer to save cmd nr for each tail-write */
+};
+#define vgt_tailq_idx(idx) ((idx) & VGT_TAILQ_IDX_MASK)
+
 struct vgt_device {
 	int vgt_id;		/* 0 is always for dom0 */
 	int vm_id;		/* domain ID per hypervisor */
 	struct pgt_device  *pdev;	/* the pgt device where the GT device registered. */
-	struct list_head	list;
+	struct list_head	list;   /* FIXME: used for context switch ?? */
 	vgt_state_t	state;		/* MMIO state except ring buffers */
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
 	vgt_reg_t		last_scan_head[MAX_ENGINES];
@@ -480,6 +518,12 @@ struct vgt_device {
 	 * flag is used. Will remove in future when VM drivers all have VEBOX
 	 * support. */
 	bool vebox_support;
+
+	/* embedded context scheduler information */
+	struct vgt_sched_info sched_info;
+
+	/* Tail Queue (used to cache tail-writingt) */
+	struct vgt_tailq rb_tailq[MAX_ENGINES];
 };
 
 extern struct vgt_device *vgt_dom0;
@@ -654,7 +698,7 @@ struct pgt_statistics {
 struct vgt_mmio_dev;
 /* per-device structure */
 struct pgt_device {
-	struct list_head	list;
+	struct list_head	list; /* list node for 'pgt_devices' */
 
 	struct pci_bus *pbus;	/* parent bus of the device */
 	struct pci_dev *pdev;	/* the gfx device bound to */
@@ -681,7 +725,7 @@ struct pgt_device {
 	void *gmadr_va;		/* virtual base of GMADR */
 	u32 mmio_size;
 	u32 gtt_size;
-	int reg_num;
+    int reg_num;
 
 	int max_engines;	/* supported max engines */
 	u32 ring_mmio_base[MAX_ENGINES];
@@ -714,8 +758,8 @@ struct pgt_device {
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
 	struct vgt_device *prev_owner[VGT_OT_MAX];	/* previous owner list of different engines */
-	struct list_head rendering_runq_head;
-	struct list_head rendering_idleq_head;
+	struct list_head rendering_runq_head; /* reuse this for context scheduler */
+	struct list_head rendering_idleq_head; /* reuse this for context scheduler */
 	spinlock_t lock;
 
 	reg_info_t *reg_info;	/* virtualization policy for a given reg */
@@ -904,7 +948,7 @@ static inline void reg_update_handlers(struct pgt_device *pdev,
 /* request types to wake up main thread */
 #define VGT_REQUEST_IRQ		0	/* a new irq pending from device */
 #define VGT_REQUEST_UEVENT	1
-#define VGT_REQUEST_SCHED	2	/* immediate reschedule requested */
+#define VGT_REQUEST_CTX_SWITCH	2	/* immediate reschedule(context switch) requested */
 #define VGT_REQUEST_EMUL_DPY_IRQ 3
 
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
@@ -912,6 +956,11 @@ static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 	set_bit(flag, (void *)&pdev->request);
 	if (waitqueue_active(&pdev->event_wq))
 		wake_up(&pdev->event_wq);
+}
+
+static inline bool vgt_chk_raised_request(struct pgt_device *pdev, uint32_t flag)
+{
+	return !!(test_bit(flag, (void *)&pdev->request));
 }
 
 /* check whether a reg access should happen on real hw */
@@ -1375,7 +1424,95 @@ static inline unsigned long __REG_READ(struct pgt_device *pdev,
 int vgt_save_state(struct vgt_device *vgt);
 int vgt_restore_state(struct vgt_device *vgt);
 
+
+/* context scheduler */
+#define CYCLES_PER_USEC	0x10c7ull
+#define VGT_DEFAULT_TSLICE (4 * 1000 * CYCLES_PER_USEC)
+#define ctx_start_time(vgt) ((vgt)->sched_info.start_time)
+#define ctx_end_time(vgt) ((vgt)->sched_info.end_time)
+#define ctx_remain_time(vgt) ((vgt)->sched_info.time_slice)
+#define ctx_actual_end_time(vgt) ((vgt)->sched_info.actual_end_time)
+#define ctx_rb_empty_delay(vgt) ((vgt)->sched_info.rb_empty_delay)
+
+#define vgt_get_cycles() ({		\
+	cycles_t __ret;				\
+	rdtsc_barrier();			\
+	__ret = get_cycles();		\
+	rdtsc_barrier();			\
+	__ret;						\
+	})
+
+#define RB_HEAD_TAIL_EQUAL(head, tail) \
+	(((head) & RB_HEAD_OFF_MASK) == ((tail) & RB_TAIL_OFF_MASK))
+
+extern bool event_based_qos;
+extern struct vgt_device *next_sched_vgt;
+extern bool vgt_vrings_empty(struct vgt_device *vgt);
+
+/* context scheduler facilities functions */
+static inline bool vgt_runq_is_empty(struct pgt_device *pdev)
+{
+	return (list_empty(&pdev->rendering_runq_head));
+}
+
+static inline void vgt_runq_insert(struct vgt_device *vgt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	list_add(&vgt->list, &pdev->rendering_runq_head);
+}
+
+static inline void vgt_runq_remove(struct vgt_device *vgt)
+{
+	list_del(&vgt->list);
+}
+
+static inline void vgt_idleq_insert(struct vgt_device *vgt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	list_add(&vgt->list, &pdev->rendering_idleq_head);
+}
+
+static inline void vgt_idleq_remove(struct vgt_device *vgt)
+{
+	list_del(&vgt->list);
+}
+
+static inline int vgt_nr_in_runq(struct pgt_device *pdev)
+{
+	int count = 0;
+	struct list_head *pos;
+	list_for_each(pos, &pdev->rendering_runq_head)
+		count++;
+	return count;
+}
+
+static inline void vgt_init_sched_info(struct vgt_device *vgt)
+{
+	ctx_remain_time(vgt) = VGT_DEFAULT_TSLICE;
+	ctx_start_time(vgt) = 0;
+	ctx_end_time(vgt) = 0;
+	ctx_actual_end_time(vgt) = 0;
+	ctx_rb_empty_delay(vgt) = 0;
+}
+
+/* main context scheduling process */
+extern void vgt_sched_ctx(struct pgt_device *pdev);
+extern void vgt_setup_countdown(struct vgt_device *vgt);
+extern void vgt_initialize_ctx_scheduler(struct pgt_device *pdev);
+extern void vgt_cleanup_ctx_scheduler(struct pgt_device *pdev);
+
+extern void __raise_ctx_sched(struct vgt_device *vgt);
+#define raise_ctx_sched(vgt) \
+	if (event_based_qos)	\
+		__raise_ctx_sched((vgt))
+
+extern bool shadow_tail_based_qos;
+int vgt_init_rb_tailq(struct vgt_device *vgt);
+void vgt_destroy_rb_tailq(struct vgt_device *vgt);
+int vgt_tailq_pushback(struct vgt_tailq *tailq, u32 tail, u32 cmdnr);
+u32 vgt_tailq_last_stail(struct vgt_tailq *tailq);
 /*
+ *
  * Activate a VGT instance to render runqueue.
  */
 static inline void vgt_enable_render(struct vgt_device *vgt)
@@ -1393,6 +1530,7 @@ static inline void vgt_enable_render(struct vgt_device *vgt)
 }
 
 /* now we scheduler all render rings together */
+/* whenever there is a ring enabled, the render(context switch ?) are enabled */
 static inline void vgt_enable_ring(struct vgt_device *vgt, int ring_id)
 {
 	int enable = bitmap_empty(vgt->enabled_rings, MAX_ENGINES);
@@ -1432,9 +1570,10 @@ static inline void vgt_disable_ring(struct vgt_device *vgt, int ring_id)
 	/* request to remove from runqueue if all rings are disabled */
 	if (bitmap_empty(vgt->enabled_rings, MAX_ENGINES)) {
 		ASSERT(spin_is_locked(&pdev->lock));
-		if (current_render_owner(pdev) == vgt)
-			vgt_raise_request(pdev, VGT_REQUEST_SCHED);
-		else
+		if (current_render_owner(pdev) == vgt) {
+			next_sched_vgt = vgt_dom0;
+			vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+		} else
 			vgt_disable_render(vgt);
 	}
 }

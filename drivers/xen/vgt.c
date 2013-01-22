@@ -76,6 +76,13 @@ module_param_named(fastmode, fastmode, int, 0600);
 int disable_ppgtt = 0;
 module_param_named(disable_ppgtt, disable_ppgtt, int, 0600);
 
+bool event_based_qos = false;
+module_param_named(event_based_qos, event_based_qos, bool, 0600);
+MODULE_PARM_DESC(event_based_qos, "Use event based QoS scheduler (default: false)");
+
+bool shadow_tail_based_qos = false;
+module_param_named(shadow_tail_based_qos, shadow_tail_based_qos, bool, 0600);
+MODULE_PARM_DESC(shadow_tail_based_qos, "Use Shadow tail based QoS scheduler (default: false)");
 /*
  * FIXME: now video ring switch has weird issue. The cmd
  * parser may enter endless loop even when head/tail is
