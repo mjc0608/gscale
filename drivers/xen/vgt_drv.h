@@ -1560,6 +1560,9 @@ static inline void vgt_disable_render(struct vgt_device *vgt)
 static inline void vgt_disable_ring(struct vgt_device *vgt, int ring_id)
 {
 	struct pgt_device *pdev = vgt->pdev;
+
+	clear_bit(ring_id, (void *)vgt->started_rings);
+
 	/* multiple disables */
 	if (!test_and_clear_bit(ring_id, (void *)vgt->enabled_rings)) {
 		printk("vGT-%d: disable a disabled ring (%d)\n",
