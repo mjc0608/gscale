@@ -86,13 +86,16 @@ struct decode_info{
 #define OP_MI_WAIT_FOR_EVENT                0x3
 #define OP_MI_FLUSH                         0x4
 #define OP_MI_ARB_CHECK                     0x5
+#define OP_MI_RS_CONTROL                    0x6  /* HSW+ */
 #define OP_MI_REPORT_HEAD                   0x7
 #define OP_MI_ARB_ON_OFF                    0x8
+#define OP_MI_URB_ATOMIC_ALLOC              0x9  /* HSW+ */
 #define OP_MI_BATCH_BUFFER_END              0xA
 #define OP_MI_SUSPEND_FLUSH                 0xB
 #define OP_MI_PREDICATE                     0xC  /* IVB+ */
 #define OP_MI_TOPOLOGY_FILTER               0xD  /* IVB+ */
 #define OP_MI_SET_APPID                     0xE  /* IVB+ */
+#define OP_MI_RS_CONTEXT                    0xF  /* HSW+ */
 #define OP_MI_DISPLAY_FLIP                  0x14
 #define OP_MI_SEMAPHORE_MBOX                0x16
 #define OP_MI_SET_CONTEXT                   0x18
@@ -107,7 +110,11 @@ struct decode_info{
 #define OP_MI_FLUSH_DW                      0x26
 #define OP_MI_CLFLUSH                       0x27
 #define OP_MI_REPORT_PERF_COUNT             0x28
-#define OP_MI_LOAD_REGISTER_MEM             0x29
+#define OP_MI_LOAD_REGISTER_MEM             0x29  /* HSW+ */
+#define OP_MI_LOAD_REGISTER_REG             0x2A  /* HSW+ */
+#define OP_MI_RS_STORE_DATA_IMM             0x2B  /* HSW+ */
+#define OP_MI_LOAD_URB_MEM                  0x2C  /* HSW+ */
+#define OP_MI_STORE_URM_MEM                 0x2D  /* HSW+ */
 #define OP_MI_BATCH_BUFFER_START            0x31
 #define OP_MI_CONDITIONAL_BATCH_BUFFER_END  0x36
 

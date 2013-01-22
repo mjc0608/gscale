@@ -1003,6 +1003,8 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 #define D_HSW	(1 << 2)
 #define D_GEN7PLUS (D_IVB | D_HSW)
 #define D_GEN75PLUS (D_HSW)
+#define D_HSW_PLUS  (D_HSW)
+#define D_IVB_PLUS  (D_IVB | D_HSW)
 #define D_ALL	(D_SNB | D_IVB | D_HSW)
 
 typedef struct {
