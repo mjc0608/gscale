@@ -81,168 +81,169 @@ struct decode_info{
 /* Render Command Map */
 
 /* MI_* command Opcode (28:23) */
-#define OP_MI_NOOP					0x0
-#define OP_MI_USER_INTERRUPT		0x2
-#define OP_MI_WAIT_FOR_EVENT		0x3
-#define OP_MI_FLUSH				0x4
-#define OP_MI_ARB_CHECK			0x5
-#define OP_MI_REPORT_HEAD			0x7
-#define OP_MI_ARB_ON_OFF			0x8
-#define OP_MI_BATCH_BUFFER_END		0xA
-#define OP_MI_SUSPEND_FLUSH		0xB
-#define OP_MI_PREDICATE         0xC  /* IVB+ */
-#define OP_MI_TOPOLOGY_FILTER   0xD  /* IVB+ */
-#define OP_MI_SET_APPID         0xE  /* IVB+ */
-#define OP_MI_DISPLAY_FLIP			0x14
-#define OP_MI_SEMAPHORE_MBOX		0x16
-#define OP_MI_SET_CONTEXT			0x18
-#define OP_MI_MATH					0x1A
-#define OP_MI_URB_CLEAR				0x19
+#define OP_MI_NOOP                          0x0
+#define OP_MI_USER_INTERRUPT                0x2
+#define OP_MI_WAIT_FOR_EVENT                0x3
+#define OP_MI_FLUSH                         0x4
+#define OP_MI_ARB_CHECK                     0x5
+#define OP_MI_REPORT_HEAD                   0x7
+#define OP_MI_ARB_ON_OFF                    0x8
+#define OP_MI_BATCH_BUFFER_END              0xA
+#define OP_MI_SUSPEND_FLUSH                 0xB
+#define OP_MI_PREDICATE                     0xC  /* IVB+ */
+#define OP_MI_TOPOLOGY_FILTER               0xD  /* IVB+ */
+#define OP_MI_SET_APPID                     0xE  /* IVB+ */
+#define OP_MI_DISPLAY_FLIP                  0x14
+#define OP_MI_SEMAPHORE_MBOX                0x16
+#define OP_MI_SET_CONTEXT                   0x18
+#define OP_MI_MATH                          0x1A
+#define OP_MI_URB_CLEAR                     0x19
 
-#define OP_MI_STORE_DATA_IMM		0x20
-#define OP_MI_STORE_DATA_INDEX		0x21
-#define OP_MI_LOAD_REGISTER_IMM	0x22
-#define OP_MI_UPDATE_GTT			0x23
-#define OP_MI_STORE_REGISTER_MEM	0x24
-#define OP_MI_FLUSH_DW				0x26
-#define OP_MI_CLFLUSH				0x27
-#define OP_MI_REPORT_PERF_COUNT	0x28
-#define OP_MI_LOAD_REGISTER_MEM     0x29
-#define OP_MI_BATCH_BUFFER_START	0x31
-#define OP_MI_CONDITIONAL_BATCH_BUFFER_END	0x36
+#define OP_MI_STORE_DATA_IMM                0x20
+#define OP_MI_STORE_DATA_INDEX              0x21
+#define OP_MI_LOAD_REGISTER_IMM             0x22
+#define OP_MI_UPDATE_GTT                    0x23
+#define OP_MI_STORE_REGISTER_MEM            0x24
+#define OP_MI_FLUSH_DW                      0x26
+#define OP_MI_CLFLUSH                       0x27
+#define OP_MI_REPORT_PERF_COUNT             0x28
+#define OP_MI_LOAD_REGISTER_MEM             0x29
+#define OP_MI_BATCH_BUFFER_START            0x31
+#define OP_MI_CONDITIONAL_BATCH_BUFFER_END  0x36
 
 /* 2D command: Opcode (28:22) */
 #define OP_2D(x)    ((2<<7) | x)
-#define OP_XY_SETUP_BLT  OP_2D(0x1)
-#define OP_XY_SETUP_CLIP_BLT    OP_2D(0x3)
-#define OP_XY_SETUP_MONO_PATTERN_SL_BLT	OP_2D(0x11)
-#define OP_XY_PIXEL_BLT    OP_2D(0x24)
-#define OP_XY_SCANLINES_BLT    OP_2D(0x25)
-#define OP_XY_TEXT_BLT    OP_2D(0x26)
-#define OP_XY_TEXT_IMMEDIATE_BLT    OP_2D(0x31)
-#define OP_COLOR_BLT    OP_2D(0x40)
-#define OP_SRC_COPY_BLT    OP_2D(0x43)
-#define OP_XY_COLOR_BLT    OP_2D(0x50)
-#define OP_XY_PAT_BLT    OP_2D(0x51)
-#define OP_XY_MONO_PAT_BLT    OP_2D(0x52)
-#define OP_XY_SRC_COPY_BLT    OP_2D(0x53)
-#define OP_XY_MONO_SRC_COPY_BLT    OP_2D(0x54)
-#define OP_XY_FULL_BLT    OP_2D(0x55)
-#define OP_XY_FULL_MONO_SRC_BLT    OP_2D(0x56)
-#define OP_XY_FULL_MONO_PATTERN_BLT    OP_2D(0x57)
-#define OP_XY_FULL_MONO_PATTERN_MONO_SRC_BLT	OP_2D(0x58)
-#define OP_XY_MONO_PAT_FIXED_BLT    OP_2D(0x59)
-#define OP_XY_MONO_SRC_COPY_IMMEDIATE_BLT	OP_2D(0x71)
-#define OP_XY_PAT_BLT_IMMEDIATE    OP_2D(0x72)
-#define OP_XY_SRC_COPY_CHROMA_BLT    OP_2D(0x73)
-#define OP_XY_FULL_IMMEDIATE_PATTERN_BLT    OP_2D(0x74)
-#define OP_XY_FULL_MONO_SRC_IMMEDIATE_PATTERN_BLT    OP_2D(0x75)
-#define OP_XY_PAT_CHROMA_BLT    OP_2D(0x76)
-#define OP_XY_PAT_CHROMA_BLT_IMMEDIATE    OP_2D(0x77)
+
+#define OP_XY_SETUP_BLT                             OP_2D(0x1)
+#define OP_XY_SETUP_CLIP_BLT                        OP_2D(0x3)
+#define OP_XY_SETUP_MONO_PATTERN_SL_BLT             OP_2D(0x11)
+#define OP_XY_PIXEL_BLT                             OP_2D(0x24)
+#define OP_XY_SCANLINES_BLT                         OP_2D(0x25)
+#define OP_XY_TEXT_BLT                              OP_2D(0x26)
+#define OP_XY_TEXT_IMMEDIATE_BLT                    OP_2D(0x31)
+#define OP_COLOR_BLT                                OP_2D(0x40)
+#define OP_SRC_COPY_BLT                             OP_2D(0x43)
+#define OP_XY_COLOR_BLT                             OP_2D(0x50)
+#define OP_XY_PAT_BLT                               OP_2D(0x51)
+#define OP_XY_MONO_PAT_BLT                          OP_2D(0x52)
+#define OP_XY_SRC_COPY_BLT                          OP_2D(0x53)
+#define OP_XY_MONO_SRC_COPY_BLT                     OP_2D(0x54)
+#define OP_XY_FULL_BLT                              OP_2D(0x55)
+#define OP_XY_FULL_MONO_SRC_BLT                     OP_2D(0x56)
+#define OP_XY_FULL_MONO_PATTERN_BLT                 OP_2D(0x57)
+#define OP_XY_FULL_MONO_PATTERN_MONO_SRC_BLT        OP_2D(0x58)
+#define OP_XY_MONO_PAT_FIXED_BLT                    OP_2D(0x59)
+#define OP_XY_MONO_SRC_COPY_IMMEDIATE_BLT           OP_2D(0x71)
+#define OP_XY_PAT_BLT_IMMEDIATE                     OP_2D(0x72)
+#define OP_XY_SRC_COPY_CHROMA_BLT                   OP_2D(0x73)
+#define OP_XY_FULL_IMMEDIATE_PATTERN_BLT            OP_2D(0x74)
+#define OP_XY_FULL_MONO_SRC_IMMEDIATE_PATTERN_BLT   OP_2D(0x75)
+#define OP_XY_PAT_CHROMA_BLT                        OP_2D(0x76)
+#define OP_XY_PAT_CHROMA_BLT_IMMEDIATE              OP_2D(0x77)
 
 /* 3D/Media Command: Pipeline Type(28:27) Opcode(26:24) Sub Opcode(23:16) */
-/* macro can not begin with number, so add prefix _ */
-#define OP_3D_MEDIA(sub_type, opcode, sub_opcode) ( (3<<13) | ((sub_type)<<11) | ((opcode) <<8) | (sub_opcode))
+#define OP_3D_MEDIA(sub_type, opcode, sub_opcode) \
+	( (3<<13) | ((sub_type)<<11) | ((opcode) <<8) | (sub_opcode))
 
-#define OP_STATE_PREFETCH					OP_3D_MEDIA(0x0, 0x0, 0x03)
+#define OP_STATE_PREFETCH                       OP_3D_MEDIA(0x0, 0x0, 0x03)
 
-#define OP_STATE_BASE_ADDRESS				OP_3D_MEDIA(0x0, 0x1, 0x01)
-#define OP_STATE_SIP						OP_3D_MEDIA(0x0, 0x1, 0x02)
+#define OP_STATE_BASE_ADDRESS                   OP_3D_MEDIA(0x0, 0x1, 0x01)
+#define OP_STATE_SIP                            OP_3D_MEDIA(0x0, 0x1, 0x02)
 
-#define OP_3DSTATE_VF_STATISTICS_GM45		OP_3D_MEDIA(0x1, 0x0, 0x0B)
+#define OP_3DSTATE_VF_STATISTICS_GM45           OP_3D_MEDIA(0x1, 0x0, 0x0B)
 
-#define OP_PIPELINE_SELECT					OP_3D_MEDIA(0x1, 0x1, 0x04)
+#define OP_PIPELINE_SELECT                      OP_3D_MEDIA(0x1, 0x1, 0x04)
 
-#define OP_MEDIA_VFE_STATE					OP_3D_MEDIA( 0x2, 0x0, 0x0)
-#define OP_MEDIA_CURBE_LOAD					OP_3D_MEDIA( 0x2, 0x0, 0x1)
-#define OP_MEDIA_INTERFACE_DESCRIPTOR_LOAD	OP_3D_MEDIA( 0x2, 0x0, 0x2)
-#define OP_MEDIA_GATEWAY_STATE				OP_3D_MEDIA( 0x2, 0x0, 0x3)
-#define OP_MEDIA_STATE_FLUSH				OP_3D_MEDIA( 0x2, 0x0, 0x4)
+#define OP_MEDIA_VFE_STATE                      OP_3D_MEDIA( 0x2, 0x0, 0x0)
+#define OP_MEDIA_CURBE_LOAD                     OP_3D_MEDIA( 0x2, 0x0, 0x1)
+#define OP_MEDIA_INTERFACE_DESCRIPTOR_LOAD      OP_3D_MEDIA( 0x2, 0x0, 0x2)
+#define OP_MEDIA_GATEWAY_STATE                  OP_3D_MEDIA( 0x2, 0x0, 0x3)
+#define OP_MEDIA_STATE_FLUSH                    OP_3D_MEDIA( 0x2, 0x0, 0x4)
 
-#define OP_MEDIA_OBJECT					OP_3D_MEDIA( 0x2, 0x1, 0x0)
-#define OP_MEDIA_OBJECT_PRT				OP_3D_MEDIA( 0x2, 0x1, 0x2)
-#define OP_MEDIA_OBJECT_WALKER				OP_3D_MEDIA( 0x2, 0x1, 0x3)
+#define OP_MEDIA_OBJECT                         OP_3D_MEDIA( 0x2, 0x1, 0x0)
+#define OP_MEDIA_OBJECT_PRT                     OP_3D_MEDIA( 0x2, 0x1, 0x2)
+#define OP_MEDIA_OBJECT_WALKER                  OP_3D_MEDIA( 0x2, 0x1, 0x3)
 
-#define OP_3DSTATE_BINDING_TABLE_POINTERS	OP_3D_MEDIA(0x3, 0x0, 0x01)
-#define OP_3DSTATE_SAMPLER_STATE_POINTERS	OP_3D_MEDIA(0x3, 0x0, 0x02)
-#define OP_GEN7_3DSTATE_CLEAR_PARAMS		OP_3D_MEDIA(0x3, 0x0, 0x04) /* IVB+ */
-#define OP_GEN7_3DSTATE_DEPTH_BUFFER		OP_3D_MEDIA(0x3, 0x0, 0x05) /* IVB+ */
-#define OP_3DSTATE_URB					OP_3D_MEDIA(0x3, 0x0, 0x05)
-#define OP_GEN7_3DSTATE_STENCIL_BUFFER		OP_3D_MEDIA(0x3, 0x0, 0x06) /* IVB+ */
-#define OP_GEN7_3DSTATE_HIER_DEPTH_BUFFER	OP_3D_MEDIA(0x3, 0x0, 0x07) /* IVB+ */
-#define OP_3DSTATE_VERTEX_BUFFERS			OP_3D_MEDIA(0x3, 0x0, 0x08)
-#define OP_3DSTATE_VERTEX_ELEMENTS		OP_3D_MEDIA(0x3, 0x0, 0x09)
-#define OP_3DSTATE_INDEX_BUFFER			OP_3D_MEDIA(0x3, 0x0, 0x0A)
-#define OP_3DSTATE_VF_STATISTICS			OP_3D_MEDIA(0x3, 0x0, 0x0B)
-#define OP_3DSTATE_VF					OP_3D_MEDIA(0x3, 0x0, 0x0C)  /* HSW+ */
-#define OP_3DSTATE_VIEWPORT_STATE_POINTERS	OP_3D_MEDIA(0x3, 0x0, 0x0D)
-#define OP_3DSTATE_CC_STATE_POINTERS		OP_3D_MEDIA( 0x3 ,0x0, 0x0E )
-#define OP_3DSTATE_SCISSOR_STATE_POINTERS	OP_3D_MEDIA( 0x3 ,0x0, 0x0F )
-#define OP_3DSTATE_VS						OP_3D_MEDIA( 0x3 ,0x0, 0x10)
-#define OP_3DSTATE_GS						OP_3D_MEDIA( 0x3 ,0x0, 0x11 )
-#define OP_3DSTATE_CLIP					OP_3D_MEDIA( 0x3 ,0x0, 0x12 )
-#define OP_3DSTATE_SF						OP_3D_MEDIA( 0x3 ,0x0, 0x13)
-#define OP_3DSTATE_WM						OP_3D_MEDIA( 0x3 ,0x0, 0x14 )
-#define OP_3DSTATE_CONSTANT_VS			OP_3D_MEDIA( 0x3 ,0x0, 0x15)
-#define OP_3DSTATE_CONSTANT_GS			OP_3D_MEDIA( 0x3 ,0x0, 0x16 )
-#define OP_3DSTATE_CONSTANT_PS			OP_3D_MEDIA( 0x3 ,0x0, 0x17 )
-#define OP_3DSTATE_SAMPLE_MASK			OP_3D_MEDIA( 0x3 ,0x0, 0x18 )
-#define OP_3DSTATE_CONSTANT_HS			OP_3D_MEDIA( 0x3 ,0x0, 0x19 ) /* IVB+ */
-#define OP_3DSTATE_CONSTANT_DS			OP_3D_MEDIA( 0x3 ,0x0, 0x1A ) /* IVB+ */
-#define OP_3DSTATE_HS					OP_3D_MEDIA( 0x3 ,0x0, 0x1B ) /* IVB+ */
-#define OP_3DSTATE_TE					OP_3D_MEDIA( 0x3 ,0x0, 0x1C ) /* IVB+ */
-#define OP_3DSTATE_DS					OP_3D_MEDIA( 0x3 ,0x0, 0x1D ) /* IVB+ */
-#define OP_3DSTATE_STREAMOUT			OP_3D_MEDIA( 0x3 ,0x0, 0x1E ) /* IVB+ */
-#define OP_3DSTATE_SBE					OP_3D_MEDIA( 0x3 ,0x0, 0x1F ) /* IVB+ */
-#define OP_3DSTATE_PS					OP_3D_MEDIA( 0x3 ,0x0, 0x20 ) /* IVB+ */
+#define OP_3DSTATE_BINDING_TABLE_POINTERS       OP_3D_MEDIA(0x3, 0x0, 0x01)
+#define OP_3DSTATE_SAMPLER_STATE_POINTERS       OP_3D_MEDIA(0x3, 0x0, 0x02)
+#define OP_GEN7_3DSTATE_CLEAR_PARAMS            OP_3D_MEDIA(0x3, 0x0, 0x04) /* IVB+ */
+#define OP_GEN7_3DSTATE_DEPTH_BUFFER            OP_3D_MEDIA(0x3, 0x0, 0x05) /* IVB+ */
+#define OP_3DSTATE_URB                          OP_3D_MEDIA(0x3, 0x0, 0x05)
+#define OP_GEN7_3DSTATE_STENCIL_BUFFER          OP_3D_MEDIA(0x3, 0x0, 0x06) /* IVB+ */
+#define OP_GEN7_3DSTATE_HIER_DEPTH_BUFFER       OP_3D_MEDIA(0x3, 0x0, 0x07) /* IVB+ */
+#define OP_3DSTATE_VERTEX_BUFFERS               OP_3D_MEDIA(0x3, 0x0, 0x08)
+#define OP_3DSTATE_VERTEX_ELEMENTS              OP_3D_MEDIA(0x3, 0x0, 0x09)
+#define OP_3DSTATE_INDEX_BUFFER                 OP_3D_MEDIA(0x3, 0x0, 0x0A)
+#define OP_3DSTATE_VF_STATISTICS                OP_3D_MEDIA(0x3, 0x0, 0x0B)
+#define OP_3DSTATE_VF                           OP_3D_MEDIA(0x3, 0x0, 0x0C)  /* HSW+ */
+#define OP_3DSTATE_VIEWPORT_STATE_POINTERS      OP_3D_MEDIA(0x3, 0x0, 0x0D)
+#define OP_3DSTATE_CC_STATE_POINTERS            OP_3D_MEDIA( 0x3 ,0x0, 0x0E )
+#define OP_3DSTATE_SCISSOR_STATE_POINTERS       OP_3D_MEDIA( 0x3 ,0x0, 0x0F )
+#define OP_3DSTATE_VS                           OP_3D_MEDIA( 0x3 ,0x0, 0x10)
+#define OP_3DSTATE_GS                           OP_3D_MEDIA( 0x3 ,0x0, 0x11 )
+#define OP_3DSTATE_CLIP                         OP_3D_MEDIA( 0x3 ,0x0, 0x12 )
+#define OP_3DSTATE_SF                           OP_3D_MEDIA( 0x3 ,0x0, 0x13)
+#define OP_3DSTATE_WM                           OP_3D_MEDIA( 0x3 ,0x0, 0x14 )
+#define OP_3DSTATE_CONSTANT_VS                  OP_3D_MEDIA( 0x3 ,0x0, 0x15)
+#define OP_3DSTATE_CONSTANT_GS                  OP_3D_MEDIA( 0x3 ,0x0, 0x16 )
+#define OP_3DSTATE_CONSTANT_PS                  OP_3D_MEDIA( 0x3 ,0x0, 0x17 )
+#define OP_3DSTATE_SAMPLE_MASK                  OP_3D_MEDIA( 0x3 ,0x0, 0x18 )
+#define OP_3DSTATE_CONSTANT_HS                  OP_3D_MEDIA( 0x3 ,0x0, 0x19 ) /* IVB+ */
+#define OP_3DSTATE_CONSTANT_DS                  OP_3D_MEDIA( 0x3 ,0x0, 0x1A ) /* IVB+ */
+#define OP_3DSTATE_HS                           OP_3D_MEDIA( 0x3 ,0x0, 0x1B ) /* IVB+ */
+#define OP_3DSTATE_TE                           OP_3D_MEDIA( 0x3 ,0x0, 0x1C ) /* IVB+ */
+#define OP_3DSTATE_DS                           OP_3D_MEDIA( 0x3 ,0x0, 0x1D ) /* IVB+ */
+#define OP_3DSTATE_STREAMOUT                    OP_3D_MEDIA( 0x3 ,0x0, 0x1E ) /* IVB+ */
+#define OP_3DSTATE_SBE                          OP_3D_MEDIA( 0x3 ,0x0, 0x1F ) /* IVB+ */
+#define OP_3DSTATE_PS                           OP_3D_MEDIA( 0x3 ,0x0, 0x20 ) /* IVB+ */
 #define OP_3DSTATE_VIEWPORT_STATE_POINTERS_SF_CLIP OP_3D_MEDIA(0x3, 0x0, 0x21) /* IVB+ */
-#define OP_3DSTATE_VIEWPORT_STATE_POINTERS_CC	OP_3D_MEDIA(0x3, 0x0, 0x23) /* IVB+ */
-#define OP_3DSTATE_BLEND_STATE_POINTERS			OP_3D_MEDIA(0x3, 0x0, 0x24) /* IVB+ */
+#define OP_3DSTATE_VIEWPORT_STATE_POINTERS_CC   OP_3D_MEDIA(0x3, 0x0, 0x23) /* IVB+ */
+#define OP_3DSTATE_BLEND_STATE_POINTERS         OP_3D_MEDIA(0x3, 0x0, 0x24) /* IVB+ */
 #define OP_3DSTATE_DEPTH_STENCIL_STATE_POINTERS OP_3D_MEDIA(0x3, 0x0, 0x25) /* IVB+ */
-#define OP_3DSTATE_BINDING_TABLE_POINTERS_VS	OP_3D_MEDIA(0x3, 0x0, 0x26) /* IVB+ */
-#define OP_3DSTATE_BINDING_TABLE_POINTERS_HS	OP_3D_MEDIA(0x3, 0x0, 0x27) /* IVB+ */
-#define OP_3DSTATE_BINDING_TABLE_POINTERS_DS	OP_3D_MEDIA(0x3, 0x0, 0x28) /* IVB+ */
-#define OP_3DSTATE_BINDING_TABLE_POINTERS_GS	OP_3D_MEDIA(0x3, 0x0, 0x29) /* IVB+ */
-#define OP_3DSTATE_BINDING_TABLE_POINTERS_PS	OP_3D_MEDIA(0x3, 0x0, 0x2A) /* IVB+ */
+#define OP_3DSTATE_BINDING_TABLE_POINTERS_VS    OP_3D_MEDIA(0x3, 0x0, 0x26) /* IVB+ */
+#define OP_3DSTATE_BINDING_TABLE_POINTERS_HS    OP_3D_MEDIA(0x3, 0x0, 0x27) /* IVB+ */
+#define OP_3DSTATE_BINDING_TABLE_POINTERS_DS    OP_3D_MEDIA(0x3, 0x0, 0x28) /* IVB+ */
+#define OP_3DSTATE_BINDING_TABLE_POINTERS_GS    OP_3D_MEDIA(0x3, 0x0, 0x29) /* IVB+ */
+#define OP_3DSTATE_BINDING_TABLE_POINTERS_PS    OP_3D_MEDIA(0x3, 0x0, 0x2A) /* IVB+ */
 #define OP_3DSTATE_SAMPLER_STATE_POINTERS_VS    OP_3D_MEDIA(0x3, 0x0, 0x2B) /* IVB+ */
 #define OP_3DSTATE_SAMPLER_STATE_POINTERS_GS    OP_3D_MEDIA(0x3, 0x0, 0x2E) /* IVB+ */
 #define OP_3DSTATE_SAMPLER_STATE_POINTERS_PS    OP_3D_MEDIA(0x3, 0x0, 0x2F) /* IVB+ */
-#define OP_3DSTATE_URB_VS		OP_3D_MEDIA(0x3, 0x0, 0x30) /* IVB+ */
-#define OP_3DSTATE_URB_HS		OP_3D_MEDIA(0x3, 0x0, 0x31) /* IVB+ */
-#define OP_3DSTATE_URB_DS		OP_3D_MEDIA(0x3, 0x0, 0x32) /* IVB+ */
-#define OP_3DSTATE_URB_GS		OP_3D_MEDIA(0x3, 0x0, 0x33) /* IVB+ */
+#define OP_3DSTATE_URB_VS                       OP_3D_MEDIA(0x3, 0x0, 0x30) /* IVB+ */
+#define OP_3DSTATE_URB_HS                       OP_3D_MEDIA(0x3, 0x0, 0x31) /* IVB+ */
+#define OP_3DSTATE_URB_DS                       OP_3D_MEDIA(0x3, 0x0, 0x32) /* IVB+ */
+#define OP_3DSTATE_URB_GS                       OP_3D_MEDIA(0x3, 0x0, 0x33) /* IVB+ */
 
-#define OP_3DSTATE_DRAWING_RECTANGLE		OP_3D_MEDIA( 0x3 ,0x1, 0x00 )
-#define OP_3DSTATE_SAMPLER_PALETTE_LOAD0	OP_3D_MEDIA( 0x3 ,0x1, 0x02 )
-#define OP_3DSTATE_CHROMA_KEY				OP_3D_MEDIA( 0x3 ,0x1, 0x04 )
-#define OP_3DSTATE_DEPTH_BUFFER			OP_3D_MEDIA( 0x3 ,0x1, 0x05 )
-#define OP_3DSTATE_POLY_STIPPLE_OFFSET	OP_3D_MEDIA( 0x3 ,0x1, 0x06 )
-#define OP_3DSTATE_POLY_STIPPLE_PATTERN	OP_3D_MEDIA( 0x3 ,0x1, 0x07 )
-#define OP_3DSTATE_LINE_STIPPLE			OP_3D_MEDIA( 0x3 ,0x1, 0x08 )
-#define OP_3DSTATE_AA_LINE_PARAMS			OP_3D_MEDIA( 0x3 ,0x1, 0x0A )
-#define OP_3DSTATE_GS_SVB_INDEX			OP_3D_MEDIA( 0x3 ,0x1, 0x0B )
-#define OP_3DSTATE_SAMPLER_PALETTE_LOAD1	OP_3D_MEDIA( 0x3 ,0x1, 0x0C )
-#define OP_3DSTATE_MULTISAMPLE			OP_3D_MEDIA( 0x3 ,0x1, 0x0D )
-#define OP_3DSTATE_STENCIL_BUFFER			OP_3D_MEDIA( 0x3 ,0x1, 0x0E )
-#define OP_3DSTATE_HIER_DEPTH_BUFFER		OP_3D_MEDIA( 0x3 ,0x1, 0x0F )
-#define OP_3DSTATE_CLEAR_PARAMS			OP_3D_MEDIA( 0x3 ,0x1, 0x10 )
-#define OP_3DSTATE_MONOFILTER_SIZE		OP_3D_MEDIA( 0x3 ,0x1, 0x11 )
-#define OP_3DSTATE_PUSH_CONSTANT_ALLOC_VS	OP_3D_MEDIA(0x3, 0x1, 0x12) /* IVB+ */
-#define OP_3DSTATE_PUSH_CONSTANT_ALLOC_HS	OP_3D_MEDIA(0x3, 0x1, 0x13) /* IVB+ */
-#define OP_3DSTATE_PUSH_CONSTANT_ALLOC_DS	OP_3D_MEDIA(0x3, 0x1, 0x14) /* IVB+ */
-#define OP_3DSTATE_PUSH_CONSTANT_ALLOC_GS	OP_3D_MEDIA(0x3, 0x1, 0x15) /* IVB+ */
-#define OP_3DSTATE_PUSH_CONSTANT_ALLOC_PS	OP_3D_MEDIA(0x3, 0x1, 0x16) /* IVB+ */
-#define OP_3DSTATE_SO_DECL_LIST			OP_3D_MEDIA( 0x3 ,0x1, 0x17 )
-#define OP_3DSTATE_SO_BUFFER				OP_3D_MEDIA( 0x3 ,0x1, 0x18 )
-#define OP_3DSTATE_BINDING_TABLE_POOL_ALLOC OP_3D_MEDIA( 0x3 ,0x1, 0x19 ) /* HSW+ */
-#define OP_3DSTATE_GATHER_POOL_ALLOC		OP_3D_MEDIA( 0x3 ,0x1, 0x1A ) /* HSW+ */
+#define OP_3DSTATE_DRAWING_RECTANGLE            OP_3D_MEDIA( 0x3 ,0x1, 0x00 )
+#define OP_3DSTATE_SAMPLER_PALETTE_LOAD0        OP_3D_MEDIA( 0x3 ,0x1, 0x02 )
+#define OP_3DSTATE_CHROMA_KEY                   OP_3D_MEDIA( 0x3 ,0x1, 0x04 )
+#define OP_3DSTATE_DEPTH_BUFFER                 OP_3D_MEDIA( 0x3 ,0x1, 0x05 )
+#define OP_3DSTATE_POLY_STIPPLE_OFFSET          OP_3D_MEDIA( 0x3 ,0x1, 0x06 )
+#define OP_3DSTATE_POLY_STIPPLE_PATTERN         OP_3D_MEDIA( 0x3 ,0x1, 0x07 )
+#define OP_3DSTATE_LINE_STIPPLE                 OP_3D_MEDIA( 0x3 ,0x1, 0x08 )
+#define OP_3DSTATE_AA_LINE_PARAMS               OP_3D_MEDIA( 0x3 ,0x1, 0x0A )
+#define OP_3DSTATE_GS_SVB_INDEX                 OP_3D_MEDIA( 0x3 ,0x1, 0x0B )
+#define OP_3DSTATE_SAMPLER_PALETTE_LOAD1        OP_3D_MEDIA( 0x3 ,0x1, 0x0C )
+#define OP_3DSTATE_MULTISAMPLE                  OP_3D_MEDIA( 0x3 ,0x1, 0x0D )
+#define OP_3DSTATE_STENCIL_BUFFER               OP_3D_MEDIA( 0x3 ,0x1, 0x0E )
+#define OP_3DSTATE_HIER_DEPTH_BUFFER            OP_3D_MEDIA( 0x3 ,0x1, 0x0F )
+#define OP_3DSTATE_CLEAR_PARAMS                 OP_3D_MEDIA( 0x3 ,0x1, 0x10 )
+#define OP_3DSTATE_MONOFILTER_SIZE              OP_3D_MEDIA( 0x3 ,0x1, 0x11 )
+#define OP_3DSTATE_PUSH_CONSTANT_ALLOC_VS       OP_3D_MEDIA(0x3, 0x1, 0x12) /* IVB+ */
+#define OP_3DSTATE_PUSH_CONSTANT_ALLOC_HS       OP_3D_MEDIA(0x3, 0x1, 0x13) /* IVB+ */
+#define OP_3DSTATE_PUSH_CONSTANT_ALLOC_DS       OP_3D_MEDIA(0x3, 0x1, 0x14) /* IVB+ */
+#define OP_3DSTATE_PUSH_CONSTANT_ALLOC_GS       OP_3D_MEDIA(0x3, 0x1, 0x15) /* IVB+ */
+#define OP_3DSTATE_PUSH_CONSTANT_ALLOC_PS       OP_3D_MEDIA(0x3, 0x1, 0x16) /* IVB+ */
+#define OP_3DSTATE_SO_DECL_LIST                 OP_3D_MEDIA( 0x3 ,0x1, 0x17 )
+#define OP_3DSTATE_SO_BUFFER                    OP_3D_MEDIA( 0x3 ,0x1, 0x18 )
+#define OP_3DSTATE_BINDING_TABLE_POOL_ALLOC     OP_3D_MEDIA( 0x3 ,0x1, 0x19 ) /* HSW+ */
+#define OP_3DSTATE_GATHER_POOL_ALLOC            OP_3D_MEDIA( 0x3 ,0x1, 0x1A ) /* HSW+ */
 #define OP_3DSTATE_DX9_CONSTANT_BUFFER_POOL_ALLOC OP_3D_MEDIA( 0x3 ,0x1, 0x1B ) /* HSW+ */
-#define OP_3DSTATE_SAMPLE_PATTERN			OP_3D_MEDIA (0x3 ,0x1, 0x1C )
-#define OP_3DSTATE_URB_CLEAR				OP_3D_MEDIA (0x3 ,0x1, 0x1D )
+#define OP_3DSTATE_SAMPLE_PATTERN               OP_3D_MEDIA (0x3 ,0x1, 0x1C )
+#define OP_3DSTATE_URB_CLEAR                    OP_3D_MEDIA (0x3 ,0x1, 0x1D )
 
-#define OP_PIPE_CONTROL					OP_3D_MEDIA( 0x3 ,0x2, 0x00 )
+#define OP_PIPE_CONTROL                         OP_3D_MEDIA( 0x3 ,0x2, 0x00 )
 
-#define OP_3DPRIMITIVE					OP_3D_MEDIA( 0x3 ,0x3, 0x00 )
+#define OP_3DPRIMITIVE                          OP_3D_MEDIA( 0x3 ,0x3, 0x00 )
 
 /* VCCP Command Parser */
 
@@ -333,14 +334,14 @@ struct parser_exec_state;
 
 typedef int (*parser_cmd_handler)(struct parser_exec_state *s);
 
-#define VGT_CMD_HASH_BITS	7
+#define VGT_CMD_HASH_BITS   7
 
 /* which DWords need address fix */
-#define ADDR_FIX_1(x1)	(1<<(x1))
-#define ADDR_FIX_2(x1,x2)	(ADDR_FIX_1(x1) | ADDR_FIX_1(x2))
-#define ADDR_FIX_3(x1,x2,x3)	(ADDR_FIX_1(x1) | ADDR_FIX_2(x2,x3))
-#define ADDR_FIX_4(x1,x2,x3,x4)	( ADDR_FIX_1(x1) | ADDR_FIX_3(x2,x3,x4))
-#define ADDR_FIX_5(x1,x2,x3,x4,x5)  (ADDR_FIX_1(x1) | ADDR_FIX_4(x2,x3,x4,x5))
+#define ADDR_FIX_1(x1)                  (1<<(x1))
+#define ADDR_FIX_2(x1,x2)               (ADDR_FIX_1(x1) | ADDR_FIX_1(x2))
+#define ADDR_FIX_3(x1,x2,x3)            (ADDR_FIX_1(x1) | ADDR_FIX_2(x2,x3))
+#define ADDR_FIX_4(x1,x2,x3,x4)         (ADDR_FIX_1(x1) | ADDR_FIX_3(x2,x3,x4))
+#define ADDR_FIX_5(x1,x2,x3,x4,x5)      (ADDR_FIX_1(x1) | ADDR_FIX_4(x2,x3,x4,x5))
 
 struct cmd_info{
 	char* name;
