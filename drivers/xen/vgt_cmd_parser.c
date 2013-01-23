@@ -270,7 +270,8 @@ static inline uint32_t cmd_val(struct parser_exec_state *s, int index)
 
 static void parser_exec_state_dump(struct parser_exec_state *s)
 {
-	printk(KERN_ERR"  RING%d: ring_start(%08lx) ring_end(%08lx) ring_head(%08lx) ring_tail(%08lx)\n",
+	printk(KERN_ERR"  vgt%d RING%d: ring_start(%08lx) ring_end(%08lx)"
+			" ring_head(%08lx) ring_tail(%08lx)\n", s->vgt->vgt_id,
 			s->ring_id, s->ring_start, s->ring_start + s->ring_size, s->ring_head, s->ring_tail);
 
 	printk(KERN_ERR"  %s %s ip_gma(%08lx) ",
@@ -360,6 +361,22 @@ static inline int cmd_length(struct parser_exec_state *s)
 	else /* F_LEN_VAR */{
 		return (cmd_val(s,0) & ( (1U << s->info->len) - 1)) + 2;
 	}
+}
+
+/* vgt use bit 20 to detect buffer reuse
+   Assumption: Linux/Windows guest will not set this bit
+ */
+#define VGT_NOOP_ID_MASK	(1U << 20)
+
+static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
+{
+	if (cmd_val(s,0) & VGT_NOOP_ID_MASK){
+		printk(KERN_ERR "WANRING: Guest reuse cmd buffer! Need ");
+		parser_exec_state_dump(s);
+		return -EFAULT;
+	}
+
+	return 0;
 }
 
 static int vgt_cmd_advance_default(struct parser_exec_state *s)
@@ -626,7 +643,7 @@ static int vgt_cmd_handler_mfx_crypto_copy_base_addr(struct parser_exec_state *s
 
 #endif
 static struct cmd_info cmd_info[] = {
-	{"MI_NOOP", OP_MI_NOOP, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
+	{"MI_NOOP", OP_MI_NOOP, F_LEN_CONST, R_ALL, D_ALL, 0, 1, vgt_cmd_handler_mi_noop},
 
 	{"MI_USER_INTERRUPT", OP_MI_USER_INTERRUPT, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
 
