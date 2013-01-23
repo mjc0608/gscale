@@ -842,6 +842,7 @@ static void vgt_check_pending_events(struct vgt_device *vgt)
 	    (__vreg(vgt, _REG_PMIIR) & __vreg(vgt, _REG_PMIER))) {
 		dprintk("vGT-IRQ: catch pending iir\n");
 		vgt_set_irq_pending(vgt);
+		vgt->stat.pending_events++;
 		vgt_inject_virtual_interrupt(vgt);
 	}
 }
@@ -1472,7 +1473,10 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 			return;
 		}
 
-		dev->stat.events[entry->event]++;
+		if (physical) {
+			dev->stat.events[entry->event]++;
+		}
+
 #ifndef VGT_IRQ_DEFAULT_HANDLER
 		if (unlikely(!entry->event_handler)) {
 			VGT_IRQ_WARN(info, entry->event, "No handler!!!\n");

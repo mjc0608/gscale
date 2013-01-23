@@ -363,6 +363,11 @@ static int vgt_show_irqinfo(struct seq_file *m, void *data)
 	}
 	seq_printf(m, "--------------------------\n");
 	seq_printf(m, "Total %lld interrupts logged:\n", pstat->irq_num);
+	seq_printf(m, "#	WARNING: precisely this is the number of vGT \n"
+				  "#	physical interrupt handler be called,\n"
+				  "#	each calling several events can be\n"
+				  "#	been handled, so usually this number\n"
+				  "#	is less than the total events number.\n");
 	for (i = 0; i < IRQ_MAX; i++) {
 		if (!pstat->events[i])
 			continue;
@@ -403,6 +408,10 @@ static int vgt_show_irqinfo(struct seq_file *m, void *data)
 			seq_printf(m, "\t%16lld: %s\n", vstat->events[j],
 					vgt_irq_name[j]);
 		}
+
+		if (vstat->pending_events)
+			seq_printf(m, "\t%16lld: %s\n", vstat->pending_events,
+					"pending virt events");
 	}
 	return 0;
 }

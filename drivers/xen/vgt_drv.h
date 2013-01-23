@@ -414,6 +414,12 @@ struct vgt_statistics {
 	u64	used_cycles;
 	u64	irq_num;
 	u64	events[IRQ_MAX];
+
+	/* actually this is the number of  pending
+	 * interrutps, check this in vgt_check_pending_events,
+	 * one injection can deliver more than one events
+	 */
+	u64	pending_events;
 	u64	last_propogation;
 	u64	last_blocked_propogation;
 	u64	last_injection;
@@ -2134,6 +2140,7 @@ extern u64 context_switch_cost;
 extern u64 context_switch_num;
 extern u64 ring_0_idle;
 extern u64 ring_0_busy;
+extern u64 vm_pending_irq[VGT_MAX_VMS];
 
 struct vgt_port_output_struct {
 	unsigned int ctrl_reg;
