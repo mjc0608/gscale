@@ -284,11 +284,11 @@ struct decode_info{
  */
 
 #define OP_MFX(pipeline, op, sub_opa, sub_opb)     \
-    (3 << 29 |                                  \
-     (pipeline) << 27 |                         \
-     (op) << 24 |                               \
-     (sub_opa) << 21 |                          \
-     (sub_opb) << 16)
+     (3 << 13 |                                  \
+     (pipeline) << 11 |                         \
+     (op) << 8 |                               \
+     (sub_opa) << 5 |                          \
+     (sub_opb))
 
 #define OP_MFX_PIPE_MODE_SELECT                    OP_MFX(2, 0, 0, 0)  /* ALL */
 #define OP_MFX_SURFACE_STATE                       OP_MFX(2, 0, 0, 1)  /* ALL */
