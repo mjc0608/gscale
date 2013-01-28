@@ -948,7 +948,7 @@ bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 	return true;
 }
 
-bool is_context_switch_done(struct pgt_device *pdev, int ring_id)
+bool vgt_magic_done(struct pgt_device *pdev, int ring_id)
 {
 	u32 *ptr;
 
@@ -959,50 +959,40 @@ bool is_context_switch_done(struct pgt_device *pdev, int ring_id)
 	return true;
 }
 
+static bool ring_wait_for_magic(struct pgt_device *pdev, int ring_id)
+{
+	if (wait_for_atomic(vgt_magic_done(pdev, ring_id), 100) != 0) {
+		vgt_err("wait for magic fail on ring %d\n", ring_id);
+		return false;
+	}
+	return true;
+}
+
 /*
  * Wait for the empty of RB.
  * TODO: Empty of RB doesn't mean the commands are retired. May need a STORE_IMM
  * after MI_FLUSH, but that needs our own hardware satus page.
  */
-static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, bool ctx_switch, char *str)
+static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, char *str)
 {
-	static u64 max = 200;
-	u64 count = 0;
-
 	/* wait to be completed */
-	while (true) {
-		if (ctx_switch && is_context_switch_done(pdev, ring_id))
-			break;
-		if (!ctx_switch && is_rendering_engine_empty(pdev, ring_id))
-			break;
-		sleep_us(1);		/* 1us delay */
-		count++;
-		if (!(count % 10000000)) {
-			printk("vGT(%s): timeout wait %lld seconds for ring(%d)\n",
-				str, count / 1000000, ring_id);
+	if (wait_for_atomic(is_rendering_engine_empty(pdev, ring_id), 100) != 0) {
+		vgt_err("(%s): timeout wait 100 ms for ring(%d)\n", str, ring_id);
 
-			printk("vGT-cur(%d): head(%x), tail(%x), start(%x)\n",
+		vgt_err("vGT-cur(%d): head(%x), tail(%x), start(%x)\n",
 				current_render_owner(pdev)->vgt_id,
 				current_render_owner(pdev)->rb[ring_id].sring.head,
 				current_render_owner(pdev)->rb[ring_id].sring.tail,
 				current_render_owner(pdev)->rb[ring_id].sring.start);
-			printk("vGT-dom0(%d): head(%x), tail(%x), start(%x)\n",
+		vgt_err("vGT-dom0(%d): head(%x), tail(%x), start(%x)\n",
 				vgt_dom0->vgt_id,
 				vgt_dom0->rb[ring_id].sring.head,
 				vgt_dom0->rb[ring_id].sring.tail,
 				vgt_dom0->rb[ring_id].sring.start);
-			show_debug(pdev, ring_id);
-			show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
-		}
+		show_debug(pdev, ring_id);
+		show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
+		return false;
 	}
-
-	if (count > 2000 || count > max)
-		vgt_dbg("vGT(%s): ring (%d) has timeout (%lldus), max(%lldus)\n",
-			ctx_switch ? "ctx-switch" : "wait-empty",
-			ring_id, count, max);
-
-	if (count > max)
-		max = count;
 
 	return true;
 }
@@ -1019,7 +1009,7 @@ bool is_rendering_engines_empty(struct pgt_device *pdev, int *ring_id)
 		if (!enable_video_switch && i == RING_BUFFER_VCS)
 			continue;
 
-		if ( !ring_wait_for_empty(pdev, i, false, "wait-empty") ) {
+		if ( !ring_wait_for_empty(pdev, i, "wait-empty") ) {
 			*ring_id = i;
 			return false;
 		}
@@ -1426,7 +1416,7 @@ void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 static inline void stop_ring(struct pgt_device *pdev, int ring_id)
 {
 	/* wait for ring idle */
-	ring_wait_for_empty(pdev, ring_id, false, "stop-ring");
+	ring_wait_for_empty(pdev, ring_id, "stop-ring");
 	VGT_MMIO_WRITE(pdev, pdev->ring_mi_mode[ring_id],
 		       _REGBIT_MI_STOP_RINGS | (_REGBIT_MI_STOP_RINGS << 16));
 }
@@ -1840,7 +1830,7 @@ static bool vgt_save_context (struct vgt_device *vgt)
 		vgt_ring_emit(ring, MI_NOOP);
 		vgt_ring_advance(ring);
 
-		if (!ring_wait_for_empty(pdev, i, true, "ctx-switch")) {
+		if (!ring_wait_for_magic(pdev, i)) {
 			vgt_err("context switch commands unfinished\n");
 			show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
 			return false;

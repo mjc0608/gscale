@@ -2167,17 +2167,32 @@ void vgt_cleanup_mmio_dev(struct pgt_device *pdev);
 int vgt_create_mmio_dev(struct vgt_device *vgt);
 void vgt_destroy_mmio_dev(struct vgt_device *vgt);
 
+/* copy from drmP.h */
+static __inline__ bool drm_can_sleep(void)
+{
+	if (in_atomic() || irqs_disabled())
+		return false;
+	return true;
+}
+
 #define _wait_for(COND, MS, W) ({	\
-	int ret__ = 0;					\
-	int ms__ = MS;					\
-									\
-	while (!(COND) && ms__--)		\
-		mdelay(1);					\
-									\
-	if (!ms__ && !(COND))			\
-		ret__ = -ETIMEDOUT;			\
-	ret__;							\
+	unsigned long timeout__ = jiffies + msecs_to_jiffies(MS);       \
+	int ret__ = 0;                                                  \
+	while (!(COND)) {                                               \
+		if (time_after(jiffies, timeout__)) {                   \
+			ret__ = -ETIMEDOUT;                             \
+			break;                                          \
+		}                                                       \
+		if (W && drm_can_sleep())  {                            \
+			msleep(W);                                      \
+		} else {                                                \
+			cpu_relax();                                    \
+		}                                                       \
+	}                                                               \
+	ret__;								\
 })
+
 #define wait_for(COND, MS) _wait_for(COND, MS, 1)
+#define wait_for_atomic(COND, MS) _wait_for(COND, MS, 0)
 
 #endif	/* _VGT_DRV_H_ */
