@@ -443,14 +443,14 @@ static int vgt_core_register_event(struct vgt_device *dev,
 
 		handlers = kzalloc(IRQ_MAX * sizeof(vgt_core_handler_t), GFP_KERNEL);
 		if (!handlers) {
-			dprintk("vGT: no enough memory for core handler table\n");
+			vgt_dbg("vGT: no enough memory for core handler table\n");
 			return -ENOMEM;
 		}
 		vgt_core_event_handlers(dev) = handlers;
 	}
 
 	if (vgt_core_event_handler(dev, event)) {
-		dprintk("vGT: existing handler for event (%s)\n", vgt_irq_name[event]);
+		vgt_dbg("vGT: existing handler for event (%s)\n", vgt_irq_name[event]);
 		return -EBUSY;
 	}
 
@@ -508,7 +508,7 @@ void vgt_irq_save_context(struct vgt_device *vstate, enum vgt_owner_type owner)
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
 	if (owner != VGT_OT_RENDER && owner != VGT_OT_DISPLAY) {
-		dprintk("Dynamic ownership update for type (%d) is prohibited\n", owner);
+		vgt_dbg("Dynamic ownership update for type (%d) is prohibited\n", owner);
 		return;
 	}
 
@@ -532,7 +532,7 @@ void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owne
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
 
 	if (owner != VGT_OT_RENDER && owner != VGT_OT_DISPLAY) {
-		dprintk("Dynamic ownership update for type (%d) is prohibited\n", owner);
+		vgt_dbg("Dynamic ownership update for type (%d) is prohibited\n", owner);
 		return;
 	}
 
@@ -556,7 +556,7 @@ void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owne
 int vgt_irq_update_event_ownership(struct vgt_device *dev,
 	enum vgt_event_type event, enum vgt_owner_type owner)
 {
-	dprintk("Event ownership mapping change is not supported now\n");
+	vgt_dbg("Event ownership mapping change is not supported now\n");
 	return -EINVAL;
 }
 #endif
@@ -573,7 +573,7 @@ extern int resend_irq_on_evtchn(unsigned int i915_irq);
 void vgt_propogate_virtual_event(struct vgt_device *vstate,
 	int bit, struct vgt_irq_info *info)
 {
-	dprintk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
+	vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
 		__vreg(vstate, vgt_isr(info->reg_base)),
 		__vreg(vstate, vgt_imr(info->reg_base)),
 		__vreg(vstate, vgt_iir(info->reg_base)),
@@ -586,16 +586,16 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))) &&
 	    test_bit(_REGSHIFT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
 		if (vstate->vgt_id)
-			dprintk("vGT: set bit (%d) for (%s) for VM (%d)\n",
+			vgt_dbg("vGT: set bit (%d) for (%s) for VM (%d)\n",
 				bit, info->name, vstate->vgt_id);
 		vgt_set_irq_pending(vstate);
 		vstate->stat.last_propogation = get_cycles();
 		vstate->stat.events[info->table[bit].event]++;
 	} else {
 		if (vstate->vgt_id) {
-			dprintk("vGT: propogate bit (%d) for (%s) for VM (%d) w/o injection\n",
+			vgt_dbg("vGT: propogate bit (%d) for (%s) for VM (%d) w/o injection\n",
 				bit, info->name, vstate->vgt_id);
-			dprintk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
+			vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
 				__vreg(vstate, vgt_isr(info->reg_base)),
 				__vreg(vstate, vgt_imr(info->reg_base)),
 				__vreg(vstate, vgt_iir(info->reg_base)),
@@ -623,11 +623,11 @@ void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
 	if (!test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
 	    !test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
 	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base)))) {
-		dprintk("vGT: set pch bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
+		vgt_dbg("vGT: set pch bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
 		vgt_set_pch_irq_pending(vstate);
 	} else {
-		dprintk("vGT: propogate pch bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
-		dprintk("vGT: visr(%x), vimr(%x), viir(%x), vier(%x)i\n",
+		vgt_dbg("vGT: propogate pch bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
+		vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x)i\n",
 			__vreg(vstate, vgt_isr(info->reg_base)),
 			__vreg(vstate, vgt_imr(info->reg_base)),
 			__vreg(vstate, vgt_iir(info->reg_base)),
@@ -664,7 +664,7 @@ void vgt_propogate_emulated_event(struct vgt_device *vstate,
 void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
 {
 	unsigned long flags;
-	dprintk("vGT: resend irq for dom0\n");
+	vgt_dbg("vGT: resend irq for dom0\n");
 	/* resend irq may unmask events which requires irq disabled */
 	local_irq_save(flags);
 	resend_irq_on_evtchn(vgt_i915_irq(vgt->pdev));
@@ -686,7 +686,7 @@ void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 	info.dom = vgt->vm_id;
 	info.address = *(uint32_t *)(cfg_space + MSI_CAP_ADDRESS);
 	info.data = *(uint16_t *)(cfg_space + MSI_CAP_DATA);
-	dprintk("vGT(%d): hvm injections. address (%x) data(%x)!\n",
+	vgt_dbg("vGT(%d): hvm injections. address (%x) data(%x)!\n",
 		vgt->vgt_id, info.address, info.data);
 
 	if (HYPERVISOR_vcpu_op(VCPUOP_inject_raw_msi,
@@ -725,7 +725,7 @@ static void vgt_run_emul(struct vgt_device *vstate,
 
 	entry = info->table + bit;
 	if (entry->emul_handler) {
-		dprintk("vGT-IRQ(%d): %s emul handler for event %s\n", vstate->vgt_id,
+		vgt_dbg("vGT-IRQ(%d): %s emul handler for event %s\n", vstate->vgt_id,
 				enable ? "enable" : "disable", vgt_irq_name[event]);
 		if (!enable)
 			clear_bit(event, vgt_state_emulated_events(vstate));
@@ -770,7 +770,7 @@ static void vgt_toggle_emulated_bits(struct vgt_device *vgt,
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
-	dprintk("vGT: toggle event emulations at imr/ier emulation for reg (%s) bits (%x)\n",
+	vgt_dbg("vGT: toggle event emulations at imr/ier emulation for reg (%s) bits (%x)\n",
 		ops->get_reg_name(pdev, reg), bits);
 	if (((reg == _REG_DEIER) || (reg == _REG_DEIMR))) {
 		if (pdev->is_sandybridge)
@@ -840,7 +840,7 @@ static void vgt_check_pending_events(struct vgt_device *vgt)
 	if ((__vreg(vgt, _REG_DEIIR) & __vreg(vgt, _REG_DEIER)) ||
 	    (__vreg(vgt, _REG_GTIIR) & __vreg(vgt, _REG_GTIER)) ||
 	    (__vreg(vgt, _REG_PMIIR) & __vreg(vgt, _REG_PMIER))) {
-		dprintk("vGT-IRQ: catch pending iir\n");
+		vgt_dbg("vGT-IRQ: catch pending iir\n");
 		vgt_set_irq_pending(vgt);
 		vgt->stat.pending_events++;
 		vgt_inject_virtual_interrupt(vgt);
@@ -860,12 +860,12 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 
 	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
 
-	dprintk("vGT-IRQ: capture IMR write on reg (%s) with val (%lx)\n",
+	vgt_dbg("vGT-IRQ: capture IMR write on reg (%s) with val (%lx)\n",
 		ops->get_reg_name(pdev, reg), imr);
 
-	dprintk("vGT-IRQ: old vIER(%x), vIMR(%x)\n",
+	vgt_dbg("vGT-IRQ: old vIER(%x), vIMR(%x)\n",
 		__vreg(state, reg + 8), __vreg(state, reg));
-	dprintk("vGT-IRQ: old IER(%x), IMR(%x)\n",
+	vgt_dbg("vGT-IRQ: old IER(%x), IMR(%x)\n",
 		VGT_MMIO_READ(pdev, reg + 8), VGT_MMIO_READ(pdev, reg));
 
 	/* figure out newly masked/unmasked bits */
@@ -879,7 +879,7 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 	enabled = ier & unmasked;
 	disabled = ier & masked;
 
-	dprintk("vGT-IRQ: changed (%x), masked(%x), unmasked (%x), enabled(%x), disabled (%x)\n",
+	vgt_dbg("vGT-IRQ: changed (%x), masked(%x), unmasked (%x), enabled(%x), disabled (%x)\n",
 		changed, masked, unmasked, enabled, disabled);
 	__vreg(state, reg) = imr;
 
@@ -930,9 +930,9 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 
 		if (reg == _REG_DEIMR) {
 			if (masked & 0x88)
-				dprintk("XXX: mask vblank/vsync (%x)\n", masked);
+				vgt_dbg("XXX: mask vblank/vsync (%x)\n", masked);
 			if (unmasked & 0x88)
-				dprintk("XXX: unmask vblank/vsync (%x)\n", unmasked);
+				vgt_dbg("XXX: unmask vblank/vsync (%x)\n", unmasked);
 		}
 		VGT_MMIO_WRITE(pdev, reg, val);
 		VGT_POST_READ(pdev, reg);
@@ -946,9 +946,9 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 	if (disabled)
 		vgt_toggle_emulated_bits(state, reg, disabled, false);
 
-	dprintk("vGT-IRQ: new vIER(%x), vIMR(%x)\n",
+	vgt_dbg("vGT-IRQ: new vIER(%x), vIMR(%x)\n",
 		__vreg(state, reg + 8), __vreg(state, reg));
-	dprintk("vGT-IRQ: new IER(%x), IMR(%x)\n",
+	vgt_dbg("vGT-IRQ: new IER(%x), IMR(%x)\n",
 		VGT_MMIO_READ(pdev, reg + 8), VGT_MMIO_READ(pdev, reg));
 	/* TODO: throw out an early warning if no handlers for enabled events */
 	return true;
@@ -972,12 +972,12 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 
 	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
 
-	dprintk("vGT-IRQ: capture IER write on reg (%s) with val (%lx)\n",
+	vgt_dbg("vGT-IRQ: capture IER write on reg (%s) with val (%lx)\n",
 		ops->get_reg_name(pdev, reg), ier);
 
-	dprintk("vGT-IRQ: old vIER(%x), vIMR(%x)\n",
+	vgt_dbg("vGT-IRQ: old vIER(%x), vIMR(%x)\n",
 		__vreg(state, reg), __vreg(state, reg - 8));
-	dprintk("vGT-IRQ: old IER(%x), IMR(%x)\n",
+	vgt_dbg("vGT-IRQ: old IER(%x), IMR(%x)\n",
 		VGT_MMIO_READ(pdev, reg), VGT_MMIO_READ(pdev, reg - 8));
 
 	/* figure out newly enabled/disable bits */
@@ -990,7 +990,7 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 	enabled = ier_enabled & ~imr;
 	disabled = ier_disabled & ~imr;
 
-	dprintk("vGT_IRQ: changed (%x), i-enabled(%x), i-disabled (%x), enabled(%x), disabled(%x)\n",
+	vgt_dbg("vGT_IRQ: changed (%x), i-enabled(%x), i-disabled (%x), enabled(%x), disabled(%x)\n",
 		changed, ier_enabled, ier_disabled, enabled, disabled);
 	__vreg(state, reg) = ier;
 
@@ -1026,14 +1026,14 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 	if (ier_enabled || ier_disabled) {
 		if (reg == _REG_DEIER) {
 			if (ier_enabled & _REGBIT_MASTER_INTERRUPT) {
-				dprintk("vGT-IRQ(%d): newly enable MASTER\n", state->vgt_id);
+				vgt_dbg("vGT-IRQ(%d): newly enable MASTER\n", state->vgt_id);
 				set_bit(state->vgt_id, (void *)&vgt_master_enable(pdev));
 				/* leave to vgt_enable_master_interrupt */
 				ier_enabled &= ~_REGBIT_MASTER_INTERRUPT;
 			}
 
 			if (ier_disabled & _REGBIT_MASTER_INTERRUPT) {
-				dprintk("vGT-IRQ(%d): newly disable MASTER\n", state->vgt_id);
+				vgt_dbg("vGT-IRQ(%d): newly disable MASTER\n", state->vgt_id);
 				clear_bit(state->vgt_id, (void *)&vgt_master_enable(pdev));
 				ier_disabled &= ~_REGBIT_MASTER_INTERRUPT;
 			}
@@ -1047,9 +1047,9 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 			val &= ~ier_disabled;
 		if (reg == _REG_DEIER) {
 			if (ier_disabled & 0x88)
-				dprintk("XXX: disable vblank/vsync (%x)\n", ier_disabled);
+				vgt_dbg("XXX: disable vblank/vsync (%x)\n", ier_disabled);
 			if (ier_enabled & 0x88)
-				dprintk("XXX: enable vblank/vsync (%x)\n", ier_enabled);
+				vgt_dbg("XXX: enable vblank/vsync (%x)\n", ier_enabled);
 		}
 		if (vgt_master_enable(pdev))
 			val |= _REGBIT_MASTER_INTERRUPT;
@@ -1067,9 +1067,9 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 	if (disabled)
 		vgt_toggle_emulated_bits(state, reg, disabled, false);
 
-	dprintk("vGT-IRQ: new vIER(%x), vIMR(%x)\n",
+	vgt_dbg("vGT-IRQ: new vIER(%x), vIMR(%x)\n",
 		__vreg(state, reg), __vreg(state, reg - 8));
-	dprintk("vGT-IRQ: new IER(%x), IMR(%x)\n",
+	vgt_dbg("vGT-IRQ: new IER(%x), IMR(%x)\n",
 		VGT_MMIO_READ(pdev, reg), VGT_MMIO_READ(pdev, reg - 8));
 	/* TODO: throw out an early warning if no handlers for enabled events */
 	return true;
@@ -1088,11 +1088,11 @@ bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 
 	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
 
-	dprintk("vGT-IRQ: capture IIR write on reg (%s) with val (%x)\n",
+	vgt_dbg("vGT-IRQ: capture IIR write on reg (%s) with val (%x)\n",
 		ops->get_reg_name(vgt->pdev, reg), iir);
 
 
-	dprintk("vGT: update %s: %x -> %x\n", ops->get_reg_name(vgt->pdev, reg),
+	vgt_dbg("vGT: update %s: %x -> %x\n", ops->get_reg_name(vgt->pdev, reg),
 		__vreg(vgt, reg), __vreg(vgt, reg) & (~iir));
 	/* write to clear IIR */
 	__vreg(vgt, reg) &= ~iir;
@@ -1197,7 +1197,7 @@ void vgt_emulate_dpy_status(struct vgt_device *vstate, enum vgt_event_type event
 
 void vgt_emulate_watchdog(struct vgt_device *vstate, enum vgt_event_type event, bool enable)
 {
-	dprintk("vGT: watch dog emulation is not supported yet\n");
+	vgt_dbg("vGT: watch dog emulation is not supported yet\n");
 }
 
 /* =======================pEvent Handlers===================== */
@@ -1490,7 +1490,7 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 		if (!physical &&
 		    vgt_get_event_owner_type(dev, entry->event) == o_type &&
 		    vgt_get_previous_owner(dev, o_type) != NULL) {
-			dprintk("vGT: inject event (%s) to previous owner (%d)\n",
+			vgt_dbg("vGT: inject event (%s) to previous owner (%d)\n",
 				vgt_irq_name[entry->event],
 				vgt_get_previous_owner(dev, o_type)->vgt_id);
 			entry->event_handler(dev, bit, entry, info, physical,
@@ -1601,7 +1601,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	spin_lock(&dev->lock);
 	dev->stat.irq_num++;
 	dev->stat.last_pirq = get_cycles();
-	dprintk("vGT: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
+	vgt_dbg("vGT: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
 		VGT_MMIO_READ(dev, _REG_DEIIR),
 		VGT_MMIO_READ(dev, _REG_GTIIR),
 		VGT_MMIO_READ(dev, _REG_SDEIIR),
@@ -1614,7 +1614,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 
 	ret = ops->interrupt(dev);
 	if (ret == IRQ_NONE) {
-		dprintk("Spurious interrupt received (or shared vector)\n");
+		vgt_dbg("Spurious interrupt received (or shared vector)\n");
 		VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);
 		spin_unlock(&dev->lock);
 		return IRQ_HANDLED;
@@ -1744,7 +1744,7 @@ int vgt_irq_init(struct pgt_device *dev)
 	if (dev->is_sandybridge || dev->is_ivybridge || dev->is_haswell)
 		dev->irq_hstate->ops = &snb_irq_ops;
 	else {
-		dprintk("vGT: no irq ops found!\n");
+		vgt_dbg("vGT: no irq ops found!\n");
 		return -EINVAL;
 	}
 
@@ -1753,7 +1753,7 @@ int vgt_irq_init(struct pgt_device *dev)
 	if (!o_table) {
 		kfree(dev->irq_hstate);
 		dev->irq_hstate = NULL;
-		dprintk("vGT: no enough memory for owner table\n");
+		vgt_dbg("vGT: no enough memory for owner table\n");
 		return -ENOMEM;
 	}
 	memcpy((void *)o_table, (void *)vgt_default_event_owner_table,

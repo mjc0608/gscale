@@ -310,7 +310,7 @@ bool vgt_register_mmio_handler(unsigned int start, int bytes,
 
 	end = start + bytes -1;
 
-	printk("start=0x%x end=0x%x\n", start, end);
+	vgt_dbg("start=0x%x end=0x%x\n", start, end);
 
 	ASSERT((start & 3) == 0);
 	ASSERT(((end+1) & 3) == 0);
@@ -357,7 +357,7 @@ int allocate_vgt_id(void)
 	do {
 		bit_index = ffz (vgt_id_alloc_bitmap);
 		if (bit_index >= VGT_MAX_VMS) {
-			printk("vGT: allocate_vgt_id() failed\n");
+			vgt_err("vGT: allocate_vgt_id() failed\n");
 			return -ENOSPC;
 		}
 	} while (test_and_set_bit(bit_index, &vgt_id_alloc_bitmap) != 0);
@@ -389,7 +389,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	ASSERT((reg < _REG_FENCE_0_LOW) || (reg > _REG_FENCE_15_HIGH));
 
 	mask = reg_aux_addr_mask(pdev, reg);
-	dprintk("vGT: address fix g->h for reg (0x%lx) value (0x%x) mask (0x%x)\n", reg, g_value, mask);
+	vgt_dbg("vGT: address fix g->h for reg (0x%lx) value (0x%x) mask (0x%x)\n", reg, g_value, mask);
 	/*
 	 * NOTE: address ZERO is special, and sometimes the driver may hard
 	 * code address ZERO, e.g. in curbase setting (when the cursor becomes
@@ -397,14 +397,14 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	 * range of the VM. If this doesn't work, we need change the driver!
 	 */
 	if (!(g_value & mask)) {
-		dprintk("vGT(%d): translate address ZERO for reg (%lx)\n",
+		vgt_dbg("vGT(%d): translate address ZERO for reg (%lx)\n",
 			vgt->vgt_id, reg);
 		g_value = (vgt_guest_visible_gm_base(vgt) & mask) |
 			  (g_value & ~mask);
 	}
 	/* FIXME: there may have some complex mask pattern */
 	h_value = g2h_gm(vgt, g_value & mask);
-	dprintk("....(g)%x->(h)%x\n", g_value, (h_value & mask) | (g_value & ~mask));
+	vgt_dbg("....(g)%x->(h)%x\n", g_value, (h_value & mask) | (g_value & ~mask));
 
 	return (h_value & mask) | (g_value & ~mask);
 }
@@ -423,7 +423,7 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	if (!reg_addr_fix(pdev, reg))
 		return h_value;
 
-	dprintk("vGT: address fix h->g for reg (%lx)(%x)\n", reg, h_value);
+	vgt_dbg("vGT: address fix h->g for reg (%lx)(%x)\n", reg, h_value);
 	mask = reg_aux_addr_mask(pdev, reg);
 
 	/*
@@ -432,13 +432,13 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	 * doesn't matter.
 	 */
 	if (!h_gm_is_valid(vgt, h_value & mask)) {
-		dprintk("!!!vGT: reg (%lx) doesn't contain a valid host address (%x)\n", reg, h_value);
+		vgt_dbg("!!!vGT: reg (%lx) doesn't contain a valid host address (%x)\n", reg, h_value);
 		h_value = (vgt_visible_gm_base(vgt) & mask) | (h_value & ~mask);
 	}
 
 	/* FIXME: there may have some complex mask pattern */
 	g_value = h2g_gm(vgt, h_value & mask);
-	dprintk("....(h)%x->(g)%x\n", h_value, (g_value & mask) | (h_value & ~mask));
+	vgt_dbg("....(h)%x->(g)%x\n", h_value, (g_value & mask) | (h_value & ~mask));
 	return (g_value & mask) | (h_value & ~mask);
 }
 
@@ -631,7 +631,7 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 	 */
 	__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
 	if (reg == _REG_DSPASURF)
-		dprintk("%s: =======: write vReg(%x), sReg(%x)\n", __func__, __vreg(vgt, reg), __sreg(vgt, reg));
+		vgt_dbg("%s: =======: write vReg(%x), sReg(%x)\n", __func__, __vreg(vgt, reg), __sreg(vgt, reg));
 	if (reg_hw_access(vgt, reg))
 		VGT_MMIO_WRITE(pdev, reg, __sreg(vgt, reg));
 }
@@ -731,7 +731,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 	}
 
 	if (bytes > 4)
-		dprintk("vGT: capture >4 bytes read to %x\n", offset);
+		vgt_dbg("vGT: capture >4 bytes read to %x\n", offset);
 
 	spin_lock_irqsave(&pdev->lock, flags);
 
@@ -753,7 +753,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 	}
 
 	if (!reg_is_tracked(pdev, offset)) {
-		printk("vGT: untracked MMIO: vm_id(%d), offset=0x%x,"
+		vgt_warn("vGT: untracked MMIO: vm_id(%d), offset=0x%x,"
 			"len=%d, val=0x%x!!!\n",
 			vgt->vm_id,	offset, bytes, *(u32 *)p_data);
 
@@ -846,7 +846,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
 
 	if (bytes > 4)
-		dprintk("vGT: capture >4 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
+		vgt_dbg("vGT: capture >4 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
 /*
 	if (reg_rdonly(pdev, offset & (~(bytes - 1)))) {
 		printk("vGT: captured write to read-only reg (%x)\n", offset);
@@ -872,7 +872,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	}
 
 	if (!reg_is_tracked(pdev, offset)) {
-		printk("vGT: untracked MMIO : vm_id(%d), offset=0x%x,"
+		vgt_warn("vGT: untracked MMIO : vm_id(%d), offset=0x%x,"
 			"len=%d, val=0x%x!!!\n",
 			vgt->vm_id,	offset, bytes, *(u32 *)p_data);
 
@@ -888,7 +888,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 
 
 	if (offset == _REG_DSPASURF || offset == _REG_DSPBSURF) {
-		dprintk("vGT(%d): write to surface base (%x) with (%x), pReg(%x)\n",
+		vgt_dbg("vGT(%d): write to surface base (%x) with (%x), pReg(%x)\n",
 			vgt->vgt_id, offset, __vreg(vgt, offset),
 			VGT_MMIO_READ(pdev, offset));
 		/* update live reg as vm may wait on the update */
@@ -902,7 +902,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	if (reg_mode_ctl(pdev, offset)) {
 		u32 mask = __vreg(vgt, offset) >> 16;
 
-		dprintk("old mode (%x): %x/%x, mask(%x)\n", offset,
+		vgt_dbg("old mode (%x): %x/%x, mask(%x)\n", offset,
 			__vreg(vgt, offset), __sreg(vgt, offset),
 			reg_aux_mode_mask(pdev, offset));
 		/*
@@ -912,7 +912,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		reg_aux_mode_mask(pdev, offset) |= mask << 16;
 		__vreg(vgt, offset) = (old_vreg & ~mask) | (__vreg(vgt, offset) & mask);
 		__sreg(vgt, offset) = (old_sreg & ~mask) | (__sreg(vgt, offset) & mask);
-		dprintk("new mode (%x): %x/%x, mask(%x)\n", offset,
+		vgt_dbg("new mode (%x): %x/%x, mask(%x)\n", offset,
 			__vreg(vgt, offset), __sreg(vgt, offset),
 			reg_aux_mode_mask(pdev, offset));
 		//show_mode_settings(vgt->pdev);
@@ -997,7 +997,7 @@ static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, bool ctx_s
 	}
 
 	if (count > 2000 || count > max)
-		dprintk("vGT(%s): ring (%d) has timeout (%lldus), max(%lldus)\n",
+		vgt_dbg("vGT(%s): ring (%d) has timeout (%lldus), max(%lldus)\n",
 			ctx_switch ? "ctx-switch" : "wait-empty",
 			ring_id, count, max);
 
@@ -1059,20 +1059,20 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 			current_display_owner(pdev), next_display_owner);
 
 	ASSERT(spin_is_locked(&pdev->lock));
-	dprintk("before irq save\n");
+	vgt_dbg("before irq save\n");
 	pdev->in_ctx_switch = 1;
 	vgt_irq_save_context(current_display_owner(pdev),
 			VGT_OT_DISPLAY);
-	dprintk("after irq save\n");
+	vgt_dbg("after irq save\n");
 
 	vgt_switch_display_owner(current_display_owner(pdev),
 			next_display_owner);
 	previous_display_owner(pdev) = current_display_owner(pdev);
 	current_display_owner(pdev) = next_display_owner;
 
-	dprintk("before irq restore\n");
+	vgt_dbg("before irq restore\n");
 	vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
-	dprintk("after irq restore\n");
+	vgt_dbg("after irq restore\n");
 
 	pdev->in_ctx_switch = 0;
 	/*
@@ -1115,7 +1115,7 @@ void vgt_resume_ringbuffers(struct vgt_device *vgt)
 			continue;
 
 		if (!(vgt->rb[i].sring.ctl & _RING_CTL_ENABLE)) {
-			dprintk("vGT: ring (%d) not enabled. exit resume\n", i);
+			vgt_dbg("vGT: ring (%d) not enabled. exit resume\n", i);
 			continue;
 		}
 		VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(vgt->pdev, i), vgt->rb[i].sring.tail);
@@ -1257,7 +1257,7 @@ int vgt_thread(void *priv)
 		 * But for robustness, let's keep it temporarily */
 		if (vgt_runq_is_empty(pdev)) {
 			/* Idle now, and no pending activity */
-			dprintk("....idle\n");
+			vgt_dbg("....idle\n");
 			continue;
 		}
 
@@ -1275,7 +1275,7 @@ int vgt_thread(void *priv)
 		if ( next != (prev = current_render_owner(pdev)) )
 		{
 			if (is_rendering_engines_empty(pdev, &ring_id)) {
-				dprintk("vGT: next vgt (%d)\n", next->vgt_id);
+				vgt_dbg("vGT: next vgt (%d)\n", next->vgt_id);
 
 				/* variable exported by debugfs */
 				context_switch_num ++;
@@ -1389,7 +1389,7 @@ int vgt_thread(void *priv)
 
 		/* Virtual interrupts pending right after render switch */
 		if (check_irq && test_bit(VGT_REQUEST_IRQ, (void*)&pdev->request)) {
-			dprintk("vGT: handle pending interrupt in the render context switch time\n");
+			vgt_dbg("vGT: handle pending interrupt in the render context switch time\n");
 			spin_lock_irq(&pdev->lock);
 			clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 			vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
@@ -1406,9 +1406,9 @@ int vgt_thread(void *priv)
  */
 void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	dprintk("old head(%x), old tail(%x)\n", srb->head, srb->tail);
+	vgt_dbg("old head(%x), old tail(%x)\n", srb->head, srb->tail);
 	srb->head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
-	dprintk("new head(%x), new tail(%x)\n", srb->head, srb->tail);
+	vgt_dbg("new head(%x), new tail(%x)\n", srb->head, srb->tail);
 #if 0
 	srb->tail = VGT_MMIO_READ(pdev, &prb->tail);
 	srb->start = VGT_MMIO_READ(pdev, &prb->start);
@@ -1437,7 +1437,7 @@ static inline void resume_ring(struct pgt_device *pdev, int ring_id)
 	VGT_MMIO_WRITE(pdev, pdev->ring_mi_mode[ring_id],
 		       _REGBIT_MI_STOP_RINGS << 16);
 	if (VGT_MMIO_READ(pdev, pdev->ring_mi_mode[ring_id]) & _REGBIT_MI_STOP_RINGS)
-		printk("!!!!!!!!!failed to clear stop ring bit\n");
+		vgt_warn("!!!!!!!!!failed to clear stop ring bit\n");
 }
 
 /*
@@ -1498,7 +1498,7 @@ bool vgt_vrings_empty(struct vgt_device *vgt)
  */
 void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
-	dprintk("shadow 2 phys: [%x, %x, %x, %x] \n", srb->head, srb->tail,
+	vgt_dbg("shadow 2 phys: [%x, %x, %x, %x] \n", srb->head, srb->tail,
 		VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id)),
 		VGT_MMIO_READ(pdev, RB_CTL(pdev, ring_id)));
 
@@ -1533,7 +1533,7 @@ void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 	 * can further optimize by not switching unused ring.
 	 */
 	VGT_POST_READ(pdev, RB_HEAD(pdev, ring_id));
-	dprintk("shadow 2 phys: [%x, %x]\n",
+	vgt_dbg("shadow 2 phys: [%x, %x]\n",
 		VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id)),
 		VGT_MMIO_READ(pdev, RB_TAIL(pdev, ring_id)));
 }
@@ -1693,7 +1693,7 @@ static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *reg
 		{
 			__sreg(vgt, reg) = VGT_MMIO_READ(vgt->pdev, reg);
 			__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
-			dprintk("....save mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
+			vgt_dbg("....save mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
 		}
 	}
 }
@@ -1741,7 +1741,7 @@ static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs
 			__vreg(vgt, _REG_RCS_UHPTR) &= ~1;
 		}
 		VGT_MMIO_WRITE(vgt->pdev, reg, val);
-		dprintk("....restore mmio (%x) with (%x)\n", reg, val);
+		vgt_dbg("....restore mmio (%x) with (%x)\n", reg, val);
 	}
 }
 
@@ -1841,12 +1841,12 @@ static bool vgt_save_context (struct vgt_device *vgt)
 		vgt_ring_advance(ring);
 
 		if (!ring_wait_for_empty(pdev, i, true, "ctx-switch")) {
-			printk("vGT: context switch commands unfinished\n");
+			vgt_err("context switch commands unfinished\n");
 			show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
 			return false;
 		}
 
-		dprintk("new magic number: %d\n",
+		vgt_dbg("new magic number: %d\n",
 				*(u32 *)(phys_aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
 
 		/* still confirm the CCID for safety. May remove in the future */
@@ -1861,7 +1861,7 @@ static bool vgt_save_context (struct vgt_device *vgt)
 			printk("!!!!!!!!!(save ring-%d, %llx switch) tail moved from %x to %x\n",
 				i, vgt_ctx_switch(pdev), rb->sring.tail, old_tail);
 
-		dprintk("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
+		vgt_dbg("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
 
 	}
 	return true;
@@ -1950,7 +1950,7 @@ static bool vgt_restore_context (struct vgt_device *vgt)
 
 	/* Restore the PM */
 	//restore_power_management(vgt);
-	dprintk("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
+	vgt_dbg("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
 	return true;
 }
 
@@ -1989,7 +1989,7 @@ static void state_sreg_init(struct vgt_device *vgt)
 	for (i = 0; i < vgt->pdev->reg_num; i++) {
 		if (reg_addr_fix(vgt->pdev, i * REG_SIZE)) {
 			__sreg(vgt, i) = mmio_g2h_gmadr(vgt, i, __vreg(vgt, i));
-			dprintk("vGT: address fix for reg (%x): (%x->%x)\n",
+			vgt_dbg("vGT: address fix for reg (%x): (%x->%x)\n",
 				i, __vreg(vgt, i), __sreg(vgt, i));
 		}
 	}
@@ -2007,7 +2007,7 @@ static int create_state_instance(struct vgt_device *vgt)
 	vgt_state_t	*state;
 	int i;
 
-	dprintk("create_state_instance\n");
+	vgt_dbg("create_state_instance\n");
 	state = &vgt->state;
 	state->vReg = vmalloc(vgt->pdev->mmio_size);
 	state->sReg = vmalloc(vgt->pdev->mmio_size);
@@ -2162,7 +2162,7 @@ static void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev)
 {
 	unsigned long *gm_bitmap = pdev->gm_bitmap;
 
-	printk("vGT: total aperture: 0x%x bytes, total GM space: 0x%llx bytes\n",
+	vgt_info("total aperture: 0x%x bytes, total GM space: 0x%llx bytes\n",
 		phys_aperture_sz(pdev), gm_sz(pdev));
 
 	ASSERT(phys_aperture_sz(pdev) % SIZE_1MB == 0);
@@ -2182,7 +2182,7 @@ static void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev)
 	bitmap_set(gm_bitmap, aperture_2_gm(pdev, pdev->rsvd_aperture_base)/SIZE_1MB,
 				pdev->rsvd_aperture_sz/SIZE_1MB);
 
-	printk("vGT: reserved aperture: [0x%llx, 0x%llx)\n",
+	vgt_info("reserved aperture: [0x%llx, 0x%llx)\n",
 			pdev->rsvd_aperture_base,
 			pdev->rsvd_aperture_base + pdev->rsvd_aperture_sz);
 }
@@ -2199,7 +2199,7 @@ unsigned long xen_get_vm_mem_sz(int vm_id)
 
 	rc = HYPERVISOR_domctl(&arg);
 	if (rc<0){
-		printk(KERN_ERR "HYPERVISOR_domctl fail ret=%d\n",rc);
+		vgt_err("HYPERVISOR_domctl fail ret=%d\n",rc);
 		return 0;
 	}
 
@@ -2217,7 +2217,7 @@ static int vgt_vmem_init(struct vgt_device *vgt)
 	vgt->vmem_sz = xen_get_vm_mem_sz(vgt->vm_id);
 	vgt->vmem_vma = kmalloc(sizeof(*vgt->vmem_vma)*(vgt->vmem_sz>>VMEM_BUCK_SHIFT),GFP_KERNEL);
 	if (vgt->vmem_vma == NULL){
-		printk(KERN_ERR "Insufficient memory for vmem_vma, vmem_sz=0x%llx\n",
+		vgt_err("Insufficient memory for vmem_vma, vmem_sz=0x%llx\n",
 				vgt->vmem_sz );
 		return -ENOMEM;
 	}
@@ -2228,7 +2228,7 @@ static int vgt_vmem_init(struct vgt_device *vgt)
 				VMEM_BUCK_SIZE >> PAGE_SHIFT,
 				vgt->vm_id);
 		if (vgt->vmem_vma[i] == NULL)
-			printk("warning: no mapping for vmem buck starting @ %ldMB\n", i<<(VMEM_BUCK_SHIFT-20));
+			vgt_warn("no mapping for vmem buck starting @ %ldMB\n", i<<(VMEM_BUCK_SHIFT-20));
 	}
 
 	return 0;
@@ -2277,10 +2277,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	char *cfg_space;
 	int rc = -ENOMEM;
 
-	printk("vGT: %s: vm_id=%d, aperture_sz=%dMB, gm_sz=%dMB, fence_sz=%d"
-			", vgt_primary=%d\n",
-		__func__, vp.vm_id, vp.aperture_sz, vp.gm_sz, vp.fence_sz,
-		vp.vgt_primary);
+	vgt_info("vm_id=%d, aperture_sz=%dMB, gm_sz=%dMB, fence_sz=%d, vgt_primary=%d\n",
+		 vp.vm_id, vp.aperture_sz, vp.gm_sz, vp.fence_sz, vp.vgt_primary);
 
 	vgt = kzalloc (sizeof(*vgt), GFP_KERNEL);
 	if (vgt == NULL) {
@@ -2321,7 +2319,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		vgt->vgtt_sz = (gm_sz(pdev) >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
 	else
 		vgt->vgtt_sz = (vgt->gm_sz >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
-	printk("vGT:   Virtual GTT size: 0x%lx\n", (long)vgt->vgtt_sz);
+	vgt_info("Virtual GTT size: 0x%lx\n", (long)vgt->vgtt_sz);
 	vgt->vgtt = vzalloc(vgt->vgtt_sz);
 	if (!vgt->vgtt) {
 		printk("vGT: failed to allocate virtual GTT table\n");
@@ -2348,7 +2346,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
 	vgt_pci_bar_write_32(vgt, VGT_REG_CFG_SPACE_BAR1, phys_aperture_base(pdev) );
 
-	printk("vGT:   aperture: [0x%llx, 0x%llx] guest [0x%llx, 0x%llx] "
+	vgt_info("aperture: [0x%llx, 0x%llx] guest [0x%llx, 0x%llx] "
 		"va(0x%llx)\n",
 		vgt_aperture_base(vgt),
 		vgt_aperture_end(vgt),
@@ -2356,7 +2354,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		vgt_guest_aperture_end(vgt),
 		(uint64_t)vgt->aperture_base_va);
 
-	printk("vGT:   GM: [0x%llx, 0x%llx], [0x%llx, 0x%llx], "
+	vgt_info("GM: [0x%llx, 0x%llx], [0x%llx, 0x%llx], "
 		"guest[0x%llx, 0x%llx], [0x%llx, 0x%llx]\n",
 		vgt_visible_gm_base(vgt),
 		vgt_visible_gm_end(vgt),
@@ -2398,7 +2396,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		__vreg(vgt, vgt_info_off(avail_rs.high_gmadr.my_size)) = vgt_hidden_gm_sz(vgt);
 
 		__vreg(vgt, vgt_info_off(avail_rs.fence_num)) = vgt->fence_sz;
-		printk("vGT: filling VGT_PVINFO_PAGE for dom%d:\n"
+		vgt_info("filling VGT_PVINFO_PAGE for dom%d:\n"
 			"   visable_gm_base=0x%llx, size=0x%llx\n"
 			"   hidden_gm_base=0x%llx, size=0x%llx\n"
 			"   fence_base=%d, num=%d\n",
@@ -2438,13 +2436,13 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	/* create debugfs per vgt */
 	if (vgt_create_debugfs(vgt)) {
-		printk("vGT: failed to create debugfs for vgt-%d\n",
+		vgt_err("failed to create debugfs for vgt-%d\n",
 			vgt->vgt_id);
 		goto err;
 	}
 
 	if (vgt_create_mmio_dev(vgt)) {
-		printk("vGT: failed to create mmio devnode for vgt-%d\n",
+		vgt_err("failed to create mmio devnode for vgt-%d\n",
 				vgt->vgt_id);
 		goto err;
 	}
@@ -2580,11 +2578,11 @@ static uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
 	pci_write_config_dword(dev, bar_off, 0xFFFFFFFF);
 
 	pci_read_config_dword(dev, bar_off, (uint32_t *)&bar_size);
-dprintk("read back bar_size %lx\n", bar_size);
+vgt_dbg("read back bar_size %lx\n", bar_size);
 	bar_size &= ~0xf;       /* bit 4-31 */
-dprintk("read back bar_size1 %lx\n", bar_size);
+vgt_dbg("read back bar_size1 %lx\n", bar_size);
 	bar_size = 1 << find_first_bit(&bar_size, BITS_PER_LONG);
-dprintk("read back bar_size2 %lx\n", bar_size);
+vgt_dbg("read back bar_size2 %lx\n", bar_size);
 
 	pci_write_config_dword(dev, bar_off, bar_s);
 
@@ -2626,7 +2624,7 @@ bool initial_phys_states(struct pgt_device *pdev)
 	uint64_t	bar0, bar1;
 	struct pci_dev *dev = pdev->pdev;
 
-	dprintk("VGT: Initial_phys_states\n");
+	vgt_dbg("VGT: Initial_phys_states\n");
 
 	pdev->gtt_size = vgt_get_gtt_size(pdev->pbus);
 	gm_sz(pdev) = vgt_get_gtt_size(pdev->pbus) * 1024;
@@ -2637,9 +2635,9 @@ bool initial_phys_states(struct pgt_device *pdev)
 
 	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4) {
 		if (!(i % 16))
-			dprintk("\n[%2x]: ", i);
+			vgt_dbg("\n[%2x]: ", i);
 
-		dprintk("%02x %02x %02x %02x ",
+		vgt_dbg("%02x %02x %02x %02x ",
 			*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff,
 			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff00) >> 8,
 			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff0000) >> 16,
@@ -2705,23 +2703,23 @@ static bool vgt_set_device_type(struct pgt_device *pdev)
 {
 	if (_is_sandybridge(pdev->pdev->device)) {
 		pdev->is_sandybridge = 1;
-		printk("Detected Sandybridge\n");
+		vgt_info("Detected Sandybridge\n");
 		return true;
 	}
 
 	if (_is_ivybridge(pdev->pdev->device)) {
 		pdev->is_ivybridge = 1;
-		printk("Detected Ivybridge\n");
+		vgt_info("Detected Ivybridge\n");
 		return true;
 	}
 
 	if (_is_haswell(pdev->pdev->device)) {
 		pdev->is_haswell = 1;
-		printk("Detected Haswell\n");
+		vgt_info("Detected Haswell\n");
 		return true;
 	}
 
-	printk(KERN_ERR "Unknown chip 0x%x\n", pdev->pdev->device);
+	vgt_err("Unknown chip 0x%x\n", pdev->pdev->device);
 	return false;
 }
 
@@ -2865,9 +2863,9 @@ static int setup_gtt(struct pgt_device *pdev)
 	for (i = 0; i < gm_pages(pdev); i++)
 		vgt_write_gtt(pdev, i, pte);
 
-	dprintk("content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
-	dprintk("content at 0x64000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x64000));
-	dprintk("content at 0x8064000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x8064000));
+	vgt_dbg("content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
+	vgt_dbg("content at 0x64000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x64000));
+	vgt_dbg("content at 0x8064000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x8064000));
 
 	check_gtt(pdev);
 	printk("vGT: allocate vGT aperture\n");
@@ -2877,7 +2875,7 @@ static int setup_gtt(struct pgt_device *pdev)
 		/* need a DMA flag? */
 		page = alloc_page(GFP_KERNEL | __GFP_ZERO);
 		if (!page) {
-			dprintk("vGT: Failed to create page for setup_gtt!\n");
+			vgt_dbg("vGT: Failed to create page for setup_gtt!\n");
 			ret = -ENOMEM;
 			goto err_out;
 		}
@@ -2964,7 +2962,7 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 
 	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
-	dprintk("create dom0 instance succeeds\n");
+	vgt_dbg("create dom0 instance succeeds\n");
 
 	show_mode_settings(pdev);
 

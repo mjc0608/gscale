@@ -116,7 +116,7 @@ int xen_start_vgt(struct pci_dev *pdev)
 		return 0;
 
 	if (vgt_xops.initialized) {
-		printk("vgt_ops has been intialized\n");
+		vgt_info("vgt_ops has been intialized\n");
 		return 0;
 	}
 
@@ -162,8 +162,6 @@ arch_initcall(vgt_init_module);
 
 static void __exit vgt_exit_module(void)
 {
-	int rc = 0;
-
 	if (!xen_initial_domain())
 		return;
 	// Need cancel the i/o forwarding
@@ -171,7 +169,6 @@ static void __exit vgt_exit_module(void)
 	// fill other exit works here
 	vgt_destroy();
 	vgt_klog_cleanup();
-	printk("VGT module exit %d\n", rc);
 	return;
 }
 module_exit(vgt_exit_module);

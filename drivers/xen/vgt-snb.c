@@ -414,22 +414,22 @@ static void vgt_snb_handle_virtual_interrupt(struct pgt_device *dev, enum vgt_ow
 {
 	int i;
 	if (vgt_gt_iir(dev)) {
-		dprintk("vGT-IRQ-SNB: handle virtual gt_iir(%x)\n", vgt_gt_iir(dev));
+		vgt_dbg("vGT-IRQ-SNB: handle virtual gt_iir(%x)\n", vgt_gt_iir(dev));
 		vgt_irq_handle_event(dev, &vgt_gt_iir(dev), &snb_render_irq_info, false, type);
 	}
 
 	if (vgt_pm_iir(dev)) {
-		dprintk("vGT-IRQ-SNB: handle virtual pm_iir(%x)\n", vgt_pm_iir(dev));
+		vgt_dbg("vGT-IRQ-SNB: handle virtual pm_iir(%x)\n", vgt_pm_iir(dev));
 		vgt_irq_handle_event(dev, &vgt_pm_iir(dev), &snb_pm_irq_info, false, type);
 	}
 
 	if (vgt_sde_iir(dev)) {
-		dprintk("vGT-IRQ-SNB: handle virtual sde_iir(%x)\n", vgt_sde_iir(dev));
+		vgt_dbg("vGT-IRQ-SNB: handle virtual sde_iir(%x)\n", vgt_sde_iir(dev));
 		vgt_irq_handle_event(dev, &vgt_sde_iir(dev), &snb_pch_irq_info, false, type);
 	}
 
 	if (vgt_de_iir(dev)) {
-		dprintk("vGT-IRQ-SNB: handle virtual de_iir(%x)\n", vgt_de_iir(dev));
+		vgt_dbg("vGT-IRQ-SNB: handle virtual de_iir(%x)\n", vgt_de_iir(dev));
 		if (dev->is_sandybridge)
 			vgt_irq_handle_event(dev, &vgt_de_iir(dev), &snb_dpy_irq_info, false, type);
 		else if (dev->is_ivybridge || dev->is_haswell)
@@ -469,10 +469,10 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 	if (!gt_iir && !de_iir && !pm_iir)
 		return IRQ_NONE;
 
-	dprintk("vGT-IRQ-SNB: handle gt_iir(%x)\n", gt_iir);
+	vgt_dbg("vGT-IRQ-SNB: handle gt_iir(%x)\n", gt_iir);
 	vgt_irq_handle_event(dev, &gt_iir, &snb_render_irq_info, true, VGT_OT_NONE);
 
-	dprintk("vGT-IRQ-SNB: handle de_iir(%x), tmp_de_iir(%x)\n", de_iir, tmp_de_iir);
+	vgt_dbg("vGT-IRQ-SNB: handle de_iir(%x), tmp_de_iir(%x)\n", de_iir, tmp_de_iir);
 	if (dev->is_sandybridge) {
 		if (de_iir & _REGBIT_PCH)
 			pch_irq = 1;
@@ -485,12 +485,12 @@ static irqreturn_t vgt_snb_interrupt(struct pgt_device *dev)
 		vgt_irq_handle_event(dev, &tmp_de_iir, &gen7_de_irq_info, true, VGT_OT_NONE);
 	}
 
-	dprintk("vGT-IRQ-SNB: handle pm_iir(%x)\n", pm_iir);
+	vgt_dbg("vGT-IRQ-SNB: handle pm_iir(%x)\n", pm_iir);
 	vgt_irq_handle_event(dev, &pm_iir, &snb_pm_irq_info, true, VGT_OT_NONE);
 
 	if (pch_irq) {
 		sde_iir = VGT_MMIO_READ(dev, _REG_SDEIIR);
-		dprintk("vGT-IRQ-SNB: handle sde_iir(%x)\n", sde_iir);
+		vgt_dbg("vGT-IRQ-SNB: handle sde_iir(%x)\n", sde_iir);
 		vgt_irq_handle_event(dev, &sde_iir, &snb_pch_irq_info, true, VGT_OT_NONE);
 		VGT_MMIO_WRITE(dev, _REG_SDEIIR, sde_iir);
 	}
@@ -735,7 +735,7 @@ enum vgt_event_type vgt_snb_get_event_type_from_bit(struct pgt_device *dev, uint
 	struct vgt_irq_info *info = vgt_snb_get_irq_info_from_reg(dev, reg);
 
 	ASSERT(info != NULL);
-	dprintk("vGT-IRQ-SNB: search table (%s) for bit(%d) with type(%d, %s)\n",
+	vgt_dbg("vGT-IRQ-SNB: search table (%s) for bit(%d) with type(%d, %s)\n",
 		info->name, bit, info->table[bit].event, vgt_irq_name[info->table[bit].event]);
 	return info->table[bit].event;
 }

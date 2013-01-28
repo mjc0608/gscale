@@ -82,11 +82,17 @@ extern int dom0_gm_sz;
 extern int dom0_fence_sz;
 extern bool bypass_scan;
 
-#define dprintk(fmt, a...)	\
-	do { if (vgt_debug) printk("vGT:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##a); } while (0)
+#define vgt_info(fmt, s...)	\
+	do { printk(KERN_INFO "vGT info:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
 
-#define snb_device(dev)	1
-#define ivb_device(dev)	0
+#define vgt_warn(fmt, s...)	\
+	do { printk(KERN_WARNING "vGT warning:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
+
+#define vgt_err(fmt, s...)	\
+	do { printk(KERN_ERR "vGT error:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
+
+#define vgt_dbg(fmt, s...)	\
+	do { if (vgt_debug) printk(KERN_DEBUG "vGT debug:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
 
 typedef uint32_t vgt_reg_t;
 

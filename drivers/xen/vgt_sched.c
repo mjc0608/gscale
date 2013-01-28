@@ -131,7 +131,7 @@ static enum hrtimer_restart vgt_tbs_timer_fn(struct hrtimer *data)
 			current_render_owner(pdev));
 
 	if (vgt_chk_raised_request(pdev, VGT_REQUEST_CTX_SWITCH))
-		dprintk("Warning: last request for ctx_switch not handled yet!\n");
+		vgt_dbg("Warning: last request for ctx_switch not handled yet!\n");
 
 	vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 
@@ -366,7 +366,7 @@ bool is_vgt_rb_tailq_empty(struct vgt_device *vgt, int max_engines)
 		if (test_bit(ring_id, (void *)vgt->started_rings)
 				&& !is_vgt_tailq_empty(&vgt->rb_tailq[ring_id])) {
 			/* check how many tail-writings can be cached */
-			dprintk("vGT(%d): rb(%d) tailq length(%d)\n",
+			vgt_dbg("vGT(%d): rb(%d) tailq length(%d)\n",
 					vgt->vgt_id, ring_id,
 					vgt_tailq_len(&vgt->rb_tailq[ring_id]));
 			return false;
@@ -587,7 +587,7 @@ static void vgt_alloc_tslice(struct vgt_device *vgt)
 	int64_t *ts = &(vgt->sched_info.time_slice);
 	if (*ts > 0)
 		return;
-	dprintk("vgt(%d): allocate tslice %lld\n",
+	vgt_dbg("vgt(%d): allocate tslice %lld\n",
 			vgt->vgt_id,
 			VGT_DEFAULT_TSLICE);
 
@@ -722,7 +722,7 @@ void vgt_sched_ctx(struct pgt_device *pdev)
 
 	/* time slice not used up */
 	if (cur_time < ctx_end_time(cur_vgt)) {
-		dprintk("vgt(%d): cur_time(%lld), [%lld, %lld]\n",
+		vgt_dbg("vgt(%d): cur_time(%lld), [%lld, %lld]\n",
 				cur_vgt->vgt_id,
 				cur_time,
 				ctx_start_time(cur_vgt),
@@ -731,7 +731,7 @@ void vgt_sched_ctx(struct pgt_device *pdev)
 		return;
 	}
 
-	dprintk("vgt(%d): tslice used up, cur_time(%lld), ctx_end_time(%lld)\n",
+	vgt_dbg("vgt(%d): tslice used up, cur_time(%lld), ctx_end_time(%lld)\n",
 			cur_vgt->vgt_id,
 			cur_time,
 			ctx_end_time(cur_vgt));
@@ -750,8 +750,8 @@ void vgt_sched_ctx(struct pgt_device *pdev)
 			return;
 		}
 
-		dprintk("try to switch to vgt(%d), cur_time(%lld)\n", next_vgt->vgt_id, cur_time);
-		dprintk("vgt(%d): rb wait(%lld) to be empty\n",
+		vgt_dbg("try to switch to vgt(%d), cur_time(%lld)\n", next_vgt->vgt_id, cur_time);
+		vgt_dbg("vgt(%d): rb wait(%lld) to be empty\n",
 				cur_vgt->vgt_id,
 				ctx_rb_empty_delay(cur_vgt));
 

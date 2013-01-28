@@ -326,7 +326,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 	ring_mmio_wcnt++;
 	ASSERT(bytes <= 4);
-	dprintk("vGT:ring_mmio_write (0x%x) with val (0x%x)\n", off, *((u32 *)p_data));
+	vgt_dbg("vGT:ring_mmio_write (0x%x) with val (0x%x)\n", off, *((u32 *)p_data));
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 	ASSERT(!(rel_off & (bytes - 1)));
 
@@ -442,13 +442,13 @@ static inline void set_vRC(struct vgt_device *vgt, int c)
 
 static void set_vRC_to_C6(struct vgt_device *vgt)
 {
-	dprintk("Virtual Render C state set to C6\n");
+	vgt_dbg("Virtual Render C state set to C6\n");
 	set_vRC(vgt, 3);
 }
 
 static void set_vRC_to_C0(struct vgt_device *vgt)
 {
-	dprintk("Virtual Render C state set to C0\n");
+	vgt_dbg("Virtual Render C state set to C0\n");
 	set_vRC(vgt, 0);
 }
 
@@ -504,7 +504,7 @@ bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 
 	data = (*(uint32_t*) p_data) & 1 ;
 
-	dprintk("VM%d write register FORCE_WAKE with %x\n", vgt->vm_id, data);
+	vgt_dbg("VM%d write register FORCE_WAKE with %x\n", vgt->vm_id, data);
 
 	if (vgt->pdev->is_haswell) {
 		__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = data;
@@ -545,7 +545,7 @@ bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 
 	data = *(uint32_t*) p_data;
 
-	dprintk("VM%d write register FORCE_WAKE_MT with %x\n", vgt->vm_id, data);
+	vgt_dbg("VM%d write register FORCE_WAKE_MT with %x\n", vgt->vm_id, data);
 
 	if (!(__vreg(vgt, _REG_ECOBUS) & ECOBUS_FORCEWAKE_MT_ENABLE)){
 		__vreg(vgt, _REG_MUL_FORCEWAKE) = data;
@@ -795,7 +795,7 @@ void vgt_try_setup_ppgtt(struct vgt_device *vgt)
 			return;
 		}
 	}
-	dprintk("zhen: all rings are set PPGTT base and use single table!\n");
+	vgt_dbg("zhen: all rings are set PPGTT base and use single table!\n");
 	vgt_setup_ppgtt(vgt);
 }
 
@@ -828,7 +828,7 @@ bool rcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 
 	*(u32 *)p_data = v_info->base;
 
-	dprintk("RCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
+	vgt_dbg("RCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
 
 	return true;
 }
@@ -840,7 +840,7 @@ bool rcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
-	dprintk("RCS_PP_DIR_BASE write: 0x%x\n", base);
+	vgt_dbg("RCS_PP_DIR_BASE write: 0x%x\n", base);
 	ring_pp_dir_base_write(vgt, RING_BUFFER_RCS, off, base);
 	return true;
 }
@@ -853,7 +853,7 @@ bool bcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->base;
-	dprintk("BCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
+	vgt_dbg("BCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
 	return true;
 }
 
@@ -864,7 +864,7 @@ bool bcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
-	dprintk("BCS_PP_DIR_BASE write: 0x%x\n", base);
+	vgt_dbg("BCS_PP_DIR_BASE write: 0x%x\n", base);
 	ring_pp_dir_base_write(vgt, RING_BUFFER_BCS, off, base);
 	return true;
 }
@@ -877,7 +877,7 @@ bool vcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->base;
-	dprintk("VCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
+	vgt_dbg("VCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
 	return true;
 }
 
@@ -888,7 +888,7 @@ bool vcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
-	dprintk("VCS_PP_DIR_BASE write: 0x%x\n", base);
+	vgt_dbg("VCS_PP_DIR_BASE write: 0x%x\n", base);
 	ring_pp_dir_base_write(vgt, RING_BUFFER_VCS, off, base);
 	return true;
 }
@@ -901,7 +901,7 @@ bool vecs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->base;
-	dprintk("VECS_PP_DIR_BASE read: 0x%x\n", v_info->base);
+	vgt_dbg("VECS_PP_DIR_BASE read: 0x%x\n", v_info->base);
 	return true;
 }
 
@@ -914,7 +914,7 @@ bool vecs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 
 	vgt->vebox_support = true;
 
-	dprintk("VECS_PP_DIR_BASE write: 0x%x\n", base);
+	vgt_dbg("VECS_PP_DIR_BASE write: 0x%x\n", base);
 	ring_pp_dir_base_write(vgt, RING_BUFFER_VECS, off, base);
 	return true;
 }
@@ -937,7 +937,7 @@ bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
 	__vreg(vgt, off) = dclv;
 	__sreg(vgt, off) = dclv;
 
-	dprintk("PP_DCLV write: 0x%x\n", dclv);
+	vgt_dbg("PP_DCLV write: 0x%x\n", dclv);
 	return true;
 }
 
@@ -949,7 +949,7 @@ bool rcs_gfx_mode_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->mode;
-	dprintk("RCS_GFX_MODE read: 0x%x\n", v_info->mode);
+	vgt_dbg("RCS_GFX_MODE read: 0x%x\n", v_info->mode);
 	return true;
 }
 
@@ -961,7 +961,7 @@ bool bcs_blt_mode_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->mode;
-	dprintk("BCS_BLT_MODE read: 0x%x\n", v_info->mode);
+	vgt_dbg("BCS_BLT_MODE read: 0x%x\n", v_info->mode);
 	return true;
 }
 
@@ -973,7 +973,7 @@ bool vcs_mfx_mode_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->mode;
-	dprintk("VCS_MFX_MODE read: 0x%x\n", v_info->mode);
+	vgt_dbg("VCS_MFX_MODE read: 0x%x\n", v_info->mode);
 	return true;
 }
 
@@ -985,7 +985,7 @@ bool vecs_mfx_mode_read(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->mode;
-	dprintk("VECS_MFX_MODE read: 0x%x\n", v_info->mode);
+	vgt_dbg("VECS_MFX_MODE read: 0x%x\n", v_info->mode);
 	return true;
 }
 
@@ -1001,7 +1001,7 @@ int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
 	__vreg(vgt, off) = mode;
 
 	if (reg_hw_access(vgt, off)) {
-		dprintk("RING mode: offset 0x%x write 0x%x\n", off, s_info->mode);
+		vgt_dbg("RING mode: offset 0x%x write 0x%x\n", off, s_info->mode);
 		VGT_MMIO_WRITE(vgt->pdev, off, s_info->mode);
 	}
 
@@ -1025,7 +1025,7 @@ bool rcs_gfx_mode_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
-	dprintk("RCS_GFX_MODE write: 0x%x\n", mode);
+	vgt_dbg("RCS_GFX_MODE write: 0x%x\n", mode);
 	ring_ppgtt_mode(vgt, RING_BUFFER_RCS, off, mode);
 
 	return true;
@@ -1038,7 +1038,7 @@ bool bcs_blt_mode_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
-	dprintk("BCS_BLT_MODE write: 0x%x\n", mode);
+	vgt_dbg("BCS_BLT_MODE write: 0x%x\n", mode);
 	ring_ppgtt_mode(vgt, RING_BUFFER_BCS, off, mode);
 
 	return true;
@@ -1051,7 +1051,7 @@ bool vcs_mfx_mode_write(struct vgt_device *vgt, unsigned int off,
 
 	ASSERT(bytes == 4);
 
-	dprintk("VCS_MFX_MODE write: 0x%x\n", mode);
+	vgt_dbg("VCS_MFX_MODE write: 0x%x\n", mode);
 	ring_ppgtt_mode(vgt, RING_BUFFER_VCS, off, mode);
 
 	return true;
@@ -1066,7 +1066,7 @@ bool vecs_mfx_mode_write(struct vgt_device *vgt, unsigned int off,
 
 	vgt->vebox_support = true;
 
-	dprintk("VECS_MFX_MODE write: 0x%x\n", mode);
+	vgt_dbg("VECS_MFX_MODE write: 0x%x\n", mode);
 	ring_ppgtt_mode(vgt, RING_BUFFER_VECS, off, mode);
 
 	return true;
@@ -1613,7 +1613,7 @@ bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		BUG();
 
 	if (0 == queue_work(pdev->pgt_wq, &vgt->fb_debugfs_work))
-		dprintk("vGT: failed to submit aready attached work!\n");
+		vgt_dbg("vGT: failed to submit aready attached work!\n");
 
 	return true;
 }
@@ -1998,7 +1998,7 @@ static struct vm_struct *map_hvm_iopage(struct vgt_device *vgt)
 void vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
      unsigned int port, unsigned int bytes, unsigned long val)
 {
-    dprintk("vgt_hvm_write_cf8_cfc %x %d %lx\n", port, bytes, val);
+    vgt_dbg("vgt_hvm_write_cf8_cfc %x %d %lx\n", port, bytes, val);
     if ( (port & ~3) == 0xcf8 ) {
         ASSERT (bytes == 4);
         ASSERT ((port & 3) == 0);
@@ -2030,7 +2030,7 @@ void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
                      &data, bytes);
         memcpy(val, &data, bytes);
     }
-    dprintk("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
+    vgt_dbg("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
                port, bytes, *val);
 }
 
@@ -2058,7 +2058,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 		if (!req->data_is_ptr) {
 			ASSERT (req->count == 1);
 
-			//dprintk("HVM_MMIO_read: target register (%lx).\n",
+			//vgt_dbg("HVM_MMIO_read: target register (%lx).\n",
 			//	(unsigned long)req->addr);
 			vgt_emulate_read(vgt, req->addr, &req->data, req->size);
 		}
@@ -2066,7 +2066,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 			ASSERT (req->addr + sign * req->count * req->size >= base);
 			ASSERT (req->addr + sign * req->count * req->size <
 				base + vgt->state.bar_size[0]);
-			//dprintk("HVM_MMIO_read: rep %d target memory %lx, slow!\n",
+			//vgt_dbg("HVM_MMIO_read: rep %d target memory %lx, slow!\n",
 			//	req->count, (unsigned long)req->addr);
 
 			for (i = 0; i < req->count; i++) {
@@ -2079,7 +2079,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 				if (gva != NULL && vgt->pdev->is_haswell)
 					memcpy(gva, &tmp, req->size);
 				else
-					dprintk("vGT: can not write gpa = 0x%lx!!!\n", gpa);
+					vgt_dbg("vGT: can not write gpa = 0x%lx!!!\n", gpa);
 			}
 		}
 		t1 = get_cycles();
@@ -2091,14 +2091,14 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 		mmio_wcnt++;
 		if (!req->data_is_ptr) {
 			ASSERT (req->count == 1);
-			//dprintk("HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
+			//vgt_dbg("HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
 			vgt_emulate_write(vgt, req->addr, &req->data, req->size);
 		}
 		else {
 			ASSERT (req->addr + sign * req->count * req->size >= base);
 			ASSERT (req->addr + sign * req->count * req->size <
 				base + vgt->state.bar_size[0]);
-			//dprintk("HVM_MMIO_write: rep %d target memory %lx, slow!\n",
+			//vgt_dbg("HVM_MMIO_write: rep %d target memory %lx, slow!\n",
 			//	req->count, (unsigned long)req->addr);
 
 			for (i = 0; i < req->count; i++) {
@@ -2108,7 +2108,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 					memcpy(&tmp, gva, req->size);
 				else {
 					tmp = 0;
-					dprintk("vGT: can not read gpa = 0x%lx!!!\n", gpa);
+					vgt_dbg("vGT: can not read gpa = 0x%lx!!!\n", gpa);
 				}
 				vgt_emulate_write(vgt, req->addr + sign * i * req->size, &tmp, req->size);
 			}
@@ -2135,7 +2135,7 @@ void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
                   (unsigned long*) &ioreq->data);
         }
         else {
-            dprintk("VGT: _hvm_pio_emulation read data_ptr %lx\n",
+            vgt_dbg("VGT: _hvm_pio_emulation read data_ptr %lx\n",
 			(long)ioreq->data);
             /*
              * The data pointer of emulation is guest physical address
@@ -2166,7 +2166,7 @@ void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
                   (unsigned long) ioreq->data);
         }
         else {
-            dprintk("VGT: _hvm_pio_emulation write data_ptr %lx\n",
+            vgt_dbg("VGT: _hvm_pio_emulation write data_ptr %lx\n",
 			(long)ioreq->data);
             /*
              * The data pointer of emulation is guest physical address
@@ -3531,7 +3531,7 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 	printk("post mmio hooks initialized\n");
 
 	if (pdev->enable_ppgtt) {
-		dprintk("Hook up PPGTT register handlers\n");
+		vgt_dbg("Hook up PPGTT register handlers\n");
 		/* trap PPGTT base register */
 		reg_update_handlers(pdev, _REG_RCS_PP_DIR_BASE_IVB, 4,
 				rcs_pp_dir_base_read, rcs_pp_dir_base_write);

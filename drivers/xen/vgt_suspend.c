@@ -133,7 +133,7 @@ struct vgt_intel_device_info *vgt_devinfo = &snb_devinfo;
 #define vgt_restore_mmio_reg_64(offset)                         \
     do {                                                        \
         if (!reg_is_owner(vgt, (offset))) {                     \
-            dprintk("vGT: restore non-owner reg(%x)\n", (offset)); \
+            vgt_dbg("vGT: restore non-owner reg(%x)\n", (offset)); \
             break;                                              \
         }                                                       \
         __sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset)));  \
@@ -144,7 +144,7 @@ struct vgt_intel_device_info *vgt_devinfo = &snb_devinfo;
 #define vgt_restore_mmio_reg_8(offset) \
     do {                                    \
         if (!reg_is_owner(vgt, (offset))) {                     \
-            dprintk("vGT: restore non-owner reg(%x)\n", (offset)); \
+            vgt_dbg("vGT: restore non-owner reg(%x)\n", (offset)); \
             break;                                              \
         }                                                       \
         __sreg8(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg8(vgt, (offset))); \

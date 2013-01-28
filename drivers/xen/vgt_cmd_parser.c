@@ -236,11 +236,11 @@ static void vgt_print_opcode(uint32_t cmd, int ring_id)
 	if (d_info == NULL)
 		return;
 
-	printk(KERN_ERR"opcode=0x%x %s sub_ops:", cmd >> (32 - d_info->op_len), d_info->name);
+	vgt_err("opcode=0x%x %s sub_ops:", cmd >> (32 - d_info->op_len), d_info->name);
 	for (i=0; i< d_info->nr_sub_op; i++){
-		printk(KERN_ERR"0x%x ", sub_op_val(cmd, d_info->sub_op[i].hi,  d_info->sub_op[i].low));
+		vgt_err("0x%x ", sub_op_val(cmd, d_info->sub_op[i].hi,  d_info->sub_op[i].low));
 	}
-	printk(KERN_ERR"\n");
+	vgt_err("\n");
 }
 
 static inline struct cmd_info* vgt_get_cmd_info(uint32_t cmd, int ring_id)
@@ -270,18 +270,18 @@ static inline uint32_t cmd_val(struct parser_exec_state *s, int index)
 
 static void parser_exec_state_dump(struct parser_exec_state *s)
 {
-	printk(KERN_ERR"  vgt%d RING%d: ring_start(%08lx) ring_end(%08lx)"
+	vgt_err("  vgt%d RING%d: ring_start(%08lx) ring_end(%08lx)"
 			" ring_head(%08lx) ring_tail(%08lx)\n", s->vgt->vgt_id,
 			s->ring_id, s->ring_start, s->ring_start + s->ring_size, s->ring_head, s->ring_tail);
 
-	printk(KERN_ERR"  %s %s ip_gma(%08lx) ",
+	vgt_err("  %s %s ip_gma(%08lx) ",
 			s->buf_type == RING_BUFFER_INSTRUCTION ? "RING_BUFFER": "BATCH_BUFFER",
 			s->buf_addr_type == GTT_BUFFER ? "GTT" : "PPGTT", s->ip_gma);
 
 	if (s->ip_va == NULL){
-		printk(KERN_ERR" ip_va(NULL)\n");
+		vgt_err(" ip_va(NULL)\n");
 	}else{
-		printk(KERN_ERR"  ip_va=%p: %08x %08x %08x %08x \n",
+		vgt_err("  ip_va=%p: %08x %08x %08x %08x \n",
 				s->ip_va, cmd_val(s,0), cmd_val(s,1),cmd_val(s,2), cmd_val(s,3));
 		vgt_print_opcode(cmd_val(s,0), s->ring_id);
 	}
@@ -306,7 +306,7 @@ static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)
 			s->buf_addr_type == PPGTT_BUFFER);
 
 	if (s->ip_va == NULL){
-		printk(KERN_ERR"ERROR: gma %lx is invalid, fail to set\n",s->ip_gma);
+		vgt_err("ERROR: gma %lx is invalid, fail to set\n",s->ip_gma);
 		dump_stack();
 		parser_exec_state_dump(s);
 		return -EFAULT;
@@ -326,7 +326,7 @@ static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)
 			s->buf_addr_type == PPGTT_BUFFER);
 
 	if (s->ip_va_next_page == NULL){
-		printk(KERN_ERR"ERROR: next page gma %lx is invalid, fail to set\n",gma_next_page);
+		vgt_err("ERROR: next page gma %lx is invalid, fail to set\n",gma_next_page);
 		dump_stack();
 		parser_exec_state_dump(s);
 		return -EFAULT;
@@ -371,7 +371,7 @@ static inline int cmd_length(struct parser_exec_state *s)
 static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
 {
 	if (cmd_val(s,0) & VGT_NOOP_ID_MASK){
-		printk(KERN_ERR "WANRING: Guest reuse cmd buffer! Need ");
+		vgt_err("WANRING: Guest reuse cmd buffer! Need ");
 		parser_exec_state_dump(s);
 		return -EFAULT;
 	}
@@ -406,7 +406,7 @@ static int vgt_cmd_handler_mi_update_gtt(struct parser_exec_state *s)
 	entry_num = cmd_val(s,0) & ((1U<<8) - 1); /* bit 7:0 */
 	entry = v_aperture(s->vgt->pdev, cmd_val(s,1));
 	for (i=0; i<entry_num; i++){
-		dprintk("vgt: update GTT entry %d\n", i);
+		vgt_dbg("vgt: update GTT entry %d\n", i);
 		/*TODO: optimize by batch g2m translation*/
 		rc = gtt_p2m(s->vgt, entry[i], &entry[i] );
 		if (rc < 0){
@@ -470,7 +470,7 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct parser_exec_state *s)
 	rc = ip_gma_set(s, cmd_val(s,1) & BATCH_BUFFER_ADDR_MASK);
 
 	if (rc < 0){
-		printk(KERN_WARNING"invalid batch buffer addr, so skip scanning it\n");
+		vgt_warn("invalid batch buffer addr, so skip scanning it\n");
 	}
 
 	return rc;
@@ -1250,7 +1250,7 @@ static int cmd_hash_init(struct pgt_device *pdev)
 
 	for (i=0; i< ARRAY_SIZE(cmd_info); i++){
 		if (!(cmd_info[i].devices & gen_type)){
-			printk("CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] not registered\n",
+			vgt_dbg("CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] not registered\n",
 					cmd_info[i].name, cmd_info[i].opcode, cmd_info[i].flag,
 					cmd_info[i].devices, cmd_info[i].rings);
 			continue;
@@ -1258,20 +1258,20 @@ static int cmd_hash_init(struct pgt_device *pdev)
 
 		e = kmalloc(sizeof(*e), GFP_KERNEL);
 		if (e == NULL) {
-			printk("Insufficient memory in %s\n", __FUNCTION__);
+			vgt_err("Insufficient memory in %s\n", __FUNCTION__);
 			return -ENOMEM;
 		}
 		e->info = &cmd_info[i];
 
 		info = vgt_find_cmd_entry_any_ring(e->info->opcode, e->info->rings);
 		if (info){
-			printk("%s %s duplicated\n", e->info->name, info->name);
+			vgt_err("%s %s duplicated\n", e->info->name, info->name);
 			return -EINVAL;
 		}
 
 		INIT_HLIST_NODE(&e->hlist);
 		vgt_add_cmd_entry(e);
-		printk("CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] registered\n",
+		vgt_info("CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] registered\n",
 				e->info->name,e->info->opcode, e->info->flag, e->info->devices,
 				e->info->rings);
 	}
@@ -1287,7 +1287,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 
 	info = vgt_get_cmd_info(*s->ip_va, s->ring_id);
 	if(info == NULL){
-		printk(KERN_ERR"ERROR: unknown cmd 0x%x, opcode=0x%x\n", *s->ip_va,
+		vgt_err("ERROR: unknown cmd 0x%x, opcode=0x%x\n", *s->ip_va,
 				vgt_get_opcode(*s->ip_va, s->ring_id));
 		parser_exec_state_dump(s);
 		klog_printk("ERROR: unknown cmd %x, ring%d[%lx,%lx] gma[%lx] va[%p]\n",
@@ -1310,7 +1310,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 	if (info->handler){
 		rc = info->handler(s);
 		if (rc < 0){
-			printk("%s: %s handler error", __func__, info->name);
+			vgt_err("%s: %s handler error", __func__, info->name);
 			return rc;
 		}
 	}
@@ -1318,7 +1318,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 	if (!(info->flag & F_IP_ADVANCE_CUSTOM)){
 		rc = vgt_cmd_advance_default(s);
 		if (rc < 0){
-			printk("%s: %s IP advance error", __func__, info->name);
+			vgt_err("%s: %s IP advance error", __func__, info->name);
 			return rc;
 		}
 	}
@@ -1383,13 +1383,13 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	}
 
 	klog_printk("ring buffer scan start on ring %d\n", ring_id);
-	dprintk("scan_start: start=%lx end=%lx\n", gma_head, gma_tail);
+	vgt_dbg("scan_start: start=%lx end=%lx\n", gma_head, gma_tail);
 	while(s.ip_gma != gma_tail){
 		if (s.buf_type == RING_BUFFER_INSTRUCTION){
 			ASSERT((s.ip_gma >= base) && (s.ip_gma < gma_bottom));
 			if (gma_out_of_range(s.ip_gma, gma_head, gma_tail)){
 				error_count++;
-				printk(KERN_ERR"ERROR: ip_gma %lx out of range\n", s.ip_gma);
+				vgt_err("ERROR: ip_gma %lx out of range\n", s.ip_gma);
 				break;
 			}
 		}
@@ -1403,16 +1403,16 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		rc = vgt_cmd_parser_exec(&s);
 		if (rc < 0){
 			error_count++;
-			printk(KERN_ERR"error_count=%d\n", error_count);
+			vgt_err("error_count=%d\n", error_count);
 			if (error_count >= MAX_PARSER_ERROR_NUM){
-				printk(KERN_ERR "Reach max error number,stop parsing\n");
+				vgt_err("Reach max error number,stop parsing\n");
 			}
 			klog_printk("error_count=%d\n", error_count);
 			break;
 		}
 	}
 	klog_printk("ring buffer scan end on ring %d\n", ring_id);
-	dprintk("scan_end\n");
+	vgt_dbg("scan_end\n");
 	return rc;
 }
 
@@ -1430,7 +1430,7 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 
 	if ( !(vring->ctl & _RING_CTL_ENABLE) ) {
 		/* Ring is enabled */
-		printk("VGT-Parser.c vring head %x tail %x ctl %x\n",
+		vgt_dbg("VGT-Parser.c vring head %x tail %x ctl %x\n",
 			vring->head, vring->tail, vring->ctl);
 		return 0;
 	}

@@ -72,7 +72,7 @@ unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
 
 	rc = HYPERVISOR_memory_op(XENMEM_get_mfn_from_pfn, &pfn_arg);
 	if(rc < 0){
-		printk(KERN_ERR "failed to get mfn for gpfn(0x%lx)\n, errno=%d\n", g_pfn,rc);
+		vgt_err("failed to get mfn for gpfn(0x%lx)\n, errno=%d\n", g_pfn,rc);
 		return INVALID_MFN;
 	}
 
@@ -130,7 +130,7 @@ int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val)
 
 	mfn = g2m_pfn(vgt->vm_id, g_pfn);
 	if (mfn == INVALID_MFN){
-		printk(KERN_ERR "Invalid gtt entry 0x%x\n", p_gtt_val);
+		vgt_err("Invalid gtt entry 0x%x\n", p_gtt_val);
 		return -EINVAL;
 	}
 
@@ -149,7 +149,7 @@ unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma)
 
 	/* Global GTT */
 	if (!g_gm_is_valid(vgt, gma)) {
-		printk(KERN_ERR "invalid gma %lx\n", gma);
+		vgt_err("invalid gma %lx\n", gma);
 		return INVALID_ADDR;
 	}
 	gtt_index = gma >> GTT_PAGE_SHIFT;
@@ -169,7 +169,7 @@ static unsigned long vgt_gma_2_shadow_gpa(struct vgt_device *vgt, unsigned long 
 	/* gpa is physical pfn from shadow page table, we need VM's
 	 * pte page entry */
 	if (!p->guest_pte_va) {
-		printk(KERN_WARNING "No guest pte mapping? index %lu\n",(gma >> 22) & 0x3ff);
+		vgt_warn("No guest pte mapping? index %lu\n",(gma >> 22) & 0x3ff);
 		return INVALID_ADDR;
 	}
 
@@ -210,7 +210,7 @@ void* vgt_gma_to_va(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
 	}
 
 	if (gpa == INVALID_ADDR) {
-		printk(KERN_WARNING "invalid gpa! gma 0x%lx, ppgtt %s\n", gma, ppgtt ? "yes":"no");
+		vgt_warn("invalid gpa! gma 0x%lx, ppgtt %s\n", gma, ppgtt ? "yes":"no");
 		return NULL;
 	}
 
@@ -225,11 +225,11 @@ vgt_ppgtt_pde_write(struct vgt_device *vgt, unsigned int g_gtt_index, u32 g_gtt_
 	u32 h_gtt_index;
 
 	if (vgt->shadow_pde_table[i].entry == g_gtt_val) {
-		dprintk("write same PDE value?\n");
+		vgt_dbg("write same PDE value?\n");
 		return;
 	}
 
-	dprintk("write PDE[%d] old: 0x%x new: 0x%x\n", i, vgt->shadow_pde_table[i].entry, g_gtt_val);
+	vgt_dbg("write PDE[%d] old: 0x%x new: 0x%x\n", i, vgt->shadow_pde_table[i].entry, g_gtt_val);
 
 	if (vgt->shadow_pde_table[i].entry & _REGBIT_PDE_VALID)
 		vgt_unset_wp_page(vgt, vgt->shadow_pde_table[i].virtual_phyaddr >> PAGE_SHIFT);
@@ -254,7 +254,7 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	gtt_mmio_rcnt++;
 	off -= vgt->pdev->mmio_size;
 	if (off >= vgt->vgtt_sz) {
-		dprintk("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
+		vgt_dbg("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
 		return false;
 	}
 
@@ -293,7 +293,7 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 		/* print info every 32MB */
 		if (!(count % 8192))
-			dprintk("vGT(%d): capture ballooned write for %d times (%x)\n",
+			vgt_dbg("vGT(%d): capture ballooned write for %d times (%x)\n",
 				vgt->vgt_id, count, off);
 
 		count++;
@@ -304,14 +304,14 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	if (vgt->ppgtt_initialized &&
 			g_gtt_index >= vgt->ppgtt_base &&
 			g_gtt_index < vgt->ppgtt_base + VGT_PPGTT_PDE_ENTRIES) {
-		dprintk("vGT(%d): Change PPGTT PDE %d!\n", vgt->vgt_id, g_gtt_index);
+		vgt_dbg("vGT(%d): Change PPGTT PDE %d!\n", vgt->vgt_id, g_gtt_index);
 		vgt_ppgtt_pde_write(vgt, g_gtt_index, g_gtt_val);
 		goto out;
 	}
 
 	rc = gtt_p2m(vgt, g_gtt_val, &h_gtt_val);
 	if (rc < 0){
-		printk("vGT(%d): failed to translate g_gtt_val(%x)\n", vgt->vgt_id, g_gtt_val);
+		vgt_err("vGT(%d): failed to translate g_gtt_val(%x)\n", vgt->vgt_id, g_gtt_val);
 		return false;
 	}
 
@@ -345,7 +345,7 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e
 	u32 *pte;
 	unsigned long g_val = 0, g_addr = 0, h_addr = 0;
 
-	dprintk("PTE WP handler: offset 0x%x data 0x%lx bytes %d\n", offset, *(unsigned long *)p_data, bytes);
+	vgt_dbg("PTE WP handler: offset 0x%x data 0x%lx bytes %d\n", offset, *(unsigned long *)p_data, bytes);
 
 	i = e->idx;
 
@@ -359,7 +359,7 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e
 
 	h_addr = g2m_pfn(vgt->vm_id, g_addr);
 	if (h_addr == INVALID_MFN) {
-		printk(KERN_ERR "Failed to convert WP page at 0x%lx\n", g_addr);
+		vgt_err("Failed to convert WP page at 0x%lx\n", g_addr);
 		return false;
 	}
 
@@ -374,7 +374,7 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e
 	clflush((u8 *)pte + index * 4);
 	kunmap_atomic(pte);
 
-	dprintk("WP: PDE[%d], PTE[%d], entry 0x%x, g_addr 0x%lx, h_addr 0x%lx\n", i, index, pte[index], g_addr, h_addr);
+	vgt_dbg("WP: PDE[%d], PTE[%d], entry 0x%x, g_addr 0x%lx, h_addr 0x%lx\n", i, index, pte[index], g_addr, h_addr);
 
 	return true;
 }
@@ -401,7 +401,7 @@ int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages,
 
 	rc = HYPERVISOR_hvm_op(HVMOP_vgt_wp_pages, &req);
 	if (rc)
-		printk(KERN_ERR "Set WP pages failed!\n");
+		vgt_err("Set WP pages failed!\n");
 	else {
 		/* Add pages in hash table */
 		struct vgt_wp_page_entry *mht;
@@ -443,7 +443,7 @@ int vgt_unset_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
 
 	rc = HYPERVISOR_hvm_op(HVMOP_vgt_wp_pages, &req);
 	if (rc)
-		printk(KERN_ERR "Unset WP pages failed!\n");
+		vgt_err("Unset WP pages failed!\n");
 	else {
 		for (i = 0; i < nr; i++)
 			vgt_del_wp_page_entry(vgt, *p++);
@@ -479,13 +479,13 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 	struct pgt_device *pdev = vgt->pdev;
 
 	if (!p->pte_page) {
-		printk(KERN_ERR "Uninitialized shadow PTE page at index %d?\n", idx);
+		vgt_err("Uninitialized shadow PTE page at index %d?\n", idx);
 		return -1;
 	}
 
 	p->guest_pte_va = vgt_vmem_gpa_2_va(vgt, virt_pte);
 	if (!p->guest_pte_va) {
-		printk(KERN_ERR "Failed to get guest PTE page memory access!\n");
+		vgt_err("Failed to get guest PTE page memory access!\n");
 		return -1;
 	}
 	ent = p->guest_pte_va;
@@ -503,7 +503,7 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 		/* get real physical address for that page */
 		s_addr = g2m_pfn(vgt->vm_id, addr);
 		if (s_addr == INVALID_MFN) {
-			printk("vGT[%d]: Failed to get machine address for 0x%lx\n",
+			vgt_err("vGT[%d]: Failed to get machine address for 0x%lx\n",
 			       vgt->vm_id, (unsigned long)addr);
 			return -1;
 		}
@@ -596,7 +596,7 @@ static void vgt_init_ppgtt_hw(struct vgt_device *vgt, u32 base)
 void vgt_ppgtt_switch(struct vgt_device *vgt)
 {
 	u32 base = vgt->rb[0].sring_ppgtt_info.base;
-	dprintk("vGT(%d): switch to ppgtt base 0x%x\n", vgt->vm_id, base);
+	vgt_dbg("vGT(%d): switch to ppgtt base 0x%x\n", vgt->vm_id, base);
 	vgt_init_ppgtt_hw(vgt, base);
 }
 
@@ -607,7 +607,7 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 	u32 pde, gtt_base;
 	unsigned int index;
 
-	printk(KERN_INFO "vgt_setup_ppgtt on vm %d: PDE base 0x%x\n", vgt->vm_id, base);
+	vgt_info("vgt_setup_ppgtt on vm %d: PDE base 0x%x\n", vgt->vm_id, base);
 
 	gtt_base = base >> PAGE_SHIFT;
 
@@ -643,20 +643,20 @@ bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 	vgt_ppgtt_pte_t *p;
 	dma_addr_t dma_addr;
 
-	dprintk("vgt_init_shadow_ppgtt for vm %d\n", vgt->vm_id);
+	vgt_dbg("vgt_init_shadow_ppgtt for vm %d\n", vgt->vm_id);
 
 	/* each PDE entry has one shadow PTE page */
 	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
 		p = &vgt->shadow_pte_table[i];
 		p->pte_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
 		if (!p->pte_page) {
-			printk(KERN_ERR "Init shadow PTE page failed!\n");
+			vgt_err("Init shadow PTE page failed!\n");
 			return false;
 		}
 
 		dma_addr = pci_map_page(pdev->pdev, p->pte_page, 0, PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
 		if (pci_dma_mapping_error(pdev->pdev, dma_addr)) {
-			printk(KERN_ERR "Pci map shadow PTE page failed!\n");
+			vgt_err("Pci map shadow PTE page failed!\n");
 			return false;
 		}
 

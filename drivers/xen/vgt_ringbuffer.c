@@ -122,7 +122,7 @@ void vgt_ring_start(struct vgt_ring_buffer *ring)
 	wait_for(((VGT_READ_CTL(pdev, id) & 1) != 0 &&
 			VGT_READ_START(pdev, id) == ring->offset &&
 			(VGT_READ_HEAD(pdev, id) & RB_HEAD_OFF_MASK) == 0), 50);
-	dprintk("start vgt ring at 0x%x\n", ring->offset);
+	vgt_dbg("start vgt ring at 0x%x\n", ring->offset);
 }
 
 void vgt_ring_advance(struct vgt_ring_buffer *ring)
