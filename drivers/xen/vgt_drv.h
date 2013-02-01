@@ -273,6 +273,7 @@ typedef struct {
 	dma_addr_t	virtual_phyaddr;
 	dma_addr_t	shadow_pte_maddr;
 	bool		big_page;	/* 32K page */
+	u32		entry;
 } vgt_ppgtt_pde_t;
 
 #define __vreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.vReg + off))

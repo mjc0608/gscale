@@ -53,6 +53,10 @@ u64 gtt_mmio_wcnt=0;
 u64 gtt_mmio_wcycles=0;
 u64 gtt_mmio_rcycles=0;
 
+static void
+vgt_ppgtt_pde_handle(struct vgt_device *vgt, unsigned int i, u32 pde);
+int vgt_unset_wp_page(struct vgt_device *vgt, unsigned long pfn);
+
 /* Translate from VM's guest pfn to machine pfn */
 unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
 {
@@ -213,6 +217,31 @@ void* vgt_gma_to_va(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
 	return vgt_vmem_gpa_2_va(vgt, gpa);
 }
 
+
+static void
+vgt_ppgtt_pde_write(struct vgt_device *vgt, unsigned int g_gtt_index, u32 g_gtt_val)
+{
+	int i = g_gtt_index - vgt->ppgtt_base;
+	u32 h_gtt_index;
+
+	if (vgt->shadow_pde_table[i].entry == g_gtt_val) {
+		dprintk("write same PDE value?\n");
+		return;
+	}
+
+	dprintk("write PDE[%d] old: 0x%x new: 0x%x\n", i, vgt->shadow_pde_table[i].entry, g_gtt_val);
+
+	if (vgt->shadow_pde_table[i].entry & _REGBIT_PDE_VALID)
+		vgt_unset_wp_page(vgt, vgt->shadow_pde_table[i].virtual_phyaddr >> PAGE_SHIFT);
+
+	if (!(g_gtt_val & _REGBIT_PDE_VALID)) {
+		h_gtt_index = g2h_gtt_index(vgt, g_gtt_index);
+		vgt_write_gtt(vgt->pdev, h_gtt_index, 0);
+	} else {
+		vgt_ppgtt_pde_handle(vgt, i, g_gtt_val);
+	}
+}
+
 bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
@@ -275,8 +304,8 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	if (vgt->ppgtt_initialized &&
 			g_gtt_index >= vgt->ppgtt_base &&
 			g_gtt_index < vgt->ppgtt_base + VGT_PPGTT_PDE_ENTRIES) {
-		printk("vGT(%d): Change PPGTT PDE %d!\n", vgt->vgt_id, g_gtt_index);
-		ASSERT(0);
+		dprintk("vGT(%d): Change PPGTT PDE %d!\n", vgt->vgt_id, g_gtt_index);
+		vgt_ppgtt_pde_write(vgt, g_gtt_index, g_gtt_val);
 		goto out;
 	}
 
@@ -487,6 +516,61 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 	return 0;
 }
 
+/* Process needed shadow setup for one PDE entry.
+ * i: index from PDE base
+ * pde: guest GTT PDE entry value
+ */
+static void
+vgt_ppgtt_pde_handle(struct vgt_device *vgt, unsigned int i, u32 pde)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	u32 shadow_pde;
+	unsigned int index, h_index;
+	dma_addr_t pte_phy;
+
+	if (!(pde & _REGBIT_PDE_VALID)) {
+		printk("vGT(%d): PDE %d not valid!\n", vgt->vgt_id, i);
+		return;
+	}
+
+	if ((pde & _REGBIT_PDE_PAGE_32K)) {
+		printk("vGT(%d): 32K page in PDE!\n", vgt->vgt_id);
+		vgt->shadow_pde_table[i].big_page = true;
+	} else
+		vgt->shadow_pde_table[i].big_page = false;
+
+	vgt->shadow_pde_table[i].entry = pde;
+
+	pte_phy = gtt_pte_get_pfn(pdev, pde);
+	pte_phy <<= PAGE_SHIFT;
+
+	vgt->shadow_pde_table[i].virtual_phyaddr = pte_phy;
+
+	/* allocate shadow PTE page, and fix it up */
+	vgt_ppgtt_shadow_pte_init(vgt, i, pte_phy);
+
+	/* WP original PTE page */
+	vgt_set_wp_page(vgt, pte_phy >> PAGE_SHIFT, i);
+
+	shadow_pde = gtt_pte_update(pdev,
+				    vgt->shadow_pde_table[i].shadow_pte_maddr >> GTT_PAGE_SHIFT,
+				    pde);
+
+	if (vgt->shadow_pde_table[i].big_page) {
+		/* For 32K page, even HVM thinks it's continual, it's
+		 * really not on physical pages. But fallback to 4K
+		 * addressing can still provide correct page reference.
+		 */
+		shadow_pde &= ~_REGBIT_PDE_PAGE_32K;
+	}
+
+	index = vgt->ppgtt_base + i;
+	h_index = g2h_gtt_index(vgt, index);
+
+	/* write_gtt with new shadow PTE page address */
+	vgt_write_gtt(vgt->pdev, h_index, shadow_pde);
+}
+
 static void vgt_init_ppgtt_hw(struct vgt_device *vgt, u32 base)
 {
 	/* only change HW setting if vgt is current render owner.*/
@@ -518,13 +602,10 @@ void vgt_ppgtt_switch(struct vgt_device *vgt)
 
 bool vgt_setup_ppgtt(struct vgt_device *vgt)
 {
-	struct pgt_device *pdev = vgt->pdev;
 	u32 base = vgt->rb[0].sring_ppgtt_info.base;
 	int i;
-	u32 pde, shadow_pde;
-	dma_addr_t pte_phy;
-	u32 gtt_base;
-	unsigned int index, h_index;
+	u32 pde, gtt_base;
+	unsigned int index;
 
 	printk(KERN_INFO "vgt_setup_ppgtt on vm %d: PDE base 0x%x\n", vgt->vm_id, base);
 
@@ -544,43 +625,7 @@ bool vgt_setup_ppgtt(struct vgt_device *vgt)
 		/* Just use guest virtual value instead of real machine address */
 		pde = vgt->vgtt[index];
 
-		if (!(pde & _REGBIT_PDE_VALID)) {
-			dprintk("vGT(%d): PDE %d not valid!\n", vgt->vgt_id, i);
-			continue;
-		}
-
-		if ((pde & _REGBIT_PDE_PAGE_32K)) {
-			printk("vGT(%d): 32K page in PDE!\n", vgt->vgt_id);
-			vgt->shadow_pde_table[i].big_page = true;
-		} else
-			vgt->shadow_pde_table[i].big_page = false;
-
-		pte_phy = gtt_pte_get_pfn(pdev, pde);
-		pte_phy <<= PAGE_SHIFT;
-
-		vgt->shadow_pde_table[i].virtual_phyaddr = pte_phy;
-
-		/* allocate shadow PTE page, and fix it up */
-		vgt_ppgtt_shadow_pte_init(vgt, i, pte_phy);
-
-		/* WP original PTE page */
-		vgt_set_wp_page(vgt, pte_phy >> PAGE_SHIFT, i);
-
-		shadow_pde = gtt_pte_update(pdev,
-				vgt->shadow_pde_table[i].shadow_pte_maddr >> GTT_PAGE_SHIFT, pde);
-
-		if (vgt->shadow_pde_table[i].big_page) {
-			/* For 32K page, even HVM thinks it's continual, it's
-			 * really not on physical pages. But fallback to 4K
-			 * addressing can still provide correct page reference.
-			 */
-			shadow_pde &= ~_REGBIT_PDE_PAGE_32K;
-		}
-
-		h_index = g2h_gtt_index(vgt, index);
-
-		/* write_gtt with new shadow PTE page address */
-		vgt_write_gtt(vgt->pdev, h_index, shadow_pde);
+		vgt_ppgtt_pde_handle(vgt, i, pde);
 	}
 
 finish:
