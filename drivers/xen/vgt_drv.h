@@ -299,7 +299,9 @@ typedef struct {
 	rb_dword	save_buffer[RB_DWORDS_TO_SAVE];
 	/* In aperture, partitioned & 4KB aligned. */
 	/* 64KB alignment requirement for walkaround. */
-	uint64_t	context_save_area;
+	uint64_t	context_save_area;	/* VGT default context space */
+	uint32_t	active_vm_context;	/* current active VM set context space.
+						   _not_ next target ctx when switched to HW later. */
 	bool	initialized;	/* whether it includes an valid context */
 	bool	stateless;	/* whether the engine requires special context switch */
 	/* ppgtt info */
@@ -529,6 +531,8 @@ struct vgt_device {
 
 	/* Tail Queue (used to cache tail-writingt) */
 	struct vgt_tailq rb_tailq[MAX_ENGINES];
+
+	bool has_context;
 };
 
 extern struct vgt_device *vgt_dom0;

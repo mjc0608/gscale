@@ -1688,6 +1688,8 @@ static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *reg
 	}
 }
 
+/* For save/restore global states difference between VMs.
+ * Other context states should be covered by normal context switch later. */
 void vgt_rendering_save_mmio(struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -1802,6 +1804,12 @@ static bool vgt_save_context (struct vgt_device *vgt)
 		 * Context save to vGT's area happens in the restore phase.
 		 */
 
+		if (vgt->has_context) {
+			rb->active_vm_context = VGT_MMIO_READ(pdev, _REG_CCID);
+			rb->active_vm_context &= 0xfffff000;
+			vgt_dbg("VM %d CCID 0x%x\n", vgt->vm_id, rb->active_vm_context);
+		}
+
 		disable_ring(pdev, i);
 
 		vgt_ring_start(ring);
@@ -1831,7 +1839,7 @@ static bool vgt_save_context (struct vgt_device *vgt)
 		vgt_ring_advance(ring);
 
 		if (!ring_wait_for_magic(pdev, i)) {
-			vgt_err("context switch commands unfinished\n");
+			vgt_err("save context commands unfinished\n");
 			show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
 			return false;
 		}
@@ -1846,10 +1854,6 @@ static bool vgt_save_context (struct vgt_device *vgt)
 		}
 
 		rb->initialized = true;
-
-		if (old_tail != rb->sring.tail)
-			printk("!!!!!!!!!(save ring-%d, %llx switch) tail moved from %x to %x\n",
-				i, vgt_ctx_switch(pdev), rb->sring.tail, old_tail);
 
 		vgt_dbg("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
 
@@ -1916,9 +1920,36 @@ static bool vgt_restore_context (struct vgt_device *vgt)
 		vgt_ring_emit(ring, 0);
 		vgt_ring_advance(ring);
 
-		if (old_tail != rb->sring.tail)
-			printk("!!!!!!!!!(restore ring-%d, %llx switch) tail moved from %x to %x\n",
-				i, vgt_ctx_switch(pdev), rb->sring.tail, old_tail);
+		if (!ring_wait_for_magic(pdev, i)) {
+			vgt_err("restore context switch commands unfinished\n");
+			show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
+			return false;
+		}
+
+		/* restore VM context */
+		if (vgt->has_context && rb->active_vm_context) {
+			vgt_ring_begin(ring, 8);
+			vgt_ring_emit(ring, MI_SET_CONTEXT);
+			vgt_ring_emit(ring, rb->active_vm_context |
+				      MI_MM_SPACE_GTT |
+				      MI_SAVE_EXT_STATE_EN |
+				      MI_RESTORE_EXT_STATE_EN |
+				      MI_FORCE_RESTORE);
+
+			vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
+			vgt_ring_emit(ring, 0);
+			vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
+			vgt_ring_emit(ring, ++pdev->magic);
+			vgt_ring_emit(ring, 0);
+			vgt_ring_emit(ring, 0);
+			vgt_ring_advance(ring);
+
+			if (!ring_wait_for_magic(pdev, i)) {
+				vgt_err("change to VM context switch commands unfinished\n");
+				show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
+				return false;
+			}
+		}
 	}
 
 	/* Restore ring registers */
@@ -2127,6 +2158,8 @@ static int alloc_vm_rsvd_aperture(struct vgt_device *vgt)
 		rb = &vgt->rb[i];
 		rb->context_save_area = aperture_2_gm(pdev,
 				rsvd_aperture_alloc(pdev, SZ_CONTEXT_AREA_PER_RING) );
+
+		rb->active_vm_context = 0;
 		printk("VM%d Ring%d context_save_area is allocated at gm(%llx)\n", vgt->vm_id, i,
 				rb->context_save_area);
 		rb->initialized = false;

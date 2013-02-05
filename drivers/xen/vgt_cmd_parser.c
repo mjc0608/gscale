@@ -379,6 +379,20 @@ static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
 	return 0;
 }
 
+static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
+{
+	struct vgt_device *vgt = s->vgt;
+
+	/* Only mark VM with context usage when it's render owner.
+	 * For possible race that VM has issued in ring but not scheduled yet.
+	 */
+	if (vgt == current_render_owner(vgt->pdev)) {
+		vgt_dbg("VM %d active context\n", vgt->vm_id);
+		vgt->has_context = true;
+	}
+	return 0;
+}
+
 static int vgt_cmd_advance_default(struct parser_exec_state *s)
 {
 	return ip_gma_advance(s, cmd_length(s));
@@ -682,7 +696,7 @@ static struct cmd_info cmd_info[] = {
 	{"MI_SEMAPHORE_MBOX", OP_MI_SEMAPHORE_MBOX, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL },
 
 	{"MI_SET_CONTEXT", OP_MI_SET_CONTEXT, F_LEN_VAR, R_ALL, D_ALL,
-		ADDR_FIX_1(1), 8, NULL},
+		ADDR_FIX_1(1), 8, vgt_cmd_handler_mi_set_context},
 
 	{"MI_MATH", OP_MI_MATH, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL},
 
