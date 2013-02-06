@@ -2777,7 +2777,7 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 		return false;
 
 	/* check PPGTT enabling. */
-	if (!disable_ppgtt && (pdev->is_ivybridge || pdev->is_haswell))
+	if (pdev->is_ivybridge || pdev->is_haswell)
 		pdev->enable_ppgtt = 1;
 
 	INIT_LIST_HEAD(&pdev->rendering_runq_head);
