@@ -111,7 +111,7 @@
 #define VIRQ_ENOMEM     12 /* G. (DOM0) Low on heap memory       */
 #define VIRQ_VGT_GFX	15 /* (DOM0) Used for graphics interrupt          */
 
-#define VIRQ_VGT_GFX	12 /* (DOM0) Used for graphics interrupt          */
+#define VIRQ_VGT_GFX	15  /* (DOM0) Used for graphics interrupt          */
 
 /* Architecture-specific VIRQ definitions. */
 #define VIRQ_ARCH_0    16
