@@ -32,6 +32,7 @@
 #include <linux/slab.h>
 #include <linux/highmem.h>
 #include <linux/pci.h>
+#include <linux/delay.h>
 
 #include <asm/xen/hypercall.h>
 #include <asm/xen/hypervisor.h>
