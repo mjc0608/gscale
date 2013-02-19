@@ -303,9 +303,9 @@ struct decode_info{
 
 #define OP_MFD_MPEG2_BSD_OBJECT                    OP_MFX(2, 3, 1, 8) /* ALL */
 
-#define OP_MFX_CRYPTO_COPY_BASE_ADDR               OP_MFX(2, 6, 0, 0) /* IVB+ */
-#define OP_MFX_CRYPTO_COPY                         OP_MFX(2, 6, 0, 8) /* IVB+ */
-#define OP_MFX_CRYPTO_KEY_EXCHANGE                 OP_MFX(2, 6, 0, 9) /* IVB+ */
+#define OP_MFX_2_6_0_0                             OP_MFX(2, 6, 0, 0) /* IVB+ */
+#define OP_MFX_2_6_0_8                             OP_MFX(2, 6, 0, 8) /* IVB+ */
+#define OP_MFX_2_6_0_9                             OP_MFX(2, 6, 0, 9) /* IVB+ */
 
 #define OP_MFX_JPEG_PIC_STATE                      OP_MFX(2, 7, 0, 0)
 #define OP_MFX_JPEG_HUFF_TABLE_STATE               OP_MFX(2, 7, 0, 2)

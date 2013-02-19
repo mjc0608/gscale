@@ -629,7 +629,7 @@ static int vgt_cmd_handler_mfx_ind_obj_base_addr_state(struct parser_exec_state 
 	return 0;
 }
 
-static int vgt_cmd_handler_mfx_crypto_copy_base_addr(struct parser_exec_state *s)
+static int vgt_cmd_handler_mfx_2_6_0_0(struct parser_exec_state *s)
 {
 	base_and_upper_addr_fix(s);
 	address_fixup(s,2);
@@ -1223,14 +1223,12 @@ static struct cmd_info cmd_info[] = {
 	{"MFD_MPEG2_BSD_OBJECT", OP_MFD_MPEG2_BSD_OBJECT, F_LEN_VAR,
 		R_VCS, D_ALL, 0, 12, NULL},
 
-	{"MFX_CRYPTO_COPY_BASE_ADDR", OP_MFX_CRYPTO_COPY_BASE_ADDR, F_LEN_VAR,
-		R_VCS, D_ALL, 0, 16, vgt_cmd_handler_mfx_crypto_copy_base_addr},
+	{"MFX_2_6_0_0", OP_MFX_2_6_0_0, F_LEN_VAR, R_VCS, D_ALL,
+		0, 16, vgt_cmd_handler_mfx_2_6_0_0},
 
-	{"MFX_CRYPTO_KEY_EXCHANGE", OP_MFX_CRYPTO_KEY_EXCHANGE, F_LEN_VAR,
-		R_VCS, D_ALL, 0, 16, NULL},
+	{"MFX_2_6_0_9", OP_MFX_2_6_0_9, F_LEN_VAR, R_VCS, D_ALL, 0, 16, NULL},
 
-	{"MFX_CRYPTO_COPY", OP_MFX_CRYPTO_COPY, F_LEN_VAR,
-		R_VCS, D_ALL, 0, 16, NULL},
+	{"MFX_2_6_0_8", OP_MFX_2_6_0_8, F_LEN_VAR, R_VCS, D_ALL, 0, 16, NULL},
 
 	{"MFX_JPEG_PIC_STATE", OP_MFX_JPEG_PIC_STATE, F_LEN_VAR,
 		R_VCS, D_GEN7PLUS, 0, 12, NULL},
