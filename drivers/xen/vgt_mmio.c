@@ -32,6 +32,7 @@
 #include <linux/slab.h>
 #include <linux/pci.h>
 #include <linux/delay.h>
+#include <linux/acpi_io.h>
 
 #include <asm/xen/hypercall.h>
 #include <asm/xen/hypervisor.h>
@@ -2244,7 +2245,9 @@ static void vgt_hvm_opregion_init(struct vgt_device *vgt)
 {
 	uint8_t* buf;
 	vgt->opregion_pa = *(uint32_t*)(vgt->state.cfg_space + VGT_REG_CFG_OPREGION );
-	vgt->opregion_va = __va(vgt->opregion_pa);
+	vgt->opregion_va = acpi_os_ioremap(vgt->opregion_pa,
+				VGT_OPREGION_PAGES);
+	ASSERT(vgt->opregion_va);
 
 	/* for unknown reason, the value in LID field is incorrect
 	   which block the windows guest, so workaround it by force
@@ -2319,6 +2322,9 @@ void vgt_hvm_info_deinit(struct vgt_device *vgt)
 
 	if (info == NULL)
 		return;
+
+	if (vgt->opregion_va)
+		iounmap(vgt->opregion_va);
 
 	if (!info->nr_vcpu || info->evtchn_irq == NULL)
 		goto out1;
