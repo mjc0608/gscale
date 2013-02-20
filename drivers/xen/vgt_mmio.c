@@ -86,80 +86,13 @@ static void ring_debug(struct vgt_device *vgt, int ring_id)
 bool gmbus_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	bool rc = true;
-
-	ASSERT(bytes <= 8 && !(offset & (bytes - 1)));
-	//printk("vGT(%d): read gmbus register with offset%x and size %d.\n", vgt->vgt_id, offset, bytes);
-
-	vgt_i2c_handle_gmbus_read(&vgt->vgt_i2c_bus, offset, p_data);
-
-	return rc;
+	return vgt_i2c_handle_gmbus_read(vgt, offset, p_data, bytes);
 }
 
 bool gmbus_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	bool rc = true;
-	vgt_edid_data_t **pedid = NULL;
-	//printk("vGT(%d): write gmbus register with offset %x and size %d, value 0x%x.\n",
-	//		vgt->vgt_id, offset, bytes, *((int *)p_data));
-
-	if (offset == _REG_PCH_GMBUS0) {
-		/* select the port */
-		unsigned port = *(int *)p_data & 0x7;
-		switch (port) {
-		case 0: /* disabled. Be treated as reset */
-			pedid = NULL;
-			break;
-		case 1: /* LCTRCLK */
-			/* Is there really the case? If so, need to handle.*/
-			printk("vGT(%d): WARNING: Accessing LCTRCLK which is not supported!\n",
-					vgt->vgt_id);
-			BUG();
-			break;
-		case 2: /* Analog Mon */
-			pedid = (vgt_edid_data_t **)
-					&vgt->vgt_edids[EDID_VGA];
-			break;
-		case 3: /* LVDS */
-			pedid = (vgt_edid_data_t **)
-					&vgt->vgt_edids[EDID_LVDS];
-			break;
-		case 4: /* Port C*/
-			pedid = (vgt_edid_data_t **)
-					&vgt->vgt_edids[EDID_HDMIC];
-			break;
-		case 5: /* Port B */
-			pedid = (vgt_edid_data_t **)
-					&vgt->vgt_edids[EDID_HDMIB];
-			break;
-		case 6: /* Port D */
-			pedid = (vgt_edid_data_t **)
-					&vgt->vgt_edids[EDID_HDMID];
-			break;
-		case 7: /* Reserved */
-			/*
-			 * Well, it actually happened...
-			 */
-#if 0
-			ASSERT(0);
-#else
-			printk("vGT(%d): WARNING: GMBUS accessing reserved port!!!!\n", vgt->vgt_id);
-			return true;
-#endif
-			break;
-		default:
-			break;
-		}
-		vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
-		vgt->vgt_i2c_bus.state = VGT_I2C_SEND;
-		vgt->vgt_i2c_bus.gmbus.pedid = pedid;
-	} else {
-		vgt_i2c_handle_gmbus_write (&vgt->vgt_i2c_bus,
-						offset, p_data);
-		pedid = vgt->vgt_i2c_bus.gmbus.pedid;
-	}
-	return rc;
+	return vgt_i2c_handle_gmbus_write(vgt, offset, p_data, bytes);
 }
 
 #ifdef ENABLE_GPIO_EMULATION
@@ -2531,9 +2464,9 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			(void)VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
 
 			EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
-				 & (_GMBUS_SATOER | _GMBUS_HW_WAIT_PHASE)), 5, 10, timeout);
+				 & (_GMBUS_NAK | _GMBUS_HW_WAIT)), 5, 10, timeout);
 
-			if (timeout || (val & _GMBUS_SATOER)) {
+			if (timeout || (val & _GMBUS_NAK)) {
 				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
 				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
 				kfree(*pedid);
@@ -2554,8 +2487,8 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			do {
 				int j = 0;
 				EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
-					 & (_GMBUS_SATOER | _GMBUS_HW_RDY)), 5, 10, timeout);
-				if (timeout || (val & _GMBUS_SATOER)) {
+					 & (_GMBUS_NAK | _GMBUS_HW_RDY)), 5, 10, timeout);
+				if (timeout || (val & _GMBUS_NAK)) {
 					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
 					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
 					kfree(*pedid);

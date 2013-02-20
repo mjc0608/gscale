@@ -29,6 +29,11 @@
 #include <linux/types.h>
 #include <linux/highmem.h>
 #include <linux/slab.h>
+
+#include <xen/vgt.h>
+#include <xen/vgt-if.h>
+#include "vgt_reg.h"
+#include "vgt_drv.h"
 #include "vgt_edid.h"
 
 #define DEBUG_VGT_EDID
@@ -64,11 +69,6 @@ typedef enum {
 #ifdef DEBUG_VGT_EDID
 
 static int vgt_edid_log_level = 2;
-
-#define ASSERT(x)						\
-do { if (!(x)) 							\
-{printk("Assert at %s line %d\n", __FILE__, __LINE__); 		\
-BUG();}} while (0);
 
 #define EDID_MSG(log, emu, fmt, args...) 			\
 	do {							\
@@ -223,255 +223,281 @@ vgt_edid_data_t *vgt_create_edid(void)
  *
  *************************************************************************/
 
-/* TODO GMBUS definition copied from vgt_reg.h.
- * Could be removed after someday someone clean up vgt_reg.h
- * to make it smaller so that it could be included instead.
- */
-#define _REG_PCH_GMBUS0		0xc5100
-#define _REG_PCH_GMBUS1		0xc5104
-#define _REG_PCH_GMBUS2		0xc5108
-#define _REG_PCH_GMBUS3		0xc510c
-#define _GMBUS_SATOER		(1<<10)
-
-void vgt_i2c_handle_gmbus_read(vgt_i2c_bus_t *i2c_bus,
-				unsigned int offset, void *p_data)
+/* GMBUS0 */
+static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes)
 {
-	int i;
-	bool gmbus_emulate = (i2c_bus->gmbus.pedid && *i2c_bus->gmbus.pedid);
-	vgt_edid_t *edid = (vgt_edid_t *)i2c_bus->current_slave;
+    vgt_edid_data_t *edid_data = NULL;
+    vgt_reg_t wvalue = *(vgt_reg_t *)p_data;
+    switch (wvalue & _GMBUS_PIN_SEL_MASK) {
+	case 0: /* disabled. Be treated as reset */
+	    edid_data = NULL;
+	    break;
+	case 1: /* LCTRCLK */
+	    printk("vGT(%d): WARNING: Accessing LCTRCLK which is not supported!\n",
+		    vgt->vgt_id);
+	    break;
+	case 2: /* Analog Mon */
+	    edid_data = vgt->vgt_edids[EDID_VGA];
+	    break;
+	case 3: /* LVDS */
+	    edid_data = vgt->vgt_edids[EDID_LVDS];
+	    break;
+	case 4: /* Port C use */
+	    /* TODO: how about DP ??? */
+	    edid_data = vgt->vgt_edids[EDID_HDMIC];
+	    break;
+	case 5: /* Port B use */
+	    /* TODO: how about DP ??? */
+	    edid_data = vgt->vgt_edids[EDID_HDMIB];
+	    break;
+	case 6: /* Port D use */
+	    /* TODO: how about DP ??? */
+	    edid_data = vgt->vgt_edids[EDID_HDMID];
+	    break;
+	case 7:
+	    printk("vGT(%d): WARNING: GMBUS accessing reserved port!!!!\n", vgt->vgt_id);
+	    break;
+	default:
+	    printk("vGT(%d): EDID unknown ERROR!\n", vgt->vgt_id);
+    }
 
-	ASSERT(offset == _REG_PCH_GMBUS2 || offset == _REG_PCH_GMBUS3);
+    vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
+    //vgt->vgt_i2c_bus.state = VGT_I2C_SEND;
+    vgt->vgt_i2c_bus.gmbus.pedid = edid_data;
+	/* From hw spec the GMBUS phase transition like this:
+	 * START (-->INDEX) -->DATA */
+	vgt->vgt_i2c_bus.gmbus.phase = GMBUS_DATA_PHASE;
 
-	if (offset == _REG_PCH_GMBUS2) {
-		int value = 0;
-		if (gmbus_emulate && edid) {
-			value = (edid->current_read & 0x1ff);
-		}
+	/* Initialize status reg */
+	__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_HW_WAIT;
+	__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_RDY;
+	if (!edid_data)
+		__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_NAK;
+	else
+		__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_NAK;
 
-		if (i2c_bus->gmbus.inuse) {
-			value |= _GMBUS_INUSE;
-		} else {
-			i2c_bus->gmbus.inuse = true;
-		}
-
-		/* always in hdw_ready and wait state */
-		value |= _GMBUS_HW_READY_BIT;
-		value |= _GMBUS_HW_WAIT_PHASE;
-
-		if (edid && !(edid->edid_data)) {
-			/* It is not valid EDID reading
-			 * from really existed monitor.
-			 */
-			value |= _GMBUS_SATOER;
-		}
-#if 0
-		else {
-			value |= _GMBUS_ACTIVE;
-			if (i2c_bus->state == VGT_I2C_WAIT) {
-				value |= _GMBUS_HW_WAIT_PHASE;
-			}
-		}
-#endif
-		*(int *)p_data = value;
-	} else {
-		if (!edid) {
-			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-				"GMBUS_3 reading without slave setting!\n");
-			*(int *)p_data = 0;
-			return;
-		}
-		ASSERT(offset == _REG_PCH_GMBUS3);
-		ASSERT(i2c_bus->state == VGT_I2C_RECEIVE);
-		if (gmbus_emulate) {
-			*(int *)p_data = 0;
-			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-				"GMBUS reading snapshot for EDID!\n");
-			for (i = 0; i < 4; ++ i) {
-				unsigned char buffer =
-					i2c_bus->current_slave->get_byte_from_snap(
-						i2c_bus->current_slave);
-				*(int *)p_data |= (buffer << (i << 3));
-			}
-
-			if (i2c_bus->gmbus.total_byte_count
-				<= edid->current_read) {
-				/* finished reading */
-				if (i2c_bus->gmbus.cycle_type & 0x4) {
-					EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-				"GMBUS goes to stop stage from data cycle.\n");
-					vgt_init_i2c_bus(i2c_bus);
-				} else {
-					i2c_bus->state = VGT_I2C_WAIT;
-				}
-			}
-		} else {
-			int value = *(int *)p_data;
-			unsigned num = 4;
-			if (i2c_bus->gmbus.total_byte_count) {
-				int l = i2c_bus->gmbus.total_byte_count -
-						edid->current_write;
-				ASSERT(l >= 0);
-				if (l < 4) {
-					num = l;
-				}
-			}
-
-			for (i = 0; i < num; ++ i) {
-				i2c_bus->current_slave->snap_read_byte(
-					i2c_bus->current_slave,value & 0xff);
-				value >>= 8;
-			}
-			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-				"GMBUS doing snapshot for EDID!\n");
-			/* There is no other better place to check the end of
-			 * EDID reading...
-			 */
-			if (edid->current_write == EDID_SIZE) {
-				i2c_bus->current_slave->snap_stop(
-						i2c_bus->gmbus.pedid,
-						i2c_bus->current_slave);
-			}
-		}
-	}
-	return;
+    memcpy(p_data, (char *)vgt->state.vReg + offset, bytes);
+    return true;
 }
 
-/* vgt_i2c_handle_gmbus_write()
- *
- * Handle the write of GMBUS1, GMBUS2 and GMBUS3. The GMBUS0
- * access is handled in gmbus_mmio_write() because there are
- * some init logic there.
- */
-void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
-				unsigned int offset, void *p_data)
+/* TODO: */
+void vgt_reset_gmbus_controller(struct vgt_device *vgt)
 {
-	bool gmbus_emulate = (i2c_bus->gmbus.pedid && *i2c_bus->gmbus.pedid);
+    /* TODO: clear gmbus0 ? */
+    //__vreg(vgt, _REG_PCH_GMBUS0) = 0;
+    //__vreg(vgt, _REG_PCH_GMBUS1) = 0;
+    __vreg(vgt, _REG_PCH_GMBUS2) = _GMBUS_HW_RDY;
+	//__vreg(vgt, _REG_PCH_GMBUS3) = 0;
+	//__vreg(vgt, _REG_PCH_GMBUS4) = 0;
+	//__vreg(vgt, _REG_PCH_GMBUS5) = 0;
+	vgt->vgt_i2c_bus.gmbus.phase = GMBUS_IDLE_PHASE;
+}
 
-	if (offset == _REG_PCH_GMBUS1) {
-		int value = *(int *)p_data;
-		unsigned total_byte_count = 0;
-		unsigned slave_addr = value & 0xff;
-		I2C_STATE i2c_state = (slave_addr & 0x1) ? VGT_I2C_RECEIVE :
-							   VGT_I2C_SEND;
-		if (((value & (1 << 31)) == 0) &&
-		    (i2c_bus->gmbus.gmbus1 & (1 << 31))) {
-			/* According to PRM Vol3, part 3, Section 2.2.3.2,
-			 * setting the bit SW_CLR_INT and then clear it will reset
-			 * GMBUS.
-			 */
-			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-			"GMBUS goes to stop stage by GMBUS reset.\n");
-			vgt_init_i2c_bus(i2c_bus);
-			return;
+static bool vgt_gmbus1_mmio_write(struct vgt_device *vgt, unsigned int offset,
+void *p_data, unsigned int bytes)
+{
+	u32 slave_addr;
+	vgt_i2c_bus_t *i2c_bus = &vgt->vgt_i2c_bus;
+
+	vgt_reg_t wvalue = *(vgt_reg_t *)p_data;
+	if (__vreg(vgt, offset) & _GMBUS_SW_CLR_INT) {
+		if (!(wvalue & _GMBUS_SW_CLR_INT)) {
+			__vreg(vgt, offset) &= ~_GMBUS_SW_CLR_INT;
+			vgt_reset_gmbus_controller(vgt);
+		}
+		/* TODO: "This bit is cleared to zero when an event
+		 * causes the HW_RDY bit transition to occur "*/
+	} else {
+		/* per bspec setting this bit can cause:
+		   1) INT status bit cleared
+		   2) HW_RDY bit asserted
+		   */
+		if (wvalue & _GMBUS_SW_CLR_INT) {
+			__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_INT_STAT;
+			__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_RDY;
 		}
 
-		i2c_bus->gmbus.gmbus1 = value;
-		slave_addr >>= 1;
-		total_byte_count = (value >> _GMBUS1_BYTE_LENGTH_POSI)
-					& 0x1ff;
+		/* For virtualization, we suppose that HW is always ready,
+		 * so _GMBUS_SW_RDY should always be cleared
+		 */
+		if (wvalue & _GMBUS_SW_RDY)
+			wvalue &= ~_GMBUS_SW_RDY;
 
+		i2c_bus->gmbus.total_byte_count =
+			gmbus1_total_byte_count(wvalue);
+		slave_addr = gmbus1_slave_addr(wvalue);
+		i2c_bus->current_slave_addr = slave_addr;
+
+		/* vgt gmbus only support EDID */
 		if (slave_addr == EDID_ADDR) {
-			i2c_bus->current_slave_addr = slave_addr;
-			i2c_bus->current_slave =
-					(vgt_i2c_slave_t *)&i2c_bus->edid_slave;
-			if (gmbus_emulate) {
-				i2c_bus->edid_slave.edid_data =
-					*i2c_bus->gmbus.pedid;
-			} else {
-				i2c_bus->edid_slave.edid_data =
-					(vgt_edid_data_t *) vgt_create_edid();
-				EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-					"GMBUS created new EDID data.\n");
-			}
-			i2c_bus->state = i2c_state;
-			i2c_bus->gmbus.total_byte_count = total_byte_count;
+			i2c_bus->current_slave = (vgt_i2c_slave_t *)&i2c_bus->edid_slave;
+			i2c_bus->edid_slave.edid_data = i2c_bus->gmbus.pedid;
 
-			if (value & _GMBUS1_CYCLE_INDEX) {
-				unsigned index = (value >>
-						_GMBUS1_BYTE_INDEX_POSI)
-						& 0xff;
-				i2c_bus->current_slave->snap_write_byte(
-						i2c_bus->current_slave,
-						index);
-			}
 		} else if (slave_addr != 0) {
-			EDID_MSG(VGT_EDID_WARN, gmbus_emulate,
-				"Slave that is not supported yet[addr:0x%x]!\n",
-				slave_addr);
-
-			//This is pretty slow, and meanlingless for HVM guest.
-			//dump_stack();
+			printk("vGT(%d): ERROR: gmbus slave addr(%x)\n",
+					vgt->vgt_id, slave_addr);
+			BUG();
 		}
 
-		i2c_bus->gmbus.cycle_type = ((value >> 25) & 0x7);
-		switch (i2c_bus->gmbus.cycle_type) {
-		case GMBUS_NOCYCLE:
-			/* ignore */
-			break;
-		case NIDX_NS_W:
-			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-			"GMBUS is set NIDX_NS_W cycle.\n");
-			break;
-		case NIDX_STOP:
-			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-			"GMBUS is set NIDX_STOP cycle.\n");
-			break;
-		case GMBUS_STOP:
-			/* TODO: assert the wait stage? */
-			//i2c_bus->gmbus.gmbus2
-			//xuanhua
-			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-			"GMBUS goes to stop stage by stop command.\n");
-			vgt_init_i2c_bus(i2c_bus);
-			break;
-		case IDX_NS_W:
-			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-			"GMBUS is set IDX_NS_W cycle.\n");
-			break;
-		case IDX_STOP:
-			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
-			"GMBUS is set IDX_STOP cycle.\n");
-			break;
-		default:
-			EDID_MSG(VGT_EDID_WARN, gmbus_emulate,
-			"Not supported CYCLE type written from GMBUS1!\n");
-			break;
-		}
-
-	} else if (offset == _REG_PCH_GMBUS2) {
-		if ((*(int *)p_data) & _GMBUS_INUSE) {
-			i2c_bus->gmbus.inuse = false;
-		}
-	} else if (offset == _REG_PCH_GMBUS3) {
-		int buffer = *(int *)p_data;
-		if (i2c_bus->current_slave) {
-			ASSERT(i2c_bus->state == VGT_I2C_SEND);
-
-			/* Below only write the lower 8-bits. For EDID case,
-			 * it should not happen. For normal case, the count
-			 * has to be taken into account to know how many
-			 * bytes in the 4-byte word will be written.
-			 */
+		if (wvalue & _GMBUS_CYCLE_INDEX) {
 			i2c_bus->current_slave->snap_write_byte(
-						i2c_bus->current_slave,
-						buffer);
-			/* Should not happen for EDID */
-			ASSERT(0);
-		} else {
-			/* not yet set slave. Ignore it as kind of reset
-			 * of register value
-			 */
+					i2c_bus->current_slave,
+					gmbus1_slave_index(wvalue));
 		}
-	} else {
-		EDID_MSG(VGT_EDID_WARN, gmbus_emulate,
-			"Other gmbus register access? addr: 0x%x\n", offset);
 
-		//This is pretty slow, and meanlingless for HVM guest.
-		//dump_stack();
+		/* TODO: how to handle these cycles
+		   2) gmbus_xfer() */
+		i2c_bus->gmbus.cycle_type = gmbus1_bus_cycle(wvalue);
+		switch (gmbus1_bus_cycle(wvalue)) {
+			case GMBUS_STOP:
+				/* TODO:
+				   From spec:
+				   This can only cause a STOP to be generated
+				   if a GMBUS cycle is generated, the GMBUS is
+				   currently in a data phase, or it is in a
+				   WAIT phase
+				   */
+				if (((gmbus1_bus_cycle(__vreg(vgt, offset)) != GMBUS_NOCYCLE)
+							&& (i2c_bus->gmbus.phase == GMBUS_DATA_PHASE))
+						|| (i2c_bus->gmbus.phase == GMBUS_WAIT_PHASE)) {
+					vgt_init_i2c_bus(i2c_bus);
+					i2c_bus->gmbus.phase = GMBUS_STOP_PHASE;
+					__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_HW_WAIT;
+				}
+				break;
+			default:
+				break;
+		}
+
+		__vreg(vgt, offset) = wvalue;
+	}
+	return true;
+}
+
+bool vgt_gmbus3_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+    BUG();
+    return true;
+}
+
+bool vgt_gmbus3_mmio_read(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	vgt_i2c_bus_t *i2c_bus = &vgt->vgt_i2c_bus;
+	int byte_left = i2c_bus->gmbus.total_byte_count
+		- i2c_bus->edid_slave.current_read;
+	int i, byte_count = byte_left;
+	vgt_reg_t reg_data = 0;
+	unsigned char byte_data;
+
+	/* Data can only be recevied if previous settings correct */
+	if (__vreg(vgt, _REG_PCH_GMBUS1) & _GMBUS_SLAVE_READ) {
+		if (byte_left <= 0) {
+			memcpy((char *)p_data, (char *)vgt->state.vReg + offset, bytes);
+			return true;
+		}
+
+		if (byte_count > 4)
+			byte_count = 4;
+		for (i = 0; i< byte_count; i++) {
+			byte_data = i2c_bus->current_slave->get_byte_from_snap(
+					i2c_bus->current_slave);
+			reg_data |= (byte_data << (i << 3));
+		}
+
+		memcpy((char *)p_data, (char *)&reg_data, byte_count);
+		memcpy((char *)vgt->state.vReg + offset, (char *)&reg_data, byte_count);
+
+		if (byte_left <= 4) {
+			switch (i2c_bus->gmbus.cycle_type) {
+				case NIDX_NS_W:
+				case IDX_NS_W:
+					i2c_bus->gmbus.phase = GMBUS_WAIT_PHASE;
+					break;
+				case NIDX_STOP:
+				case IDX_STOP:
+					i2c_bus->gmbus.phase = GMBUS_STOP_PHASE;
+					break;
+				default:
+					i2c_bus->gmbus.phase = GMBUS_IDLE_PHASE;
+					break;
+			}
+			if (i2c_bus->gmbus.phase == GMBUS_WAIT_PHASE)
+				__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_WAIT;
+			else
+				__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_HW_WAIT;
+			vgt_init_i2c_bus(i2c_bus);
+		}
+
+		/* Read GMBUS3 during send operation, return the latest written value */
+	} else {
+		memcpy((char *)p_data, (char *)vgt->state.vReg + offset, bytes);
+		printk("vGT(%d): warning: gmbus3 read with nothing retuned\n",
+				vgt->vgt_id);
 	}
 
-	return;
+	return true;
 }
+
+static bool vgt_gmbus2_mmio_read(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	vgt_reg_t value = __vreg(vgt, offset);
+	if (!(__vreg(vgt, offset) & _GMBUS_IN_USE)) {
+		__vreg(vgt, offset) |= _GMBUS_IN_USE;
+	}
+
+	memcpy(p_data, (void *)&value, bytes);
+	return true;
+}
+
+bool vgt_gmbus2_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	vgt_reg_t wvalue = *(vgt_reg_t *)p_data;
+	if (wvalue & _GMBUS_IN_USE)
+		__vreg(vgt, offset) &= ~_GMBUS_IN_USE;
+	/* All other bits are read-only */
+	return true;
+}
+
+bool vgt_i2c_handle_gmbus_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	ASSERT(bytes <= 8 && !(offset & (bytes - 1)));
+	switch (offset) {
+		case _REG_PCH_GMBUS2:
+			return vgt_gmbus2_mmio_read(vgt, offset, p_data, bytes);
+		case _REG_PCH_GMBUS3:
+			return vgt_gmbus3_mmio_read(vgt, offset, p_data, bytes);
+		default:
+			memcpy(p_data, (char *)vgt->state.vReg + offset, bytes);
+	}
+	return true;
+}
+
+bool vgt_i2c_handle_gmbus_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	ASSERT(bytes <= 8 && !(offset & (bytes - 1)));
+	switch (offset) {
+		case _REG_PCH_GMBUS0:
+			return vgt_gmbus0_mmio_write(vgt, offset, p_data, bytes);
+		case _REG_PCH_GMBUS1:
+			return vgt_gmbus1_mmio_write(vgt, offset, p_data, bytes);
+		case _REG_PCH_GMBUS2:
+			return vgt_gmbus2_mmio_write(vgt, offset, p_data, bytes);
+		/* TODO: */
+		case _REG_PCH_GMBUS3:
+			BUG();
+			return false;
+		default:
+			memcpy((char *)vgt->state.vReg + offset, p_data, bytes);
+	}
+	return true;
+}
+
 
 /**************************************************************************
  *

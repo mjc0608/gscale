@@ -34,14 +34,6 @@
 #define EDID_SIZE		128
 #define EDID_ADDR		0x50
 
-#define _GMBUS_ACTIVE			(1 << 9)
-#define _GMBUS_HW_READY_BIT		(1 << 11)
-#define _GMBUS_HW_WAIT_PHASE		(1 << 14)
-#define _GMBUS_INUSE			(1 << 15)
-#define _GMBUS1_CYCLE_INDEX		(2 << 25)
-#define _GMBUS1_BYTE_LENGTH_POSI	16
-#define _GMBUS1_BYTE_INDEX_POSI		8
-
 #define VGT_AUX_NATIVE_WRITE			0x8
 #define VGT_AUX_NATIVE_READ			0x9
 #define VGT_AUX_I2C_WRITE			0x0
@@ -101,19 +93,31 @@ typedef enum {
  *	Read/Write
  *	Data for transfer
  */
+
+/* From hw specs, Other phases like START, ADDRESS, INDEX
+ * are invisible to GMBUS MMIO interface. So no definitions
+ * in below enum types
+ */
+typedef enum {
+    GMBUS_IDLE_PHASE = 0,
+    GMBUS_DATA_PHASE,
+    GMBUS_WAIT_PHASE,
+    GMBUS_STOP_PHASE,
+    GMBUS_MAX_PHASE
+} vgt_gmbus_phase_t;
+
 typedef struct {
-	unsigned gmbus1;
-	unsigned gmbus2;
 	unsigned port;
 	unsigned total_byte_count; /* from GMBUS1 */
 	gmbus_cycle_type_t cycle_type;
+	vgt_gmbus_phase_t phase;
 	/* TODO
 	 * would WRITE(GMBUS0, 0) clear "inuse" bit?
 	 * current implementation is to clear it.
 	 */
-	bool inuse;
-	vgt_edid_data_t **pedid;
-}vgt_i2c_gmbus_t;
+	//bool inuse;
+	vgt_edid_data_t *pedid;
+} vgt_i2c_gmbus_t;
 
 /*
  * States of AUX_CH
@@ -297,11 +301,11 @@ vgt_edid_data_t *vgt_create_edid(void);
 
 void vgt_init_i2c_bus(vgt_i2c_bus_t *i2c_bus);
 
-void vgt_i2c_handle_gmbus_read(vgt_i2c_bus_t *i2c_bus,
-				unsigned int offset, void *p_data);
+bool vgt_i2c_handle_gmbus_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes);
 
-void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
-				unsigned int offset, void *p_data);
+bool vgt_i2c_handle_gmbus_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes);
 
 void vgt_i2c_handle_aux_ch_read(vgt_i2c_bus_t *i2c_bus,
 				vgt_edid_data_t **pedid,

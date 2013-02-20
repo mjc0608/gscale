@@ -1112,14 +1112,33 @@ union _TRANS_CONFIG
 #define _REG_PCH_GMBUS4		0xc5110
 #define _REG_PCH_GMBUS5		0xc5120
 
-#define _GMBUS_SW_CLR_INT	(1<<31)
-#define _GMBUS_SW_RDY		(1<<30)
-#define _GMBUS_CYCLE_WAIT	(1<<25)
-#define _GMBUS_CYCLE_STOP	(4<<25)
-#define _GMBUS_HW_RDY		(1<<11)
-#define _GMBUS_SATOER		(1<<10)
-#define _GMBUS_SLAVE_READ	(1<<0)
-#define _GMBUS_SLAVE_WRITE	(0<<0)
+/* GMBUS1 bits definitions */
+#define _GMBUS_SW_CLR_INT	(1 << 31)
+#define _GMBUS_SW_RDY		(1 << 30)
+#define _GMBUS_CYCLE_WAIT	(1 << 25)
+#define _GMBUS_CYCLE_INDEX	(1 << 26)
+#define _GMBUS_CYCLE_STOP	(1 << 27)
+#define _GMBUS_SLAVE_READ	(1 << 0)
+#define GMBUS1_TOTAL_BYTES_SHIFT 16
+#define GMBUS1_TOTAL_BYTES_MASK 0x1ff
+#define gmbus1_total_byte_count(v) (((v) >> GMBUS1_TOTAL_BYTES_SHIFT) & GMBUS1_TOTAL_BYTES_MASK)
+#define gmbus1_slave_addr(v) (((v) & 0xff) >> 1)
+#define gmbus1_slave_index(v) (((v) >> 8) & 0xff)
+#define gmbus1_bus_cycle(v) (((v) >> 25) & 0x7)
+
+/* GMBUS0 bits definitions */
+#define _GMBUS_PIN_SEL_MASK	(0x7)
+
+/* GMBUS2 bits definitions */
+#define _GMBUS_IN_USE		(1 << 15)
+#define _GMBUS_HW_WAIT		(1 << 14)
+#define _GMBUS_HW_RDY		(1 << 11)
+#define _GMBUS_INT_STAT		(1 << 12)
+#define _GMBUS_NAK			(1 << 10)
+#define _GMBUS_ACTIVE		(1 << 9)
+
+#define _GMBUS_SLAVE_READ	(1 << 0)
+#define _GMBUS_SLAVE_WRITE	(0 << 0)
 #define _GMBUS_BYTE_COUNT_SHIFT	16
 #define _GMBUS_SLAVE_ADDR_SHIFT	1
 
