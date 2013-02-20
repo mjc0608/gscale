@@ -257,12 +257,6 @@ void vgt_i2c_handle_gmbus_read(vgt_i2c_bus_t *i2c_bus,
 		/* always in hdw_ready and wait state */
 		value |= _GMBUS_HW_READY_BIT;
 		value |= _GMBUS_HW_WAIT_PHASE;
-		if (i2c_bus->gmbus.pedid) {
-			value |= _GMBUS_ACTIVE;
-			if (i2c_bus->state == VGT_I2C_WAIT) {
-				value |= _GMBUS_HW_WAIT_PHASE;
-			}
-		}
 
 		if (edid && !(edid->edid_data)) {
 			/* It is not valid EDID reading
@@ -270,6 +264,14 @@ void vgt_i2c_handle_gmbus_read(vgt_i2c_bus_t *i2c_bus,
 			 */
 			value |= _GMBUS_SATOER;
 		}
+#if 0
+		else {
+			value |= _GMBUS_ACTIVE;
+			if (i2c_bus->state == VGT_I2C_WAIT) {
+				value |= _GMBUS_HW_WAIT_PHASE;
+			}
+		}
+#endif
 		*(int *)p_data = value;
 	} else {
 		if (!edid) {
@@ -354,7 +356,7 @@ void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
 		if (((value & (1 << 31)) == 0) &&
 		    (i2c_bus->gmbus.gmbus1 & (1 << 31))) {
 			/* According to PRM Vol3, part 3, Section 2.2.3.2,
-			 * the write to SW_CLR_INT with 1 and 0 will reset
+			 * setting the bit SW_CLR_INT and then clear it will reset
 			 * GMBUS.
 			 */
 			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
@@ -365,7 +367,7 @@ void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
 
 		i2c_bus->gmbus.gmbus1 = value;
 		slave_addr >>= 1;
-		total_byte_count = (*(int *)p_data >> _GMBUS1_BYTE_LENGTH_POSI)
+		total_byte_count = (value >> _GMBUS1_BYTE_LENGTH_POSI)
 					& 0x1ff;
 
 		if (slave_addr == EDID_ADDR) {
@@ -383,6 +385,15 @@ void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
 			}
 			i2c_bus->state = i2c_state;
 			i2c_bus->gmbus.total_byte_count = total_byte_count;
+
+			if (value & _GMBUS1_CYCLE_INDEX) {
+				unsigned index = (value >>
+						_GMBUS1_BYTE_INDEX_POSI)
+						& 0xff;
+				i2c_bus->current_slave->snap_write_byte(
+						i2c_bus->current_slave,
+						index);
+			}
 		} else if (slave_addr != 0) {
 			EDID_MSG(VGT_EDID_WARN, gmbus_emulate,
 				"Slave that is not supported yet[addr:0x%x]!\n",
@@ -407,12 +418,20 @@ void vgt_i2c_handle_gmbus_write(vgt_i2c_bus_t *i2c_bus,
 			break;
 		case GMBUS_STOP:
 			/* TODO: assert the wait stage? */
+			//i2c_bus->gmbus.gmbus2
+			//xuanhua
 			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
 			"GMBUS goes to stop stage by stop command.\n");
 			vgt_init_i2c_bus(i2c_bus);
 			break;
 		case IDX_NS_W:
+			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
+			"GMBUS is set IDX_NS_W cycle.\n");
+			break;
 		case IDX_STOP:
+			EDID_MSG(VGT_EDID_INFO, gmbus_emulate,
+			"GMBUS is set IDX_STOP cycle.\n");
+			break;
 		default:
 			EDID_MSG(VGT_EDID_WARN, gmbus_emulate,
 			"Not supported CYCLE type written from GMBUS1!\n");

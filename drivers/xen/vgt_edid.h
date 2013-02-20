@@ -38,7 +38,9 @@
 #define _GMBUS_HW_READY_BIT		(1 << 11)
 #define _GMBUS_HW_WAIT_PHASE		(1 << 14)
 #define _GMBUS_INUSE			(1 << 15)
+#define _GMBUS1_CYCLE_INDEX		(2 << 25)
 #define _GMBUS1_BYTE_LENGTH_POSI	16
+#define _GMBUS1_BYTE_INDEX_POSI		8
 
 #define VGT_AUX_NATIVE_WRITE			0x8
 #define VGT_AUX_NATIVE_READ			0x9
@@ -101,6 +103,7 @@ typedef enum {
  */
 typedef struct {
 	unsigned gmbus1;
+	unsigned gmbus2;
 	unsigned port;
 	unsigned total_byte_count; /* from GMBUS1 */
 	gmbus_cycle_type_t cycle_type;
