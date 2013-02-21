@@ -390,9 +390,19 @@ static int vgt_cmd_advance_default(struct parser_exec_state *s)
 
 static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
 {
-	s->buf_type = RING_BUFFER_INSTRUCTION;
-	s->buf_addr_type = GTT_BUFFER;
-	return ip_gma_set(s, s->ret_instr_gma);
+	int rc;
+
+	if (s->buf_type == BATCH_BUFFER_2ND_LEVEL){
+		s->buf_type = BATCH_BUFFER_INSTRUCTION;
+		rc = ip_gma_set(s, s->ret_ip_gma_bb);
+		s->buf_addr_type = s->saved_buf_addr_type;
+	}else{
+		s->buf_type = RING_BUFFER_INSTRUCTION;
+		s->buf_addr_type = GTT_BUFFER;
+		rc = ip_gma_set(s, s->ret_ip_gma_ring);
+	}
+
+	return rc;
 }
 
 #define USE_GLOBAL_GTT_MASK (1U << 22)
@@ -453,23 +463,37 @@ static void addr_type_update_snb(struct parser_exec_state* s)
 static int vgt_cmd_handler_mi_batch_buffer_start(struct parser_exec_state *s)
 {
 	int rc=0;
+	bool second_level;
 
-	/* FIXME: add 2nd level batch buffer support */
-	ASSERT(BATCH_BUFFER_2ND_LEVEL_BIT(cmd_val(s,0)) == 0);
+	if (s->buf_type == BATCH_BUFFER_2ND_LEVEL){
+		vgt_err("MI_BATCH_BUFFER_START not allowd in 2nd level batch buffer\n");
+		return -EINVAL;
+	}
+
+	second_level = BATCH_BUFFER_2ND_LEVEL_BIT(cmd_val(s,0)) == 1;
+	if (second_level && (s->buf_type != BATCH_BUFFER_INSTRUCTION)){
+		vgt_err("Jumping to 2nd level batch buffer from ring buffer is not allowd\n");
+		return -EINVAL;
+	}
+
+	s->saved_buf_addr_type = s->buf_addr_type;
 
 	/* FIXME: add IVB/HSW code */
 	addr_type_update_snb(s);
 
 	if (s->buf_type == RING_BUFFER_INSTRUCTION){
-		s->ret_instr_gma = s->ip_gma + 2*sizeof(uint32_t);
-	}
+		s->ret_ip_gma_ring = s->ip_gma + 2*sizeof(uint32_t);
+		s->buf_type = BATCH_BUFFER_INSTRUCTION;
+	} else if (second_level){
+		s->buf_type = BATCH_BUFFER_2ND_LEVEL;
+		s->ret_ip_gma_bb = s->ip_gma + 2*sizeof(uint32_t);
+	 }
 
 	klog_printk("MI_BATCH_BUFFER_START: Addr=%x ClearCommandBufferEnable=%d\n",
 			cmd_val(s,1),  (cmd_val(s,0)>>11) & 1);
 
 	address_fixup(s, 1);
 
-	s->buf_type = BATCH_BUFFER_INSTRUCTION;
 	rc = ip_gma_set(s, cmd_val(s,1) & BATCH_BUFFER_ADDR_MASK);
 
 	if (rc < 0){

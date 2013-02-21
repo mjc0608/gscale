@@ -387,7 +387,8 @@ struct vgt_cmd_entry {
 
 typedef enum {
 	RING_BUFFER_INSTRUCTION,
-	BATCH_BUFFER_INSTRUCTION
+	BATCH_BUFFER_INSTRUCTION,
+	BATCH_BUFFER_2ND_LEVEL,
 }cmd_buf_t;
 
 typedef enum{
@@ -423,7 +424,14 @@ struct parser_exec_state{
 	uint32_t *ip_va_next_page;
 
 	/* next instruction when return from  batch buffer to ring buffer */
-	unsigned long ret_instr_gma;
+	unsigned long ret_ip_gma_ring;
+
+	/* next instruction when return from 2nd batch buffer to batch buffer */
+	unsigned long ret_ip_gma_bb;
+
+	/* batch buffer address type (GTT or PPGTT)
+	   used when ret from 2nd level batch buffer */
+	gtt_addr_t saved_buf_addr_type;
 
 	struct cmd_info* info;
 };
