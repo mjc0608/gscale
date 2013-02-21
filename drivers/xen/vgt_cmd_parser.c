@@ -648,6 +648,9 @@ static int vgt_cmd_handler_mfx_2_6_0_0(struct parser_exec_state *s)
 static struct cmd_info cmd_info[] = {
 	{"MI_NOOP", OP_MI_NOOP, F_LEN_CONST, R_ALL, D_ALL, 0, 1, vgt_cmd_handler_mi_noop},
 
+	{"MI_SET_PREDICATE", OP_MI_SET_PREDICATE, F_LEN_CONST, R_ALL, D_HSW_PLUS,
+		0, 1, NULL},
+
 	{"MI_USER_INTERRUPT", OP_MI_USER_INTERRUPT, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
 
 	{"MI_WAIT_FOR_EVENT", OP_MI_WAIT_FOR_EVENT, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},

@@ -50,6 +50,7 @@ struct decode_info{
 
 /* MI_* command Opcode (28:23) */
 #define OP_MI_NOOP                          0x0
+#define OP_MI_SET_PREDICATE                 0x1  /* HSW+ */
 #define OP_MI_USER_INTERRUPT                0x2
 #define OP_MI_WAIT_FOR_EVENT                0x3
 #define OP_MI_FLUSH                         0x4
