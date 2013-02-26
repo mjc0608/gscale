@@ -1017,13 +1017,9 @@ union _TRANS_CONFIG
 #define _REG_FPB1	0x0604c
 
 /* Display Port */
-#define _REG_DP_TP_CTL_A		0x64040
 #define _REG_DP_B				0x64100
-#define _REG_DP_TP_CTL_B		0x64140
 #define _REG_DP_C				0x64200
-#define _REG_DP_TP_CTL_C		0x64240
 #define _REG_DP_D				0x64300
-#define _REG_DP_TP_CTL_D		0x64340
 
 #define DRM_MODE_DPMS_ON	0
 
@@ -1393,30 +1389,6 @@ enum vgt_port_type {
 #define _REG_HSW_PWR_WELL_CTL2	0x45404
 #define _REG_HSW_PWR_WELL_CTL3	0x45408
 #define _REG_HSW_PWR_WELL_CTL4	0x4540C
-
-#define _REG_SPLL_CTL			0x46020
-
-#define _REG_WRPLL_CTL1			0x46040
-#define _REG_WRPLL_CTL2			0x46060
-
-#define _REG_PORT_CLK_SEL_DDIC	0x46108
-#define _REG_PORT_CLK_SEL_DDIE	0x46110
-
-#define _REG_TRANS_CLK_SEL_A	0x46140
-
-#define _REG_NDE_RSTWRN_OP		0x46408
-
-#define _REG_CLKGATE_DIS_PAR3	0x46508
-
-#define _REG_CSC_POSTOFF_A		0x49040
-#define _REG_CGE_CTRL_A			0x49080
-#define _REG_CGE_WEIGHT_A		0x49090
-
-#define _REG_SBI_ADDR			0xc6000
-#define _REG_SBI_DATA			0xc6004
-#define _REG_SBI_CTL_STAT		0xc6008
-
-#define _REG_TRANS_DDI_FUNC_CTL_A	0x60400
 
 #define _REG_GEN7_COMMON_SLICE_CHICKEN1		0x7010
 #define _REG_GEN7_L3CNTLREG1			0xB01C
