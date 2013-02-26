@@ -551,9 +551,6 @@ static void vgt_create_cmdstat_per_ring(struct vgt_device *vgt, int ring_id, str
 		case RING_BUFFER_VECS:
 			ring_name = "ve";
 			break;
-		case RING_BUFFER_VCS2:
-			ring_name = "vc";
-			break;
 		default:
 			return;
 	}

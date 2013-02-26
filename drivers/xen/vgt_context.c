@@ -97,13 +97,16 @@ void show_debug(struct pgt_device *pdev, int ring_id)
 	printk("....ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_ESR));
 	printk("....blit EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_EIR));
 	printk("....blit ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_ESR));
-	printk("....IPEIR(last executed inst): %x\n", VGT_MMIO_READ(pdev, 0x2064 + 0x10000*ring_id));
-	printk("....IPEHR(last executed inst): 0x%x\n", VGT_MMIO_READ(pdev, 0x2068 + 0x10000*ring_id));
+	printk("....%x: %x\n", 0x2064 + 0x10000*ring_id,
+		VGT_MMIO_READ(pdev, 0x2064 + 0x10000*ring_id));
+	printk("....%x: 0x%x\n", 0x2068 + 0x10000*ring_id,
+		VGT_MMIO_READ(pdev, 0x2068 + 0x10000*ring_id));
 	reg = VGT_MMIO_READ(pdev, 0x2070 + 0x10000*ring_id);
 	printk("....INSTPS* (parser state): 0x%x :\n", reg);
 	printk("....ACTHD(active header): 0x%x\n", VGT_MMIO_READ(pdev, 0x2074 + 0x10000*ring_id));
 	printk("....UHPTR(pending header): %x\n", VGT_MMIO_READ(pdev, _REG_RCS_UHPTR));
-	printk("....DMA_FADD_P(current fetch DMA): 0x%x\n", VGT_MMIO_READ(pdev, 0x2078 + 0x10000*ring_id));
+	printk("....%x: 0x%x\n", 0x2078 + 0x10000*ring_id,
+		VGT_MMIO_READ(pdev, 0x2078 + 0x10000*ring_id));
 	printk("....CSCMDOP* (instruction DWORD): 0x%x\n", VGT_MMIO_READ(pdev, 0x220C + 0x10000*ring_id));
 	printk("....CSCMDVLD* (command buffer valid): 0x%x\n", VGT_MMIO_READ(pdev, 0x2210 + 0x10000*ring_id));
 	printk("(informative)\n");
@@ -2789,9 +2792,9 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	pdev->ring_mmio_base[RING_BUFFER_VCS] = _REG_VCS_TAIL;
 	pdev->ring_mmio_base[RING_BUFFER_BCS] = _REG_BCS_TAIL;
 
-	pdev->ring_psmi[RING_BUFFER_RCS] = _REG_RCS_PSMI;
-	pdev->ring_psmi[RING_BUFFER_VCS] = _REG_VCS_PSMI;
-	pdev->ring_psmi[RING_BUFFER_BCS] = _REG_BCS_PSMI;
+	pdev->ring_psmi[RING_BUFFER_RCS] = 0x2050;
+	pdev->ring_psmi[RING_BUFFER_VCS] = 0x12050;
+	pdev->ring_psmi[RING_BUFFER_BCS] = 0x22050;
 
 	pdev->ring_mi_mode[RING_BUFFER_RCS] = _REG_RCS_MI_MODE;
 	pdev->ring_mi_mode[RING_BUFFER_VCS] = _REG_VCS_MI_MODE;

@@ -343,11 +343,8 @@ enum vgt_ring_id {
 	RING_BUFFER_VCS,
 	RING_BUFFER_BCS,
 	RING_BUFFER_VECS,
-	RING_BUFFER_VCS2,
-	RING_BUFFER_MAX
+	MAX_ENGINES
 };
-
-#define  MAX_ENGINES		5
 
 extern enum vgt_pipe surf_used_pipe;
 

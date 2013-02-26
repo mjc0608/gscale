@@ -60,7 +60,7 @@
  *	cmd error (IPEHR)
  *   - reserved bit checking in vREG?
  *   - watchdog timer control (write 1 to reset, and write 0 to start)
- *	PR_CTR_CTL, BCS_CTR_THRSH, VCS_ECOSKPD, VCS_CNTR
+ *	PR_CTR_CTL, BCS_CTR_THRSH, VCS_CNTR
  *	interresting that blitter has no such interrupt
  */
 

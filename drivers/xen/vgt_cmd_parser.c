@@ -192,17 +192,6 @@ static struct decode_info* ring_decode_info[MAX_ENGINES][8]=
 		NULL,
 		NULL,
 	},
-
-	[RING_BUFFER_VCS2] = {
-		NULL,
-		NULL,
-		NULL,
-		&decode_info_mfx_vc,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-	},
 };
 
 uint32_t vgt_get_opcode(uint32_t cmd, int ring_id)

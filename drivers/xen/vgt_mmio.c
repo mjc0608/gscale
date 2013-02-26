@@ -734,38 +734,32 @@ bool pipe_dsl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return default_passthrough_mmio_read(vgt, offset, p_data, bytes);
 }
 
-bool hdcp_status_mmio_read(struct vgt_device *vgt, unsigned int offset,
+bool dpy_reg_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	ASSERT(bytes == 4);
 
-	printk("VM%d read HDCP status register 0x%x\n", vgt->vm_id, offset);
-
-	*(uint32_t*)p_data = _REGBIT_HDCP_CIPHER_AN_READY;
+	*(uint32_t*)p_data = (1<<17);
 
 	return true;
 }
 
-bool hdcp_key_status_mmio_read(struct vgt_device *vgt, unsigned int offset,
+bool dpy_reg_mmio_read_2(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	ASSERT(bytes == 4);
 
-	printk("VM%d read HDCP KEY status register 0x%x\n", vgt->vm_id, offset);
-
-	*(uint32_t*)p_data = _REGBIT_HDCP_KEY_DONE;
+	*(uint32_t*)p_data = 3;
 
 	return true;
 }
 
-bool hdcp_pch_boot_auth_mmio_read(struct vgt_device *vgt, unsigned int offset,
+bool dpy_reg_mmio_read_3(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	ASSERT(bytes == 4);
 
-	printk("VM%d read HDCP PCH Boot Authentication Status Register 0x%x\n", vgt->vm_id, offset);
-
-	*(uint32_t*)p_data = _REGBIT_HDCP_PCH_BOOT_AUTH_STATUS_READY;
+	*(uint32_t*)p_data = (0x2F << 16);
 
 	return true;
 }
@@ -2815,7 +2809,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_BCS_UHPTR, 4, F_RDR_HWSTS, 0, D_ALL, NULL, NULL},
 {_REG_RCS_BB_PREEMPT_ADDR, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_CCID, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
-{_REG_VCS_NEXT_CCID, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
+{0x12198, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 
 {_REG_CXT_SIZE, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GEN7_CXT_SIZE, 4, F_WA, 0, D_ALL, NULL, NULL},
@@ -2900,7 +2894,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIPEBSTAT, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
 {_REG_CURABASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
-{_REG_CURASURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
+{0x700AC, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_CURACNTR, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_CURAPOS, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_CURAPALET_0, 4, F_DPY, 0, D_ALL, NULL, NULL},
@@ -2908,15 +2902,15 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_CURAPALET_2, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_CURAPALET_3, 4, F_DPY, 0, D_ALL, NULL, NULL},
 /* FIXME: it contains physical address */
-{_REG_CURAVGAPOPUPBASE, 4, F_DPY, 0, D_ALL, NULL, vgt_error_handler},
+{0x7008C, 4, F_DPY, 0, D_ALL, NULL, vgt_error_handler},
 {_REG_CURBBASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
-{_REG_CURBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
+{0x700EC, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_CURBCNTR, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_CURBPOS, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_CURBPALET_0, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_CURBPALET_1, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_CURBPALET_2, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_CURBPALET_3, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x700D0, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x700D4, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x700D8, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x700DC, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
 {_REG_DSPACNTR, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_DSPASURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
@@ -3117,14 +3111,14 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PCH_PP_ON_DELAYS, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PCH_PP_OFF_DELAYS, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
-{_REG_HDCP_STATUS_REG_1, 4, F_DPY, 0, D_ALL, hdcp_status_mmio_read, NULL},
-{_REG_HDCP_STATUS_REG_2, 4, F_DPY, 0, D_ALL, hdcp_status_mmio_read, NULL},
-{_REG_HDCP_STATUS_REG_3, 4, F_DPY, 0, D_ALL, hdcp_status_mmio_read, NULL},
-{_REG_HDCP_STATUS_REG_4, 4, F_DPY, 0, D_ALL, hdcp_status_mmio_read, NULL},
-{_REG_HDCP_KEY_STATUS_REG, 4, F_DPY, 0, D_ALL,
-	hdcp_key_status_mmio_read, NULL},
-{_REG_HDCP_PCH_BOOT_AUTH_STATUS_REG, 4, F_DPY, 0, D_ALL,
-	      hdcp_pch_boot_auth_mmio_read, NULL},
+{0xE651C, 4, F_DPY, 0, D_ALL, dpy_reg_mmio_read, NULL},
+{0xE661C, 4, F_DPY, 0, D_ALL, dpy_reg_mmio_read, NULL},
+{0xE671C, 4, F_DPY, 0, D_ALL, dpy_reg_mmio_read, NULL},
+{0xE681C, 4, F_DPY, 0, D_ALL, dpy_reg_mmio_read, NULL},
+{0xE6C04, 4, F_DPY, 0, D_ALL,
+	dpy_reg_mmio_read_2, NULL},
+{0xE6E1C, 4, F_DPY, 0, D_ALL,
+	      dpy_reg_mmio_read_3, NULL},
 {_REG_SHOTPLUG_CTL, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_LCPLL_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_HSW_FUSE_STRAP, 4, F_DPY, 0, D_HSW, NULL, NULL},
@@ -3203,9 +3197,9 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_TILECTL, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_DISP_ARB_CTL, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_DISP_ARB_CTL2, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_RCS_PSMI, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_VCS_PSMI, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_BCS_PSMI, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x2050, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x12050, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x22050, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_DISPLAY_CHICKEN_BITS_1, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
 {_REG_DISPLAY_CHICKEN_BITS_2, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
 {_REG_DSPCLK_GATE_D, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
@@ -3225,32 +3219,32 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_3D_CHICKEN1, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_3D_CHICKEN2, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_3D_CHICKEN3, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_3D_CHICKEN4, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_FF_SLICE_CHICKEN, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_FF_SLICE_CS_CHICKEN2, 4, F_WA, 0, D_GEN7PLUS, NULL, NULL},
+{0x20d4, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x2088, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x20e4, 4, F_WA, 0, D_GEN7PLUS, NULL, NULL},
 /* no definition on this. from Linux */
 {_REG_GEN3_MI_ARB_STATE, 4, F_WA, 0, D_SNB, NULL, NULL},
 {_REG_RCS_ECOSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_VCS_ECOSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x121d0, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_BCS_ECOSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
 {0x41d0, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_RENDER_PIPE_STATUS, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x22ac, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_VFSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_RUNLIST_SUBMIT_PORT, 4, F_WA, 0, D_SNB, NULL, NULL},
+{0x2700, 4, F_WA, 0, D_SNB, NULL, NULL},
 {_REG_ECOCHK, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GAC_ECOCHK, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_2D_CG_DIS, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_3D_CG_DIS, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_3D_CG_DIS2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_TD_CTL2, 4, F_VIRT, 0, D_SNB, NULL, NULL},
-{_REG_SAMPLE_MODE, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_3DCHKN0, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0x7004, 4, F_VIRT, 0, D_SNB, NULL, NULL},
+{0x7118, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0x7180, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0x7408, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0x7c00, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_SNPCR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_MBCTL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_PAVP_FUSE_1, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_PAVP_FUSE_2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0x911c, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0x9120, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
 {_REG_GAB_CTL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 /*
@@ -3264,7 +3258,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DPFC_CONTROL_SA, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_DPFC_CPU_FENCE_OFFSET_SA, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
-{_REG_MBM_CTRL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0x48800, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_CSC_A_COEFFICIENTS_1, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_CSC_A_COEFFICIENTS_2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_CSC_A_COEFFICIENTS_3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
@@ -3287,56 +3281,56 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PRECSC_B_LOW_COLOR_CHANNEL_OFFSET, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_SWF, 0x110, F_VIRT, 0, D_SNB, NULL, NULL},
 {_REG_SWF, 0x90, F_VIRT, 0, D_GEN7PLUS, NULL, NULL},
-{_REG_FDI_TXA_CHICKEN, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_FDI_TXB_CHICKEN, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_CHK_REG0, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_LVDS_INT_CTL1, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDCP_DDI_B, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDCP_DDI_B_INIT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDCP_DDI_C, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDCP_DDI_C_INIT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDCP_DDI_D, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDCP_DDI_D_INIT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDCP_EDP, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDCP_EDP_INIT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0x60110, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x61110, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x70400, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0xce044, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xe6500, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xe6504, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xe6600, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xe6604, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xe6700, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xe6704, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xe6800, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xe6804, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 /* now looks gmbus handler can't cover 4/5 ports */
 {_REG_PCH_GMBUS4, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_PCH_GMBUS5, 4, F_WA, 0, D_ALL, NULL, NULL},
 
 {_REG_SUPER_QUEUE_CONFIG, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_MISC_CLOCK_GATING, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE0_LSB_DRC_CTRL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE0_MSB_DRC_CTRL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE0_LSB_DRC_CTRL+0x18, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE0_MSB_DRC_CTRL+0x18, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE0_LSB_DRC_CTRL+0x18*2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE0_MSB_DRC_CTRL+0x18*2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE0_LSB_DRC_CTRL+0x18*3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE0_MSB_DRC_CTRL+0x18*3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE4_LSB_DRC_CTRL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE4_MSB_DRC_CTRL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE4_LSB_DRC_CTRL+0x18, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE4_MSB_DRC_CTRL+0x18, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE4_LSB_DRC_CTRL+0x18*2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE4_MSB_DRC_CTRL+0x18*2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE4_LSB_DRC_CTRL+0x18*3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_FDI_RX_LANE4_MSB_DRC_CTRL+0x18*3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE0, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE1, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE4, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE5, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE6, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE7, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE8, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE9, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE10, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_HDMI_BUF_CTL_LANE11, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_DP_LOAD_STROBE, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec008, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec00c, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec008+0x18, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec00c+0x18, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec008+0x18*2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec00c+0x18*2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec008+0x18*3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec00c+0x18*3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec408, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec40c, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec408+0x18, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec40c+0x18, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec408+0x18*2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec40c+0x18*2, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec408+0x18*3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xec40c+0x18*3, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfc810, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfc81c, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfc828, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfc834, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfcc00, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfcc0c, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfcc18, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfcc24, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfd000, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfd00c, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfd018, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfd024, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{0xfd034, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_GTDRIVER_MAILBOX_INTERFACE, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GTDRIVER_MAILBOX_DATA0, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_GTDRIVER_MAILBOX_DATA1, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x13812c, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GTT_FAULT_STATUS, 4, F_WA, 0, D_ALL, err_int_r, err_int_w},
 /* HSW */
 {0x120010, 4, F_WA, 0, D_HSW, NULL, NULL},	/* For eLLC detect */

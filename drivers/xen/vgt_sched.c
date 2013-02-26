@@ -445,7 +445,7 @@ static void ondemand_sched_ctx(struct pgt_device *pdev)
 	struct vgt_device *cur_vgt = current_render_owner(pdev);
 	struct vgt_device *next_vgt = ondemand_sched_next(pdev);
 	/* default commit 5 tail writing at most */
-	u32 tails_per_ring[MAX_ENGINES] = {5, 5, 5, 5, 5};
+	u32 tails_per_ring[MAX_ENGINES] = {5, 5, 5};
 
 	//if (is_vgt_rb_tailq_empty(next_vgt, pdev->max_engines))
 	//	return;

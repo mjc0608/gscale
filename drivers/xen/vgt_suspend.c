@@ -5,6 +5,9 @@
  * So currenly marked as  GPLv2 license.  When using or
  * redistributing this file, you may do so under such license.
  *
+ * Copyright 2008 (c) Intel Corporation
+ *   Jesse Barnes <jbarnes@virtuousgeek.org>
+ *
  * GPL LICENSE SUMMARY
  *
  * Copyright(c) 2011 Intel Corporation. All rights reserved.
@@ -1930,10 +1933,10 @@ static void vgt_gen6_fdi_link_train(struct vgt_device *vgt,
 	 * suppose we just have 1 fdi_lane ???
 	 */
 	reg_data = VGT_MMIO_READ(pdev, reg);
-	reg_data &= ~_REGBIT_FDI_TX_PORT_WIDTH_MASK;
-	//ASSERT((__sreg(vgt, reg) & _REGBIT_FDI_TX_PORT_WIDTH_MASK) == 0);
+	reg_data &= ~(0x7 << 19);
+	//ASSERT((__sreg(vgt, reg) & (0x7 << 19)) == 0);
 	//reg_data |= (0 << 19);
-	reg_data |= (__sreg(vgt, reg) & _REGBIT_FDI_TX_PORT_WIDTH_MASK);
+	reg_data |= (__sreg(vgt, reg) & (0x7 << 19));
 	reg_data &= ~_REGBIT_FDI_LINK_TRAIN_NONE;
 	reg_data |= _REGBIT_FDI_LINK_TRAIN_PATTERN_1;
 	reg_data &= ~_REGBIT_FDI_LINK_TRAIN_VOL_EMP_MASK;

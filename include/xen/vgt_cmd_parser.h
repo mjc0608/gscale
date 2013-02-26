@@ -360,8 +360,7 @@ struct cmd_info{
 #define R_VCS	(1 << RING_BUFFER_VCS )
 #define R_BCS	(1 << RING_BUFFER_BCS )
 #define R_VECS	(1 << RING_BUFFER_VECS )
-#define R_VECS2	(1 << RING_BUFFER_VCS2 )
-#define R_ALL (R_RCS | R_VCS | R_BCS | R_VECS | R_VECS2 )
+#define R_ALL (R_RCS | R_VCS | R_BCS | R_VECS)
 	/* rings that support this cmd: BLT/RCS/VCS/VECS */
 	uint16_t rings;
 
