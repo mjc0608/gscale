@@ -40,6 +40,12 @@
 #define    VGT_VERSION_MAJOR 1
 #define    VGT_VERSION_MINOR 0
 
+/*
+ * The information set by the guest gfx driver, through the display_ready field
+ */
+#define    VGT_DRV_DISPLAY_READY	(1 << 0)	/* ready for display switch */
+#define    VGT_DRV_LEGACY_VGA_MODE	(1 << 1)	/* in the legacy VGA mode */
+
 struct vgt_if {
     uint64_t  magic;      /* VGT_MAGIC */
     uint16_t  version_major;
