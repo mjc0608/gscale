@@ -32,7 +32,7 @@
 #endif /* ENABLE_GPIO_EMULATION */
 
 #define EDID_SIZE		128
-#define EDID_ADDR		0x50
+#define EDID_ADDR		0x50 /* Linux hvm EDID addr (TODO: how to get this addr ? )*/
 
 #define VGT_AUX_NATIVE_WRITE			0x8
 #define VGT_AUX_NATIVE_READ			0x9
@@ -102,7 +102,7 @@ typedef enum {
     GMBUS_IDLE_PHASE = 0,
     GMBUS_DATA_PHASE,
     GMBUS_WAIT_PHASE,
-    GMBUS_STOP_PHASE,
+    //GMBUS_STOP_PHASE,
     GMBUS_MAX_PHASE
 } vgt_gmbus_phase_t;
 

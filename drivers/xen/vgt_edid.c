@@ -264,13 +264,12 @@ static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt, unsigned int offset, v
     vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
     //vgt->vgt_i2c_bus.state = VGT_I2C_SEND;
     vgt->vgt_i2c_bus.gmbus.pedid = edid_data;
-	/* From hw spec the GMBUS phase transition like this:
-	 * START (-->INDEX) -->DATA */
-	vgt->vgt_i2c_bus.gmbus.phase = GMBUS_DATA_PHASE;
+	vgt->vgt_i2c_bus.gmbus.phase = GMBUS_IDLE_PHASE;
 
-	/* Initialize status reg */
-	__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_HW_WAIT;
-	__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_RDY;
+	/* Initialize status reg
+	 * FIXME: never clear _GMBUS_HW_WAIT */
+	__vreg(vgt, _REG_PCH_GMBUS2) &= ~ _GMBUS_ACTIVE;
+	__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_RDY | _GMBUS_HW_WAIT;
 	if (!edid_data)
 		__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_NAK;
 	else
@@ -292,6 +291,7 @@ void vgt_reset_gmbus_controller(struct vgt_device *vgt)
 	//__vreg(vgt, _REG_PCH_GMBUS5) = 0;
 	vgt->vgt_i2c_bus.gmbus.phase = GMBUS_IDLE_PHASE;
 }
+
 
 static bool vgt_gmbus1_mmio_write(struct vgt_device *vgt, unsigned int offset,
 void *p_data, unsigned int bytes)
@@ -334,9 +334,10 @@ void *p_data, unsigned int bytes)
 			i2c_bus->edid_slave.edid_data = i2c_bus->gmbus.pedid;
 
 		} else if (slave_addr != 0) {
-			printk("vGT(%d): ERROR: gmbus slave addr(%x)\n",
+			vgt_err("vGT(%d): unsupported gmbus slave addr(%x)\n",
 					vgt->vgt_id, slave_addr);
-			BUG();
+			i2c_bus->current_slave = (vgt_i2c_slave_t *)&i2c_bus->edid_slave;
+			i2c_bus->edid_slave.edid_data = i2c_bus->gmbus.pedid;
 		}
 
 		if (wvalue & _GMBUS_CYCLE_INDEX) {
@@ -345,29 +346,60 @@ void *p_data, unsigned int bytes)
 					gmbus1_slave_index(wvalue));
 		}
 
-		/* TODO: how to handle these cycles
-		   2) gmbus_xfer() */
 		i2c_bus->gmbus.cycle_type = gmbus1_bus_cycle(wvalue);
 		switch (gmbus1_bus_cycle(wvalue)) {
+			case GMBUS_NOCYCLE:
+				break;
 			case GMBUS_STOP:
-				/* TODO:
-				   From spec:
+				/* From spec:
 				   This can only cause a STOP to be generated
 				   if a GMBUS cycle is generated, the GMBUS is
-				   currently in a data phase, or it is in a
+				   currently in a data/wait/idle phase, or it is in a
 				   WAIT phase
 				   */
-				if (((gmbus1_bus_cycle(__vreg(vgt, offset)) != GMBUS_NOCYCLE)
-							&& (i2c_bus->gmbus.phase == GMBUS_DATA_PHASE))
-						|| (i2c_bus->gmbus.phase == GMBUS_WAIT_PHASE)) {
+				if (gmbus1_bus_cycle(__vreg(vgt, offset)) != GMBUS_NOCYCLE) {
 					vgt_init_i2c_bus(i2c_bus);
-					i2c_bus->gmbus.phase = GMBUS_STOP_PHASE;
-					__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_HW_WAIT;
+					/* After the 'stop' cycle, hw state would become
+					 * 'stop phase' and then 'idle phase' after a few
+					 * milliseconds. In emulation, we just set it as
+					 * 'idle phase' ('stop phase' is not
+					 * visible in gmbus interface)
+					 */
+					i2c_bus->gmbus.phase = GMBUS_IDLE_PHASE;
+					/*
+					FIXME: never clear _GMBUS_WAIT
+					__vreg(vgt, _REG_PCH_GMBUS2) &=
+						~(_GMBUS_ACTIVE | _GMBUS_HW_WAIT);
+					*/
+					__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_ACTIVE;
 				}
 				break;
+			case NIDX_NS_W:
+			case IDX_NS_W:
+			case NIDX_STOP:
+			case IDX_STOP:
+				/* From hw spec the GMBUS phase
+				 * transition like this:
+				 * START (-->INDEX) -->DATA
+				 */
+				i2c_bus->gmbus.phase = GMBUS_DATA_PHASE;
+				__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_ACTIVE;
+				/* FIXME: never clear _GMBUS_WAIT */
+				//__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_HW_WAIT;
+				break;
 			default:
+				vgt_err("Unknown/reserved GMBUS cycle detected!");
 				break;
 		}
+		/* From hw spec the WAIT state will be
+		 * cleared:
+		 * (1) in a new GMBUS cycle
+		 * (2) by generating a stop
+		 */
+		/* FIXME: never clear _GMBUS_WAIT
+		if (gmbus1_bus_cycle(wvalue) != GMBUS_NOCYCLE)
+			__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_HW_WAIT;
+		*/
 
 		__vreg(vgt, offset) = wvalue;
 	}
@@ -411,22 +443,19 @@ bool vgt_gmbus3_mmio_read(struct vgt_device *vgt, unsigned int offset,
 
 		if (byte_left <= 4) {
 			switch (i2c_bus->gmbus.cycle_type) {
-				case NIDX_NS_W:
-				case IDX_NS_W:
-					i2c_bus->gmbus.phase = GMBUS_WAIT_PHASE;
-					break;
 				case NIDX_STOP:
 				case IDX_STOP:
-					i2c_bus->gmbus.phase = GMBUS_STOP_PHASE;
-					break;
-				default:
 					i2c_bus->gmbus.phase = GMBUS_IDLE_PHASE;
 					break;
+				case NIDX_NS_W:
+				case IDX_NS_W:
+				default:
+					i2c_bus->gmbus.phase = GMBUS_WAIT_PHASE;
+					break;
 			}
-			if (i2c_bus->gmbus.phase == GMBUS_WAIT_PHASE)
-				__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_WAIT;
-			else
-				__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_HW_WAIT;
+			//if (i2c_bus->gmbus.phase == GMBUS_WAIT_PHASE)
+			//__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_WAIT;
+
 			vgt_init_i2c_bus(i2c_bus);
 		}
 
