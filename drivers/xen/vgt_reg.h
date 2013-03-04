@@ -986,7 +986,7 @@ union _TRANS_CONFIG
 #define DP_SET_POWER	0x600
 #define DP_SET_POWER_D0                    0x1
 #define AUX_NATIVE_WRITE	0x8
-#define AUX_NATIVE_READ	0x4
+#define AUX_NATIVE_READ	0x9
 
 #define AUX_NATIVE_REPLY_MASK	(0x3 << 4)
 #define AUX_NATIVE_REPLY_ACK	(0x0 << 4)
