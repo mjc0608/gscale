@@ -50,7 +50,6 @@ struct kobject *vgt_ctrl_kobj;
 struct kset *vgt_kset;
 static struct pgt_device *vgt_kobj_priv;
 struct vgt_device *vmid_2_vgt_device(int vmid);
-static unsigned int query_reg;
 DEFINE_MUTEX(vgt_sysfs_lock);
 
 static void vgt_kobj_release(struct kobject *kobj)
@@ -263,65 +262,6 @@ static ssize_t vgt_hot_plug_trigger(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t vgt_reg_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
-            const char *buf, size_t count)
-{
-	unsigned int reg;
-
-	sscanf(buf, "%xu", &reg);
-	if ((reg & 0x3) || reg > (VGT_MMIO_SPACE_SZ - 4))
-		return 0;
-
-	query_reg = reg;
-
-	return count;
-}
-
-static ssize_t vgt_reg_owner_show(struct kobject *kobj, struct kobj_attribute *attr,
-			char *buf)
-{
-	unsigned int bit, reg;
-	bool found_owner = false;
-	enum vgt_owner_type type;
-	struct pgt_device *pdev = vgt_kobj_priv;
-	struct vgt_device *vgt;
-
-	reg = query_reg;
-	type = pdev->reg_info[REG_INDEX(reg)] & VGT_REG_OWNER;
-
-	for_each_set_bit(bit, &vgt_id_alloc_bitmap, (8 * sizeof(unsigned long))) {
-		vgt = pdev->device[bit];
-		if (vgt == vgt_get_owner(pdev, type)) {
-			found_owner = true;
-			break;
-		}
-	}
-
-	return sprintf(buf,"Reg(%08x) ownership info: \n"
-			"Type #:              [%03d]\n"
-			"No-owner:            [%-3s]\n"
-			"RCS:                 [%-3s]\n"
-			"BCS:                 [%-3s]\n"
-			"VCS:                 [%-3s]\n"
-			"RENDER:              [%-3s]\n"
-			"DISPLAY:             [%-3s]\n"
-			"PM:                  [%-3s]\n"
-			"MGMT:                [%-3s]\n\n"
-			"Owner Domain         [%08x]\n",
-			reg,
-			type,
-			(type == VGT_OT_NONE) ? "yes" : "no",
-			(type == VGT_OT_RCS) ? "yes" : "no",
-			(type == VGT_OT_BCS) ? "yes" : "no",
-			(type == VGT_OT_VCS) ? "yes" : "no",
-			(type == VGT_OT_RENDER) ? "yes" : "no",
-			(type == VGT_OT_DISPLAY) ? "yes" : "no",
-			(type == VGT_OT_PM) ? "yes" : "no",
-			(type == VGT_OT_MGMT) ? "yes" : "no",
-			found_owner ? vgt->vgt_id : 0xdeadbeef
-			);
-}
-
 static struct kobj_attribute create_vgt_instance_attrs =
 	__ATTR(create_vgt_instance, 0220, NULL, vgt_create_instance_store);
 static struct kobj_attribute display_owner_ctrl_attrs =
@@ -332,9 +272,6 @@ static struct kobj_attribute display_pointer_attrs =
 
 static struct kobj_attribute hot_plug_event_attrs =
 	__ATTR(virtual_event, 0660, vgt_hot_plug_reader, vgt_hot_plug_trigger);
-
-static struct kobj_attribute reg_owner_attrs =
-	__ATTR(reg_owner, 0660, vgt_reg_owner_show, vgt_reg_owner_store);
 
 static struct kobj_attribute ctx_switch_attrs =
 	__ATTR(ctx_switch, 0660, vgt_ctx_switch_show, vgt_ctx_switch_store);
@@ -350,7 +287,6 @@ static struct attribute *vgt_ctrl_attrs[] = {
 	&display_owner_ctrl_attrs.attr,
 	&display_pointer_attrs.attr,
 	&hot_plug_event_attrs.attr,
-	&reg_owner_attrs.attr,
 	&ctx_switch_attrs.attr,
 	&dpy_switch_attrs.attr,
 	&available_res_attrs.attr,
@@ -447,7 +383,6 @@ static struct attribute *vgt_instance_attrs[] = {
 	&aperture_sz_attribute.attr,
 	&aperture_base_attribute.attr,
 	&aperture_base_va_attribute.attr,
-	//&reg_owner_attribute.attr,
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 
