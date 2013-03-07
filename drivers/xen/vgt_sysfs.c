@@ -145,8 +145,10 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 	}
 
 	pdev = next_vgt->pdev;
-	if (current_display_owner(pdev) == next_vgt)
+	if (current_display_owner(pdev) == next_vgt) {
+		ret = -EINVAL;
 		goto out;
+	}
 
 	next_display_owner = next_vgt;
 	do_vgt_display_switch(pdev);
@@ -160,8 +162,8 @@ static ssize_t vgt_display_pointer_store(struct kobject *kobj, struct kobj_attri
 {
 	int vmid;
 
-	/* TODO: scanned value not checked */
-	sscanf(buf, "%du", &vmid);
+	if (sscanf(buf, "%du", &vmid) != 1)
+		return -EINVAL;
 	vgt_set_display_pointer(vmid);
 	return count;
 }
@@ -178,8 +180,8 @@ static ssize_t vgt_ctx_switch_store(struct kobject *kobj, struct kobj_attribute 
 	int val;
 	bool enabled;
 
-	/* TODO: scanned value not checked */
-	sscanf(buf, "%du", &val);
+	if (sscanf(buf, "%du", &val) != 1)
+		return -EINVAL;
 	enabled = !!val;
 	vgt_toggle_ctx_switch(enabled);
 	return count;
@@ -257,7 +259,8 @@ static ssize_t vgt_hot_plug_trigger(struct kobject *kobj,
 				const char *buf, size_t count)
 {
 	unsigned hotplug_cmd = 0;
-	sscanf(buf, "%du", &hotplug_cmd);
+	if (sscanf(buf, "%du", &hotplug_cmd) != 1);
+		return -EINVAL;
 	vgt_trigger_display_hot_plug(vgt_kobj_priv, (vgt_hotplug_cmd_t)hotplug_cmd);
 	return count;
 }
