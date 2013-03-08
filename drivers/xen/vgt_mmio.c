@@ -1292,7 +1292,9 @@ bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	 * if vgt is the display owner.
 	 */
 	if (__vreg(vgt, reg) & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER) {
-		ASSERT(!(__vreg(vgt, reg) & _REGBIT_ADPA_DAC_ENABLE));
+		if ((__vreg(vgt, reg) & _REGBIT_ADPA_DAC_ENABLE)) {
+			vgt_warn("HOTPLUG_FORCE_TRIGGER is set while VGA is enabled!\n");
+		}
 
 		if (reg_hw_access(vgt, reg)) {
 			rc = default_mmio_read(vgt, offset, p_data, bytes);
@@ -1361,7 +1363,9 @@ bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		 * TODO: need consider whether to trigger virtual hotplug event
 		 * when hotplug is already enabled. Not sure how HW will behave.
 		 */
-		ASSERT(!(new & _REGBIT_ADPA_DAC_ENABLE));
+		if ((new & _REGBIT_ADPA_DAC_ENABLE)) {
+			vgt_warn("HOTPLUG_FORCE_TRIGGER is set while VGA is enabled!\n");
+		}
 
 		/*
 		 * if vgt is the owner, the force trigger bit is forwarded
