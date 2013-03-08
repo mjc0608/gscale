@@ -570,7 +570,7 @@ extern int resend_irq_on_evtchn(unsigned int i915_irq);
  *   - rising edge to trigger an event to next level
  *   - only cache one instance for IIR now
  */
-void vgt_propogate_virtual_event(struct vgt_device *vstate,
+void vgt_propagate_virtual_event(struct vgt_device *vstate,
 	int bit, struct vgt_irq_info *info)
 {
 	vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
@@ -589,11 +589,11 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 			vgt_dbg("vGT: set bit (%d) for (%s) for VM (%d)\n",
 				bit, info->name, vstate->vgt_id);
 		vgt_set_irq_pending(vstate);
-		vstate->stat.last_propogation = get_cycles();
+		vstate->stat.last_propagation = get_cycles();
 		vstate->stat.events[info->table[bit].event]++;
 	} else {
 		if (vstate->vgt_id) {
-			vgt_dbg("vGT: propogate bit (%d) for (%s) for VM (%d) w/o injection\n",
+			vgt_dbg("vGT: propagate bit (%d) for (%s) for VM (%d) w/o injection\n",
 				bit, info->name, vstate->vgt_id);
 			vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
 				__vreg(vstate, vgt_isr(info->reg_base)),
@@ -602,7 +602,7 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 				__vreg(vstate, vgt_ier(info->reg_base)),
 				__vreg(vstate, _REG_DEIER));
 		}
-		vstate->stat.last_blocked_propogation = get_cycles();
+		vstate->stat.last_blocked_propagation = get_cycles();
 	}
 
 #if 0
@@ -612,10 +612,10 @@ void vgt_propogate_virtual_event(struct vgt_device *vstate,
 }
 
 /*
- * propogate PCH specific event, which will be chained to level-1 ISR later
+ * propagate PCH specific event, which will be chained to level-1 ISR later
  * similarly need consider IIR which can store two pending instances
  */
-void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
+void vgt_propagate_pch_virtual_event(struct vgt_device *vstate,
 	int bit, struct vgt_irq_info *info)
 {
 	/* Rising edge ISR triggers IIR. so no need to touch ISR */
@@ -626,7 +626,7 @@ void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
 		vgt_dbg("vGT: set pch bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
 		vgt_set_pch_irq_pending(vstate);
 	} else {
-		vgt_dbg("vGT: propogate pch bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
+		vgt_dbg("vGT: propagate pch bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
 		vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x)i\n",
 			__vreg(vstate, vgt_isr(info->reg_base)),
 			__vreg(vstate, vgt_imr(info->reg_base)),
@@ -641,11 +641,11 @@ void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
 }
 
 /*
- * FIXME: need to handle PCH propogation. Also it'd be good to share
+ * FIXME: need to handle PCH propagation. Also it'd be good to share
  * same handler as in physical interrupt path, since this can only
  * handle IIR-only events.
  */
-void vgt_propogate_emulated_event(struct vgt_device *vstate,
+void vgt_propagate_emulated_event(struct vgt_device *vstate,
 	enum vgt_event_type event)
 {
 	int bit;
@@ -658,7 +658,7 @@ void vgt_propogate_emulated_event(struct vgt_device *vstate,
 	bit = ops->get_bit_from_event(dev, event, info);
 	entry = info->table + bit;
 	ASSERT(entry->event == event);
-	vgt_propogate_virtual_event(vstate, bit, info);
+	vgt_propagate_virtual_event(vstate, bit, info);
 }
 
 void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
@@ -1124,35 +1124,35 @@ static void vgt_emul_dpy_virq(struct vgt_device *vstate)
 {
 /* carry all display status events in one timer */
 	if (test_bit(IRQ_PIPE_A_VSYNC, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_VSYNC);
+		vgt_propagate_emulated_event(vstate, IRQ_PIPE_A_VSYNC);
 	if (test_bit(IRQ_PIPE_A_LINE_COMPARE, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_LINE_COMPARE);
+		vgt_propagate_emulated_event(vstate, IRQ_PIPE_A_LINE_COMPARE);
 	if (test_bit(IRQ_PIPE_A_ODD_FIELD, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_ODD_FIELD);
+		vgt_propagate_emulated_event(vstate, IRQ_PIPE_A_ODD_FIELD);
 	if (test_bit(IRQ_PIPE_A_EVEN_FIELD, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_EVEN_FIELD);
+		vgt_propagate_emulated_event(vstate, IRQ_PIPE_A_EVEN_FIELD);
 	if (test_bit(IRQ_PIPE_A_VBLANK, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PIPE_A_VBLANK);
+		vgt_propagate_emulated_event(vstate, IRQ_PIPE_A_VBLANK);
 #if 0
 	if (test_bit(IRQ_PIPE_B_VSYNC, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_VSYNC);
+		vgt_propagate_emulated_event(vstate, IRQ_PIPE_B_VSYNC);
 	if (test_bit(IRQ_PIPE_B_LINE_COMPARE, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_LINE_COMPARE);
+		vgt_propagate_emulated_event(vstate, IRQ_PIPE_B_LINE_COMPARE);
 	if (test_bit(IRQ_PIPE_B_ODD_FIELD, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_ODD_FIELD);
+		vgt_propagate_emulated_event(vstate, IRQ_PIPE_B_ODD_FIELD);
 	if (test_bit(IRQ_PIPE_B_EVEN_FIELD, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_EVEN_FIELD);
+		vgt_propagate_emulated_event(vstate, IRQ_PIPE_B_EVEN_FIELD);
 	if (test_bit(IRQ_PIPE_B_VBLANK, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PIPE_B_VBLANK);
+		vgt_propagate_emulated_event(vstate, IRQ_PIPE_B_VBLANK);
 #endif
 	if (test_bit(IRQ_PRIMARY_A_FLIP_DONE, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PRIMARY_A_FLIP_DONE);
+		vgt_propagate_emulated_event(vstate, IRQ_PRIMARY_A_FLIP_DONE);
 	if (test_bit(IRQ_PRIMARY_B_FLIP_DONE, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_PRIMARY_B_FLIP_DONE);
+		vgt_propagate_emulated_event(vstate, IRQ_PRIMARY_B_FLIP_DONE);
 	if (test_bit(IRQ_SPRITE_A_FLIP_DONE, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_SPRITE_A_FLIP_DONE);
+		vgt_propagate_emulated_event(vstate, IRQ_SPRITE_A_FLIP_DONE);
 	if (test_bit(IRQ_SPRITE_B_FLIP_DONE, vgt_state_emulated_events(vstate)))
-		vgt_propogate_emulated_event(vstate, IRQ_SPRITE_B_FLIP_DONE);
+		vgt_propagate_emulated_event(vstate, IRQ_SPRITE_B_FLIP_DONE);
 
 }
 
@@ -1215,7 +1215,7 @@ void vgt_default_event_handler(struct pgt_device *dev,
 		return;
 
 	/* propagate to the owner */
-	info->propogate_virtual_event(vgt, bit, info);
+	info->propagate_virtual_event(vgt, bit, info);
 }
 
 /* not assumed to be invoked, e.g. 'sync flush' expected to be polled! */
@@ -1272,7 +1272,7 @@ void vgt_handle_cmd_stream_error(struct pgt_device *dev,
 		case IRQ_BCS_CMD_STREAMER_ERR:
 			reg = _REG_BCS_EIR;
 		default:
-			printk("no reg info to propogate\n");
+			printk("no reg info to propagate\n");
 			reg = _REG_INVALID;
 	};
 	ASSERT(reg != _REG_INVALID);
@@ -1305,7 +1305,7 @@ void vgt_handle_cmd_stream_error(struct pgt_device *dev,
 	 * thus leave them unhandled for now.
 	 */
 
-	info->propogate_virtual_event(vgt, bit, info);
+	info->propagate_virtual_event(vgt, bit, info);
 }
 
 void vgt_handle_phase_in(struct pgt_device *dev,
@@ -1324,7 +1324,7 @@ void vgt_handle_phase_in(struct pgt_device *dev,
 	}
 
 	__vreg(vgt, _REG_BLC_PWM_CTL2) |= _REGBIT_PHASE_IN_IRQ_STATUS;
-	info->propogate_virtual_event(vgt, bit, info);
+	info->propagate_virtual_event(vgt, bit, info);
 }
 
 void vgt_handle_histogram(struct pgt_device *dev,
@@ -1343,7 +1343,7 @@ void vgt_handle_histogram(struct pgt_device *dev,
 	}
 
 	__vreg(vgt, _REG_HISTOGRAM_THRSH) |= _REGBIT_HISTOGRAM_IRQ_STATUS;
-	info->propogate_virtual_event(vgt, bit, info);
+	info->propagate_virtual_event(vgt, bit, info);
 }
 
 void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int value, unsigned int offset)
@@ -1430,7 +1430,7 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 	__vreg(vgt, _REG_PCH_ADPA) &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 	__vreg(vgt, _REG_PCH_ADPA) |= vgt_event_state(pdev, entry->event).val &
 				      _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-	info->propogate_virtual_event(vgt, bit, info);
+	info->propagate_virtual_event(vgt, bit, info);
 }
 
 void vgt_handle_aux_channel(struct pgt_device *dev,
@@ -1548,7 +1548,7 @@ void vgt_trigger_virtual_event(struct vgt_device *vgt,
 		info_de = ops->get_irq_info_from_event(pdev, IRQ_PCH_IRQ);
 		ASSERT(info_de);
 		bit_de = ops->get_bit_from_event(pdev, IRQ_PCH_IRQ, info_de);
-		vgt_propogate_virtual_event(vgt, bit_de, info_de);
+		vgt_propagate_virtual_event(vgt, bit_de, info_de);
 	}
 
 	if (check && vgt_has_irq_pending(vgt))

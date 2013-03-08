@@ -42,7 +42,7 @@ static struct vgt_irq_info snb_render_irq_info = {
 	.name = "SNB GT IRQ",
 	.reg_base = _REG_GTISR,
 	.table_size = VGT_IRQ_BITWIDTH,
-	.propogate_virtual_event = vgt_propogate_virtual_event,
+	.propagate_virtual_event = vgt_propagate_virtual_event,
 	.table = {
 		{IRQ_RCS_MI_USER_INTERRUPT,	vgt_default_event_handler, 	NULL},	// bit 0
 		{IRQ_RCS_DEBUG,			vgt_default_event_handler, 	NULL},	// bit 1
@@ -105,7 +105,7 @@ static struct vgt_irq_info snb_dpy_irq_info = {
 	.name = "SNB DISPLAY IRQ",
 	.reg_base = _REG_DEISR,
 	.table_size = VGT_IRQ_BITWIDTH,
-	.propogate_virtual_event = vgt_propogate_virtual_event,
+	.propagate_virtual_event = vgt_propagate_virtual_event,
 	.table = {
 		{IRQ_PIPE_A_FIFO_UNDERRUN,	vgt_default_event_handler,	NULL},	// bit 0
 		{IRQ_PIPE_A_CRC_ERR, 		vgt_default_event_handler,	NULL},	// bit 1
@@ -158,7 +158,7 @@ static struct vgt_irq_info snb_pm_irq_info = {
 	.name = "SNB PM IRQ",
 	.reg_base = _REG_PMISR,
 	.table_size = VGT_IRQ_BITWIDTH,
-	.propogate_virtual_event = vgt_propogate_virtual_event,
+	.propagate_virtual_event = vgt_propagate_virtual_event,
 	.table = {
 		{IRQ_RESERVED,			NULL,	NULL},				// bit 0
 
@@ -208,7 +208,7 @@ static struct vgt_irq_info snb_pch_irq_info = {
 	.name = "SNB PCH IRQ",
 	.reg_base = _REG_SDEISR,
 	.table_size = VGT_IRQ_BITWIDTH,
-	.propogate_virtual_event = vgt_propogate_pch_virtual_event,
+	.propagate_virtual_event = vgt_propagate_pch_virtual_event,
 	.table = {
 		{IRQ_FDI_RX_INTERRUPTS_TRANSCODER_A,	NULL,	NULL},	// bit 0
 		{IRQ_AUDIO_CP_CHANGE_TRANSCODER_A, 	NULL,	NULL},	// bit 1
@@ -261,7 +261,7 @@ static struct vgt_irq_info gen7_de_irq_info = {
 	.name = "Gen7 DE IRQ",
 	.reg_base = _REG_DEISR,
 	.table_size = VGT_IRQ_BITWIDTH,
-	.propogate_virtual_event = vgt_propogate_virtual_event,
+	.propagate_virtual_event = vgt_propagate_virtual_event,
 	.table = {
 		{IRQ_PIPE_A_VBLANK,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 0
 		{IRQ_PIPE_A_VSYNC,		vgt_default_event_handler,	vgt_emulate_dpy_status},	// bit 1
@@ -391,7 +391,7 @@ static inline void vgt_snb_toggle_hw_event(struct pgt_device *dev,
 		vgt_clear_reg_bit(dev, vgt_imr(info->reg_base), bit);
 
 		/*
-		 * for a vGT enabled PCH event, we need propogate to DEIER.
+		 * for a vGT enabled PCH event, we need propagate to DEIER.
 		 * but for VM enabled PCH event, the VM itself will enable
 		 * DEIER. For safety, since vGT's own requirement is unclear
 		 * yet, let's disable this logic for now
@@ -440,10 +440,10 @@ static void vgt_snb_handle_virtual_interrupt(struct pgt_device *dev, enum vgt_ow
 	for (i = 0; i < VGT_MAX_VMS; i++) {
 		if (dev->device[i] && vgt_has_pch_irq_pending(dev->device[i])) {
 			if (dev->is_sandybridge)
-				vgt_propogate_virtual_event(dev->device[i],
+				vgt_propagate_virtual_event(dev->device[i],
 							    _REGSHIFT_PCH, &snb_dpy_irq_info);
 			else if (dev->is_ivybridge || dev->is_haswell)
-				vgt_propogate_virtual_event(dev->device[i],
+				vgt_propagate_virtual_event(dev->device[i],
 							    _REGSHIFT_PCH_GEN7, &gen7_de_irq_info);
 			vgt_clear_pch_irq_pending(dev->device[i]);
 		}

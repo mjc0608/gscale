@@ -390,10 +390,10 @@ static int vgt_show_irqinfo(struct seq_file *m, void *data)
 		seq_printf(m, "\n-->vgt-%d:\n", pdev->device[i]->vgt_id);
 		vstat = &pdev->device[i]->stat;
 
-		seq_printf(m, "%16lld: Last virq propogation\n",
-			vstat->last_propogation);
-		seq_printf(m, "%16lld: Last blocked virq propogation\n",
-			vstat->last_blocked_propogation);
+		seq_printf(m, "%16lld: Last virq propagation\n",
+			vstat->last_propagation);
+		seq_printf(m, "%16lld: Last blocked virq propagation\n",
+			vstat->last_blocked_propagation);
 		seq_printf(m, "%16lld: Last injection\n",
 			vstat->last_injection);
 

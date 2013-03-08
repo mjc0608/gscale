@@ -1939,8 +1939,8 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 			break;
 	}
 	/*
-	 * FIXME: assume most dmo0's cfg writes should be propogated to
-	 * the real conf space. In the case where propogation is required
+	 * FIXME: assume most dmo0's cfg writes should be propagated to
+	 * the real conf space. In the case where propagation is required
 	 * but value needs be changed (sReg), do it here
 	 */
 	return rc;

@@ -417,8 +417,8 @@ struct vgt_statistics {
 	 * one injection can deliver more than one events
 	 */
 	u64	pending_events;
-	u64	last_propogation;
-	u64	last_blocked_propogation;
+	u64	last_propagation;
+	u64	last_blocked_propagation;
 	u64	last_injection;
 };
 
@@ -1722,7 +1722,7 @@ struct vgt_irq_info {
 	char *name;
 	int reg_base;
 	int table_size;
-	void (*propogate_virtual_event)(struct vgt_device *vstate,
+	void (*propagate_virtual_event)(struct vgt_device *vstate,
 		int bit, struct vgt_irq_info *info);
 	struct vgt_irq_info_entry table[VGT_IRQ_BITWIDTH];
 };
@@ -1920,7 +1920,7 @@ static inline bool vgt_has_irq_pending(struct vgt_device *vstate)
 	return vstate->irq_vstate->irq_pending;
 }
 
-/* propogation to DE is postponed since there may have multiple PCH events pending */
+/* propagation to DE is postponed since there may have multiple PCH events pending */
 static inline void vgt_set_pch_irq_pending(struct vgt_device *vstate)
 {
 	vstate->irq_vstate->pch_irq_pending = true;
@@ -1971,11 +1971,11 @@ void vgt_irq_save_context(struct vgt_device *vstate, enum vgt_owner_type owner);
 void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owner);
 
 void vgt_show_irq_state(struct vgt_device *vgt);
-void vgt_propogate_pch_virtual_event(struct vgt_device *vstate,
+void vgt_propagate_pch_virtual_event(struct vgt_device *vstate,
 	int bit, struct vgt_irq_info *info);
-void vgt_propogate_virtual_event(struct vgt_device *vstate,
+void vgt_propagate_virtual_event(struct vgt_device *vstate,
 	int bit, struct vgt_irq_info *info);
-void vgt_propogate_emulated_event(struct vgt_device *vstate,
+void vgt_propagate_emulated_event(struct vgt_device *vstate,
 	enum vgt_event_type event);
 void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 	struct vgt_irq_info *info, bool physical,
