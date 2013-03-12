@@ -163,9 +163,11 @@ static char *format_array_alloc(const char *fmt, u32 *array, unsigned array_size
 	size_t len = format_array(NULL, 0, fmt, array, array_size);
 	char *ret;
 
-	ret = kmalloc(len, GFP_KERNEL);
-	if (ret == NULL)
+	ret = vmalloc(len);
+	if (ret == NULL) {
+		vgt_err("failed to alloc memory!");
 		return NULL;
+	}
 
 	format_array(ret, len, fmt, array, array_size);
 	return ret;
@@ -181,7 +183,7 @@ static ssize_t u32_array_read(struct file *file, char __user *buf, size_t len,
 
 	if (*ppos == 0) {
 		if (file->private_data) {
-			kfree(file->private_data);
+			vfree(file->private_data);
 			file->private_data = NULL;
 		}
 
@@ -197,7 +199,7 @@ static ssize_t u32_array_read(struct file *file, char __user *buf, size_t len,
 
 static int vgt_array_release(struct inode *inode, struct file *file)
 {
-    kfree(file->private_data);
+    vfree(file->private_data);
 
     return 0;
 }
@@ -579,7 +581,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	dsp_surf_size[vgt_id][PIPE_B] = __sreg(vgt, _REG_DSPBSIZE);
 
 	dsp_surf_base[vgt_id][PIPE_A] = phys_aperture_vbase(pdev) + ((__sreg(vgt, _REG_DSPASURF)) & PAGE_MASK);
-	dsp_surf_base[vgt_id][PIPE_A] = phys_aperture_vbase(pdev) + ((__sreg(vgt, _REG_DSPBSURF)) & PAGE_MASK);
+	dsp_surf_base[vgt_id][PIPE_B] = phys_aperture_vbase(pdev) + ((__sreg(vgt, _REG_DSPBSURF)) & PAGE_MASK);
 
 	printk("vGT(%d): Display surface A va(%p) size(%d)\n", vgt_id, dsp_surf_base[vgt_id][PIPE_A], dsp_surf_size[vgt_id][PIPE_A]);
 	printk("vGT(%d): Display surface B va(%p) size(%d)\n", vgt_id, dsp_surf_base[vgt_id][PIPE_B], dsp_surf_size[vgt_id][PIPE_B]);
