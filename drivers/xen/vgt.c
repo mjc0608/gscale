@@ -67,7 +67,7 @@ module_param_named(debug, vgt_debug, bool, 0600);
 bool novgt = false;
 module_param_named(novgt, novgt, bool, 0400);
 
-bool fastpath_dpy_switch = false;
+bool fastpath_dpy_switch = true;
 module_param_named(fastpath_dpy_switch, fastpath_dpy_switch, bool, 0600);
 
 int fastmode = 1;
