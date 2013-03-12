@@ -336,13 +336,13 @@ static struct kobj_attribute reg_owner_attrs =
 	__ATTR(reg_owner, 0660, vgt_reg_owner_show, vgt_reg_owner_store);
 
 static struct kobj_attribute ctx_switch_attrs =
-	__ATTR(ctx_switch, 0660, vgt_ctx_switch_show, vgt_ctx_switch_store);
+	__ATTR(render_context_switch, 0660, vgt_ctx_switch_show, vgt_ctx_switch_store);
 
 static struct kobj_attribute dpy_switch_attrs =
-	__ATTR(display_switch_method, 0660, vgt_dpy_switch_show, vgt_dpy_switch_store);
+	__ATTR(display_switch_mode, 0660, vgt_dpy_switch_show, vgt_dpy_switch_store);
 
 static struct kobj_attribute available_res_attrs =
-	__ATTR(available_resource, 0440, vgt_available_res_show, NULL);
+	__ATTR(free_resources, 0440, vgt_available_res_show, NULL);
 
 static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
@@ -544,7 +544,7 @@ igd_mmio_write(struct file* filp, struct kobject *kobj,
 
 static struct bin_attribute igd_mmio_attr = {
 	.attr =	{
-		.name = "igd_mmio",
+		.name = "regs",
 		.mode = 0660
 	},
 	.size = VGT_MMIO_SPACE_SZ,
