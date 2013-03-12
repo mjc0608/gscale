@@ -2057,6 +2057,8 @@ typedef struct {
 						-1: means the ioemu doesn't supply a value */
 } vgt_params_t;
 
+ssize_t get_avl_vm_aperture_gm_and_fence(struct pgt_device *pdev, char *buf,
+		ssize_t buf_sz);
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp);
 void vgt_release_instance(struct vgt_device *vgt);
 int vgt_init_sysfs(struct pgt_device *pdev);

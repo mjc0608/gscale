@@ -213,6 +213,20 @@ static ssize_t vgt_dpy_switch_show(struct kobject *kobj, struct kobj_attribute *
 				 : "slow-path method. (write 1 to use the fast-path method)");
 }
 
+ static ssize_t vgt_available_res_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	struct pgt_device *pdev = vgt_kobj_priv;
+	ssize_t buf_len;
+
+	spin_lock_irq(&pdev->lock);
+	buf_len = get_avl_vm_aperture_gm_and_fence(vgt_kobj_priv, buf,
+			PAGE_SIZE);
+	spin_unlock_irq(&pdev->lock);
+	return buf_len;
+}
+
+
 static ssize_t vgt_hot_plug_reader(struct kobject *kobj,
 				struct kobj_attribute *attr, char *buf)
 {
@@ -327,6 +341,9 @@ static struct kobj_attribute ctx_switch_attrs =
 static struct kobj_attribute dpy_switch_attrs =
 	__ATTR(display_switch_method, 0660, vgt_dpy_switch_show, vgt_dpy_switch_store);
 
+static struct kobj_attribute available_res_attrs =
+	__ATTR(available_resource, 0440, vgt_available_res_show, NULL);
+
 static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
 	&display_owner_ctrl_attrs.attr,
@@ -335,6 +352,7 @@ static struct attribute *vgt_ctrl_attrs[] = {
 	&reg_owner_attrs.attr,
 	&ctx_switch_attrs.attr,
 	&dpy_switch_attrs.attr,
+	&available_res_attrs.attr,
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 

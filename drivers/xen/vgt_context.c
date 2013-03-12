@@ -2085,6 +2085,46 @@ void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start, unsigned l
 	}
 }
 
+ssize_t get_avl_vm_aperture_gm_and_fence(struct pgt_device *pdev, char *buf,
+		ssize_t buf_sz)
+{
+	unsigned long aperture_guard = phys_aperture_sz(pdev) / SIZE_1MB;
+	unsigned long gm_guard = gm_sz(pdev) / SIZE_1MB;
+	unsigned long fence_guard = VGT_FENCE_BITMAP_BITS;
+	int i;
+	ssize_t buf_len = 0;
+#define MAX_NR_RES 2
+	unsigned long *bitmap[MAX_NR_RES];
+	unsigned long bitmap_sz[MAX_NR_RES];
+
+	buf_len = snprintf(buf, buf_sz, "0x%08lx, 0x%08lx, 0x%08lx, "
+			"0x%08lx, 0x%08lx, 0x%08lx\n",
+			aperture_guard,
+			aperture_guard - bitmap_weight(pdev->gm_bitmap, aperture_guard),
+			gm_guard,
+			gm_guard - bitmap_weight(pdev->gm_bitmap, gm_guard),
+			fence_guard,
+			fence_guard - bitmap_weight(pdev->fence_bitmap, fence_guard)
+			);
+
+#define init_resource_bitmap(i, map, sz) \
+	ASSERT((i) <  MAX_NR_RES);	\
+	bitmap[i] = map;	\
+	bitmap_sz[i] = sz;
+	/* gm */
+	init_resource_bitmap(0, pdev->gm_bitmap, gm_guard);
+	/* fence registers */
+	init_resource_bitmap(1, pdev->fence_bitmap, fence_guard);
+
+	for (i = 0; i < MAX_NR_RES; i++) {
+		buf_len += bitmap_scnprintf(buf + buf_len, buf_sz - buf_len,
+				bitmap[i], bitmap_sz[i]);
+		buf_len += snprintf(buf + buf_len, buf_sz - buf_len, "\n");
+	}
+
+	return buf_len;
+}
+
 static int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp)
 {
 	struct pgt_device *pdev = vgt->pdev;
