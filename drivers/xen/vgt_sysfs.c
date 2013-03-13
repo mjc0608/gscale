@@ -200,7 +200,8 @@ static ssize_t vgt_dpy_switch_store(struct kobject *kobj, struct kobj_attribute 
 	if (sscanf(buf, "%d", &val) != 1)
 		return -EINVAL;
 
-	fastpath_dpy_switch = !!val;
+//	fastpath_dpy_switch = !!val;
+	fastpath_dpy_switch = true;
 	return count;
 }
 
