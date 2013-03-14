@@ -1331,14 +1331,6 @@ enum vgt_port_type {
 
 #define _REG_TRANS_CLK_SEL_A	0x46140
 
-#define _REG_NDE_RSTWRN_OP		0x46408
-
-#define _REG_CLKGATE_DIS_PAR3	0x46508
-
-#define _REG_CSC_POSTOFF_A		0x49040
-#define _REG_CGE_CTRL_A			0x49080
-#define _REG_CGE_WEIGHT_A		0x49090
-
 #define _REG_SBI_ADDR			0xc6000
 #define _REG_SBI_DATA			0xc6004
 #define _REG_SBI_CTL_STAT		0xc6008
