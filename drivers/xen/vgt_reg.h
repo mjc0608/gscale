@@ -1329,6 +1329,8 @@ enum vgt_port_type {
  * Configuration register definition for BDF: 0:0:0.
  */
 #define _REG_GMCH_CONTRL	0x50
+#define 	_REGBIT_GMCH_GMS_SHIFT 		3
+#define 	_REGBIT_GMCH_GMS_MASK 		0x1f
 
 /* HSW */
 #define _REG_LCPLL_CTL		0x130040
