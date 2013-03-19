@@ -264,7 +264,7 @@ struct decode_info{
 #define OP_MFX_PIPE_BUF_ADDR_STATE                 OP_MFX(2, 0, 0, 2)  /* ALL */
 #define OP_MFX_IND_OBJ_BASE_ADDR_STATE             OP_MFX(2, 0, 0, 3)  /* ALL */
 #define OP_MFX_BSP_BUF_BASE_ADDR_STATE             OP_MFX(2, 0, 0, 4)  /* ALL */
-#define OP_MFX_AES_STATE                           OP_MFX(2, 0, 0, 5)  /* ALL */
+#define OP_2_0_0_5                                 OP_MFX(2, 0, 0, 5)  /* ALL */
 #define OP_MFX_STATE_POINTER                       OP_MFX(2, 0, 0, 6)  /* ALL */
 #define OP_MFX_QM_STATE                            OP_MFX(2, 0, 0, 7)  /* IVB+ */
 #define OP_MFX_FQM_STATE                           OP_MFX(2, 0, 0, 8)  /* IVB+ */
