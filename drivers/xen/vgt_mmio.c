@@ -3270,8 +3270,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x13812c, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GTT_FAULT_STATUS, 4, F_WA, 0, D_ALL, err_int_r, err_int_w},
 /* HSW */
-{0x120010, 4, F_WA, 0, D_HSW, NULL, NULL},	/* For eLLC detect */
-{0x9008, 4, F_WA, 0, D_HSW, NULL, NULL},	/* For eLLC detect */
+{0x120010, 4, F_WA, 0, D_HSW, NULL, NULL},
+{0x9008, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_DP_A_HOTPLUG_CNTL, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_VECS_TAIL, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_VECS_HEAD, 4, F_WA, 0, D_HSW, NULL, NULL},
