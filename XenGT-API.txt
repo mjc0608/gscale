@@ -25,9 +25,9 @@ Index
 
 1.1 Introduction to XenGT udev interface
 
-udev interface in XenGT is used to notify the userland deamon (like udevd)
-some events happened. After receiving such events, userland deamon uses defined
-rules or methods to take actions. In XenGT, userland deamon "udevd" is used for
+udev interface in XenGT is used to notify the userland daemon (like udevd)
+some events happened. After receiving such events, userland daemon uses defined
+rules or methods to take actions. In XenGT, userland daemon "udevd" is used for
 this purpose. Event matching and handling in udevd are based on rules
 defined in vgt.rules which should be placed under /etc/udev/rules.d.
 
@@ -285,7 +285,7 @@ SYNOPSIS:	echo <vec> > /sys/kernel/vgt/control/virtual_event
 
 DESCRIPTION:	It is now mainly used to inject monitor hotplug events
 		to different VMs. When physical events happen, Dom0
-		will notify the userland deamon which will use this
+		will notify the userland daemon which will use this
 		interface when it decides to inject virtual events to
 		to selected VM(s).
 PARAMETERS:
