@@ -255,14 +255,16 @@ static int hcall_pio_read(
     return X86EMUL_OKAY;
 }
 
-static unsigned int vgt_cf8;
+static DEFINE_PER_CPU(unsigned int, vgt_cf8);
+
 int vgt_cfg_write_emul(
         unsigned int port,
         unsigned int bytes,
         unsigned long val,
         struct x86_emulate_ctxt *ctxt)
 {
-    int rc = X86EMUL_OKAY;
+	unsigned int cf8 = per_cpu(vgt_cf8, smp_processor_id());
+	int rc = X86EMUL_OKAY;
 
     dprintk("VGT: vgt_cfg_write_emul %x %x %lx at %llx\n",
 	    port, bytes, val, ctxt->regs->rip);
@@ -271,12 +273,12 @@ int vgt_cfg_write_emul(
         ASSERT (bytes == 4);
         ASSERT ((port & 3) == 0);
 
-        vgt_cf8 = val;
-	dprintk("vgt_cf8 write w/ %x\n", vgt_cf8);
+        cf8 = val;
+	dprintk("vgt_cf8 write w/ %x\n", cf8);
     }
     else {	// port 0xCFC */
 	dprintk("cfg_write_emul port %x %d %lx\n",port, bytes, val);
-        ASSERT ( (vgt_cf8 & 3) == 0);
+        ASSERT ( (cf8 & 3) == 0);
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
 
@@ -289,7 +291,7 @@ int vgt_cfg_write_emul(
 	 */
 	if (vgt_ops && !vgt_ops->boot_time) {
 		if (!vgt_ops->cfg_write(dom0_vgt,
-			(vgt_cf8 & 0xfc) + (port & 3),
+			(cf8 & 0xfc) + (port & 3),
 			&val, bytes)) {
 			rc = X86EMUL_UNHANDLEABLE;
 			goto out;
@@ -308,13 +310,14 @@ static int vgt_cfg_read_emul(
         unsigned long *val)
 {
     unsigned long data;
+	unsigned int cf8 = per_cpu(vgt_cf8, smp_processor_id());
     int rc = X86EMUL_OKAY;
 
     if ((port & ~3)== 0xcf8) {
-        memcpy(val, (uint8_t*)&vgt_cf8 + (port & 3), bytes);
+        memcpy(val, (uint8_t*)&cf8 + (port & 3), bytes);
     }
     else {
-        ASSERT ( (vgt_cf8 & 3) == 0);
+        ASSERT ( (cf8 & 3) == 0);
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
 
@@ -329,7 +332,7 @@ static int vgt_cfg_read_emul(
 			goto out;
 	} else {
 		if (!vgt_ops->cfg_read(dom0_vgt,
-			(vgt_cf8 & 0xfc) + (port & 3),
+			(cf8 & 0xfc) + (port & 3),
 			&data, bytes)) {
 			rc = X86EMUL_UNHANDLEABLE;
 			goto out;
