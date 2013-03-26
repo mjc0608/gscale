@@ -352,7 +352,7 @@ static int read_io(
     unsigned long data;
 
     ASSERT ( is_vgt_trap_pio(port) == is_vgt_trap_pio(port + bytes - 1) );
-    ASSERT (bytes <= 4);	/* TODO */
+    ASSERT (bytes <= 4);
 
     aport = port & ~3;
     if ( aport == 0xcf8 || aport == 0xcfc ) {
@@ -388,7 +388,7 @@ static int write_io(
     unsigned int  aport;
 
     ASSERT ( is_vgt_trap_pio(port) == is_vgt_trap_pio(port + bytes - 1) );
-    ASSERT (bytes <= 4);	/* TODO */
+    ASSERT (bytes <= 4);
 
     aport = port & ~3;
     if ( aport == 0xcf8 || aport == 0xcfc ) {
