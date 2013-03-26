@@ -484,6 +484,8 @@ int xen_start_vgt(struct pci_dev *pdev)
 	return vgt_initialize(pdev) == 0;
 }
 
+EXPORT_SYMBOL(xen_start_vgt);
+
 static void vgt_param_check(void)
 {
 	if (hvm_owner || hvm_super_owner) {
@@ -513,13 +515,9 @@ static int __init vgt_init_module(void)
 
 	vgt_klog_init();
 
-	/* register call back function for i915 driver*/
-	cb_xen_start_vgt = xen_start_vgt;
-	cb_vgt_install_irq = vgt_install_irq;
-
 	return xen_register_vgt_driver(&vgt_xops);
 }
-arch_initcall(vgt_init_module);
+module_init(vgt_init_module);
 
 static void __exit vgt_exit_module(void)
 {

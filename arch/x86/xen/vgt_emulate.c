@@ -38,12 +38,6 @@
 vgt_ops_t *vgt_ops = NULL;
 static struct vgt_device *dom0_vgt=NULL;
 
-/* vgt call back functions which are registered in
- * vgt module loading and called by i915 driver
- */
-vgt_irq_callback_t cb_vgt_install_irq = NULL;
-vgt_start_callback_t cb_xen_start_vgt = NULL;
-
 /*
  * Return ID of registered vgt device.
  *  >= 0: successful
@@ -936,5 +930,3 @@ EXPORT_SYMBOL(xen_vgt_dom0_ready);
 EXPORT_SYMBOL(vgt_ops);
 EXPORT_SYMBOL(hcall_mmio_write);
 EXPORT_SYMBOL(hcall_mmio_read);
-EXPORT_SYMBOL(cb_vgt_install_irq);
-EXPORT_SYMBOL(cb_xen_start_vgt);
