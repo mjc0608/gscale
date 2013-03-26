@@ -285,9 +285,7 @@ int vgt_cfg_write_emul(
 	/*
 	 * at boot time, dom0 always has write accesses to hw
 	 * for initialization work
-	 *
-	 * FIXME: bar size check by i915 driver shouldn't go to hw!!!
-	 * FIXME: S3 suspend/resume needs to reset boot_time again!!!
+	 * TODO: S3 suspend/resume needs to reset boot_time again!!!
 	 */
 	if (vgt_ops && !vgt_ops->boot_time) {
 		if (!vgt_ops->cfg_write(dom0_vgt,
@@ -321,11 +319,7 @@ static int vgt_cfg_read_emul(
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
 
-	/*
-	 * FIXME: similarly, for i915 bar size check we want it in virtual
-	 * bar, but if there's some real hw initialization work, we'd like
-	 * it to hw!!! hard to check
-	 */
+	/* see the comment in vgt_cfg_write_emul() */
 	if (!vgt_ops || vgt_ops->boot_time) {
 		rc = hcall_pio_read(port, bytes, &data);
 		if (rc != X86EMUL_OKAY)
