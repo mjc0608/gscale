@@ -625,7 +625,7 @@ struct vgt_uevent_info {
     bool (*vgt_uevent_handler)(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev);
 };
 
-void inline vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent);
+void vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent);
 
 typedef union {
 	uint32_t cmd;
