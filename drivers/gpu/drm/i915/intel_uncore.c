@@ -1251,8 +1251,8 @@ void intel_uncore_init(struct drm_device *dev)
 
 	i915_check_and_clear_faults(dev);
 	if (dev_priv->in_xen_vgt) {
-		dev_priv->gt.force_wake_get = null_force_wake;
-		dev_priv->gt.force_wake_put = null_force_wake;
+		dev_priv->uncore.funcs.force_wake_get = null_force_wake;
+		dev_priv->uncore.funcs.force_wake_put = null_force_wake;
 	}
 }
 #undef ASSIGN_WRITE_MMIO_VFUNCS

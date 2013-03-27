@@ -2315,6 +2315,7 @@ struct i915_params {
 	int enable_rc6;
 	int enable_fbc;
 	int enable_ppgtt;
+	bool ctx_switch;
 	int enable_execlists;
 	int enable_psr;
 	unsigned int preliminary_hw_support;
