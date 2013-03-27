@@ -61,9 +61,8 @@ void vgt_add_mmio_entry(struct vgt_mmio_entry *e)
 struct vgt_mmio_entry * vgt_find_mmio_entry(unsigned int base)
 {
 	struct vgt_mmio_entry *e;
-	struct hlist_node *node;
 
-	hash_for_each_possible(vgt_mmio_table, e, node, hlist, base) {
+	hash_for_each_possible(vgt_mmio_table, e, hlist, base) {
 		if (base == e->base)
 			return e;
 	}
@@ -82,10 +81,10 @@ void vgt_del_mmio_entry(unsigned int base)
 void vgt_clear_mmio_table(void)
 {
 	int i;
-	struct hlist_node *node, *tmp;
+	struct hlist_node *tmp;
 	struct vgt_mmio_entry *e;
 
-	hash_for_each_safe(vgt_mmio_table, i, node, tmp, e, hlist)
+	hash_for_each_safe(vgt_mmio_table, i, tmp, e, hlist)
 		kfree(e);
 
 	hash_init(vgt_mmio_table);
@@ -99,9 +98,8 @@ void vgt_add_wp_page_entry(struct vgt_device *vgt, struct vgt_wp_page_entry *e)
 struct vgt_wp_page_entry * vgt_find_wp_page_entry(struct vgt_device *vgt, unsigned int pfn)
 {
 	struct vgt_wp_page_entry *e;
-	struct hlist_node *node;
 
-	hash_for_each_possible((vgt->wp_table), e, node, hlist, pfn) {
+	hash_for_each_possible((vgt->wp_table), e, hlist, pfn) {
 		if (pfn == e->pfn)
 			return e;
 	}
@@ -121,10 +119,10 @@ void vgt_del_wp_page_entry(struct vgt_device *vgt, unsigned int pfn)
 void vgt_clear_wp_table(struct vgt_device *vgt)
 {
 	int i;
-	struct hlist_node *node, *tmp;
+	struct hlist_node *tmp;
 	struct vgt_wp_page_entry *e;
 
-	hash_for_each_safe((vgt->wp_table), i, node, tmp, e, hlist)
+	hash_for_each_safe((vgt->wp_table), i, tmp, e, hlist)
 		kfree(e);
 
 	hash_init((vgt->wp_table));

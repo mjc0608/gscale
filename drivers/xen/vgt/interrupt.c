@@ -659,6 +659,8 @@ void vgt_propagate_emulated_event(struct vgt_device *vstate,
 	vgt_propagate_virtual_event(vstate, bit, info);
 }
 
+extern int resend_irq_on_evtchn(unsigned int i915_irq);
+
 void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
 {
 	unsigned long flags;

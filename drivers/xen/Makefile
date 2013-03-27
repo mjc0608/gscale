@@ -18,10 +18,14 @@ xen-pad-$(CONFIG_X86) += xen-acpi-pad.o
 dom0-$(CONFIG_X86) += pcpu.o
 obj-$(CONFIG_XEN_DOM0)			+= $(dom0-y)
 
-VGT_SOURCE := vgt.o vgt_context.o vgt_mmio.o vgt-interrupt.o vgt-snb.o \
+
+#VGT_SOURCE := vgt.o vgt_context.o vgt_mmio.o vgt-interrupt.o vgt-snb.o \
 	vgt_sysfs.o vgt_suspend.o vgt_debugfs.o vgt_edid.o vgt_gtt.o \
 	vgt_klog.o vgt_mmio_dev.o vgt_cmd_parser.o vgt_sched.o vgt_ringbuffer.o
 	#vgt_mmio_gpio.o
+VGT_SOURCE := vgt/vgt.o vgt/render.o vgt/mmio.o vgt/handlers.o vgt/interrupt.o vgt/interrupt_snb.o \
+	vgt/sysfs.o vgt/display.o vgt/debugfs.o vgt/edid.o vgt/gtt.o vgt/aperture_gm.o vgt/utility.o\
+	vgt/klog.o vgt/dev.o vgt/cmd_parser.o vgt/sched.o vgt/instance.o vgt/cfg_space.o
 
 obj-$(CONFIG_BLOCK)			+= biomerge.o
 obj-$(CONFIG_XEN_BALLOON)		+= xen-balloon.o

@@ -46,9 +46,8 @@ static void vgt_add_cmd_entry(struct vgt_cmd_entry *e)
 static struct cmd_info* vgt_find_cmd_entry(unsigned int opcode, int ring_id)
 {
 	struct vgt_cmd_entry *e;
-	struct hlist_node *node;
 
-	hash_for_each_possible(vgt_cmd_table, e, node, hlist, opcode) {
+	hash_for_each_possible(vgt_cmd_table, e, hlist, opcode) {
 		if ( (opcode == e->info->opcode) && (e->info->rings & (1<<ring_id)) )
 			return e->info;
 	}
@@ -70,10 +69,10 @@ static struct cmd_info* vgt_find_cmd_entry_any_ring(unsigned int opcode, int rin
 void vgt_clear_cmd_table(void)
 {
 	int i;
-	struct hlist_node *node, *tmp;
+	struct hlist_node *tmp;
 	struct vgt_cmd_entry *e;
 
-	hash_for_each_safe(vgt_cmd_table, i, node, tmp, e, hlist)
+	hash_for_each_safe(vgt_cmd_table, i, tmp, e, hlist)
 		kfree(e);
 
 	hash_init(vgt_cmd_table);
