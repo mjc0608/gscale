@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -76,31 +76,31 @@ typedef enum {
 /* Default value of SCL or SDA line is 1.
  * Return default value if no out value is specified.
  */
-#define VGT_GET_I2C_OUT_SCL(val) 				\
-(((((val) & _GPIO_CLOCK_DIR_VAL) == _GPIO_CLOCK_DIR_OUT) && 	\
-     ((val) & _GPIO_CLOCK_VAL_MASK)) ? 				\
+#define VGT_GET_I2C_OUT_SCL(val)				\
+(((((val) & _GPIO_CLOCK_DIR_VAL) == _GPIO_CLOCK_DIR_OUT) &&	\
+	((val) & _GPIO_CLOCK_VAL_MASK)) ?			\
 	(((val) & _GPIO_CLOCK_VAL_OUT) != 0) : 1)
 
-#define VGT_GET_I2C_OUT_SDA(val) 				\
-(((((val) & _GPIO_DATA_DIR_VAL) == _GPIO_DATA_DIR_OUT) && 	\
-     ((val) & _GPIO_DATA_VAL_MASK)) ? 				\
+#define VGT_GET_I2C_OUT_SDA(val)				\
+(((((val) & _GPIO_DATA_DIR_VAL) == _GPIO_DATA_DIR_OUT) &&	\
+	((val) & _GPIO_DATA_VAL_MASK)) ?			\
 	(((val) & _GPIO_DATA_VAL_OUT) != 0) : 1)
 
 #define VGT_HAS_SDA_IN_VALUE(val)				\
 ((((val) & _GPIO_DATA_DIR_VAL) == _GPIO_DATA_DIR_IN) &&		\
  ((val) & _GPIO_DATA_VAL_MASK))
 
-#define IS_ENABLE_SDA_VAL_IN(val) 				\
+#define IS_ENABLE_SDA_VAL_IN(val)				\
 (((val) & _GPIO_DATA_DIR_MASK) &&				\
  (((val) & _GPIO_DATA_DIR_VAL) == _GPIO_DATA_DIR_IN))
 
-#define IS_I2C_START(scl, sda_old, sda_new) 			\
-(((scl) == VGT_I2C_HIGH) && 					\
+#define IS_I2C_START(scl, sda_old, sda_new)			\
+(((scl) == VGT_I2C_HIGH) &&					\
  ((sda_old) == VGT_I2C_HIGH) &&					\
  ((sda_new) == VGT_I2C_LOW))
 
-#define IS_I2C_STOP(scl, sda_old, sda_new) 			\
-(((scl) == VGT_I2C_HIGH) && 					\
+#define IS_I2C_STOP(scl, sda_old, sda_new)			\
+(((scl) == VGT_I2C_HIGH) &&					\
  ((sda_old) == VGT_I2C_LOW) &&					\
  ((sda_new) == VGT_I2C_HIGH))
 
@@ -112,41 +112,41 @@ typedef enum {
  * be talked as well.
  *
  * current_line:	The variable shows which line is currently I2C
- * 			READ/WRITE is happening. The reason to have this is
- * 			otherwise I2C READ cannot know the data source. The
- * 			variable is set in the I2C WRITE command according
- * 			to the DIR mask.
+ *			READ/WRITE is happening. The reason to have this is
+ *			otherwise I2C READ cannot know the data source. The
+ *			variable is set in the I2C WRITE command according
+ *			to the DIR mask.
  * sda_state:		Indicate the level(LOW/HIGH) of SDA line. The value
- * 			of current level is used to know the level change. That
- * 			kind of information is used to recognize the I2C_START,
- * 			I2C_STOP etc.
+ *			of current level is used to know the level change. That
+ *			kind of information is used to recognize the I2C_START,
+ *			I2C_STOP etc.
  * scl_state:		Indicate the level(LOW/HIGH) of SCL line. The emulation
- * 			needs to knwo the clock info for two purposes: one is to
- * 			recognize some state changes together with sda_state;
- * 			another is to ignore some useless commands which happens
- * 			in SCL low level. For instance, the read in SCL LOW.
- * 			(is it really needed?)
+ *			needs to knwo the clock info for two purposes: one is to
+ *			recognize some state changes together with sda_state;
+ *			another is to ignore some useless commands which happens
+ *			in SCL low level. For instance, the read in SCL LOW.
+ *			(is it really needed?)
  * write_enabled:
  * read_enabled:	The two boolean variables are set during the I2C WRITE
- * 			command and will be consumed by I2C WRITE or READ
- * 			command. The reason to have this fields is related to
- * 			the i915 I2C command implementation. The I2C read-bit
- * 			in i915 is implemented as follow:
+ *			command and will be consumed by I2C WRITE or READ
+ *			command. The reason to have this fields is related to
+ *			the i915 I2C command implementation. The I2C read-bit
+ *			in i915 is implemented as follow:
  *
- * 				reserved = GPIO_MMIO_READ
- * 				GPIO_MMIO_WRITE (reserved|DIR_IN|DIR_MASK)
- * 				GPIO_MMIO_WRITE (reserved)
- * 				value = GPIO_MMIO_READ
+ *				reserved = GPIO_MMIO_READ
+ *				GPIO_MMIO_WRITE (reserved|DIR_IN|DIR_MASK)
+ *				GPIO_MMIO_WRITE (reserved)
+ *				value = GPIO_MMIO_READ
  *
  *			and the write-bit is implemented as follow:
  *
  *			write 1:
- * 				GPIO_MMIO_WRITE (reserved|DIR_IN|DIR_MASK)
- * 				value = GPIO_MMIO_READ
- * 			write 0:
- * 				GPIO_MMIO_WRITE (reserved|DIR_OUT|DIR_MASK|
- * 						 OUT_VALUE|VALUE_MASK)
- * 				value = GPIO_MMIO_READ
+ *				GPIO_MMIO_WRITE (reserved|DIR_IN|DIR_MASK)
+ *				value = GPIO_MMIO_READ
+ *			write 0:
+ *				GPIO_MMIO_WRITE (reserved|DIR_OUT|DIR_MASK|
+ *						OUT_VALUE|VALUE_MASK)
+ *				value = GPIO_MMIO_READ
  *
  *			And the headache is that the the "write 1" above is
  *			quite similar to read. The solution here is to have
@@ -158,18 +158,18 @@ typedef enum {
  *			considered as write. We could assume that "read" is
  *			always enabled.
  * sda_ack_state:	After 8-bit data operation(read/write), the bit-banging
- * 			will enter this state; It is needed to know that some
- * 			read/write needs to be ignored. For instance, after
- * 			sending 8-bit value, there could still be SDA write to
- * 			set SDA line high level. This should actually be
- * 			ignored.
+ *			will enter this state; It is needed to know that some
+ *			read/write needs to be ignored. For instance, after
+ *			sending 8-bit value, there could still be SDA write to
+ *			set SDA line high level. This should actually be
+ *			ignored.
  * pending_write_bit:	record the write value in the WRITE command if "DIR"
- * 			mask is enabled. The value needs to be pending because
+ *			mask is enabled. The value needs to be pending because
  *			it is still not yet known whether it is really for
  *			writing bit or reading bit.
  * buffer:		The 8-bit buffer for bit-banging operations.
  * bit_length:		Length of the buffer that currently has been consumed.
- * 			The value will be adjusted in clock down side.
+ *			The value will be adjusted in clock down side.
  */
 typedef struct {
 	I2C_LINE current_line;

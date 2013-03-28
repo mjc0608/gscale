@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -272,12 +272,12 @@ extern struct kobject *vgt_ctrl_kobj;
 
 bool vgt_default_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev)
 {
-    int retval;
-    retval = kobject_uevent_env(vgt_ctrl_kobj, uevent_entry->action, uevent_entry->env_var_table);
-    if (retval == 0)
-        return true;
-    else
-        return false;
+	int retval;
+	retval = kobject_uevent_env(vgt_ctrl_kobj, uevent_entry->action, uevent_entry->env_var_table);
+	if (retval == 0)
+		return true;
+	else
+		return false;
 }
 
 bool vgt_hotplug_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev)
@@ -304,7 +304,7 @@ bool vgt_vga_stat_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pg
  pointer of string are stored in env_var_table (below).
 struct vgt_uevent_info {
 	...
-    char *env_var_table[VGT_MAX_UEVENT_VARS];
+	char *env_var_table[VGT_MAX_UEVENT_VARS];
 	...
 };
  You should place a NULL as the termination of variable
@@ -349,23 +349,23 @@ void inline vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent)
 
 void vgt_signal_uevent(struct pgt_device *dev)
 {
-    struct vgt_uevent_info *info_entry;
-    bool rc;
-    int bit;
+	struct vgt_uevent_info *info_entry;
+	bool rc;
+	int bit;
 
-    for_each_set_bit(bit, vgt_uevents_bitmap, UEVENT_MAX) {
-        clear_bit(bit, vgt_uevents_bitmap);
+	for_each_set_bit(bit, vgt_uevents_bitmap, UEVENT_MAX) {
+		clear_bit(bit, vgt_uevents_bitmap);
 
-        info_entry = &vgt_default_uevent_info_table[bit];
+		info_entry = &vgt_default_uevent_info_table[bit];
 
-        ASSERT(info_entry);
-        ASSERT(info_entry->vgt_uevent_handler);
+		ASSERT(info_entry);
+		ASSERT(info_entry->vgt_uevent_handler);
 
-        rc = info_entry->vgt_uevent_handler(info_entry, dev);
-        if (rc == false)
-            printk("%s: %d: vGT: failed to send uevent [%s]!\n",
-                    __func__, __LINE__, info_entry->uevent_name);
-    }
+		rc = info_entry->vgt_uevent_handler(info_entry, dev);
+		if (rc == false)
+			printk("%s: %d: vGT: failed to send uevent [%s]!\n",
+					__func__, __LINE__, info_entry->uevent_name);
+	}
 }
 
 static void vgt_run_emul(struct vgt_device *vstate,
@@ -485,8 +485,8 @@ void vgt_irq_toggle_emulations(struct vgt_device *vstate,
 				continue;
 
 			if (enable &&
-			    !test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
-			    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base)))) {
+				!test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
+				test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base)))) {
 				vgt_run_emul(vstate, event, bit, true);
 			} else {
 				if (test_bit(event, vgt_state_emulated_events(vstate)))
@@ -580,9 +580,9 @@ void vgt_propagate_virtual_event(struct vgt_device *vstate,
 	/* Rising edge ISR triggers IIR. so no need to touch ISR */
 //	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
 	if (!test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
-	    !test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
-	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))) &&
-	    test_bit(_REGSHIFT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
+		!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
+		test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))) &&
+		test_bit(_REGSHIFT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
 		if (vstate->vgt_id)
 			vgt_dbg("vGT: set bit (%d) for (%s) for VM (%d)\n",
 				bit, info->name, vstate->vgt_id);
@@ -619,8 +619,8 @@ void vgt_propagate_pch_virtual_event(struct vgt_device *vstate,
 	/* Rising edge ISR triggers IIR. so no need to touch ISR */
 //	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
 	if (!test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
-	    !test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
-	    test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base)))) {
+		!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
+		test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base)))) {
 		vgt_dbg("vGT: set pch bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
 		vgt_set_pch_irq_pending(vstate);
 	} else {
@@ -690,7 +690,7 @@ void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 		vgt->vgt_id, info.address, info.data);
 
 	if (HYPERVISOR_vcpu_op(VCPUOP_inject_raw_msi,
-                        smp_processor_id(), &info) < 0)
+						smp_processor_id(), &info) < 0)
 		printk("vGT(%d): failed to inject vmsi\n", vgt->vgt_id);
 }
 
@@ -820,7 +820,7 @@ static uint32_t vgt_keep_owner_bits(struct vgt_device *vgt,
 
 		/* TODO: reserved events should be always masked/disabled */
 		if ((event == IRQ_RESERVED) ||
-		    vgt_get_event_owner(pdev, event) == vgt)
+			vgt_get_event_owner(pdev, event) == vgt)
 			val |= 1U << bit;
 	}
 
@@ -838,8 +838,8 @@ static void vgt_check_pending_events(struct vgt_device *vgt)
 	 * so that current value of vISR doesn't matter.
 	 */
 	if ((__vreg(vgt, _REG_DEIIR) & __vreg(vgt, _REG_DEIER)) ||
-	    (__vreg(vgt, _REG_GTIIR) & __vreg(vgt, _REG_GTIER)) ||
-	    (__vreg(vgt, _REG_PMIIR) & __vreg(vgt, _REG_PMIER))) {
+		(__vreg(vgt, _REG_GTIIR) & __vreg(vgt, _REG_GTIER)) ||
+		(__vreg(vgt, _REG_PMIIR) & __vreg(vgt, _REG_PMIER))) {
 		vgt_dbg("vGT-IRQ: catch pending iir\n");
 		vgt_set_irq_pending(vgt);
 		vgt->stat.pending_events++;
@@ -1185,8 +1185,8 @@ void vgt_emulate_dpy_status(struct vgt_device *vstate, enum vgt_event_type event
 		if (enable)
 			/* FIXME : check interface */
 			hrtimer_start(&vgt_dpy_timer(vstate).timer,
-				      ktime_add_ns(ktime_get(), vgt_dpy_timer(vstate).period),
-				      HRTIMER_MODE_ABS);
+					ktime_add_ns(ktime_get(), vgt_dpy_timer(vstate).period),
+					HRTIMER_MODE_ABS);
 		else
 			hrtimer_cancel(&vgt_dpy_timer(vstate).timer);
 	}
@@ -1429,7 +1429,7 @@ void vgt_handle_crt_hotplug(struct pgt_device *dev,
 	/* update channel status */
 	__vreg(vgt, _REG_PCH_ADPA) &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 	__vreg(vgt, _REG_PCH_ADPA) |= vgt_event_state(pdev, entry->event).val &
-				      _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 	info->propagate_virtual_event(vgt, bit, info);
 }
 
@@ -1468,7 +1468,7 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 		//vgt_trace_irq_event(info, entry->event);
 
 		if (entry->event == IRQ_RESERVED ||
-		    entry->event >= IRQ_MAX) {
+			entry->event >= IRQ_MAX) {
 			VGT_IRQ_WARN(info, entry->event, "UNKNOWN!!!\n");
 			return;
 		}
@@ -1488,8 +1488,8 @@ void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
 		 * need to inject into both the prev and curr owner
 		 */
 		if (!physical &&
-		    vgt_get_event_owner_type(dev, entry->event) == o_type &&
-		    vgt_get_previous_owner(dev, o_type) != NULL) {
+			vgt_get_event_owner_type(dev, entry->event) == o_type &&
+			vgt_get_previous_owner(dev, o_type) != NULL) {
 			vgt_dbg("vGT: inject event (%s) to previous owner (%d)\n",
 				vgt_irq_name[entry->event],
 				vgt_get_previous_owner(dev, o_type)->vgt_id);
@@ -1540,7 +1540,7 @@ void vgt_trigger_virtual_event(struct vgt_device *vgt,
 
 	/* forward to DE if any PCH event pending */
 	if (VGT_PCH_EVENT(event) &&
-	    vgt_has_pch_irq_pending(vgt)) {
+		vgt_has_pch_irq_pending(vgt)) {
 		int bit_de;
 		struct vgt_irq_info *info_de;
 

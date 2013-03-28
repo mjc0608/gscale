@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -56,15 +56,15 @@ unsigned long vgt_id_alloc_bitmap;
 /*TODO: may need lock to protect default_deivce */
 struct vgt_device *vmid_2_vgt_device(int vmid)
 {
-    unsigned int bit;
-    struct vgt_device *vgt;
-    /* TODO: check if vgt_id_alloc_bitmap is ~0UL */
-    for_each_set_bit(bit, &vgt_id_alloc_bitmap, (8 * sizeof(unsigned long))) {
-        vgt = default_device.device[bit];
-        if (vgt->vm_id == vmid)
-            return vgt;
-    }
-    return NULL;
+	unsigned int bit;
+	struct vgt_device *vgt;
+	/* TODO: check if vgt_id_alloc_bitmap is ~0UL */
+	for_each_set_bit(bit, &vgt_id_alloc_bitmap, (8 * sizeof(unsigned long))) {
+		vgt = default_device.device[bit];
+		if (vgt->vm_id == vmid)
+			return vgt;
+	}
+	return NULL;
 }
 
 int allocate_vgt_id(void)
@@ -91,8 +91,8 @@ void free_vgt_id(int vgt_id)
 
 /*
  * Initialize the vgt state instance.
- * Return:   0: failed
- * 	     1: success
+ * Return:	0: failed
+ *		1: success
  *
  */
 static int create_state_instance(struct vgt_device *vgt)
@@ -130,7 +130,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	int rc = -ENOMEM;
 
 	vgt_info("vm_id=%d, aperture_sz=%dMB, gm_sz=%dMB, fence_sz=%d, vgt_primary=%d\n",
-		 vp.vm_id, vp.aperture_sz, vp.gm_sz, vp.fence_sz, vp.vgt_primary);
+		vp.vm_id, vp.aperture_sz, vp.gm_sz, vp.fence_sz, vp.vgt_primary);
 
 	vgt = kzalloc (sizeof(*vgt), GFP_KERNEL);
 	if (vgt == NULL) {

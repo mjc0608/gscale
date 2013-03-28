@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -151,8 +151,8 @@ void show_batchbuffer(struct pgt_device *pdev, u32 addr)
 	vgt_write_gtt(pdev, index1, pte_val);
 
 	p_contents = phys_aperture_vbase(pdev) +
-		     pdev->batch_buffer_page +
-		     (addr & ~GTT_PAGE_MASK);
+		pdev->batch_buffer_page +
+		(addr & ~GTT_PAGE_MASK);
 	printk("Batch buffer remaps to %x (p_contents: %llx)\n",
 		pte_val, (u64)p_contents);
 	printk("[%08x]:", (u32)(addr & ~GTT_PAGE_MASK));
@@ -266,29 +266,29 @@ uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
 	unsigned long bar_s, bar_size=0;
 	struct pci_dev *dev = pdev->pdev;
 
-	pci_read_config_dword(dev,  bar_off, (uint32_t *)&bar_s);
+	pci_read_config_dword(dev, bar_off, (uint32_t *)&bar_s);
 	pci_write_config_dword(dev, bar_off, 0xFFFFFFFF);
 
 	pci_read_config_dword(dev, bar_off, (uint32_t *)&bar_size);
-vgt_dbg("read back bar_size %lx\n", bar_size);
-	bar_size &= ~0xf;       /* bit 4-31 */
-vgt_dbg("read back bar_size1 %lx\n", bar_size);
+	vgt_dbg("read back bar_size %lx\n", bar_size);
+	bar_size &= ~0xf; /* bit 4-31 */
+	vgt_dbg("read back bar_size1 %lx\n", bar_size);
 	bar_size = 1 << find_first_bit(&bar_size, BITS_PER_LONG);
-vgt_dbg("read back bar_size2 %lx\n", bar_size);
+	vgt_dbg("read back bar_size2 %lx\n", bar_size);
 
 	pci_write_config_dword(dev, bar_off, bar_s);
 
 #if 0
-        bar_s = pci_conf_read32( 0, vgt_bus, vgt_dev, vgt_fun, bar_off);
-        pci_conf_write32(0, vgt_bus, vgt_dev, vgt_fun, bar_off, 0xFFFFFFFF);
+	bar_s = pci_conf_read32( 0, vgt_bus, vgt_dev, vgt_fun, bar_off);
+	pci_conf_write32(0, vgt_bus, vgt_dev, vgt_fun, bar_off, 0xFFFFFFFF);
 
-        bar_size = pci_conf_read32(0, vgt_bus, vgt_dev, vgt_fun, bar_off);
-        bar_size &= ~0xf;       /* bit 4-31 */
-        bar_size = 1 << find_first_bit(&bar_size, sizeof(bar_size));
+	bar_size = pci_conf_read32(0, vgt_bus, vgt_dev, vgt_fun, bar_off);
+	bar_size &= ~0xf; /* bit 4-31 */
+	bar_size = 1 << find_first_bit(&bar_size, sizeof(bar_size));
 
-        pci_conf_write32(0, vgt_bus, vgt_dev, vgt_fun, bar_offset, bar_s);
+	pci_conf_write32(0, vgt_bus, vgt_dev, vgt_fun, bar_offset, bar_s);
 #endif
-        return bar_size;
+	return bar_size;
 }
 
 uint64_t vgt_get_gtt_size(struct pci_bus *bus)
@@ -567,7 +567,7 @@ int vgt_hvm_map_opregion (struct vgt_device *vgt, int map)
 
 	memmap.first_gfn = opregion >> PAGE_SHIFT;
 	memmap.first_mfn = opregion >> PAGE_SHIFT;
-	memmap.nr_mfns =  VGT_OPREGION_PAGES;
+	memmap.nr_mfns = VGT_OPREGION_PAGES;
 	memmap.map = map;
 	memmap.domid = vgt->vm_id;
 	rc = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
@@ -629,25 +629,28 @@ int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
-        struct xen_hvm_vgt_set_trap_io trap;
-        uint64_t bar_s, bar_e;
-        int r;
+	struct xen_hvm_vgt_set_trap_io trap;
+	uint64_t bar_s, bar_e;
+	int r;
 
-		trap.domid = vgt->vm_id;
-        trap.nr_pio_frags = 0;
-        trap.nr_mmio_frags = 1;
-        cfg_space += VGT_REG_CFG_SPACE_BAR0;
-		if (VGT_GET_BITS(*cfg_space, 2, 1) == 2){
-			/* 64 bits MMIO bar */
-			bar_s = * (uint64_t *) cfg_space;
-		} else {
-			/* 32 bits MMIO bar */
-			bar_s = * (uint32_t*) cfg_space;
-		}
-		bar_s &= ~0xF; /* clear the LSB 4 bits */
-        bar_e = bar_s + vgt->state.bar_size[0] - 1;
-        trap.mmio_frags[0].s = bar_s;
-        trap.mmio_frags[0].e = bar_e;
+	trap.domid = vgt->vm_id;
+	trap.nr_pio_frags = 0;
+	trap.nr_mmio_frags = 1;
+
+	cfg_space += VGT_REG_CFG_SPACE_BAR0;
+	if (VGT_GET_BITS(*cfg_space, 2, 1) == 2){
+		/* 64 bits MMIO bar */
+		bar_s = * (uint64_t *) cfg_space;
+	} else {
+		/* 32 bits MMIO bar */
+		bar_s = * (uint32_t*) cfg_space;
+	}
+
+	bar_s &= ~0xF; /* clear the LSB 4 bits */
+	bar_e = bar_s + vgt->state.bar_size[0] - 1;
+
+	trap.mmio_frags[0].s = bar_s;
+	trap.mmio_frags[0].e = bar_e;
 
 	r = HYPERVISOR_hvm_op(HVMOP_vgt_set_trap_io, &trap);
 	if (r < 0) {
@@ -757,9 +760,8 @@ void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
 {
 	unsigned long buck_index;
 
-	if (vgt->vm_id == 0){
+	if (vgt->vm_id == 0)
 		return (char*)mfn_to_virt(gpa>>PAGE_SHIFT) + (gpa & (PAGE_SIZE-1));
-	}
 
 	buck_index = gpa >> VMEM_BUCK_SHIFT;
 	if (!vgt->vmem_vma || !vgt->vmem_vma[buck_index])

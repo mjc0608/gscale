@@ -8,7 +8,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -136,8 +136,8 @@ static void remove_channel_controls(void)
  *	Returns channel on success, negative otherwise.
  */
 static int create_channel_controls(struct dentry *parent,
-				   const char *base_filename,
-				   struct rchan *chan)
+				const char *base_filename,
+				struct rchan *chan)
 {
 	unsigned int i;
 	char *tmpname = kmalloc(NAME_MAX + 1, GFP_KERNEL);
@@ -149,7 +149,7 @@ static int create_channel_controls(struct dentry *parent,
 		produced_control[i] = debugfs_create_file(tmpname, 0, parent, chan->buf[i], &produced_fops);
 		if (!produced_control[i]) {
 			printk("Couldn't create relay control file %s.\n",
-			       tmpname);
+				tmpname);
 			goto cleanup_control_files;
 		}
 
@@ -157,7 +157,7 @@ static int create_channel_controls(struct dentry *parent,
 		consumed_control[i] = debugfs_create_file(tmpname, 0, parent, chan->buf[i], &consumed_fops);
 		if (!consumed_control[i]) {
 			printk("Couldn't create relay control file %s.\n",
-			       tmpname);
+				tmpname);
 			goto cleanup_control_files;
 		}
 	}
@@ -205,15 +205,15 @@ static int subbuf_start_handler(struct rchan_buf *buf,
  * file_create() callback.  Creates relay file in debugfs.
  */
 static struct dentry *create_buf_file_handler(const char *filename,
-					      struct dentry *parent,
-					      umode_t mode,
-					      struct rchan_buf *buf,
-					      int *is_global)
+						struct dentry *parent,
+						umode_t mode,
+						struct rchan_buf *buf,
+						int *is_global)
 {
 	struct dentry *buf_file;
 
 	buf_file = debugfs_create_file(filename, mode, parent, buf,
-				       &relay_file_operations);
+					&relay_file_operations);
 
 	return buf_file;
 }
@@ -246,14 +246,14 @@ static struct rchan_callbacks relay_callbacks =
  *	Returns channel on success, NULL otherwise
  */
 static struct rchan *create_channel(unsigned subbuf_size,
-				    unsigned n_subbufs)
+					unsigned n_subbufs)
 {
 	struct rchan *chan;
 
 	printk("create_channel: subbuf_size %u, n_subbufs %u, dir %p\n", subbuf_size, n_subbufs, dir);
 
 	chan = relay_open("cpu", dir, subbuf_size,
-			  n_subbufs, &relay_callbacks, NULL);
+			n_subbufs, &relay_callbacks, NULL);
 
 	if (!chan) {
 		printk("relay app channel creation failed\n");
@@ -316,14 +316,14 @@ static void remove_controls(void)
 static int create_controls(void)
 {
 	enabled_control = debugfs_create_file("enabled", 0, dir,
-					      NULL, &enabled_fops);
+						NULL, &enabled_fops);
 	if (!enabled_control) {
 		printk("Couldn't create relay control file 'enabled'.\n");
 		goto fail;
 	}
 
 	subbuf_size_control = debugfs_create_file("subbuf_size", 0, dir,
-						  NULL, &subbuf_size_fops);
+						NULL, &subbuf_size_fops);
 	if (!subbuf_size_control) {
 		printk("Couldn't create relay control file 'subbuf_size'.\n");
 		goto fail;
@@ -337,14 +337,14 @@ static int create_controls(void)
 	}
 
 	create_control = debugfs_create_file("create", 0, dir,
-					     NULL, &create_fops);
+						NULL, &create_fops);
 	if (!create_control) {
 		printk("Couldn't create relay control file 'create'.\n");
 		goto fail;
 	}
 
 	dropped_control = debugfs_create_file("dropped", 0, dir,
-					      NULL, &dropped_fops);
+						NULL, &dropped_fops);
 	if (!dropped_control) {
 		printk("Couldn't create relay control file 'dropped'.\n");
 		goto fail;
@@ -365,17 +365,17 @@ fail:
  */
 
 static ssize_t enabled_read(struct file *filp, char __user *buffer,
-			    size_t count, loff_t *ppos)
+				size_t count, loff_t *ppos)
 {
 	char buf[16];
 
 	snprintf(buf, sizeof(buf), "%d\n", logging);
 	return simple_read_from_buffer(buffer, count, ppos,
-				       buf, strlen(buf));
+					buf, strlen(buf));
 }
 
 static ssize_t enabled_write(struct file *filp, const char __user *buffer,
-			     size_t count, loff_t *ppos)
+				size_t count, loff_t *ppos)
 {
 	char buf[16];
 	char *tmp;
@@ -410,24 +410,24 @@ static ssize_t enabled_write(struct file *filp, const char __user *buffer,
  *  toggles logging to the relay channel
  */
 struct file_operations enabled_fops = {
-	.owner =	THIS_MODULE,
-	.read =		enabled_read,
-	.write =	enabled_write,
+	.owner	=	THIS_MODULE,
+	.read	=	enabled_read,
+	.write	=	enabled_write,
 };
 
 static ssize_t create_read(struct file *filp, char __user *buffer,
-			   size_t count, loff_t *ppos)
+			size_t count, loff_t *ppos)
 {
 	char buf[16];
 
 	snprintf(buf, sizeof(buf), "%d\n", !!chan);
 
 	return simple_read_from_buffer(buffer, count, ppos,
-				       buf, strlen(buf));
+					buf, strlen(buf));
 }
 
 static ssize_t create_write(struct file *filp, const char __user *buffer,
-			    size_t count, loff_t *ppos)
+				size_t count, loff_t *ppos)
 {
 	char buf[16];
 	char *tmp;
@@ -462,9 +462,9 @@ static ssize_t create_write(struct file *filp, const char __user *buffer,
  *  creates/destroys the relay channel
  */
 struct file_operations create_fops = {
-	.owner =	THIS_MODULE,
-	.read =		create_read,
-	.write =	create_write,
+	.owner	=	THIS_MODULE,
+	.read	=	create_read,
+	.write	=	create_write,
 };
 
 static ssize_t subbuf_size_read(struct file *filp, char __user *buffer,
@@ -475,11 +475,11 @@ static ssize_t subbuf_size_read(struct file *filp, char __user *buffer,
 	snprintf(buf, sizeof(buf), "%zu\n", subbuf_size);
 
 	return simple_read_from_buffer(buffer, count, ppos,
-				       buf, strlen(buf));
+					buf, strlen(buf));
 }
 
 static ssize_t subbuf_size_write(struct file *filp, const char __user *buffer,
-				 size_t count, loff_t *ppos)
+				size_t count, loff_t *ppos)
 {
 	char buf[16];
 	char *tmp;
@@ -514,18 +514,18 @@ struct file_operations subbuf_size_fops = {
 };
 
 static ssize_t n_subbufs_read(struct file *filp, char __user *buffer,
-			      size_t count, loff_t *ppos)
+				size_t count, loff_t *ppos)
 {
 	char buf[16];
 
 	snprintf(buf, sizeof(buf), "%zu\n", n_subbufs);
 
 	return simple_read_from_buffer(buffer, count, ppos,
-				       buf, strlen(buf));
+					buf, strlen(buf));
 }
 
 static ssize_t n_subbufs_write(struct file *filp, const char __user *buffer,
-			       size_t count, loff_t *ppos)
+				size_t count, loff_t *ppos)
 {
 	char buf[16];
 	char *tmp;
@@ -560,14 +560,14 @@ struct file_operations n_subbufs_fops = {
 };
 
 static ssize_t dropped_read(struct file *filp, char __user *buffer,
-			    size_t count, loff_t *ppos)
+				size_t count, loff_t *ppos)
 {
 	char buf[16];
 
 	snprintf(buf, sizeof(buf), "%zu\n", dropped);
 
 	return simple_read_from_buffer(buffer, count, ppos,
-				       buf, strlen(buf));
+					buf, strlen(buf));
 }
 
 /*
@@ -593,13 +593,13 @@ static int produced_open(struct inode *inode, struct file *filp)
 }
 
 static ssize_t produced_read(struct file *filp, char __user *buffer,
-			     size_t count, loff_t *ppos)
+				size_t count, loff_t *ppos)
 {
 	struct rchan_buf *buf = filp->private_data;
 
 	return simple_read_from_buffer(buffer, count, ppos,
-				       &buf->subbufs_produced,
-				       sizeof(buf->subbufs_produced));
+					&buf->subbufs_produced,
+					sizeof(buf->subbufs_produced));
 }
 
 /*
@@ -624,17 +624,17 @@ static int consumed_open(struct inode *inode, struct file *filp)
 }
 
 static ssize_t consumed_read(struct file *filp, char __user *buffer,
-			     size_t count, loff_t *ppos)
+				size_t count, loff_t *ppos)
 {
 	struct rchan_buf *buf = filp->private_data;
 
 	return simple_read_from_buffer(buffer, count, ppos,
-				       &buf->subbufs_consumed,
-				       sizeof(buf->subbufs_consumed));
+					&buf->subbufs_consumed,
+					sizeof(buf->subbufs_consumed));
 }
 
 static ssize_t consumed_write(struct file *filp, const char __user *buffer,
-			      size_t count, loff_t *ppos)
+				size_t count, loff_t *ppos)
 {
 	struct rchan_buf *buf = filp->private_data;
 	size_t consumed;
@@ -709,9 +709,10 @@ EXPORT_SYMBOL_GPL(klog_printk);
  *  consumed for the associated relay buffer.
  */
 struct file_operations consumed_fops = {
-	.owner =	THIS_MODULE,
-	.open =		consumed_open,
-	.read =		consumed_read,
-	.write =	consumed_write,
-	.llseek = default_llseek,
+	.owner	=	THIS_MODULE,
+	.open	=	consumed_open,
+	.read	=	consumed_read,
+	.write	=	consumed_write,
+	.llseek	=	default_llseek,
 };
+

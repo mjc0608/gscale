@@ -18,7 +18,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -45,52 +45,52 @@
 #include "vgt.h"
 
 #undef VGT_DEBUG
-#define vgt_printk(fmt, args...)	\
-	do {														\
-		printk("%s: %d: vGT: "fmt"\n", __func__, __LINE__, ##args);	\
+#define vgt_printk(fmt, args...)					\
+	do {								\
+		printk("%s: %d: vGT: "fmt"\n", __func__, __LINE__, ##args);\
 	} while (0)
 
-#define show_sreg(vgt, reg)		\
-	do {							\
+#define show_sreg(vgt, reg)				\
+	do {						\
 		vgt_reg_t val;				\
-		ASSERT(!((reg) & 0x3));		\
+		ASSERT(!((reg) & 0x3));			\
 		val = __sreg(vgt, (reg));		\
 		vgt_printk("vgt(%d): sreg(%08x) value(%08x)", vgt->vm_id, (reg), val); \
 	} while (0)
 
 /* copied & modified from include/drm/drmP.h */
-#define VGT_DRIVER_MODESET     0x2000
+#define VGT_DRIVER_MODESET	0x2000
 u32 __vgt_driver_cap = VGT_DRIVER_MODESET;
-//#define vgt_driver_check_feature(feature)   (__vgt_driver_cap & (feature))
+//#define vgt_driver_check_feature(feature)	(__vgt_driver_cap & (feature))
 
 #if 0
 bool static vgt_driver_check_feature(struct vgt_device *vgt, int feature)
 {
-    vgt_reg_t sreg;
-    bool retval = false;
-#define _VGA_DISP_DISABLED   1 << 31
-    switch(feature) {
-        case VGT_DRIVER_MODESET:
-            sreg = __sreg(vgt, _REG_CPU_VGACNTRL);
-            if (sreg & _VGA_DISP_DISABLED)
-                retval = true;
-            break;
-        default:
-            printk(KERN_WARNING"%s:WARNING: vGT check UNKNOWN driver feature\n", __func__);
-    }
+	vgt_reg_t sreg;
+	bool retval = false;
+#define _VGA_DISP_DISABLED	(1 << 31)
+	switch(feature) {
+		case VGT_DRIVER_MODESET:
+			sreg = __sreg(vgt, _REG_CPU_VGACNTRL);
+			if (sreg & _VGA_DISP_DISABLED)
+				retval = true;
+			break;
+		default:
+			printk(KERN_WARNING"%s:WARNING: vGT check UNKNOWN driver feature\n", __func__);
+	}
 
-    return retval;
+	return retval;
 }
 #endif
 
-/* FIXME: snb_devinfo copied from  */
+/* FIXME: snb_devinfo copied from */
 /* static const struct intel_device_info intel_sandybridge_d_info = {
  */
 static struct vgt_intel_device_info snb_devinfo = {
-    .gen = 6,
+	.gen = 6,
 	.pch = PCH_CPT,
 	.need_gfx_hws = 1,
-    .has_hotplug = 1,
+	.has_hotplug = 1,
 	.has_bsd_ring = 1,
 	.has_blt_ring = 1,
 };
@@ -108,155 +108,155 @@ struct vgt_intel_device_info *vgt_devinfo = &snb_devinfo;
 /* FIXME: does read_mmio need to update v/s regs ??? */
 #define vgt_read_mmio_reg_8(offset) VGT_MMIO_READ_BYTES(pdev, (offset), 1)
 
-#define vgt_write_mmio_reg(offset, val)    \
-    do {                                    \
-        __vreg(vgt, (offset)) = val;       \
-        __sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), (val));    \
-        VGT_MMIO_WRITE(pdev, (offset), __sreg(vgt, (offset)));            \
-    } while(0)
+#define vgt_write_mmio_reg(offset, val)					\
+	do {								\
+		__vreg(vgt, (offset)) = val;				\
+		__sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), (val));\
+		VGT_MMIO_WRITE(pdev, (offset), __sreg(vgt, (offset)));	\
+	} while(0)
 
-#define vgt_write_mmio_reg_8(offset, val)    \
-    do {                                    \
-        __vreg8(vgt, (offset)) = (val);           \
-        __sreg8(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), (val));    \
-        VGT_MMIO_WRITE_BYTES(pdev, (offset), __sreg8(vgt, (offset)), 1);            \
-    } while(0)
+#define vgt_write_mmio_reg_8(offset, val)				\
+	do {								\
+		__vreg8(vgt, (offset)) = (val);				\
+		__sreg8(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), (val));	\
+		VGT_MMIO_WRITE_BYTES(pdev, (offset), __sreg8(vgt, (offset)), 1);\
+	} while(0)
 
-#define vgt_restore_mmio_reg(offset)                            \
-    do {                                                        \
-        __sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset))); \
-        VGT_MMIO_WRITE(pdev, (offset), __sreg(vgt, (offset)));      \
-    } while(0)
+#define vgt_restore_mmio_reg(offset)							\
+	do {										\
+		__sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset))); \
+		VGT_MMIO_WRITE(pdev, (offset), __sreg(vgt, (offset)));			\
+	} while(0)
 
-#define vgt_restore_sreg(reg)       \
-    do {    \
-        VGT_MMIO_WRITE(vgt->pdev, (reg), __sreg(vgt, (reg))); \
-    } while (0);
+#define vgt_restore_sreg(reg)	\
+	do {	\
+		VGT_MMIO_WRITE(vgt->pdev, (reg), __sreg(vgt, (reg))); \
+	} while (0);
 
-#define vgt_restore_mmio_reg_64(offset)                         \
-    do {                                                        \
-        if (!reg_is_owner(vgt, (offset))) {                     \
-            vgt_dbg("vGT: restore non-owner reg(%x)\n", (offset)); \
-            break;                                              \
-        }                                                       \
-        __sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset)));  \
-        __sreg(vgt, (offset) + 4) = mmio_g2h_gmadr(vgt, (offset) + 4, __vreg(vgt, (offset) + 4));  \
-        VGT_MMIO_WRITE_BYTES(pdev, (offset), __sreg64(vgt, (offset)), 8);             \
-    } while(0)
+#define vgt_restore_mmio_reg_64(offset)						\
+	do {									\
+		if (!reg_is_owner(vgt, (offset))) {				\
+			vgt_dbg("vGT: restore non-owner reg(%x)\n", (offset)); \
+			break;							\
+		}								\
+		__sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset))); \
+		__sreg(vgt, (offset) + 4) = mmio_g2h_gmadr(vgt, (offset) + 4, __vreg(vgt, (offset) + 4));\
+		VGT_MMIO_WRITE_BYTES(pdev, (offset), __sreg64(vgt, (offset)), 8);			\
+	} while(0)
 
 #define vgt_restore_mmio_reg_8(offset) \
-    do {                                    \
-        if (!reg_is_owner(vgt, (offset))) {                     \
-            vgt_dbg("vGT: restore non-owner reg(%x)\n", (offset)); \
-            break;                                              \
-        }                                                       \
-        __sreg8(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg8(vgt, (offset))); \
-        VGT_MMIO_WRITE_BYTES(pdev, (offset), __sreg8(vgt, (offset)), 1); \
-    } while(0)
+	do {									\
+		if (!reg_is_owner(vgt, (offset))) {				\
+			vgt_dbg("vGT: restore non-owner reg(%x)\n", (offset));	\
+			break;							\
+		}								\
+		__sreg8(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg8(vgt, (offset))); \
+		VGT_MMIO_WRITE_BYTES(pdev, (offset), __sreg8(vgt, (offset)), 1); \
+	} while(0)
 
-#define vgt_save_mmio_reg(offset)   \
-    do {                            \
-        __sreg(vgt, (offset)) = VGT_MMIO_READ(pdev, (offset));               \
-		__vreg(vgt, (offset)) = mmio_h2g_gmadr(vgt, (offset), __sreg(vgt, (offset)));    \
-    } while(0)
+#define vgt_save_mmio_reg(offset) \
+	do {									\
+		__sreg(vgt, (offset)) = VGT_MMIO_READ(pdev, (offset));		\
+		__vreg(vgt, (offset)) = mmio_h2g_gmadr(vgt, (offset), __sreg(vgt, (offset)));\
+	} while(0)
 
-#define vgt_save_mmio_reg_8(offset)   \
-    do {                            \
-        __sreg8(vgt, (offset)) = VGT_MMIO_READ_BYTES(pdev, (offset), 1);     \
-        __vreg8(vgt, (offset)) = mmio_h2g_gmadr(vgt, (offset), __sreg8(vgt, (offset)));     \
-    } while(0)
+#define vgt_save_mmio_reg_8(offset) \
+	do {							\
+		__sreg8(vgt, (offset)) = VGT_MMIO_READ_BYTES(pdev, (offset), 1);\
+		__vreg8(vgt, (offset)) = mmio_h2g_gmadr(vgt, (offset), __sreg8(vgt, (offset)));	\
+	} while(0)
 
-#define vgt_save_mmio_reg_64(offset)    \
-    do {                                \
-        __sreg64(vgt, (offset)) = VGT_MMIO_READ_BYTES(pdev, (offset), 8);   \
-        __vreg(vgt, (offset)) = mmio_h2g_gmadr(vgt, (offset), __sreg(vgt, (offset)));   \
-        __vreg(vgt, (offset) + 4) = mmio_h2g_gmadr(vgt, (offset) + 4, __sreg(vgt, (offset) + 4));   \
-    } while(0)
+#define vgt_save_mmio_reg_64(offset)	\
+	do {									\
+		__sreg64(vgt, (offset)) = VGT_MMIO_READ_BYTES(pdev, (offset), 8); \
+		__vreg(vgt, (offset)) = mmio_h2g_gmadr(vgt, (offset), __sreg(vgt, (offset))); \
+		__vreg(vgt, (offset) + 4) = mmio_h2g_gmadr(vgt, (offset) + 4, __sreg(vgt, (offset) + 4)); \
+	} while(0)
 
-#define not_done()              \
-    do {                        \
-        printk(KERN_WARNING"%s: %d:  not done yet!\n", __func__, __LINE__);   \
-        BUG();                  \
-    } while(0)
+#define not_done()					\
+	do {						\
+		printk(KERN_WARNING"%s: %d:not done yet!\n", __func__, __LINE__); \
+		BUG();					\
+	} while(0)
 
 //extern void intel_disable_fbc(struct drm_device *dev);
 //static void i915_restore_display(struct drm_device *dev)
 static void vgt_restore_display(struct vgt_device *vgt)
 {
-    struct pgt_device *pdev = vgt->pdev;
+	struct pgt_device *pdev = vgt->pdev;
 
 	/* Display arbitration */
-    vgt_restore_mmio_reg(_REG_DSPARB);
+	vgt_restore_mmio_reg(_REG_DSPARB);
 
 	/* Display port ratios (must be done before clock is set) */
-    // TODO: snb does not support this
-    if (VGT_SUPPORT_INTEGRATED_DP(pdev)) {
-        BUG();
-    }
+	// TODO: snb does not support this
+	if (VGT_SUPPORT_INTEGRATED_DP(pdev)) {
+		BUG();
+	}
 
 	/* This is only meaningful in non-KMS mode */
 	/* Don't restore them in KMS mode */
-    //vgt_restore_modeset_reg(vgt);
+	//vgt_restore_modeset_reg(vgt);
 
 	/* CRT state */
 	if (VGT_HAS_PCH_SPLIT(vgt))
-        vgt_restore_mmio_reg(_REG_PCH_ADPA);
-    else
-        vgt_restore_mmio_reg(_REG_ADPA);
+		vgt_restore_mmio_reg(_REG_PCH_ADPA);
+	else
+		vgt_restore_mmio_reg(_REG_ADPA);
 
-    if (VGT_HAS_PCH_SPLIT(vgt)) {
-        vgt_restore_mmio_reg(_REG_PCH_LVDS);
-    } else {
-        //else if (...) {} TODO: not related current snb platform
-        BUG();
-    }
+	if (VGT_HAS_PCH_SPLIT(vgt)) {
+		vgt_restore_mmio_reg(_REG_PCH_LVDS);
+	} else {
+		//else if (...) {} TODO: not related current snb platform
+		BUG();
+	}
 
-    /* TODO: not related current snb platform */
+	/* TODO: not related current snb platform */
 	/*if (!IS_I830(dev) && !IS_845G(dev) && !HAS_PCH_SPLIT(dev))
 		I915_WRITE(PFIT_CONTROL, dev_priv->savePFIT_CONTROL);
-    */
+	 */
 
-    if (VGT_HAS_PCH_SPLIT(vgt)) {
-        vgt_restore_mmio_reg(_REG_PCH_PP_ON_DELAYS);
-        vgt_restore_mmio_reg(_REG_PCH_PP_OFF_DELAYS);
-        vgt_restore_mmio_reg(_REG_PCH_PP_DIVISOR);
-        vgt_restore_mmio_reg(_REG_PCH_PP_CONTROL);
-        vgt_restore_mmio_reg(_REG_RSTDBYCTL);
-    } else {
-        //TODO: not related current snb platform
-        not_done();
-    }
+	if (VGT_HAS_PCH_SPLIT(vgt)) {
+		vgt_restore_mmio_reg(_REG_PCH_PP_ON_DELAYS);
+		vgt_restore_mmio_reg(_REG_PCH_PP_OFF_DELAYS);
+		vgt_restore_mmio_reg(_REG_PCH_PP_DIVISOR);
+		vgt_restore_mmio_reg(_REG_PCH_PP_CONTROL);
+		vgt_restore_mmio_reg(_REG_RSTDBYCTL);
+	} else {
+		//TODO: not related current snb platform
+		not_done();
+	}
 
 	/* Display Port state */
-    if (VGT_SUPPORT_INTEGRATED_DP(vgt)) {
-        vgt_restore_mmio_reg(_REG_DP_B);
-        vgt_restore_mmio_reg(_REG_DP_C);
-        vgt_restore_mmio_reg(_REG_DP_D);
-    }
+	if (VGT_SUPPORT_INTEGRATED_DP(vgt)) {
+		vgt_restore_mmio_reg(_REG_DP_B);
+		vgt_restore_mmio_reg(_REG_DP_C);
+		vgt_restore_mmio_reg(_REG_DP_D);
+	}
 
-    /* FIXME: how to do this ???
-     refer: drivers/gpu/drm/drm_pci.c
-     int drm_get_pci_dev
-    */
+	/* FIXME: how to do this ???
+	refer: drivers/gpu/drm/drm_pci.c
+	int drm_get_pci_dev
+	 */
 	//intel_disable_fbc(dev);
 
-    /* TODO: snb does not support fbc */
-    //if (VGT_I915_HAS_FBC(vgt)) { ... }
+	/* TODO: snb does not support fbc */
+	//if (VGT_I915_HAS_FBC(vgt)) { ... }
 
 #if 0
 	/* VGA state */
-    if (VGT_HAS_PCH_SPLIT(vgt))
-        vgt_restore_mmio_reg(_REG_CPU_VGACNTRL);
-    else
-        vgt_restore_mmio_reg(_REG_VGACNTRL);
+	if (VGT_HAS_PCH_SPLIT(vgt))
+		vgt_restore_mmio_reg(_REG_CPU_VGACNTRL);
+	else
+		vgt_restore_mmio_reg(_REG_VGACNTRL);
 
-    vgt_restore_mmio_reg(_REG_VGA0);
-    vgt_restore_mmio_reg(_REG_VGA1);
-    vgt_restore_mmio_reg(_REG_VGA_PD);
-    VGT_POST_READ(pdev, _REG_VGA_PD);
-    udelay(150);
+	vgt_restore_mmio_reg(_REG_VGA0);
+	vgt_restore_mmio_reg(_REG_VGA1);
+	vgt_restore_mmio_reg(_REG_VGA_PD);
+	VGT_POST_READ(pdev, _REG_VGA_PD);
+	udelay(150);
 
-    //vgt_restore_vga(vgt);
+	//vgt_restore_vga(vgt);
 #endif
 }
 
@@ -265,11 +265,11 @@ static void vgt_restore_display(struct vgt_device *vgt)
 void
 vgt_i2c_reset(struct vgt_device *vgt)
 {
-    struct pgt_device *pdev = vgt->pdev;
-    if (VGT_HAS_PCH_SPLIT(vgt))
-        vgt_write_mmio_reg(_REG_PCH_GMBUS0, 0);
-    else
-        vgt_write_mmio_reg(_REG_GMBUS0, 0);
+	struct pgt_device *pdev = vgt->pdev;
+	if (VGT_HAS_PCH_SPLIT(vgt))
+		vgt_write_mmio_reg(_REG_PCH_GMBUS0, 0);
+	else
+		vgt_write_mmio_reg(_REG_GMBUS0, 0);
 }
 #endif
 
@@ -278,86 +278,86 @@ vgt_i2c_reset(struct vgt_device *vgt)
 //pci_save_state()
 int vgt_pci_save_state(struct vgt_device *vgt)
 {
-    int i;
-    for (i = 0; i < 16; i++)
-        vgt_emulate_cfg_read(vgt,  i * 4, vgt->state.cfg_space, 4);
+	int i;
+	for (i = 0; i < 16; i++)
+		vgt_emulate_cfg_read(vgt,i * 4, vgt->state.cfg_space, 4);
 
-    /* FIXME: gen6 is neither pcie or pcix device */
-    //pci_save_pcie_state()
-    //pci_save_pcix_state()
+	/* FIXME: gen6 is neither pcie or pcix device */
+	//pci_save_pcie_state()
+	//pci_save_pcix_state()
 
-    return 0;
+	return 0;
 }
 #endif
 
 #if 0
 static u8 vgt_read_indexed(struct vgt_device *vgt, u16 index_port, u16 data_port, u8 index)
 {
-    struct pgt_device *pdev = vgt->pdev;
-    vgt_write_mmio_reg_8(index_port, index);
-    return vgt_read_mmio_reg_8(data_port);
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_write_mmio_reg_8(index_port, index);
+	return vgt_read_mmio_reg_8(data_port);
 }
 
 static void vgt_write_indexed(struct vgt_device *vgt, u16 index_port, u16 data_port, u8 off, u8 val)
 {
-    struct pgt_device *pdev = vgt->pdev;
-    vgt_write_mmio_reg_8(index_port, off);
-    vgt_write_mmio_reg_8(data_port, val);
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_write_mmio_reg_8(index_port, off);
+	vgt_write_mmio_reg_8(data_port, val);
 }
 
 static u8 vgt_read_ar(struct vgt_device *vgt, u16 st01, u8 reg, u16 palette_enable)
 {
-    struct pgt_device *pdev = vgt->pdev;
-    vgt_read_mmio_reg_8(st01);
-    vgt_write_mmio_reg_8(_REG_VGA_AR_INDEX, (reg | palette_enable));
-    return  vgt_read_mmio_reg_8(_REG_VGA_AR_DATA_READ);
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_read_mmio_reg_8(st01);
+	vgt_write_mmio_reg_8(_REG_VGA_AR_INDEX, (reg | palette_enable));
+	returnvgt_read_mmio_reg_8(_REG_VGA_AR_DATA_READ);
 }
 
 static void vgt_save_vga(struct vgt_device *vgt)
 {
 	int i;
 	u16 cr_index, cr_data, st01;
-    struct pgt_device *pdev = vgt->pdev;
-    vgt_state_t *vgt_state = &vgt->state;
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_state_t *vgt_state = &vgt->state;
 
 	/* VGA color palette registers */
 	//dev_priv->saveDACMASK = I915_READ8(VGA_DACMASK);
-    vgt_save_mmio_reg_8(_REG_VGA_DACMASK);
+	vgt_save_mmio_reg_8(_REG_VGA_DACMASK);
 
 	/* MSR bits */
-    vgt_save_mmio_reg_8(_REG_VGA_MSR_READ);
-    if (__vreg(vgt, _REG_VGA_MSR_READ) & VGA_MSR_CGA_MODE) {
-        cr_index = _REG_VGA_CR_INDEX_CGA;
-        cr_data = _REG_VGA_CR_DATA_CGA;
-        st01 = _REG_VGA_ST01_CGA;
-    } else {
-        cr_index = _REG_VGA_CR_INDEX_MDA;
-        cr_data = _REG_VGA_CR_DATA_MDA;
-        st01 = _REG_VGA_ST01_MDA;
-    }
+	vgt_save_mmio_reg_8(_REG_VGA_MSR_READ);
+	if (__vreg(vgt, _REG_VGA_MSR_READ) & VGA_MSR_CGA_MODE) {
+		cr_index = _REG_VGA_CR_INDEX_CGA;
+		cr_data = _REG_VGA_CR_DATA_CGA;
+		st01 = _REG_VGA_ST01_CGA;
+	} else {
+		cr_index = _REG_VGA_CR_INDEX_MDA;
+		cr_data = _REG_VGA_CR_DATA_MDA;
+		st01 = _REG_VGA_ST01_MDA;
+	}
 
 	/* CRT controller regs */
-    vgt_write_indexed(vgt, cr_index, cr_data, 0x11,
-            vgt_read_indexed(vgt, cr_index, cr_data, 0x11));
-    for (i = 0; i <= 0x24; i++)
-        vgt_state->saveCR[i] =
-            vgt_read_indexed(vgt, cr_index, cr_data, i);
+	vgt_write_indexed(vgt, cr_index, cr_data, 0x11,
+			vgt_read_indexed(vgt, cr_index, cr_data, 0x11));
+	for (i = 0; i <= 0x24; i++)
+		vgt_state->saveCR[i] =
+			vgt_read_indexed(vgt, cr_index, cr_data, i);
 	/* Make sure we don't turn off CR group 0 writes */
-    vgt_state->saveCR[0x11] &= ~0x80;
+	vgt_state->saveCR[0x11] &= ~0x80;
 
 	/* Attribute controller registers */
-    vgt_read_mmio_reg_8(st01);
-    vgt_save_mmio_reg_8(_REG_VGA_AR_INDEX);
-    for (i = 0; i <= 0x14; i++)
-        vgt_state->saveAR[i] = vgt_read_ar(vgt, st01, i, 0);
-    vgt_read_mmio_reg_8(st01);
-    vgt_restore_mmio_reg_8(_REG_VGA_AR_INDEX);
-    vgt_read_mmio_reg_8(st01);
+	vgt_read_mmio_reg_8(st01);
+	vgt_save_mmio_reg_8(_REG_VGA_AR_INDEX);
+	for (i = 0; i <= 0x14; i++)
+		vgt_state->saveAR[i] = vgt_read_ar(vgt, st01, i, 0);
+	vgt_read_mmio_reg_8(st01);
+	vgt_restore_mmio_reg_8(_REG_VGA_AR_INDEX);
+	vgt_read_mmio_reg_8(st01);
 
 	/* Graphics controller registers */
 	for (i = 0; i < 9; i++)
-        vgt_state->saveGR[i] =
-            vgt_read_indexed(vgt, _REG_VGA_GR_INDEX, _REG_VGA_GR_DATA, i);
+		vgt_state->saveGR[i] =
+			vgt_read_indexed(vgt, _REG_VGA_GR_INDEX, _REG_VGA_GR_DATA, i);
 
 	vgt_state->saveGR[0x10] =
 		vgt_read_indexed(vgt, _REG_VGA_GR_INDEX, _REG_VGA_GR_DATA, 0x10);
@@ -375,145 +375,145 @@ static void vgt_save_vga(struct vgt_device *vgt)
 
 static int vgt_save_display(struct vgt_device *vgt)
 {
-    struct pgt_device *pdev = vgt->pdev;
+	struct pgt_device *pdev = vgt->pdev;
 
 	/* Display arbitration control */
 	//dev_priv->saveDSPARB = I915_READ(DSPARB);
-    vgt_save_mmio_reg(_REG_DSPARB);
+	vgt_save_mmio_reg(_REG_DSPARB);
 
 	/* This is only meaningful in non-KMS mode */
 	/* Don't save them in KMS mode */
-    // TODO & FIXME: since by default support DRIVER_MODESET,
-    //        this function will do nothing but returns
+	// TODO & FIXME: since by default support DRIVER_MODESET,
+	//		this function will do nothing but returns
 	//i915_save_modeset_reg(dev);
-    //vgt_save_modeset_reg(vgt);
+	//vgt_save_modeset_reg(vgt);
 
 	/* CRT state */
-    if (VGT_HAS_PCH_SPLIT(vgt)) {
-        vgt_save_mmio_reg(_REG_PCH_ADPA);
-    } else {
-        vgt_save_mmio_reg(_REG_ADPA);
-    }
+	if (VGT_HAS_PCH_SPLIT(vgt)) {
+		vgt_save_mmio_reg(_REG_PCH_ADPA);
+	} else {
+		vgt_save_mmio_reg(_REG_ADPA);
+	}
 
-    if (VGT_HAS_PCH_SPLIT(pdev)) {
-        vgt_save_mmio_reg(_REG_PCH_PP_CONTROL);
-        vgt_save_mmio_reg(_REG_PCH_LVDS);
-    } else {
-        /* TODO: snb gfx save should not go to here */
-        not_done();
-    }
+	if (VGT_HAS_PCH_SPLIT(pdev)) {
+		vgt_save_mmio_reg(_REG_PCH_PP_CONTROL);
+		vgt_save_mmio_reg(_REG_PCH_LVDS);
+	} else {
+		/* TODO: snb gfx save should not go to here */
+		not_done();
+	}
 
-    /* TODO: will not go into this */
-    /*
+	/* TODO: will not go into this */
+	/*
 	if (!IS_I830(dev) && !IS_845G(dev) && !HAS_PCH_SPLIT(dev))
 		dev_priv->savePFIT_CONTROL = I915_READ(PFIT_CONTROL);
-    */
+	 */
 
-    if (VGT_HAS_PCH_SPLIT(pdev)) {
-        vgt_save_mmio_reg(_REG_PCH_PP_ON_DELAYS);
-        vgt_save_mmio_reg(_REG_PCH_PP_OFF_DELAYS);
-        vgt_save_mmio_reg(_REG_PCH_PP_DIVISOR);
-    } else {
-        /* TODO: will not go into this */
-        not_done();
-    }
+	if (VGT_HAS_PCH_SPLIT(pdev)) {
+		vgt_save_mmio_reg(_REG_PCH_PP_ON_DELAYS);
+		vgt_save_mmio_reg(_REG_PCH_PP_OFF_DELAYS);
+		vgt_save_mmio_reg(_REG_PCH_PP_DIVISOR);
+	} else {
+		/* TODO: will not go into this */
+		not_done();
+	}
 
-    /* TODO: will not go into this */
+	/* TODO: will not go into this */
 	/* Display Port state */
-    if (VGT_SUPPORT_INTEGRATED_DP(pdev)) {
-        not_done();
-    }
+	if (VGT_SUPPORT_INTEGRATED_DP(pdev)) {
+		not_done();
+	}
 
 	/* Only save FBC state on the platform that supports FBC */
-    if (VGT_I915_HAS_FBC(pdev)) {
-        not_done();
-    }
+	if (VGT_I915_HAS_FBC(pdev)) {
+		not_done();
+	}
 
 	/* VGA state */
-    vgt_save_mmio_reg(_REG_VGA0);
-    vgt_save_mmio_reg(_REG_VGA1);
-    vgt_save_mmio_reg(_REG_VGA_PD);
-    if (VGT_HAS_PCH_SPLIT(pdev))
-        vgt_save_mmio_reg(_REG_CPU_VGACNTRL);
-    else
+	vgt_save_mmio_reg(_REG_VGA0);
+	vgt_save_mmio_reg(_REG_VGA1);
+	vgt_save_mmio_reg(_REG_VGA_PD);
+	if (VGT_HAS_PCH_SPLIT(pdev))
+		vgt_save_mmio_reg(_REG_CPU_VGACNTRL);
+	else
 		BUG();
-    //vgt_save_vga(vgt);
+	//vgt_save_vga(vgt);
 
-    return 0;
+	return 0;
 }
 
 /* This function will be called from vgt_context.c */
 int vgt_save_state(struct vgt_device *vgt)
 {
-    int i;
-    struct pgt_device *pdev = vgt->pdev;
+	int i;
+	struct pgt_device *pdev = vgt->pdev;
 
-    /* put 2 functions in i915_drm_freeze here */
-    // FIXME: is this totally software stuff ???
+	/* put 2 functions in i915_drm_freeze here */
+	// FIXME: is this totally software stuff ???
 	//drm_kms_helper_poll_disable(dev);
 
-    // TODO: did not do pcie/pcix save, since 00:02.0 exposed as PCI device
-    //pci_save_state()
-    /* FIXME: no need to save pci state */
+	// TODO: did not do pcie/pcix save, since 00:02.0 exposed as PCI device
+	//pci_save_state()
+	/* FIXME: no need to save pci state */
 #if 0
-    vgt_pci_save_state(vgt);
+	vgt_pci_save_state(vgt);
 #endif
 
-    /* i915_save_state go from here */
+	/* i915_save_state go from here */
 
 	//pci_read_config_byte(dev->pdev, LBB, &dev_priv->saveLBB);
-    /* FIXME: no need to save PCI configure */
+	/* FIXME: no need to save PCI configure */
 #if 0
-    vgt_emulate_cfg_read(vgt, _REG_LBB, vgt->state.cfg_space, 1);
+	vgt_emulate_cfg_read(vgt, _REG_LBB, vgt->state.cfg_space, 1);
 #endif
 
-    /* Any lock we need ? */
+	/* Any lock we need ? */
 	//mutex_lock(&dev->struct_mutex);
 
 	/* Hardware status page */
-    /* FIXME: _REG_HWS_PGA is only used in i915 for dmah, this
-     * not used by any other vGT code, it seems like a legacy register
-     */
-    vgt_save_mmio_reg(_REG_HWS_PGA);
+	/* FIXME: _REG_HWS_PGA is only used in i915 for dmah, this
+	 * not used by any other vGT code, it seems like a legacy register
+	 */
+	vgt_save_mmio_reg(_REG_HWS_PGA);
 
 	vgt_save_display(vgt);
 
-    if (VGT_HAS_PCH_SPLIT(pdev)) {
-        vgt_save_mmio_reg(_REG_FDI_RXA_IMR);
-        vgt_save_mmio_reg(_REG_FDI_RXB_IMR);
-        vgt_save_mmio_reg(_REG_RSTDBYCTL);
-        /* FIXME: in i915 side, it is called PCH_PORT_HOTPLUG */
-        vgt_save_mmio_reg(_REG_SHOTPLUG_CTL);
-    } else {
-        vgt_save_mmio_reg(_REG_IER);
-        vgt_save_mmio_reg(_REG_IMR);
-    }
+	if (VGT_HAS_PCH_SPLIT(pdev)) {
+		vgt_save_mmio_reg(_REG_FDI_RXA_IMR);
+		vgt_save_mmio_reg(_REG_FDI_RXB_IMR);
+		vgt_save_mmio_reg(_REG_RSTDBYCTL);
+		/* FIXME: in i915 side, it is called PCH_PORT_HOTPLUG */
+		vgt_save_mmio_reg(_REG_SHOTPLUG_CTL);
+	} else {
+		vgt_save_mmio_reg(_REG_IER);
+		vgt_save_mmio_reg(_REG_IMR);
+	}
 
-    /* supposed will not go into this */
-    /*
+	/* supposed will not go into this */
+	/*
 	if (IS_IRONLAKE_M(dev))
 		ironlake_disable_drps(dev);
-    */
+	 */
 
-    /* GT_THREAD_P_REQ - GT Thread P-State Request
-     * FIXME: we need to change power management ??? */
-    /*
+	/* GT_THREAD_P_REQ - GT Thread P-State Request
+	 * FIXME: we need to change power management ??? */
+	/*
 	if (IS_GEN6(dev))
 		gen6_disable_rps(dev);
-    */
+	 */
 
 	/* Scratch space */
-    for (i = 0; i < 16; i++) {
-        vgt_save_mmio_reg(_REG_SWF00 + (i << 2));
-        vgt_save_mmio_reg(_REG_SWF10 + (i << 2));
-    }
+	for (i = 0; i < 16; i++) {
+		vgt_save_mmio_reg(_REG_SWF00 + (i << 2));
+		vgt_save_mmio_reg(_REG_SWF10 + (i << 2));
+	}
 	for (i = 0; i < 3; i++)
 		vgt_save_mmio_reg(_REG_SWF30 + (i << 2));
 
-    /* FIXME: how we need any lock ??? */
+	/* FIXME: how we need any lock ??? */
 	//mutex_unlock(&dev->struct_mutex);
 
-    return 0;
+	return 0;
 }
 
 /* intel_flush_display_plane */
@@ -538,97 +538,97 @@ static void vgt_flush_display_plane(struct vgt_device *vgt,
 static void vgt_update_cursor(struct vgt_device *vgt, enum vgt_pipe pipe);
 int vgt_restore_state(struct vgt_device *vgt)
 {
-    struct pgt_device *pdev = vgt->pdev;
-    int i;
-    //char *cfg_space;
+	struct pgt_device *pdev = vgt->pdev;
+	int i;
+	//char *cfg_space;
 
 	//pci_write_config_byte(dev->pdev, LBB, dev_priv->saveLBB);
-    /* FIXME: no need to restore pci configure */
+	/* FIXME: no need to restore pci configure */
 #if 0
-    cfg_space = &vgt->state.cfg_space[0];
-    vgt_emulate_cfg_write(vgt, _REG_LBB,
-            (void*)(cfg_space + ((_REG_LBB) & ~3)), 1);
+	cfg_space = &vgt->state.cfg_space[0];
+	vgt_emulate_cfg_write(vgt, _REG_LBB,
+			(void*)(cfg_space + ((_REG_LBB) & ~3)), 1);
 #endif
 
-    /* FIXME: any lock we need ???  */
+	/* FIXME: any lock we need ???*/
 	//mutex_lock(&dev->struct_mutex);
-    vgt_restore_mmio_reg(_REG_HWS_PGA);
+	vgt_restore_mmio_reg(_REG_HWS_PGA);
 
-    vgt_restore_display(vgt);
+	vgt_restore_display(vgt);
 
 	/* Interrupt state */
-    if (VGT_HAS_PCH_SPLIT(vgt)) {
-        vgt_restore_mmio_reg(_REG_FDI_RXA_IMR);
-        vgt_restore_mmio_reg(_REG_FDI_RXB_IMR);
-    }
+	if (VGT_HAS_PCH_SPLIT(vgt)) {
+		vgt_restore_mmio_reg(_REG_FDI_RXA_IMR);
+		vgt_restore_mmio_reg(_REG_FDI_RXB_IMR);
+	}
 
-    /* FIXME: do we need lock ??? */
-    //mutex_unlock(&dev->struct_mutex);
+	/* FIXME: do we need lock ??? */
+	//mutex_unlock(&dev->struct_mutex);
 
-    /* TODO: FIXME: how to check these supported feature ??? and do init gating */
+	/* TODO: FIXME: how to check these supported feature ??? and do init gating */
 	//if (drm_core_check_feature(dev, DRIVER_MODESET))
 	//	intel_init_clock_gating(dev);
-    /* FIXME: In intel_init_clock_gating we saw display A surface activated */
-    /* FIXME: refer ironlake_update_plane() */
+	/* FIXME: In intel_init_clock_gating we saw display A surface activated */
+	/* FIXME: refer ironlake_update_plane() */
 
-    /* FIXME: this part of code come from ironlake_update_plane */
-    printk("vGT: restoring DSPAXXX ...\n");
-    vgt_restore_sreg(_REG_DSPACNTR);
-    vgt_restore_sreg(_REG_DSPASTRIDE);
-    vgt_restore_sreg(_REG_DSPASURF);
-    vgt_restore_sreg(_REG_DSPATILEOFF);
-    vgt_restore_sreg(_REG_DSPALINOFF);
-    VGT_POST_READ(vgt->pdev, _REG_DSPACNTR);
-    printk("vGT: restoring DSPAXXX done!\n");
+	/* FIXME: this part of code come from ironlake_update_plane */
+	printk("vGT: restoring DSPAXXX ...\n");
+	vgt_restore_sreg(_REG_DSPACNTR);
+	vgt_restore_sreg(_REG_DSPASTRIDE);
+	vgt_restore_sreg(_REG_DSPASURF);
+	vgt_restore_sreg(_REG_DSPATILEOFF);
+	vgt_restore_sreg(_REG_DSPALINOFF);
+	VGT_POST_READ(vgt->pdev, _REG_DSPACNTR);
+	printk("vGT: restoring DSPAXXX done!\n");
 
-    printk("vGT: restoring DSPBXXX ...\n");
-    vgt_restore_sreg(_REG_DSPBCNTR);
-    vgt_restore_sreg(_REG_DSPBSTRIDE);
-    vgt_restore_sreg(_REG_DSPBSURF);
-    vgt_restore_sreg(_REG_DSPBTILEOFF);
-    vgt_restore_sreg(_REG_DSPBLINOFF);
-    VGT_POST_READ(vgt->pdev, _REG_DSPACNTR);
-    printk("vGT: restoring DSPBXXX done!\n");
+	printk("vGT: restoring DSPBXXX ...\n");
+	vgt_restore_sreg(_REG_DSPBCNTR);
+	vgt_restore_sreg(_REG_DSPBSTRIDE);
+	vgt_restore_sreg(_REG_DSPBSURF);
+	vgt_restore_sreg(_REG_DSPBTILEOFF);
+	vgt_restore_sreg(_REG_DSPBLINOFF);
+	VGT_POST_READ(vgt->pdev, _REG_DSPACNTR);
+	printk("vGT: restoring DSPBXXX done!\n");
 
-    /* FIXME: snb is ironlake ??? */
+	/* FIXME: snb is ironlake ??? */
 	//if (IS_IRONLAKE_M(dev)) {
 	//	ironlake_enable_drps(dev);
 	//	intel_init_emon(dev);
 	//}
 
-    if (VGT_GEN(vgt) == 6) {
-        /* TODO: power management ? */
+	if (VGT_GEN(vgt) == 6) {
+		/* TODO: power management ? */
 		//gen6_enable_rps(dev_priv);
 		//gen6_update_ring_freq(dev_priv);
-        printk("%s: %d: not emulated yet\n", __func__, __LINE__);
-    }
+		printk("%s: %d: not emulated yet\n", __func__, __LINE__);
+	}
 
-    /* TODO: lock we need ? */
+	/* TODO: lock we need ? */
 	//mutex_lock(&dev->struct_mutex);
 
-    /* FIXME: mmio ??? */
+	/* FIXME: mmio ??? */
 	for (i = 0; i < 16; i++) {
-        vgt_restore_mmio_reg(_REG_SWF00 + (i << 2));
-        vgt_restore_mmio_reg(_REG_SWF10 + (i << 2));
-    }
-    for (i = 0; i < 3; i++) {
-        vgt_restore_mmio_reg(_REG_SWF30 + (i << 2));
-    }
+		vgt_restore_mmio_reg(_REG_SWF00 + (i << 2));
+		vgt_restore_mmio_reg(_REG_SWF10 + (i << 2));
+	}
+	for (i = 0; i < 3; i++) {
+		vgt_restore_mmio_reg(_REG_SWF30 + (i << 2));
+	}
 
-    /* TODO: lock we need ? */
+	/* TODO: lock we need ? */
 	//mutex_unlock(&dev->struct_mutex);
 
-    /* FIXME: left i2c what it remains */
+	/* FIXME: left i2c what it remains */
 #if 0
-    vgt_i2c_reset(vgt);
+	vgt_i2c_reset(vgt);
 #endif
 
-    vgt_flush_display_plane(vgt, PIPE_A);
-    vgt_flush_display_plane(vgt, PIPE_B);
+	vgt_flush_display_plane(vgt, PIPE_A);
+	vgt_flush_display_plane(vgt, PIPE_B);
 	vgt_update_cursor(vgt, PIPE_A);
 	vgt_update_cursor(vgt, PIPE_B);
 
-    return 0;
+	return 0;
 }
 
 /*
@@ -637,7 +637,7 @@ int vgt_restore_state(struct vgt_device *vgt)
  * Currently we only support mode setting for lvds
  */
 #define for_each_snb_pipe(p) for ((p) = 0; (p) < I915_MAX_PIPES - 1; (p)++)
-static void  vgt_lvds_mode_fixup(struct vgt_device *vgt,
+static void vgt_lvds_mode_fixup(struct vgt_device *vgt,
 		struct vgt_port_struct *port_struct)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -646,11 +646,11 @@ static void  vgt_lvds_mode_fixup(struct vgt_device *vgt,
 	/* FIXME: copied from intel_lvds.c : intel_lvds_mode_fixup()
 	 *
 	 * Enable automatic panel scaling for non-native modes so that they fill
-	 * the screen.  Should be enabled before the pipe is enabled, according
+	 * the screen.Should be enabled before the pipe is enabled, according
 	 * to register description and PRM.
 	 * Change the value here to see the borders for debugging
 	 */
-	/* FIXME: cannot find it in Bspec,legacy register ?  */
+	/* FIXME: cannot find it in Bspec,legacy register ?*/
 	for_each_snb_pipe(pipe) {
 		VGT_MMIO_WRITE(pdev, VGT_BCLRPAT(pipe), 0);
 	}
@@ -694,7 +694,7 @@ static void vgt_lvds_disable_encoder(struct vgt_device *vgt)
 		I915_WRITE(PFIT_CONTROL, 0);
 		intel_lvds->pfit_dirty = true;
 	}
-	*/
+	 */
 
 	/* Disable lvds port */
 	vgt_printk();
@@ -783,7 +783,7 @@ static void vgt_cpt_phase_pointer_disable(struct vgt_device *vgt,
 
 	ASSERT(pipe < PIPE_C);
 
-	reg_data =  VGT_MMIO_READ(pdev, _REG_SOUTH_CHICKEN1);
+	reg_data =VGT_MMIO_READ(pdev, _REG_SOUTH_CHICKEN1);
 
 	reg_data &= ~(VGT_FDI_PHASE_SYNC_EN(pipe));
 	VGT_MMIO_WRITE(pdev, _REG_SOUTH_CHICKEN1, reg_data); /* once to disable... */
@@ -987,7 +987,7 @@ static void vgt_disable_pch_ports(struct vgt_device *vgt, enum vgt_pipe pipe)
 	reg_data |= _REGBIT_PANEL_UNLOCK_REGS;
 	VGT_MMIO_WRITE(pdev, _REG_PCH_PP_CONTROL, reg_data);
 
-	/* actually it is PCH_DP_B/C/D if compared with i915 naming  */
+	/* actually it is PCH_DP_B/C/D if compared with i915 naming*/
 	vgt_disable_pch_dp(vgt, pipe, _REG_DP_B_CTL, _REGBIT_TRANS_DP_PORT_SEL_B);
 	vgt_disable_pch_dp(vgt, pipe, _REG_DP_C_CTL, _REGBIT_TRANS_DP_PORT_SEL_C);
 	vgt_disable_pch_dp(vgt, pipe, _REG_DP_D_CTL, _REGBIT_TRANS_DP_PORT_SEL_D);
@@ -1264,7 +1264,7 @@ static void vgt_clear_scanline_wait(struct vgt_device *vgt)
 		VGT_MMIO_WRITE(pdev, reg, reg_data);
 }
 
-/* refered  ironlake_crtc_prepare() part e). */
+/* referedironlake_crtc_prepare() part e). */
 bool vgt_ironlake_crtc_disable(struct vgt_device *vgt,
 		struct vgt_port_struct *port_struct)
 {
@@ -1284,7 +1284,7 @@ bool vgt_ironlake_crtc_disable(struct vgt_device *vgt,
 	 */
 	/*
 	intel_crtc_wait_for_pending_flips(crtc);
-	*/
+	 */
 
 	/* FIXME: Handling for remain vblank events, left it for future complete
 	 * sulutions */
@@ -1561,7 +1561,7 @@ bool vgt_ironlake_crtc_mode_set(struct vgt_device *vgt,
 	if (!(VGT_IS_IVB(pdev) && pipe == PIPE_C)) {
 
 		/*if (!has_edp_encoder ||
-		    intel_encoder_is_pch_edp(&has_edp_encoder->base)) { */
+			intel_encoder_is_pch_edp(&has_edp_encoder->base)) { */
 		//show_sreg(vgt, VGT_PCH_FP0(pipe));
 		vgt_restore_sreg(VGT_PCH_FP0(pipe));
 
@@ -1653,10 +1653,10 @@ bool vgt_ironlake_crtc_mode_set(struct vgt_device *vgt,
 	/* ignore eDP part for late handling */
 	/*
 	if (has_edp_encoder &&
-	    !intel_encoder_is_pch_edp(&has_edp_encoder->base)) {
+		!intel_encoder_is_pch_edp(&has_edp_encoder->base)) {
 		ironlake_set_pll_edp(crtc, adjusted_mode->clock);
 	}
-	*/
+	 */
 
 	/* FIXME: actually no bits are changed, this is
 	 * because we did not encounbter the changing
@@ -1699,8 +1699,8 @@ static void vgt_ironlake_fdi_pll_enable(struct vgt_device *vgt,
 	/* Write the TU size bits so error detection works */
 	/* FIXME: why i915 do it like this:
 		I915_WRITE(FDI_RX_TUSIZE1(pipe),
-		   I915_READ(PIPE_DATA_M1(pipe)) & TU_SIZE_MASK);
-	*/
+		I915_READ(PIPE_DATA_M1(pipe)) & TU_SIZE_MASK);
+	 */
 	reg = VGT_FDI_RX_TUSIZE1(pipe);
 	vgt_restore_sreg(reg);
 
@@ -1809,7 +1809,7 @@ static void vgt_assert_pipe(struct vgt_device *vgt,
 	/*
 	if (pipe == PIPE_A && dev_priv->quirks & QUIRK_PIPEA_FORCE)
 		state = true;
-	*/
+	 */
 	ASSERT(pipe < PIPE_C);
 	reg = VGT_PIPECONF(pipe);
 	reg_data = VGT_MMIO_READ(pdev, reg);
@@ -1914,7 +1914,7 @@ static void vgt_gen6_fdi_link_train(struct vgt_device *vgt,
 	ASSERT(pipe < PIPE_C);
 
 	/* Train 1: umask FDI RX Interrupt symbol_lock and bit_lock bit
-	   for train result */
+	for train result */
 	/* FIXME: we do not recover these registers, so sreg is fine,
 	 * but what about vreg ??? */
 	reg = VGT_FDI_RX_IMR(pipe);
@@ -2366,7 +2366,7 @@ static void vgt_lvds_enable(struct vgt_device *vgt,
 
 	/* FIXME FIXME FIXME: whatever we will recover panel fitter */
 	/* we did not recover pfit_control related thing
-	*/
+	 */
 	reg = _REG_PCH_PP_CONTROL;
 	reg_data = __sreg(vgt, _REG_PCH_PP_CONTROL) | _REGBIT_POWER_TARGET_ON;
 	VGT_MMIO_WRITE(pdev, reg, reg_data);
@@ -2712,7 +2712,7 @@ static void vgt_dp_link_down(struct vgt_device *vgt,
 	 * (HAS_PCH_CPT(dev) && (IS_GEN7(dev) || !is_cpu_edp(intel_dp)))*/
 	vgt_printk();
 	if (VGT_HAS_PCH_SPLIT(pdev)) {
-		/* FIXME:  we do no have variable 'DP' ? */
+		/* FIXME:we do no have variable 'DP' ? */
 		dp_ctrl &= ~_REGBIT_DP_LINK_TRAIN_MASK_CPT;
 		vgt_printk("dp_ctrl value(0x%08x)", (dp_ctrl | _REGBIT_DP_LINK_TRAIN_PAT_IDLE_CPT));
 		VGT_MMIO_WRITE(pdev,
@@ -2746,7 +2746,7 @@ static void vgt_dp_power_down(struct vgt_device *vgt,
 	vgt_ironlake_edp_backlight_off(vgt);
 	vgt_ironlake_edp_panel_off(vgt);
 	vgt_ironlake_edp_panel_vdd_on(vgt)
-	*/
+	 */
 
 	vgt_dp_sink_dpms(vgt, vgt_dp, DRM_MODE_DPMS_ON);
 	vgt_printk();
@@ -2756,7 +2756,7 @@ static void vgt_dp_power_down(struct vgt_device *vgt,
 	/* TODO: called when it is edp */
 	/*
 	vgt_ironlake_edp_panel_vdd_off
-	*/
+	 */
 }
 
 static void vgt_dp_prepare(struct vgt_device *vgt,
@@ -2899,11 +2899,11 @@ static bool vgt_clock_recovery_ok(u8 link_status[DP_LINK_STATUS_SIZE],
 
 /* DPCD access
  * 1) use DP_AUX_CTRL and DP_AUX_CTRL
- *	  to access, DPCD[0 ~ 7FFFFh], totally
- *    512 kB
+ *	to access, DPCD[0 ~ 7FFFFh], totally
+ *	512 kB
  * 2) Writing to DP_AUX_CTRL and read
- *    data back from DP_AUX_DATA, each port (B/C/D)
- *    has 5 MMIO register (totally 20 bytes)
+ *	data back from DP_AUX_DATA, each port (B/C/D)
+ *	has 5 MMIO register (totally 20 bytes)
  */
 static u8 vgt_get_adjust_request_voltage(u8 adjust_request[2],
 		int lane)
@@ -3047,7 +3047,7 @@ static void vgt_dp_start_link_train(struct vgt_device *vgt,
 	intel_dp->link_configuration[0] = intel_dp->link_bw;
 	intel_dp->link_configuration[1] = intel_dp->lane_count;
 	intel_dp->link_configuration[8] = DP_SET_ANSI_8B10B;
-	*/
+	 */
 	/* FIXME: hack this from printk & dmesg :( */
 	/* TODO: move this into dp_mode_set() */
 	vgt_dp->link_configuration[0] = 10;
@@ -3114,7 +3114,7 @@ static void vgt_dp_start_link_train(struct vgt_device *vgt,
 			break;
 		}
 
-		/* TODO: no hardware written below  */
+		/* TODO: no hardware written below*/
 		/* check to see if we've tried the max voltage */
 		for (i = 0; i < vgt_dp->lane_count; i++)
 			if ((vgt_dp->train_set[i] & DP_TRAIN_MAX_SWING_REACHED) == 0)
@@ -3156,8 +3156,8 @@ static u8 vgt_dp_link_status(u8 link_status[DP_LINK_STATUS_SIZE], int r)
 
 /* Check to see if channel eq is done on all channels */
 #define CHANNEL_EQ_BITS (DP_LANE_CR_DONE|\
-			 DP_LANE_CHANNEL_EQ_DONE|\
-			 DP_LANE_SYMBOL_LOCKED)
+			DP_LANE_CHANNEL_EQ_DONE|\
+			DP_LANE_SYMBOL_LOCKED)
 static bool vgt_channel_eq_ok(struct vgt_dp_port *vgt_dp, u8 link_status[DP_LINK_STATUS_SIZE])
 {
 	u8 lane_align;
@@ -3427,8 +3427,8 @@ vgt_get_pipe_from_ctrl_reg( struct vgt_device *vgt,
 	//enum vgt_pipe pipe;
 	//struct pgt_device *pdev = vgt->pdev;
 	vgt_reg_t ctrl,
-			  enable_bitmask = (1 << 31),
-			  pipe_sel_bitmask = (3 << 29);
+			enable_bitmask = (1 << 31),
+			pipe_sel_bitmask = (3 << 29);
 
 	ASSERT(port);
 	ASSERT((port->ctrl_reg & 0x3) == 0);
@@ -3458,8 +3458,8 @@ vgt_get_dp_from_transcoder(struct vgt_device *vgt,
 	//int dp_ctrl_reg;
 	//struct pgt_device *pdev = vgt->pdev;
 	vgt_reg_t trans_dp_ctrl,
-			  dp_sel_mask = (3 << 29),
-			  enable_bitmask = (1 << 31);
+			dp_sel_mask = (3 << 29),
+			enable_bitmask = (1 << 31);
 
 	ASSERT(port);
 	ASSERT((port->ctrl_reg & 0x3) == 0);
@@ -3609,8 +3609,8 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 
 			/* step C */
 			/* Prepare the encoders and CRTCs before setting the mode.
-			   encoder_funcs->prepare(encoder);
-			   */
+			encoder_funcs->prepare(encoder);
+			 */
 			/* 1) Nothing to do with lvds */
 			/* 2) power off with crt */
 			/* 3) XXX with dp */
@@ -3619,10 +3619,10 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 
 			/* step D
 			 * FIXME: what's the purpose of "->get_ctrc()" ?
-			   drm_crtc_prepare_encoders(dev);
-			   It is just used to disable unused encoder, or to disable
-			   encoders whose crts are going to be updated (i915 seems not
-			   support these usages)
+			drm_crtc_prepare_encoders(dev);
+			It is just used to disable unused encoder, or to disable
+			encoders whose crts are going to be updated (i915 seems not
+			support these usages)
 			 */
 			/* Here we begin the real part for display mode set sequence */
 			/* 1) drm_encoder_disable() for lvds */
@@ -3647,7 +3647,7 @@ bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 			/* 1) LVDS nothing to do */
 			/* 2) CRT*/
 			/* 3) DP intel_dp_mode_set(): if we don't support audio
-			 *    nothing to do here */
+			 *	nothing to do here */
 			if (dsp_set_funcs->mode_set)
 				dsp_set_funcs->mode_set(next_vgt, port_struct);
 
@@ -3670,12 +3670,12 @@ struct vgt_device *next_display_owner;
  * Do monitor owner switch.
  */
 void vgt_switch_display_owner(struct vgt_device *prev,
-    struct vgt_device *next)
+	struct vgt_device *next)
 {
-    vgt_save_state(prev);
+	vgt_save_state(prev);
 	if (!fastpath_dpy_switch)
 		vgt_reinitialize_mode(prev, next);
-    vgt_restore_state(next);
+	vgt_restore_state(next);
 }
 
 void do_vgt_display_switch(struct pgt_device *pdev)
@@ -3713,19 +3713,19 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 		vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
 	}
 #if 0
-    cur = next_display_owner;
-    pre = current_display_owner(pdev);
-    if (cur == pre)
-        return;
-    else {
-        current_display_owner(pdev) = cur;
-        previous_display_owner(pdev) = pre;
-    }
+	cur = next_display_owner;
+	pre = current_display_owner(pdev);
+	if (cur == pre)
+		return;
+	else {
+		current_display_owner(pdev) = cur;
+		previous_display_owner(pdev) = pre;
+	}
 
-    /* double buffered */
-    VGT_MMIO_WRITE(cur->pdev, _REG_DSPASURF, __sreg(cur, _REG_DSPASURF));
-    VGT_MMIO_WRITE(cur->pdev, _REG_DSPASURF, __sreg(cur, _REG_DSPASURF));
-    printk("XXXX: display switch to dom %d\n", cur->vgt_id);
+	/* double buffered */
+	VGT_MMIO_WRITE(cur->pdev, _REG_DSPASURF, __sreg(cur, _REG_DSPASURF));
+	VGT_MMIO_WRITE(cur->pdev, _REG_DSPASURF, __sreg(cur, _REG_DSPASURF));
+	printk("XXXX: display switch to dom %d\n", cur->vgt_id);
 #endif
 
 out:

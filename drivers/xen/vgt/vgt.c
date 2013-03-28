@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -116,11 +116,11 @@ bool bypass_scan = false;
 module_param_named(bypass_scan, bypass_scan, bool, 0600);
 
 static vgt_ops_t vgt_xops = {
-    .mem_read = vgt_emulate_read,
-    .mem_write = vgt_emulate_write,
-    .cfg_read = vgt_emulate_cfg_read,
-    .cfg_write = vgt_emulate_cfg_write,
-    .boot_time = 1,
+	.mem_read = vgt_emulate_read,
+	.mem_write = vgt_emulate_write,
+	.cfg_read = vgt_emulate_cfg_read,
+	.cfg_write = vgt_emulate_cfg_write,
+	.boot_time = 1,
 };
 
 LIST_HEAD(pgt_devices);

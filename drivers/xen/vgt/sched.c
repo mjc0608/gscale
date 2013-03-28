@@ -11,7 +11,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -103,7 +103,7 @@ static struct vgt_device *tbs_next_vgt(
 		next_vgt = list_entry(next, struct vgt_device, list);
 
 		if (vgt->force_removal ||
-		    //!bitmap_empty(next_vgt->started_rings, MAX_ENGINES))
+			//!bitmap_empty(next_vgt->started_rings, MAX_ENGINES))
 			!vgt_vrings_empty(next_vgt))
 			break;
 
@@ -253,8 +253,8 @@ static int vgt_tailq_popfront(struct vgt_tailq *tailq, u32 nr)
 
 #define vgt_tailq_for_each_entry(idx, tailq) \
 	for (idx = vgt_tailq_idx(tailq->__head + 1); \
-		 (tailq->__head != tailq->__tail) && (idx != vgt_tailq_idx(tailq->__tail + 1));\
-		 idx = vgt_tailq_idx(idx + 1))
+		(tailq->__head != tailq->__tail) && (idx != vgt_tailq_idx(tailq->__tail + 1));\
+		idx = vgt_tailq_idx(idx + 1))
 
 /* Parameter:
  * @tailq:	Tail queue that we walk on

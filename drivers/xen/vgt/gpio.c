@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -39,7 +39,7 @@ typedef enum {
 	VGT_EDID_ERROR = 3,
 } vgt_edid_log_t;
 
-#define EDID_LOG(log, emu, fmt, args...) 			\
+#define EDID_LOG(log, emu, fmt, args...)			\
 	do {							\
 		printk("[VGT_EDID");				\
 		if (emu == 0x12345678)				\
@@ -66,31 +66,31 @@ typedef enum {
 static int vgt_edid_log_level = 2;
 
 #define ASSERT(x)						\
-do { if (!(x)) 							\
-{printk("Assert at %s line %d\n", __FILE__, __LINE__); 		\
+do { if (!(x))							\
+{printk("Assert at %s line %d\n", __FILE__, __LINE__);		\
 BUG();}} while (0);
 
-#define EDID_MSG(log, emu, fmt, args...) 			\
+#define EDID_MSG(log, emu, fmt, args...)			\
 	do {							\
 		if (log >= vgt_edid_log_level) {		\
 			EDID_LOG(log, emu, fmt, ##args);	\
 		}						\
 	} while (0)
 
-#define EDID_MSG_EH(log, fmt, args...) 				\
+#define EDID_MSG_EH(log, fmt, args...)				\
 	EDID_MSG(log, 0x12345678, fmt, ##args)
 
 #else /* DEBUG_VGT_EDID */
 
 #define ASSERT(x)
-#define EDID_MSG(log, emu, fmt, args...) 			\
+#define EDID_MSG(log, emu, fmt, args...)			\
 	do {							\
 		if (log >= VGT_EDID_WARN) {			\
 			EDID_LOG(log, emu, fmt, ##args);	\
 		}						\
 	} while (0)
 
-#define EDID_MSG_EH(log, fmt, args...) 				\
+#define EDID_MSG_EH(log, fmt, args...)				\
 	EDID_MSG(log, 0x12345678, fmt, ##args)
 
 #endif /* DEBUG_VGT_EDID */
@@ -131,9 +131,9 @@ static inline I2C_LINE_STATE vgt_get_i2c_in_value(int value, I2C_LINE line)
  *
  * This function will modify below fields in vgt_i2c_bitbang_t:
  *	current_line
- * 	write_enabled
- * 	read_enabled
- * 	pending_write_bit
+ *	write_enabled
+ *	read_enabled
+ *	pending_write_bit
  */
 static I2C_COMMANDS vgt_recognize_mmio_command(I2C_COMMANDS cmd,
 				vgt_i2c_bitbang_t *bitbang, int value)
@@ -200,8 +200,8 @@ static int vgt_i2c_handle_bit_read(vgt_i2c_bus_t *i2c_bus,
 				ret_val = _GPIO_CLOCK_VAL_IN;
 			}
 			ret_val |= (_GPIO_CLOCK_VAL_MASK |
-			    _GPIO_CLOCK_DIR_MASK |
-			    _GPIO_CLOCK_DIR_IN);
+					_GPIO_CLOCK_DIR_MASK |
+					_GPIO_CLOCK_DIR_IN);
 			*((int *)p_data) = ret_val;
 		}
 		return 0;
@@ -228,10 +228,10 @@ static int vgt_i2c_handle_bit_read(vgt_i2c_bus_t *i2c_bus,
 			unsigned int addr = bit_bang.buffer >> 1;
 			unsigned int is_read = bit_bang.buffer & 1;
 			i2c_bus->state = (is_read == 1 ? VGT_I2C_RECEIVE :
-							 VGT_I2C_SEND);
+							VGT_I2C_SEND);
 
 			EDID_MSG(VGT_EDID_INFO, i2c_emulate,
-				 "I2C state is changed to be %s!\n",
+				"I2C state is changed to be %s!\n",
 					(is_read == 1) ? "RECEIVE" : "SEND");
 
 			if (addr == EDID_ADDR) {
@@ -287,15 +287,15 @@ Please add handler!\n",addr);
 						i2c_bus->current_slave);
 		}
 		bit_value = ((bit_bang.buffer &
-			     (0x80 >> bit_bang.bit_length)) != 0);
+				(0x80 >> bit_bang.bit_length)) != 0);
 
 		ret_val = 0;
 		if (bit_value) {
 			ret_val = _GPIO_DATA_VAL_IN;
 		}
 		ret_val |= (_GPIO_DATA_VAL_MASK |
-			    _GPIO_DATA_DIR_MASK |
-			    _GPIO_DATA_DIR_IN);
+					_GPIO_DATA_DIR_MASK |
+					_GPIO_DATA_DIR_IN);
 		*((int *)p_data) = ret_val;
 
 	} else {
@@ -329,7 +329,7 @@ Please add handler!\n",addr);
  * not used anyway.
  */
 static int vgt_i2c_handle_bit_write(vgt_i2c_bus_t *i2c_bus,
-				    vgt_edid_data_t **pedid)
+					vgt_edid_data_t **pedid)
 {
 	int bit_value = 0;
 	bool i2c_emulate;
@@ -349,8 +349,8 @@ static int vgt_i2c_handle_bit_write(vgt_i2c_bus_t *i2c_bus,
 				new_sda_state);
 
 		if (IS_I2C_START(bit_bang.scl_state,
-				 bit_bang.sda_state,
-				 new_sda_state)) {
+				bit_bang.sda_state,
+				new_sda_state)) {
 
 			/* start new I2C transmission */
 			bit_bang.sda_state = new_sda_state;
@@ -365,12 +365,12 @@ static int vgt_i2c_handle_bit_write(vgt_i2c_bus_t *i2c_bus,
 			bit_bang.buffer = bit_bang.bit_length = 0;
 			return 0;
 		} else if (IS_I2C_STOP(bit_bang.scl_state,
-				       bit_bang.sda_state,
-				       new_sda_state)) {
+					bit_bang.sda_state,
+					new_sda_state)) {
 			/* stop the I2C data transmission */
 			ASSERT(new_sda_state == VGT_I2C_HIGH);
 			EDID_MSG(VGT_EDID_INFO, i2c_emulate,
-				  "I2C state is changed to be STOP!\n");
+				"I2C state is changed to be STOP!\n");
 			if (!i2c_emulate && i2c_bus->current_slave) {
 				i2c_bus->current_slave->snap_stop(
 						pedid,
@@ -402,7 +402,7 @@ static int vgt_i2c_handle_bit_write(vgt_i2c_bus_t *i2c_bus,
 			 */
 		}
 	} else if ((i2c_bus->state == VGT_I2C_START) ||
-		   (i2c_bus->state == VGT_I2C_SEND)) {
+		(i2c_bus->state == VGT_I2C_SEND)) {
 		if (!bit_bang.sda_ack_state) {
 			bit_value = (bit_bang.sda_state == VGT_I2C_LOW ? 0 : 1);
 			bit_bang.buffer = (bit_bang.buffer << 1) | bit_value;
@@ -418,12 +418,12 @@ static int vgt_i2c_handle_bit_write(vgt_i2c_bus_t *i2c_bus,
 }
 
 void vgt_i2c_handle_gpio_read(vgt_i2c_bus_t *i2c_bus,
-			      vgt_edid_data_t **pedid, void *p_data)
+				vgt_edid_data_t **pedid, void *p_data)
 {
 	I2C_COMMANDS cmd;
 
 	cmd = vgt_recognize_mmio_command(GPIO_MMIO_READ,
-					 &bit_bang, *(int *)p_data);
+					&bit_bang, *(int *)p_data);
 	if (cmd == I2C_COMMAND_IGNORE) {
 		return;
 	}
@@ -441,12 +441,12 @@ void vgt_i2c_handle_gpio_read(vgt_i2c_bus_t *i2c_bus,
 }
 
 void vgt_i2c_handle_gpio_write(vgt_i2c_bus_t *i2c_bus,
-			       vgt_edid_data_t **pedid, void *p_data)
+				vgt_edid_data_t **pedid, void *p_data)
 {
 	I2C_COMMANDS cmd;
 
 	cmd = vgt_recognize_mmio_command(GPIO_MMIO_WRITE,
-					 &bit_bang, *(int *)p_data);
+					&bit_bang, *(int *)p_data);
 	ASSERT(cmd == I2C_COMMAND_IGNORE);
 
 	return;

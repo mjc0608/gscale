@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -63,7 +63,7 @@ static void vgt_kobj_release(struct kobject *kobj)
 static ssize_t vgt_create_instance_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
 {
-    /* TODO: show some global statistics ? */
+	/* TODO: show some global statistics ? */
 	return sprintf(buf, "To be done...\n");
 }
 #endif
@@ -71,7 +71,7 @@ static ssize_t vgt_create_instance_show(struct kobject *kobj, struct kobj_attrib
 static int vgt_add_state_sysfs(vgt_params_t vp);
 static int vgt_del_state_sysfs(vgt_params_t vp);
 static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attribute *attr,
-			 const char *buf, size_t count)
+			const char *buf, size_t count)
 {
 	vgt_params_t vp;
 	int param_cnt;
@@ -99,7 +99,7 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
 			if (vp.vgt_primary < -1 && vp.vgt_primary > 1)
 				return -EINVAL;
 		} else {
-			vp.vgt_primary =  -1; /* no valid value specified. */
+			vp.vgt_primary = -1; /* no valid value specified. */
 		}
 	} else
 		return -EINVAL;
@@ -111,13 +111,13 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
 static ssize_t vgt_display_owner_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
 {
-    /* TODO: show the current owner ???  */
+	/* TODO: show the current owner ??? */
 	return sprintf(buf,"%d\n", current_display_owner(vgt_kobj_priv)->vm_id);
 }
 
 struct vgt_device *vmid_2_vgt_device(int vmid);
 static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
-            const char *buf, size_t count)
+	const char *buf, size_t count)
 {
 	unsigned long flags;
 	int ret = count;
@@ -158,7 +158,7 @@ out:
 }
 
 static ssize_t vgt_display_pointer_store(struct kobject *kobj, struct kobj_attribute *attr,
-            const char *buf, size_t count)
+			const char *buf, size_t count)
 {
 	int vmid;
 
@@ -175,7 +175,7 @@ static ssize_t vgt_display_pointer_show(struct kobject *kobj, struct kobj_attrib
 }
 
 static ssize_t vgt_ctx_switch_store(struct kobject *kobj, struct kobj_attribute *attr,
-            const char *buf, size_t count)
+			const char *buf, size_t count)
 {
 	int val;
 	bool enabled;
@@ -191,11 +191,11 @@ static ssize_t vgt_ctx_switch_show(struct kobject *kobj, struct kobj_attribute *
 			char *buf)
 {
 	return sprintf(buf, "VGT context switch: %s\n",
-		       vgt_ctx_switch ? "enabled" : "disabled");
+			vgt_ctx_switch ? "enabled" : "disabled");
 }
 
 static ssize_t vgt_dpy_switch_store(struct kobject *kobj, struct kobj_attribute *attr,
-            const char *buf, size_t count)
+			const char *buf, size_t count)
 {
 	int val;
 	if (sscanf(buf, "%d", &val) != 1)
@@ -212,7 +212,7 @@ static ssize_t vgt_dpy_switch_show(struct kobject *kobj, struct kobj_attribute *
 	return sprintf(buf, "VGT display_owner switch: using the %s\n",
 				fastpath_dpy_switch ?
 				"fast-path method. (write 0 to use the slow-path method)"
-				 : "slow-path method. (write 1 to use the fast-path method)");
+				: "slow-path method. (write 1 to use the fast-path method)");
 }
 
  static ssize_t vgt_available_res_show(struct kobject *kobj, struct kobj_attribute *attr,
@@ -242,11 +242,11 @@ static ssize_t vgt_hot_plug_reader(struct kobject *kobj,
  * bit 15 - bit 8	: vmid;
  * bit 7 - bit 4	: Reserved;
  * bit 3 - bit 1	: Monitor selection:
- * 		0	-	CRT
- * 		1	-	DP_A
- * 		2	-	DP_B
- * 		3	-	DP_C
- * 		4	-	DP_D
+ *		0	-	CRT
+ *		1	-	DP_A
+ *		2	-	DP_B
+ *		3	-	DP_C
+ *		4	-	DP_D
  *		5	-	HDMIB
  *		6	-	HDMIC
  *		7	-	HDMID
@@ -298,7 +298,7 @@ static struct attribute *vgt_ctrl_attrs[] = {
 
 /* copied code from here */
 static ssize_t kobj_attr_show(struct kobject *kobj, struct attribute *attr,
-			      char *buf)
+				char *buf)
 {
 	struct kobj_attribute *kattr;
 	ssize_t ret = -EIO;
@@ -310,7 +310,7 @@ static ssize_t kobj_attr_show(struct kobject *kobj, struct attribute *attr,
 }
 
 static ssize_t kobj_attr_store(struct kobject *kobj, struct attribute *attr,
-			       const char *buf, size_t count)
+				const char *buf, size_t count)
 {
 	struct kobj_attribute *kattr;
 	ssize_t ret = -EIO;
@@ -333,8 +333,8 @@ const struct sysfs_ops vgt_kobj_sysfs_ops = {
 
 static ssize_t vgt_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-    struct vgt_device *vgt = kobj_to_vgt(kobj);
-    return sprintf(buf, "%x\n", vgt->vgt_id);
+	struct vgt_device *vgt = kobj_to_vgt(kobj);
+	return sprintf(buf, "%x\n", vgt->vgt_id);
 }
 
 static ssize_t gm_sz_show(struct kobject *kobj, struct kobj_attribute *attr,char *buf)
@@ -362,19 +362,19 @@ static ssize_t aperture_base_va_show(struct kobject *kobj, struct kobj_attribute
 }
 
 static struct kobj_attribute vgt_id_attribute =
-    __ATTR_RO(vgt_id);
+	__ATTR_RO(vgt_id);
 
 static struct kobj_attribute gm_sz_attribute =
-    __ATTR_RO(gm_sz);
+	__ATTR_RO(gm_sz);
 
 static struct kobj_attribute aperture_sz_attribute =
-    __ATTR_RO(aperture_sz);
+	__ATTR_RO(aperture_sz);
 
 static struct kobj_attribute aperture_base_attribute =
-    __ATTR_RO(aperture_base);
+	__ATTR_RO(aperture_base);
 
 static struct kobj_attribute aperture_base_va_attribute =
-    __ATTR_RO(aperture_base_va);
+	__ATTR_RO(aperture_base_va);
 
 /*
  * Create a group of attributes so that we can create and destroy them all
@@ -404,13 +404,13 @@ static struct attribute_group attr_group = {
 static struct kobj_type vgt_instance_ktype = {
 	.release	= vgt_kobj_release,
 	.sysfs_ops	= &vgt_kobj_sysfs_ops,
-    .default_attrs = vgt_instance_attrs,
+	.default_attrs = vgt_instance_attrs,
 };
 
 static struct kobj_type vgt_ctrl_ktype = {
-    .release    = vgt_kobj_release,
-    .sysfs_ops  = &vgt_kobj_sysfs_ops,
-    .default_attrs = vgt_ctrl_attrs,
+	.release	= vgt_kobj_release,
+	.sysfs_ops  = &vgt_kobj_sysfs_ops,
+	.default_attrs = vgt_ctrl_attrs,
 };
 
 static ssize_t
@@ -449,8 +449,8 @@ igd_mmio_read(struct file *filp, struct kobject *kobj,
 
 static ssize_t
 igd_mmio_write(struct file* filp, struct kobject *kobj,
-		 struct bin_attribute *bin_attr,
-		 char *buf, loff_t off, size_t count)
+		struct bin_attribute *bin_attr,
+		char *buf, loff_t off, size_t count)
 {
 	struct pgt_device *pdev = vgt_kobj_priv;
 	size_t init_count = count, len;
@@ -497,12 +497,12 @@ static int vgt_add_state_sysfs(vgt_params_t vp)
 	int retval;
 	struct vgt_device *vgt;
 	/*
-	 * Create a simple kobject located under /sys/kernel/
-	 * As this is a simple directory, no uevent will be sent to
-	 * userspace.  That is why this function should not be used for
-	 * any type of dynamic kobjects, where the name and number are
-	 * not known ahead of time.
-	 */
+	* Create a simple kobject located under /sys/kernel/
+	* As this is a simple directory, no uevent will be sent to
+	* userspace.  That is why this function should not be used for
+	* any type of dynamic kobjects, where the name and number are
+	* not known ahead of time.
+	*/
 
 	ASSERT(vgt_ctrl_kobj);
 
@@ -527,7 +527,7 @@ static int vgt_add_state_sysfs(vgt_params_t vp)
 	retval = kobject_add(&vgt->kobj, NULL, "vm%u", vgt->vm_id);
 	if (retval) {
 		printk(KERN_WARNING "%s: vgt kobject add error: %d\n",
-				     __func__, retval);
+					__func__, retval);
 		kobject_put(&vgt->kobj);
 	}
 
@@ -553,28 +553,28 @@ static int vgt_del_state_sysfs(vgt_params_t vp)
 //TODO: add the Remove logic and check the return value...
 int vgt_init_sysfs(struct pgt_device *pdev)
 {
-    int retval;
+	int retval;
 
-    vgt_kset = kset_create_and_add("vgt", NULL, kernel_kobj);
-    if (!vgt_kset)
-        return -ENOMEM;
+	vgt_kset = kset_create_and_add("vgt", NULL, kernel_kobj);
+	if (!vgt_kset)
+		return -ENOMEM;
 
-    vgt_ctrl_kobj = kzalloc(sizeof(struct kobject), GFP_KERNEL);
-    if (!vgt_ctrl_kobj)
-        return -ENOMEM;
+	vgt_ctrl_kobj = kzalloc(sizeof(struct kobject), GFP_KERNEL);
+	if (!vgt_ctrl_kobj)
+		return -ENOMEM;
 
-    vgt_ctrl_kobj->kset = vgt_kset;
+	vgt_ctrl_kobj->kset = vgt_kset;
 
-    retval = kobject_init_and_add(vgt_ctrl_kobj, &vgt_ctrl_ktype, NULL, "control");
-    if (retval) {
-        kobject_put(vgt_ctrl_kobj);
-        return -EINVAL;
-    }
+	retval = kobject_init_and_add(vgt_ctrl_kobj, &vgt_ctrl_ktype, NULL, "control");
+	if (retval) {
+		kobject_put(vgt_ctrl_kobj);
+		return -EINVAL;
+	}
 
 	retval = sysfs_create_bin_file(vgt_ctrl_kobj, &igd_mmio_attr);
 	if (retval < 0)
 		return retval;
 
-    vgt_kobj_priv = pdev;
-    return 0;
+	vgt_kobj_priv = pdev;
+	return 0;
 }

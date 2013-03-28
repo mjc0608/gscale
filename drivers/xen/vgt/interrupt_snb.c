@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -202,7 +202,7 @@ static struct vgt_irq_info snb_pm_irq_info = {
 };
 
 /*
- * PCH  related irq info
+ * PCH related irq info
  */
 static struct vgt_irq_info snb_pch_irq_info = {
 	.name = "SNB PCH IRQ",
@@ -441,10 +441,10 @@ static void vgt_snb_handle_virtual_interrupt(struct pgt_device *dev, enum vgt_ow
 		if (dev->device[i] && vgt_has_pch_irq_pending(dev->device[i])) {
 			if (dev->is_sandybridge)
 				vgt_propagate_virtual_event(dev->device[i],
-							    _REGSHIFT_PCH, &snb_dpy_irq_info);
+								_REGSHIFT_PCH, &snb_dpy_irq_info);
 			else if (dev->is_ivybridge || dev->is_haswell)
 				vgt_propagate_virtual_event(dev->device[i],
-							    _REGSHIFT_PCH_GEN7, &gen7_de_irq_info);
+								_REGSHIFT_PCH_GEN7, &gen7_de_irq_info);
 			vgt_clear_pch_irq_pending(dev->device[i]);
 		}
 	}
@@ -691,25 +691,25 @@ static void vgt_snb_irq_restore(struct vgt_device *vgt,
 			/* merge new owner's display bits with other bits */
 			val = VGT_MMIO_READ(vgt->pdev, _REG_DEIMR);
 			val = (val & ~vgt_de_dpy_mask(vgt->pdev)) |
-			      (__vreg(vgt, _REG_DEIMR) & vgt_de_dpy_mask(vgt->pdev));
+				(__vreg(vgt, _REG_DEIMR) & vgt_de_dpy_mask(vgt->pdev));
 			VGT_MMIO_WRITE(vgt->pdev, _REG_DEIMR, val);
 			VGT_POST_READ(pdev, _REG_DEIMR);
 
 			val = VGT_MMIO_READ(vgt->pdev, _REG_SDEIMR);
 			val = (val & ~vgt_pch_dpy_mask(vgt->pdev)) |
-			      (__vreg(vgt, _REG_SDEIMR) & vgt_pch_dpy_mask(vgt->pdev));
+				(__vreg(vgt, _REG_SDEIMR) & vgt_pch_dpy_mask(vgt->pdev));
 			VGT_MMIO_WRITE(vgt->pdev, _REG_SDEIMR, val);
 			VGT_POST_READ(pdev, _REG_SDEIMR);
 
 			val = VGT_MMIO_READ(vgt->pdev, _REG_SDEIER);
 			val = (val & ~vgt_pch_dpy_mask(vgt->pdev)) |
-			      (__vreg(vgt, _REG_SDEIER) & vgt_pch_dpy_mask(vgt->pdev));
+				(__vreg(vgt, _REG_SDEIER) & vgt_pch_dpy_mask(vgt->pdev));
 			VGT_MMIO_WRITE(vgt->pdev, _REG_SDEIER, val);
 			VGT_POST_READ(pdev, _REG_SDEIER);
 
 			val = VGT_MMIO_READ(vgt->pdev, _REG_DEIER);
 			val = (val & ~vgt_de_dpy_mask(vgt->pdev)) |
-			      (__vreg(vgt, _REG_DEIER) & vgt_de_dpy_mask(vgt->pdev));
+				(__vreg(vgt, _REG_DEIER) & vgt_de_dpy_mask(vgt->pdev));
 			VGT_MMIO_WRITE(vgt->pdev, _REG_DEIER, val);
 			VGT_POST_READ(pdev, _REG_DEIER);
 

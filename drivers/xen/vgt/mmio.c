@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -505,7 +505,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 		t1 -= t0;
 		mmio_rcycles += (u64) t1;
 	}
-	else {   /* MMIO Write */
+	else { /* MMIO Write */
 		t0 = get_cycles();
 		mmio_wcnt++;
 		if (!req->data_is_ptr) {
@@ -540,92 +540,92 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 
 void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 {
-    int sign;
-    //char *pdata;
+	int sign;
+	//char *pdata;
 
-    sign = ioreq->df ? -1 : 1;
+	sign = ioreq->df ? -1 : 1;
 
-    if (ioreq->dir == IOREQ_READ) {
-        /* PIO READ */
-        if (!ioreq->data_is_ptr) {
-            vgt_hvm_read_cf8_cfc(vgt,
-                  ioreq->addr,
-                  ioreq->size,
-                  (unsigned long*) &ioreq->data);
-        }
-        else {
-            vgt_dbg("VGT: _hvm_pio_emulation read data_ptr %lx\n",
+	if (ioreq->dir == IOREQ_READ) {
+		/* PIO READ */
+		if (!ioreq->data_is_ptr) {
+			vgt_hvm_read_cf8_cfc(vgt,
+				ioreq->addr,
+				ioreq->size,
+				(unsigned long*) &ioreq->data);
+		}
+		else {
+			vgt_dbg("VGT: _hvm_pio_emulation read data_ptr %lx\n",
 			(long)ioreq->data);
-            /*
-             * The data pointer of emulation is guest physical address
-             * so far, which is godo to Qemu emulation, but hard for
-             * vGT driver which doesn't know gpn_2_mfn translation.
-             * We may ask hypervisor to use mfn for vGT driver.
-             * We keep assert here to see if guest really use it.
-             */
-            ASSERT(0);
+			/*
+			 * The data pointer of emulation is guest physical address
+			 * so far, which is godo to Qemu emulation, but hard for
+			 * vGT driver which doesn't know gpn_2_mfn translation.
+			 * We may ask hypervisor to use mfn for vGT driver.
+			 * We keep assert here to see if guest really use it.
+			 */
+			ASSERT(0);
 #if 0
-            pdata = (char *)ioreq->data;
-            for (i=0; i < ioreq->count; i++) {
-                vgt_hvm_read_cf8_cfc(vgt,
-                     ioreq->addr,
-                     ioreq->size,
-                     (unsigned long *)pdata);
-                pdata += ioreq->size * sign;
-            }
+			pdata = (char *)ioreq->data;
+			for (i=0; i < ioreq->count; i++) {
+				vgt_hvm_read_cf8_cfc(vgt,
+					ioreq->addr,
+					ioreq->size,
+					(unsigned long *)pdata);
+				pdata += ioreq->size * sign;
+			}
 #endif
-        }
-    }
-    else {
-        /* PIO WRITE */
-        if (!ioreq->data_is_ptr) {
-            vgt_hvm_write_cf8_cfc(vgt,
-                  ioreq->addr,
-                  ioreq->size,
-                  (unsigned long) ioreq->data);
-        }
-        else {
-            vgt_dbg("VGT: _hvm_pio_emulation write data_ptr %lx\n",
+		}
+	}
+	else {
+		/* PIO WRITE */
+		if (!ioreq->data_is_ptr) {
+			vgt_hvm_write_cf8_cfc(vgt,
+				ioreq->addr,
+				ioreq->size,
+				(unsigned long) ioreq->data);
+		}
+		else {
+			vgt_dbg("VGT: _hvm_pio_emulation write data_ptr %lx\n",
 			(long)ioreq->data);
-            /*
-             * The data pointer of emulation is guest physical address
-             * so far, which is godo to Qemu emulation, but hard for
-             * vGT driver which doesn't know gpn_2_mfn translation.
-             * We may ask hypervisor to use mfn for vGT driver.
-             * We keep assert here to see if guest really use it.
-             */
-            ASSERT(0);
+			/*
+			 * The data pointer of emulation is guest physical address
+			 * so far, which is godo to Qemu emulation, but hard for
+			 * vGT driver which doesn't know gpn_2_mfn translation.
+			 * We may ask hypervisor to use mfn for vGT driver.
+			 * We keep assert here to see if guest really use it.
+			 */
+			ASSERT(0);
 #if 0
-            pdata = (char *)ioreq->data;
+			pdata = (char *)ioreq->data;
 
-            for (i=0; i < ioreq->count; i++) {
-                vgt_hvm_write_cf8_cfc(vgt,
-                     ioreq->addr,
-                     ioreq->size, *(unsigned long *)pdata);
-                pdata += ioreq->size * sign;
-            }
+			for (i=0; i < ioreq->count; i++) {
+				vgt_hvm_write_cf8_cfc(vgt,
+					ioreq->addr,
+					ioreq->size, *(unsigned long *)pdata);
+				pdata += ioreq->size * sign;
+			}
 #endif
-        }
-    }
+		}
+	}
 }
 
 static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
 {
-        switch (ioreq->type) {
-            case IOREQ_TYPE_PIO:	/* PIO */
-                if ((ioreq->addr & ~7) != 0xcf8)
-                    printk(KERN_ERR "vGT: Unexpected PIO %lx emulation\n",
-                           (long) ioreq->addr);
-                else
-                    _hvm_pio_emulation(vgt, ioreq);
-                break;
-            case IOREQ_TYPE_COPY:	/* MMIO */
-                _hvm_mmio_emulation(vgt, ioreq);
-                break;
-            default:
-                printk(KERN_ERR "vGT: Unknown ioreq type %x\n", ioreq->type);
-                break;
-        }
+	switch (ioreq->type) {
+		case IOREQ_TYPE_PIO:	/* PIO */
+			if ((ioreq->addr & ~7) != 0xcf8)
+				printk(KERN_ERR "vGT: Unexpected PIO %lx emulation\n",
+					(long) ioreq->addr);
+			else
+				_hvm_pio_emulation(vgt, ioreq);
+			break;
+		case IOREQ_TYPE_COPY:	/* MMIO */
+			_hvm_mmio_emulation(vgt, ioreq);
+			break;
+		default:
+			printk(KERN_ERR "vGT: Unknown ioreq type %x\n", ioreq->type);
+			break;
+	}
 	return 0;
 }
 
@@ -668,9 +668,9 @@ static void vgt_hvm_opregion_init(struct vgt_device *vgt)
 	ASSERT(vgt->opregion_va);
 
 	/* for unknown reason, the value in LID field is incorrect
-	   which block the windows guest, so workaround it by force
-	   setting it to "OPEN"
-	 **/
+	 * which block the windows guest, so workaround it by force
+	 * setting it to "OPEN"
+	 */
 
 	buf = (uint8_t*)vgt->opregion_va;
 	buf[VGT_OPREGION_REG_CLID] = 0x3;
@@ -819,8 +819,8 @@ static void vgt_initialize_reg_attr(struct pgt_device *pdev,
 				attr->addr_mask,
 				(u64)attr->read, (u64)attr->write);
 		for (reg = attr->reg;
-		     reg < attr->reg + attr->size;
-		     reg += REG_SIZE) {
+			reg < attr->reg + attr->size;
+			reg += REG_SIZE) {
 			vgt_set_reg_attr(pdev, reg, attr, track);
 			tot++;
 		}
@@ -848,7 +848,7 @@ void vgt_setup_reg_info(struct pgt_device *pdev)
 }
 
 static void __vgt_initial_mmio_space (struct pgt_device *pdev,
-				      reg_attr_t *info, int num)
+					reg_attr_t *info, int num)
 {
 	int i, j;
 	reg_attr_t *attr;

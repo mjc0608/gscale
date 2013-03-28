@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -79,14 +79,14 @@ typedef enum {
  * GMBUS1:
  * 	R/W Protect
  * 	Command and Status.
- * 	bit0  is the direction bit: 1 is read; 0 is write.
- * 	bit1  - bit7  is slave 7-bit address.
+ * 	bit0 is the direction bit: 1 is read; 0 is write.
+ * 	bit1 - bit7 is slave 7-bit address.
  * 	bit16 - bit24 total byte count (ignore?)
  *
  * GMBUS2:
  * 	Most of bits are read only except bit 15 (IN_USE)
  * 	Status register
- * 	bit0 - bit8  current byte count
+ * 	bit0 - bit8 current byte count
  * 	bit 11: hardware ready;
  *
  * GMBUS3:
@@ -99,11 +99,11 @@ typedef enum {
  * in below enum types
  */
 typedef enum {
-    GMBUS_IDLE_PHASE = 0,
-    GMBUS_DATA_PHASE,
-    GMBUS_WAIT_PHASE,
-    //GMBUS_STOP_PHASE,
-    GMBUS_MAX_PHASE
+	GMBUS_IDLE_PHASE = 0,
+	GMBUS_DATA_PHASE,
+	GMBUS_WAIT_PHASE,
+	//GMBUS_STOP_PHASE,
+	GMBUS_MAX_PHASE
 } vgt_gmbus_phase_t;
 
 typedef struct {
@@ -189,10 +189,10 @@ typedef unsigned int aux_reg_t;
  * to pass-through the write, we need to consider the hardware resource
  * conflicts between vms. Below is one possible solution:
  *
- *     Let the current "middle of transaction" finish first. Introduce a
- *     semorphore for the resources shared among VMs. Other VM cannot use
- *     the resource even if it is the display owner. Timer should be introduced
- *     to release the semorphore if one VM holds it for too long time.
+ * Let the current "middle of transaction" finish first. Introduce a
+ * semorphore for the resources shared among VMs. Other VM cannot use
+ * the resource even if it is the display owner. Timer should be introduced
+ * to release the semorphore if one VM holds it for too long time.
  *
  */
 
@@ -253,7 +253,7 @@ typedef struct VGT_I2C_SLAVE_T{
 	unsigned char (*get_byte_from_snap) (void *slave);
 
 	void (*snap_stop) (void *dest,
-		      struct VGT_I2C_SLAVE_T *src);
+			struct VGT_I2C_SLAVE_T *src);
 } vgt_i2c_slave_t;
 
 /*
@@ -318,9 +318,9 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 				VGT_DP_PORTS_IDX port_idx, void *p_data);
 #ifdef ENABLE_GPIO_EMULATION
 void vgt_i2c_handle_gpio_read(vgt_i2c_bus_t *i2c_bus,
-			      vgt_edid_data_t **pedid, void *p_data);
+				vgt_edid_data_t **pedid, void *p_data);
 void vgt_i2c_handle_gpio_write(vgt_i2c_bus_t *i2c_bus,
-			       vgt_edid_data_t **pedid, void *p_data);
+				vgt_edid_data_t **pedid, void *p_data);
 #endif /* ENABLE_GPIO_EMULATION */
 
 #endif /*_VGT_EDID_H_*/

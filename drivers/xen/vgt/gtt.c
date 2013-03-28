@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -195,7 +195,7 @@ void* vgt_gma_to_va(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
 /* handler to set page wp */
 
 int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages,
-		     int *idx)
+			int *idx)
 {
 	xen_hvm_vgt_wp_pages_t req;
 	int i, rc = 0;
@@ -306,7 +306,7 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 		s_addr = g2m_pfn(vgt->vm_id, addr);
 		if (s_addr == INVALID_MFN) {
 			vgt_err("vGT[%d]: Failed to get machine address for 0x%lx\n",
-			       vgt->vm_id, (unsigned long)addr);
+				vgt->vm_id, (unsigned long)addr);
 			return -1;
 		}
 
@@ -355,8 +355,8 @@ vgt_ppgtt_pde_handle(struct vgt_device *vgt, unsigned int i, u32 pde)
 	vgt_set_wp_page(vgt, pte_phy >> PAGE_SHIFT, i);
 
 	shadow_pde = gtt_pte_update(pdev,
-				    vgt->shadow_pde_table[i].shadow_pte_maddr >> GTT_PAGE_SHIFT,
-				    pde);
+					vgt->shadow_pde_table[i].shadow_pte_maddr >> GTT_PAGE_SHIFT,
+					pde);
 
 	if (vgt->shadow_pde_table[i].big_page) {
 		/* For 32K page, even HVM thinks it's continual, it's
@@ -402,7 +402,7 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t g_gtt_index;
-        cycles_t t0, t1;
+		cycles_t t0, t1;
 
 	ASSERT(bytes == 4);
 
@@ -430,7 +430,7 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	uint32_t g_gtt_val, h_gtt_val, g_gtt_index, h_gtt_index;
 	int rc;
 	uint64_t g_addr;
-        cycles_t t0, t1;
+		cycles_t t0, t1;
 
 	ASSERT(bytes == 4);
 
@@ -494,7 +494,7 @@ out:
 
 /* Handle write protect fault on virtual PTE page */
 bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e,
-			     unsigned int offset, void *p_data, unsigned int bytes)
+				unsigned int offset, void *p_data, unsigned int bytes)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	int index, i;

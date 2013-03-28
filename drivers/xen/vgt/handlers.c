@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -217,7 +217,7 @@ static void v_force_wake_get(struct vgt_device *vgt)
 	spin_lock_irqsave(&vgt->pdev->v_force_wake_lock, flags);
 
 	if (bitmap_empty(vgt->pdev->v_force_wake_bitmap, VGT_MAX_VMS)){
-		rc =  hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_GET);
+		rc = hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_GET);
 		if (rc < 0){
 			printk("incompatible hypervisor, consider to update your hypervisor\n");
 			BUG();
@@ -238,7 +238,7 @@ static void v_force_wake_put(struct vgt_device *vgt)
 
 	if (test_and_clear_bit(vgt->vgt_id, vgt->pdev->v_force_wake_bitmap)){
 		if (bitmap_empty(vgt->pdev->v_force_wake_bitmap, VGT_MAX_VMS)){
-			rc =  hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_PUT);
+			rc = hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_PUT);
 			if (rc < 0){
 				printk("incompatible hypervisor, consider to update your hypervisor\n");
 				BUG();
@@ -310,7 +310,7 @@ bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	}
 
 	/* bit 16-31: mask
-	   bit  0-15: force wake
+	   bit 0-15: force wake
 	   forcewake bit apply only if its mask bit is 1
 	 */
 	mask = data >> 16;
@@ -382,7 +382,7 @@ bool rc_state_ctrl_2_mmio_write(struct vgt_device *vgt, unsigned int offset,
 }
 
 bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
-		 void *p_data, unsigned int bytes)
+		void *p_data, unsigned int bytes)
 {
 	uint32_t data;
 	int i;
@@ -541,7 +541,7 @@ static int ring_pp_dir_base_write(struct vgt_device *vgt, int ring_id, u32 off, 
 }
 
 bool rcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
-			  void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_RCS].vring_ppgtt_info;
 
@@ -555,7 +555,7 @@ bool rcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 }
 
 bool rcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
-			   void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	u32 base = *(u32 *)p_data;
 
@@ -567,7 +567,7 @@ bool rcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 }
 
 bool bcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
-			  void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_BCS].vring_ppgtt_info;
 
@@ -579,7 +579,7 @@ bool bcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 }
 
 bool bcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
-			   void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	u32 base = *(u32 *)p_data;
 
@@ -591,7 +591,7 @@ bool bcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 }
 
 bool vcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
-			  void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VCS].vring_ppgtt_info;
 
@@ -603,7 +603,7 @@ bool vcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 }
 
 bool vcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
-			   void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	u32 base = *(u32 *)p_data;
 
@@ -615,7 +615,7 @@ bool vcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 }
 
 bool vecs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
-			  void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VECS].vring_ppgtt_info;
 
@@ -627,7 +627,7 @@ bool vecs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 }
 
 bool vecs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
-			   void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	u32 base = *(u32 *)p_data;
 
@@ -641,7 +641,7 @@ bool vecs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 }
 
 bool pp_dclv_read(struct vgt_device *vgt, unsigned int off,
-			  void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	ASSERT(bytes == 4);
 
@@ -650,7 +650,7 @@ bool pp_dclv_read(struct vgt_device *vgt, unsigned int off,
 }
 
 bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
-			   void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	u32 dclv = *(u32 *)p_data;
 
@@ -663,7 +663,7 @@ bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
 }
 
 bool rcs_gfx_mode_read(struct vgt_device *vgt, unsigned int off,
-		       void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_RCS].vring_ppgtt_info;
 
@@ -675,7 +675,7 @@ bool rcs_gfx_mode_read(struct vgt_device *vgt, unsigned int off,
 }
 
 bool bcs_blt_mode_read(struct vgt_device *vgt, unsigned int off,
-		       void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_BCS].vring_ppgtt_info;
 
@@ -687,7 +687,7 @@ bool bcs_blt_mode_read(struct vgt_device *vgt, unsigned int off,
 }
 
 bool vcs_mfx_mode_read(struct vgt_device *vgt, unsigned int off,
-		       void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VCS].vring_ppgtt_info;
 
@@ -699,7 +699,7 @@ bool vcs_mfx_mode_read(struct vgt_device *vgt, unsigned int off,
 }
 
 bool vecs_mfx_mode_read(struct vgt_device *vgt, unsigned int off,
-		       void *p_data, unsigned int bytes)
+			void *p_data, unsigned int bytes)
 {
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VECS].vring_ppgtt_info;
 
@@ -811,162 +811,162 @@ bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 }
 
 bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
-        void *p_data, unsigned int bytes)
+		void *p_data, unsigned int bytes)
 {
-    unsigned int reg;
-    uint32_t wr_data;
+	unsigned int reg;
+	uint32_t wr_data;
 
-    ASSERT(bytes == 4);
+	ASSERT(bytes == 4);
 
-    reg = offset & ~(bytes - 1);
+	reg = offset & ~(bytes - 1);
 
-    wr_data = *((uint32_t *)p_data);
-    /* vreg status will be updated when when read hardware status */
-    if (!reg_hw_access(vgt, reg)) {
-        if (wr_data & _REGBIT_PIPE_ENABLE)
-            wr_data |= _REGBIT_PIPE_STAT_ENABLED;
-        else if (!(wr_data & _REGBIT_PIPE_ENABLE))
-            wr_data &= ~_REGBIT_PIPE_STAT_ENABLED;
-    }
+	wr_data = *((uint32_t *)p_data);
+	/* vreg status will be updated when when read hardware status */
+	if (!reg_hw_access(vgt, reg)) {
+		if (wr_data & _REGBIT_PIPE_ENABLE)
+			wr_data |= _REGBIT_PIPE_STAT_ENABLED;
+		else if (!(wr_data & _REGBIT_PIPE_ENABLE))
+			wr_data &= ~_REGBIT_PIPE_STAT_ENABLED;
+	}
 
-    /* FIXME: this will cause writing to bit _REGBIT_PIPE_STAT_ENABLED,
-     * this bit indicate actual pipe state, but in prm, not marked
-     * readonly bit
-     */
-    return default_mmio_write(vgt, offset, &wr_data, bytes);
+	/* FIXME: this will cause writing to bit _REGBIT_PIPE_STAT_ENABLED,
+	 * this bit indicate actual pipe state, but in prm, not marked
+	 * readonly bit
+	 */
+	return default_mmio_write(vgt, offset, &wr_data, bytes);
 }
 
 bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
-    void *p_data, unsigned int bytes)
+	void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
 	vgt_reg_t wr_data, old_iir;
 	bool rc;
 
-    ASSERT(bytes == 4 && !(offset & (bytes - 1)));
-    reg = offset & ~(bytes -1);
+	ASSERT(bytes == 4 && !(offset & (bytes - 1)));
+	reg = offset & ~(bytes -1);
 
-    wr_data = *(vgt_reg_t *)p_data;
-    old_iir = __vreg(vgt, reg);
+	wr_data = *(vgt_reg_t *)p_data;
+	old_iir = __vreg(vgt, reg);
 
-    rc = default_mmio_write(vgt, offset, p_data, bytes);
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
 
-    /* FIXME: sreg will be updated only when reading hardware status happened,
-     * so when dumping sreg space, the "hardware status" related bits may not
-     * be trusted */
-    if (!reg_hw_access(vgt, reg))
-        __vreg(vgt, reg) = old_iir ^ wr_data;
+	/* FIXME: sreg will be updated only when reading hardware status happened,
+	 * so when dumping sreg space, the "hardware status" related bits may not
+	 * be trusted */
+	if (!reg_hw_access(vgt, reg))
+		__vreg(vgt, reg) = old_iir ^ wr_data;
 
-    return rc;
+	return rc;
 }
 
 
 
-#define FDI_LINK_TRAIN_PATTERN_1    0
-#define FDI_LINK_TRAIN_PATTERN_2    1
+#define FDI_LINK_TRAIN_PATTERN_1	0
+#define FDI_LINK_TRAIN_PATTERN_2	1
 /* FIXME: this function is highly platform-dependent (SNB + CPT) */
 static bool check_fdi_rx_train_status(struct vgt_device *vgt, enum vgt_pipe pipe, unsigned int train_pattern)
 {
-    unsigned int fdi_rx_imr, fdi_tx_ctl, fdi_rx_ctl;
-    unsigned int fdi_rx_check_bits, fdi_tx_check_bits, fdi_rx_train_bits, fdi_tx_train_bits, fdi_iir_check_bits;
-    switch (pipe) {
-        case PIPE_A:
-            fdi_rx_imr = _REG_FDI_RXA_IMR;
-            fdi_tx_ctl = _REG_FDI_TXA_CTL;
-            fdi_rx_ctl = _REG_FDI_RXA_CTL;
-            break;
-        case PIPE_B:
-            fdi_rx_imr = _REG_FDI_RXB_IMR;
-            fdi_tx_ctl = _REG_FDI_TXB_CTL;
-            fdi_rx_ctl = _REG_FDI_RXB_CTL;
-            break;
-        default: BUG();
-    };
+	unsigned int fdi_rx_imr, fdi_tx_ctl, fdi_rx_ctl;
+	unsigned int fdi_rx_check_bits, fdi_tx_check_bits, fdi_rx_train_bits, fdi_tx_train_bits, fdi_iir_check_bits;
+	switch (pipe) {
+		case PIPE_A:
+			fdi_rx_imr = _REG_FDI_RXA_IMR;
+			fdi_tx_ctl = _REG_FDI_TXA_CTL;
+			fdi_rx_ctl = _REG_FDI_RXA_CTL;
+			break;
+		case PIPE_B:
+			fdi_rx_imr = _REG_FDI_RXB_IMR;
+			fdi_tx_ctl = _REG_FDI_TXB_CTL;
+			fdi_rx_ctl = _REG_FDI_RXB_CTL;
+			break;
+		default: BUG();
+	};
 
-    switch (train_pattern) {
-        case FDI_LINK_TRAIN_PATTERN_1:
-            fdi_rx_train_bits =_REGBIT_FDI_LINK_TRAIN_PATTERN_1_CPT;
-            fdi_tx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_1;
-            fdi_iir_check_bits = _REGBIT_FDI_RX_BIT_LOCK;
-            break;
-        case FDI_LINK_TRAIN_PATTERN_2:
-            fdi_rx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_2_CPT;
-            fdi_tx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_2;
-            fdi_iir_check_bits = _REGBIT_FDI_RX_SYMBOL_LOCK;
-            break;
-        default: BUG();
-    }
+	switch (train_pattern) {
+		case FDI_LINK_TRAIN_PATTERN_1:
+			fdi_rx_train_bits =_REGBIT_FDI_LINK_TRAIN_PATTERN_1_CPT;
+			fdi_tx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_1;
+			fdi_iir_check_bits = _REGBIT_FDI_RX_BIT_LOCK;
+			break;
+		case FDI_LINK_TRAIN_PATTERN_2:
+			fdi_rx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_2_CPT;
+			fdi_tx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_2;
+			fdi_iir_check_bits = _REGBIT_FDI_RX_SYMBOL_LOCK;
+			break;
+		default: BUG();
+	}
 
-    fdi_rx_check_bits = _REGBIT_FDI_RX_ENABLE
-        | fdi_rx_train_bits;
-    fdi_tx_check_bits = _REGBIT_FDI_TX_ENABLE
-        | fdi_tx_train_bits;
+	fdi_rx_check_bits = _REGBIT_FDI_RX_ENABLE
+		| fdi_rx_train_bits;
+	fdi_tx_check_bits = _REGBIT_FDI_TX_ENABLE
+		| fdi_tx_train_bits;
 
-    /* If imr bit not been masked */
-    if (((__vreg(vgt, fdi_rx_imr) & fdi_iir_check_bits) == 0 )
-            && ((__vreg(vgt, fdi_tx_ctl) & fdi_tx_check_bits) == fdi_tx_check_bits)
-            && ((__vreg(vgt, fdi_rx_ctl) & fdi_rx_check_bits) == fdi_rx_check_bits))
-        return true;
-    else
-        return false;
+	/* If imr bit not been masked */
+	if (((__vreg(vgt, fdi_rx_imr) & fdi_iir_check_bits) == 0 )
+			&& ((__vreg(vgt, fdi_tx_ctl) & fdi_tx_check_bits) == fdi_tx_check_bits)
+			&& ((__vreg(vgt, fdi_rx_ctl) & fdi_rx_check_bits) == fdi_rx_check_bits))
+		return true;
+	else
+		return false;
 }
 
 bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset,
-    void *p_data, unsigned int bytes)
+	void *p_data, unsigned int bytes)
 {
-    enum vgt_pipe pipe;
-    unsigned int reg, fdi_rx_iir;
-    bool rc;
+	enum vgt_pipe pipe;
+	unsigned int reg, fdi_rx_iir;
+	bool rc;
 
-    ASSERT(bytes == 4 && (offset & 0x3) == 0);
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 
-    reg = offset & ~(bytes - 1);
+	reg = offset & ~(bytes - 1);
 
-    switch (offset) {
-        case _REG_FDI_RXA_CTL:
-        case _REG_FDI_TXA_CTL:
-        case _REG_FDI_RXA_IMR:
-            pipe = PIPE_A;
-            break;
-        case _REG_FDI_RXB_CTL:
-        case _REG_FDI_TXB_CTL:
-        case _REG_FDI_RXB_IMR:
-            pipe = PIPE_B;
-            break;
-        default:
-            BUG();
-    }
+	switch (offset) {
+		case _REG_FDI_RXA_CTL:
+		case _REG_FDI_TXA_CTL:
+		case _REG_FDI_RXA_IMR:
+			pipe = PIPE_A;
+			break;
+		case _REG_FDI_RXB_CTL:
+		case _REG_FDI_TXB_CTL:
+		case _REG_FDI_RXB_IMR:
+			pipe = PIPE_B;
+			break;
+		default:
+			BUG();
+	}
 
-    switch (pipe) {
-        case PIPE_A:
-            fdi_rx_iir = _REG_FDI_RXA_IIR;
-            break;
-        case PIPE_B:
-            fdi_rx_iir = _REG_FDI_RXB_IIR;
-            break;
-        default:
-            BUG();
-    }
+	switch (pipe) {
+		case PIPE_A:
+			fdi_rx_iir = _REG_FDI_RXA_IIR;
+			break;
+		case PIPE_B:
+			fdi_rx_iir = _REG_FDI_RXB_IIR;
+			break;
+		default:
+			BUG();
+	}
 
-    rc = default_mmio_write(vgt, offset, p_data, bytes);
-    if (!reg_hw_access(vgt, reg)) {
-        if (check_fdi_rx_train_status(vgt, pipe, FDI_LINK_TRAIN_PATTERN_1))
-            __vreg(vgt, fdi_rx_iir) |= _REGBIT_FDI_RX_BIT_LOCK;
-        if (check_fdi_rx_train_status(vgt, pipe, FDI_LINK_TRAIN_PATTERN_2))
-            __vreg(vgt, fdi_rx_iir) |= _REGBIT_FDI_RX_SYMBOL_LOCK;
-    }
-    return rc;
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
+	if (!reg_hw_access(vgt, reg)) {
+		if (check_fdi_rx_train_status(vgt, pipe, FDI_LINK_TRAIN_PATTERN_1))
+			__vreg(vgt, fdi_rx_iir) |= _REGBIT_FDI_RX_BIT_LOCK;
+		if (check_fdi_rx_train_status(vgt, pipe, FDI_LINK_TRAIN_PATTERN_2))
+			__vreg(vgt, fdi_rx_iir) |= _REGBIT_FDI_RX_SYMBOL_LOCK;
+	}
+	return rc;
 }
 
 /*
  * TODO:
  * DAC_CTL is special regarding to that its bits containing multiple
  * policies:
- * 	- CRT control bits like enabling, transcoder selection belong
- * 	  to display owner
- * 	- hotplug status bits are fully virtualized like other interrupt
- * 	  status bits
- * 	- force hotplug trigger bit needs be emulated
+ *	- CRT control bits like enabling, transcoder selection belong
+ *	  to display owner
+ *	- hotplug status bits are fully virtualized like other interrupt
+ *	  status bits
+ *	- force hotplug trigger bit needs be emulated
  *
  * Let's take this as one example how this category may be abstracted
  * in the future
@@ -1345,10 +1345,10 @@ bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
 
-	if ( !reg_hw_access(vgt, reg) &&
-             ((reg == _REG_PCH_DPB_AUX_CH_CTL) ||
-	      (reg == _REG_PCH_DPC_AUX_CH_CTL) ||
-	      (reg == _REG_PCH_DPD_AUX_CH_CTL))) {
+	if (!reg_hw_access(vgt, reg) &&
+			((reg == _REG_PCH_DPB_AUX_CH_CTL) ||
+		(reg == _REG_PCH_DPC_AUX_CH_CTL) ||
+		(reg == _REG_PCH_DPD_AUX_CH_CTL))) {
 		data = __vreg(vgt, reg);
 		if (data & _REGBIT_DP_AUX_CH_CTL_DONE)
 			data &= ~_REGBIT_DP_AUX_CH_CTL_DONE;
@@ -1572,7 +1572,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			(void)VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
 
 			EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
-				 & (_GMBUS_NAK | _GMBUS_HW_WAIT)), 5, 10, timeout);
+				& (_GMBUS_NAK | _GMBUS_HW_WAIT)), 5, 10, timeout);
 
 			if (timeout || (val & _GMBUS_NAK)) {
 				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
@@ -1595,7 +1595,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			do {
 				int j = 0;
 				EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
-					 & (_GMBUS_NAK | _GMBUS_HW_RDY)), 5, 10, timeout);
+					& (_GMBUS_NAK | _GMBUS_HW_RDY)), 5, 10, timeout);
 				if (timeout || (val & _GMBUS_NAK)) {
 					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
 					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
@@ -1648,18 +1648,18 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		if (*pedid) {
 			int i;
 			unsigned char *block = (*pedid)->edid_block;
-			printk("EDID_PROBE: EDID is:\n");
-			for (i = 0; i < EDID_SIZE; ++ i) {
-				if ((block[i] >= 'a' && block[i] <= 'z') ||
-				(block[i] >= 'A' && block[i] <= 'Z')) {
-					printk ("%c ", block[i]);
-				} else {
-					printk ("0x%x ", block[i]);
-				}
-				if (((i + 1) & 0xf) == 0) {
-					printk ("\n");
-				}
-			}
+					printk("EDID_PROBE: EDID is:\n");
+					for (i = 0; i < EDID_SIZE; ++ i) {
+							if ((block[i] >= 'a' && block[i] <= 'z') ||
+								(block[i] >= 'A' && block[i] <= 'Z')) {
+									printk ("%c ", block[i]);
+							} else {
+									printk ("0x%x ", block[i]);
+							}
+							if (((i + 1) & 0xf) == 0) {
+									printk ("\n");
+							}
+					}
 		}
 	}
 }
@@ -1739,7 +1739,7 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 }
 
 static bool vga_control_r(struct vgt_device *vgt, unsigned int offset,
-    void *p_data, unsigned int bytes)
+	void *p_data, unsigned int bytes)
 {
 	ASSERT (bytes == 4 && offset == _REG_CPU_VGACNTRL);
 
@@ -1772,7 +1772,7 @@ static bool vga_control_w (struct vgt_device *vgt, unsigned int offset,
 }
 
 static bool err_int_r(struct vgt_device *vgt, unsigned int offset,
-    void *p_data, unsigned int bytes)
+	void *p_data, unsigned int bytes)
 {
 	bool rc = default_mmio_read(vgt, offset, p_data, bytes);
 	return rc;
@@ -2125,7 +2125,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0xE6C04, 4, F_DPY, 0, D_ALL,
 	dpy_reg_mmio_read_2, NULL},
 {0xE6E1C, 4, F_DPY, 0, D_ALL,
-	      dpy_reg_mmio_read_3, NULL},
+	dpy_reg_mmio_read_3, NULL},
 {_REG_SHOTPLUG_CTL, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_LCPLL_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_HSW_FUSE_STRAP, 4, F_DPY, 0, D_HSW, NULL, NULL},
@@ -2192,14 +2192,14 @@ reg_attr_t vgt_base_reg_info[] = {
 	/*
 	 * below registers require next step audit:
 	 *   - some are workaround registers which we allow
-	 *     for pReg access from any VM
+	 *	 for pReg access from any VM
 	 *   - some are marked as virtualized for now, if they
-	 *     don't fall into coarse-grained ranges, to avoid
-	 *     regression.
+	 *	 don't fall into coarse-grained ranges, to avoid
+	 *	 regression.
 	 *   - there are also boottime regs in this list. In the
-	 *     end, all boottime and workaround types should be
-	 *     removed and then placed under mgmt category, meaning
-	 *     controlled by dom0 only
+	 *	 end, all boottime and workaround types should be
+	 *	 removed and then placed under mgmt category, meaning
+	 *	 controlled by dom0 only
 	 */
 {_REG_TILECTL, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_DISP_ARB_CTL, 4, F_WA, 0, D_ALL, NULL, NULL},

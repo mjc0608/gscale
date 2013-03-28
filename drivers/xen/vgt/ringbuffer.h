@@ -32,7 +32,7 @@ static inline void vgt_ring_begin(struct vgt_ring_buffer *ring, int num_dwords)
 }
 
 static inline void vgt_ring_emit(struct vgt_ring_buffer *ring,
-				   u32 data)
+				u32 data)
 {
 	writel(data, ring->virtual_start + ring->tail);
 	ring->tail += 4;

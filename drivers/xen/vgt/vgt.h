@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -48,9 +48,9 @@ extern void show_mode_settings(struct pgt_device *pdev);
 extern void show_debug(struct pgt_device *pdev, int ring_id);
 #define ASSERT(x)							\
 	do {								\
-		if (!(x)) { 						\
+		if (!(x)) {						\
 			printk("Assert at %s line %d\n",		\
-				__FILE__, __LINE__); 			\
+				__FILE__, __LINE__);			\
 			if (vgt_dom0)					\
 				show_ringbuffer(vgt_dom0->pdev, 0, 64);	\
 			BUG();						\
@@ -58,7 +58,7 @@ extern void show_debug(struct pgt_device *pdev, int ring_id);
 	} while (0);
 #define ASSERT_NUM(x, y)						\
 	do {								\
-		if (!(x)) { 						\
+		if (!(x)) {						\
 			printk("Assert at %s line %d para 0x%llx\n",	\
 				__FILE__, __LINE__, (u64)y);		\
 			if (vgt_dom0)					\
@@ -99,7 +99,6 @@ extern bool bypass_scan;
 typedef uint32_t vgt_reg_t;
 
 enum vgt_event_type {
-
 	// GT
 	IRQ_RCS_MI_USER_INTERRUPT = 0,
 	IRQ_RCS_DEBUG,
@@ -202,19 +201,19 @@ enum vgt_event_type {
 };
 
 /*
- * Define registers of a ring buffer per hardware  register layout.
+ * Define registers of a ring buffer per hardware register layout.
  */
 typedef struct {
-    vgt_reg_t  tail;
-    vgt_reg_t  head;
-    vgt_reg_t  start;
-    vgt_reg_t  ctl;
+	vgt_reg_t tail;
+	vgt_reg_t head;
+	vgt_reg_t start;
+	vgt_reg_t ctl;
 } vgt_ringbuffer_t;
 #define _tail_reg_(ring_reg_off)	\
 		(ring_reg_off & ~(sizeof(vgt_ringbuffer_t)-1))
 
 #define _vgt_mmio_va(pdev, x)		((char*)pdev->gttmmio_base_va+x)	/* PA to VA */
-#define _vgt_mmio_pa(pdev, x)		(pdev->gttmmio_base+x)	/* PA to VA */
+#define _vgt_mmio_pa(pdev, x)		(pdev->gttmmio_base+x)			/* PA to VA */
 #define sleep_ns(x)	{long y=1UL*x/2; while (y-- > 0) ;}
 #define sleep_us(x)	{long y=500UL*x; while (y-- > 0) ;}
 
@@ -237,32 +236,32 @@ typedef struct {
 extern unsigned long vgt_id_alloc_bitmap;
 #define VGT_ID_ALLOC_BITMAP		((1UL << VGT_MAX_VMS) - 1)
 
-#define REG_SIZE    		sizeof(vgt_reg_t)        /* size of gReg/sReg[0] */
+#define REG_SIZE			sizeof(vgt_reg_t)		/* size of gReg/sReg[0] */
 #define REG_INDEX(reg)		((reg) / REG_SIZE)
 #define VGT_MMIO_SPACE_SZ	(2*SIZE_1MB)
 #define VGT_CFG_SPACE_SZ	256
 #define VGT_BAR_NUM		4
 typedef struct {
-    uint64_t    mmio_base_gpa;	/* base guest physical address of the MMIO registers */
-    vgt_reg_t	*vReg;		/* guest view of the register state */
-    vgt_reg_t	*sReg;		/* Shadow (used by hardware) state of the register */
-    uint8_t	cfg_space[VGT_CFG_SPACE_SZ];
-    bool	bar_mapped[VGT_BAR_NUM];
-    uint64_t	gt_mmio_base;	/* bar0/GTTMMIO  */
-    uint64_t	aperture_base;	/* bar1: guest aperture base */
-//    uint64_t	gt_gmadr_base;	/* bar1/GMADR */
+	uint64_t	mmio_base_gpa;	/* base guest physical address of the MMIO registers */
+	vgt_reg_t	*vReg;		/* guest view of the register state */
+	vgt_reg_t	*sReg;		/* Shadow (used by hardware) state of the register */
+	uint8_t	cfg_space[VGT_CFG_SPACE_SZ];
+	bool	bar_mapped[VGT_BAR_NUM];
+	uint64_t	gt_mmio_base;	/* bar0/GTTMMIO */
+	uint64_t	aperture_base;	/* bar1: guest aperture base */
+//	uint64_t	gt_gmadr_base;	/* bar1/GMADR */
 
-    uint32_t	bar_size[VGT_BAR_NUM];	/* 0: GTTMMIO, 1: GMADR, 2: PIO bar size */
+	uint32_t	bar_size[VGT_BAR_NUM];	/* 0: GTTMMIO, 1: GMADR, 2: PIO bar size */
 
-    /* FIXME: take them as part of vReg/sReg ??? */
-    /* save indexed MMIO */
-    uint8_t saveSR[8];  /* sequencer data register */
-    uint8_t saveGR[25]; /* CRT controller register */
-    uint8_t saveAR[21];
-    uint8_t saveCR[37];
+	/* FIXME: take them as part of vReg/sReg ??? */
+	/* save indexed MMIO */
+	uint8_t saveSR[8];	/* sequencer data register */
+	uint8_t saveGR[25];	/* CRT controller register */
+	uint8_t saveAR[21];
+	uint8_t saveCR[37];
 } vgt_state_t;
 
-#define VGT_PPGTT_PDE_ENTRIES  512 /* current 512 entires for 2G mapping */
+#define VGT_PPGTT_PDE_ENTRIES	512 /* current 512 entires for 2G mapping */
 
 typedef struct {
 	vgt_reg_t base;
@@ -303,14 +302,14 @@ typedef struct {
 	/* 64KB alignment requirement for walkaround. */
 	uint64_t	context_save_area;	/* VGT default context space */
 	uint32_t	active_vm_context;	/* current active VM set context space.
-						   _not_ next target ctx when switched to HW later. */
+						_not_ next target ctx when switched to HW later. */
 	bool	initialized;	/* whether it includes an valid context */
 	bool	stateless;	/* whether the engine requires special context switch */
 	/* ppgtt info */
 	vgt_ring_ppgtt_t	vring_ppgtt_info; /* guest view */
 	vgt_ring_ppgtt_t	sring_ppgtt_info; /* shadow info */
 	u8 has_ppgtt_base_set : 1;	/* Is PP dir base set? */
-	u8 has_ppgtt_mode_enabled : 1;  /* Is ring's mode reg PPGTT enable set? */
+	u8 has_ppgtt_mode_enabled : 1;	/* Is ring's mode reg PPGTT enable set? */
 
 	/* statistics */
 	uint64_t nr_cmd_ring; /* cmd issued in ring buffer*/
@@ -319,7 +318,7 @@ typedef struct {
 
 struct vgt_device;
 typedef bool (*vgt_mmio_read)(struct vgt_device *vgt, unsigned int offset,
-	 void *p_data, unsigned int bytes);
+	void *p_data, unsigned int bytes);
 typedef bool (*vgt_mmio_write)(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes);
 
@@ -406,7 +405,7 @@ struct vgt_hvm_info{
 
 	int nr_vcpu;
 	int* evtchn_irq; /* the event channle irqs to handle HVM io request
-				 index is vcpu id */
+				index is vcpu id */
 };
 
 struct vgt_statistics {
@@ -416,10 +415,10 @@ struct vgt_statistics {
 	u64	irq_num;
 	u64	events[IRQ_MAX];
 
-	/* actually this is the number of  pending
-	 * interrutps, check this in vgt_check_pending_events,
-	 * one injection can deliver more than one events
-	 */
+	/* actually this is the number of pending
+	* interrutps, check this in vgt_check_pending_events,
+	* one injection can deliver more than one events
+	*/
 	u64	pending_events;
 	u64	last_propagation;
 	u64	last_blocked_propagation;
@@ -432,7 +431,7 @@ struct vgt_sched_info {
 	vgt_tslice_t start_time;
 	vgt_tslice_t end_time;
 	vgt_tslice_t actual_end_time;
-	vgt_tslice_t rb_empty_delay;		/* cost for "wait rendering engines empty"*/
+	vgt_tslice_t rb_empty_delay;	/* cost for "wait rendering engines empty */
 
 	int32_t priority;
 	int32_t weight;
@@ -463,8 +462,8 @@ struct vgt_tailq {
 struct vgt_device {
 	int vgt_id;		/* 0 is always for dom0 */
 	int vm_id;		/* domain ID per hypervisor */
-	struct pgt_device  *pdev;	/* the pgt device where the GT device registered. */
-	struct list_head	list;   /* FIXME: used for context switch ?? */
+	struct pgt_device *pdev;	/* the pgt device where the GT device registered. */
+	struct list_head	list;	/* FIXME: used for context switch ?? */
 	vgt_state_t	state;		/* MMIO state except ring buffers */
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
 	vgt_reg_t		last_scan_head[MAX_ENGINES];
@@ -475,8 +474,8 @@ struct vgt_device {
 
 	uint64_t	aperture_base;
 	void		*aperture_base_va;
-	uint64_t 	aperture_sz;
-	uint64_t 	gm_sz;
+	uint64_t	aperture_sz;
+	uint64_t	gm_sz;
 	uint64_t	aperture_offset;	/* address fix for visible GM */
 	uint64_t	hidden_gm_offset;	/* address fix for invisible GM */
 	int			fence_base;
@@ -487,14 +486,14 @@ struct vgt_device {
 	uint64_t	vmem_sz;
 	struct vm_struct **vmem_vma;
 
-	uint64_t   vgtt_sz; /* virtual GTT size in byte */
-	uint32_t   *vgtt; /* virtual GTT table for guest to read */
+	uint64_t vgtt_sz; /* virtual GTT size in byte */
+	uint32_t *vgtt; /* virtual GTT table for guest to read */
 
 	vgt_reg_t	saved_wakeup;		/* disable PM before switching */
 
 	struct vgt_irq_virt_state *irq_vstate;
-	struct vgt_hvm_info  *hvm_info;
-        uint32_t        last_cf8;
+	struct vgt_hvm_info *hvm_info;
+		uint32_t		last_cf8;
 	struct kobject kobj;
 	struct vgt_statistics	stat;		/* statistics info */
 
@@ -505,14 +504,14 @@ struct vgt_device {
 	struct work_struct fb_debugfs_work;
 
 	/* PPGTT info: currently not per-ring but assume three rings share same
-	 * table.
+	* table.
 	 */
 	u32 ppgtt_base;
 	bool ppgtt_initialized;
 	DECLARE_BITMAP(enabled_rings, MAX_ENGINES);
 	DECLARE_BITMAP(started_rings, MAX_ENGINES);
 	DECLARE_HASHTABLE(wp_table, VGT_HASH_BITS);
-	vgt_ppgtt_pde_t	shadow_pde_table[VGT_PPGTT_PDE_ENTRIES];	 /* current max PDE entries should be 512 for 2G mapping */
+	vgt_ppgtt_pde_t	shadow_pde_table[VGT_PPGTT_PDE_ENTRIES];	/* current max PDE entries should be 512 for 2G mapping */
 	vgt_ppgtt_pte_t shadow_pte_table[VGT_PPGTT_PDE_ENTRIES]; /* Current PTE number is same as PDE entries */
 
 	/* force removal from the render run queue */
@@ -538,13 +537,13 @@ struct vgt_device {
 extern struct vgt_device *vgt_dom0;
 enum vgt_owner_type {
 	VGT_OT_NONE = 0,		// No owner type
-	VGT_OT_RCS,                  // the owner directly operating render command buffers
-	VGT_OT_BCS,                 // the owner directly operating blitter command buffers
-	VGT_OT_VCS,                   // the owner directly operating video command buffers
-	VGT_OT_RENDER,                      // the owner directly operating all render buffers (render/blit/video)
-	VGT_OT_DISPLAY,                 // the owner having its content directly shown on one or several displays
-	VGT_OT_PM,                      // the owner handling GEN power management activities
-	VGT_OT_MGMT,                    // the owner managing display/monitor resources
+	VGT_OT_RCS,			// the owner directly operating render command buffers
+	VGT_OT_BCS,			// the owner directly operating blitter command buffers
+	VGT_OT_VCS,			// the owner directly operating video command buffers
+	VGT_OT_RENDER,			// the owner directly operating all render buffers (render/blit/video)
+	VGT_OT_DISPLAY,			// the owner having its content directly shown on one or several displays
+	VGT_OT_PM,			// the owner handling GEN power management activities
+	VGT_OT_MGMT,			// the owner managing display/monitor resources
 	VGT_OT_MAX,
 };
 
@@ -564,7 +563,7 @@ enum vgt_owner_type {
 /* Status bit updated from HW */
 #define VGT_REG_HW_STATUS	(1 << 6)
 /* Virtualized */
-#define VGT_REG_VIRT	(1 << 7)
+#define VGT_REG_VIRT		(1 << 7)
 /* Mode ctl registers with high 16 bits as the mask bits */
 #define VGT_REG_MODE_CTL	(1 << 8)
 /* VMs have different settings on this reg */
@@ -597,8 +596,8 @@ struct vgt_irq_host_state;
 #define VGT_VBIOS_PAGES 16
 
 enum vgt_uevent_type {
-    CRT_HOTPLUG_IN = 0,
-    CRT_HOTPLUG_OUT,
+	CRT_HOTPLUG_IN = 0,
+	CRT_HOTPLUG_OUT,
 	DP_A_HOTPLUG_IN,
 	DP_A_HOTPLUG_OUT,
 	SDVO_B_HOTPLUG_IN,
@@ -617,16 +616,16 @@ enum vgt_uevent_type {
 	HDMI_D_HOTPLUG_OUT,
 	VGT_ENABLE_VGA,
 	VGT_DISABLE_VGA,
-    UEVENT_MAX
+	UEVENT_MAX
 };
 
 #define VGT_MAX_UEVENT_VARS 20
 struct vgt_uevent_info {
-    char *uevent_name;
+	char *uevent_name;
 	int vm_id;
-    enum kobject_action action;
-    char *env_var_table[VGT_MAX_UEVENT_VARS];
-    bool (*vgt_uevent_handler)(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev);
+	enum kobject_action action;
+	char *env_var_table[VGT_MAX_UEVENT_VARS];
+	bool (*vgt_uevent_handler)(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev);
 };
 
 void vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent);
@@ -735,7 +734,7 @@ struct pgt_device {
 	void *gmadr_va;		/* virtual base of GMADR */
 	u32 mmio_size;
 	u32 gtt_size;
-    int reg_num;
+	int reg_num;
 
 	int max_engines;	/* supported max engines */
 	u32 ring_mmio_base[MAX_ENGINES];
@@ -1008,10 +1007,10 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 #define D_SNB	(1 << 0)
 #define D_IVB	(1 << 1)
 #define D_HSW	(1 << 2)
-#define D_GEN7PLUS (D_IVB | D_HSW)
-#define D_GEN75PLUS (D_HSW)
-#define D_HSW_PLUS  (D_HSW)
-#define D_IVB_PLUS  (D_IVB | D_HSW)
+#define D_GEN7PLUS	(D_IVB | D_HSW)
+#define D_GEN75PLUS	(D_HSW)
+#define D_HSW_PLUS	(D_HSW)
+#define D_IVB_PLUS	(D_IVB | D_HSW)
 #define D_ALL	(D_SNB | D_IVB | D_HSW)
 
 typedef struct {
@@ -1032,7 +1031,6 @@ static inline unsigned int vgt_gen_dev_type(struct pgt_device *pdev)
 		return D_IVB;
 	if (pdev->is_haswell)
 		return D_HSW;
-
 	return 0;
 }
 
@@ -1051,8 +1049,8 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 #define F_BOOTTIME		F_VIRT | VGT_REG_BOOTTIME
 /*
  * render context
- * 	- render owner access pReg
- * 	- non-render owner access vReg
+ *	- render owner access pReg
+ *	- non-render owner access vReg
  */
 #define F_RDR			VGT_OT_RENDER
 /* render context, require address fix */
@@ -1063,8 +1061,8 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 #define F_RDR_MODE		F_RDR | VGT_REG_MODE_CTL
 /*
  * display context
- * 	- display owner access pReg
- * 	- non-display owner access vReg
+ *	- display owner access pReg
+ *	- non-display owner access vReg
  */
 #define F_DPY			VGT_OT_DISPLAY
 /* display context, require address fix */
@@ -1073,15 +1071,15 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 #define F_DPY_HWSTS_ADRFIX	F_DPY_ADRFIX | VGT_REG_HW_STATUS
 /*
  * pm context
- * 	- pm owner access pReg
- * 	- non-pm owner access vReg
+ *	- pm owner access pReg
+ *	- non-pm owner access vReg
  */
 #define F_PM			VGT_OT_PM
 /*
  * workaround reg
- * 	- any VM directly access pReg
- * 	- no save/restore
- * 	- dangerous as a workaround only
+ *	- any VM directly access pReg
+ *	- no save/restore
+ *	- dangerous as a workaround only
  */
 #define F_WA			VGT_OT_NONE | VGT_REG_WORKAROUND
 /*
@@ -1183,7 +1181,7 @@ extern void state_sreg_init(struct vgt_device *vgt);
 #define vgt_guest_visible_gm_end(vgt)	\
 	(vgt_guest_visible_gm_base(vgt) + vgt_aperture_sz(vgt) - 1)
 #define vgt_guest_hidden_gm_base(vgt)	\
-	(vgt->ballooning ? 		\
+	(vgt->ballooning ?		\
 		vgt_hidden_gm_base(vgt) :	\
 		vgt_guest_visible_gm_end(vgt) + 1)
 #define vgt_guest_hidden_gm_end(vgt)	\
@@ -1341,7 +1339,7 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 #define GTT_PAGE_SHIFT		12
 #define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
 #define GTT_PAGE_MASK		(~(GTT_PAGE_SIZE-1))
-#define GTT_PAE_MASK        ((1UL <<12) - (1UL << 4)) /* bit 11:4 */
+#define GTT_PAE_MASK		((1UL <<12) - (1UL << 4)) /* bit 11:4 */
 #define GTT_ENTRY_SIZE		4
 
 #define GTT_INDEX(pdev, addr)		\
@@ -1415,7 +1413,7 @@ static inline unsigned long __REG_READ(struct pgt_device *pdev,
 		__REG_READ(pdev, mmio_offset, bytes)
 
 #define VGT_MMIO_WRITE_BYTES(pdev, mmio_offset, val, bytes)	\
-		__REG_WRITE(pdev, mmio_offset, val,  bytes)
+		__REG_WRITE(pdev, mmio_offset, val, bytes)
 
 #define VGT_MMIO_WRITE(pdev, mmio_offset, val)	\
 		VGT_MMIO_WRITE_BYTES(pdev, mmio_offset, (unsigned long)val, REG_SIZE)
@@ -1901,7 +1899,7 @@ extern uint8_t vgt_irq_warn_once[IRQ_MAX];
 		vgt_iir((i)->reg_base))
 #define VGT_IRQ_WARN_ONCE(i, t, msg)			\
 	do {						\
-		if (!vgt_irq_warn_once[(t)]) { 		\
+		if (!vgt_irq_warn_once[(t)]) {		\
 			vgt_irq_warn_once[(t)] = 1;	\
 			VGT_IRQ_WARN(i, t, msg);	\
 		}					\
@@ -2053,7 +2051,7 @@ extern char *vgt_irq_name[IRQ_MAX];
 typedef struct {
 	int vm_id;
 	int aperture_sz; /* in MB */
-	int gm_sz;       /* in MB */
+	int gm_sz;	/* in MB */
 	int fence_sz;
 
 	int vgt_primary; /* 0/1: config the vgt device as secondary/primary VGA,
@@ -2114,7 +2112,7 @@ extern void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 
 extern unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte);
 
-#define INVALID_MFN  (~0UL)
+#define INVALID_MFN	(~0UL)
 
 extern void vgt_add_wp_page_entry(struct vgt_device *vgt, struct vgt_wp_page_entry *e);
 extern void vgt_del_wp_page_entry(struct vgt_device *vgt, unsigned int pfn);
@@ -2123,7 +2121,7 @@ extern bool vgt_init_shadow_ppgtt(struct vgt_device *vgt);
 extern bool vgt_setup_ppgtt(struct vgt_device *vgt);
 extern void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt);
 extern bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e,
-			     unsigned int offset, void *p_data, unsigned int bytes);
+				unsigned int offset, void *p_data, unsigned int bytes);
 extern void vgt_ppgtt_switch(struct vgt_device *vgt);
 extern void vgt_try_setup_ppgtt(struct vgt_device *vgt);
 extern int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode);
@@ -2148,8 +2146,8 @@ extern void klog_printk(const char *fmt, ...);
 #undef VGT_DEBUGFS_DUMP_FB
 
 typedef struct {
-    char *node_name;
-    u64 *stat;
+	char *node_name;
+	u64 *stat;
 } debug_statistics_t;
 
 extern u64 gtt_mmio_rcnt;
@@ -2198,20 +2196,20 @@ static __inline__ bool drm_can_sleep(void)
 	return true;
 }
 
-#define _wait_for(COND, MS, W) ({	\
-	unsigned long timeout__ = jiffies + msecs_to_jiffies(MS);       \
-	int ret__ = 0;                                                  \
-	while (!(COND)) {                                               \
-		if (time_after(jiffies, timeout__)) {                   \
-			ret__ = -ETIMEDOUT;                             \
-			break;                                          \
-		}                                                       \
-		if (W && drm_can_sleep())  {                            \
-			msleep(W);                                      \
-		} else {                                                \
-			cpu_relax();                                    \
-		}                                                       \
-	}                                                               \
+#define _wait_for(COND, MS, W) ({					\
+	unsigned long timeout__ = jiffies + msecs_to_jiffies(MS);	\
+	int ret__ = 0;							\
+	while (!(COND)) {						\
+		if (time_after(jiffies, timeout__)) {			\
+			ret__ = -ETIMEDOUT;				\
+			break;						\
+		}							\
+		if (W && drm_can_sleep()) {				\
+			msleep(W);					\
+		} else {						\
+			cpu_relax();					\
+		}							\
+	}								\
 	ret__;								\
 })
 
@@ -2222,9 +2220,9 @@ extern reg_attr_t vgt_base_reg_info[];
 extern int vgt_get_base_reg_num(void);
 
 void vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
-     unsigned int port, unsigned int bytes, unsigned long val);
+	unsigned int port, unsigned int bytes, unsigned long val);
 void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
-       unsigned int port, unsigned int bytes, unsigned long *val);
+	unsigned int port, unsigned int bytes, unsigned long *val);
 
 int vgt_hvm_map_opregion (struct vgt_device *vgt, int map);
 struct vm_struct *map_hvm_iopage(struct vgt_device *vgt);

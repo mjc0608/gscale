@@ -7,7 +7,7 @@
  *
  * This program is distributed in the hope it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along with
@@ -20,9 +20,9 @@
 
 static inline int _is_sandybridge(int devid)
 {
-    int ret = 0;
+	int ret = 0;
 
-    switch (devid) {
+	switch (devid) {
 	case 0x0102:
 	case 0x0112:
 	case 0x0122:
@@ -30,38 +30,38 @@ static inline int _is_sandybridge(int devid)
 	case 0x0116:
 	case 0x0126:
 	case 0x010A:
-            ret = 1;
-            break;
-        default:
-            break;
-    }
-    return ret;
+		ret = 1;
+		break;
+	default:
+		break;
+	}
+	return ret;
 }
 
 static inline int _is_ivybridge(int devid)
 {
-    int ret = 0;
+	int ret = 0;
 
-    switch (devid) {
+	switch (devid) {
 	case 0x0156:
 	case 0x0166:
 	case 0x0152:
 	case 0x0162:
 	case 0x015a:
 	case 0x016a:
-            ret = 1;
-            break;
-        default:
-            break;
-    }
-    return ret;
+		ret = 1;
+		break;
+	default:
+		break;
+	}
+	return ret;
 }
 
 static inline int _is_haswell(int devid)
 {
-    int ret = 0;
+	int ret = 0;
 
-    switch (devid) {
+	switch (devid) {
 	case 0x0400:
 	case 0x0402:
 	case 0x0404:
@@ -102,12 +102,12 @@ static inline int _is_haswell(int devid)
 	case 0x0d32:
 	case 0x0d36:
 	case 0x0d3a:
-            ret = 1;
-            break;
-        default:
-            break;
-    }
-    return ret;
+		ret = 1;
+		break;
+	default:
+		break;
+	}
+	return ret;
 }
 
 #endif  /* _VGT_DEVTABLE_H */

@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -50,11 +50,11 @@
 
 /*
  * NOTE list:
- * 	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
- * 	  also the hooks in AGP driver
- * 	- need a check on "unsigned long" vs. "u64" usage
- * 	- need consider cache related issues, e.g. Linux/Windows may have different
- * 	  TLB invalidation mode setting, which may impact vGT's context switch logic
+ *	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
+ *	 also the hooks in AGP driver
+ *	- need a check on "unsigned long" vs. "u64" usage
+ *	- need consider cache related issues, e.g. Linux/Windows may have different
+ *	 TLB invalidation mode setting, which may impact vGT's context switch logic
  */
 static bool vgt_restore_context (struct vgt_device *vgt);
 static bool vgt_save_context (struct vgt_device *vgt);
@@ -67,11 +67,11 @@ int vgt_ctx_switch = 1;
  * TODO: the context layout could be different on generations.
  * e.g. ring head/tail, ccid, etc. when PPGTT is enabled
  */
-#define OFF_CACHE_MODE_0       0x4A
-#define OFF_CACHE_MODE_1       0x4B
-#define OFF_INSTPM             0x4D
-#define OFF_EXCC               0x4E
-#define OFF_MI_MODE            0x4F
+#define OFF_CACHE_MODE_0	0x4A
+#define OFF_CACHE_MODE_1	0x4B
+#define OFF_INSTPM		0x4D
+#define OFF_EXCC		0x4E
+#define OFF_MI_MODE		0x4F
 static void update_context(struct vgt_device *vgt, uint64_t context)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -96,7 +96,7 @@ bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 		return false;
 
 	/*
-	 * FIXME: it turns out that psmi idle status bit check may not be
+	* FIXME: it turns out that psmi idle status bit check may not be
 	 * always true when both dom0/Linux VM runs glxgears in parallel. Not
 	 * sure the reason yet. So disable this check for now, but need revise
 	 * in the future
@@ -229,16 +229,16 @@ void vgt_toggle_ctx_switch(bool enable)
  *
  * So it's possible for other 3 paths to touch vreg/sreg/hwreg:
  *   a) the vgt thread may need to update HW updated regs into
- *      vreg/sreg of the prev owner
+ *	  vreg/sreg of the prev owner
  *   b) the GP handler and event handler always updates vreg/sreg,
- *      and may touch hwreg if vgt is the current owner
- *      and then update vreg for interrupt virtualization
+ *	  and may touch hwreg if vgt is the current owner
+ *	  and then update vreg for interrupt virtualization
  *
  * To simplify the lock design, we make below assumptions:
  *   a) the vgt thread doesn't trigger GP fault itself, i.e. always
- *      issues hypercall to do hwreg access
+ *	  issues hypercall to do hwreg access
  *   b) the event handler simply notifies another kernel thread, leaving
- *      to that thread for actual MMIO emulation
+ *	  to that thread for actual MMIO emulation
  *
  * Given above assumption, no nest would happen among 4 paths, and a
  * simple global spinlock now should be enough to protect the whole
@@ -263,7 +263,7 @@ int vgt_thread(void *priv)
 	while (!kthread_should_stop()) {
 		/*
 		 * TODO: Use high priority task and timeout based event
-		 * 	mechanism for QoS. schedule in 50ms now.
+		 *	mechanism for QoS. schedule in 50ms now.
 		 */
 		/* vgt_thread can only be waken up when there is a request */
 		wait_event(pdev->event_wq, pdev->request);
@@ -412,7 +412,7 @@ int vgt_thread(void *priv)
 				/* request to check IRQ when ctx switch happens */
 				check_irq = true;
 				if (prev->force_removal ||
-				    bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
+					bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
 					printk("Disable render for vgt(%d) from kthread\n",
 						prev->vgt_id);
 					vgt_disable_render(prev);
@@ -486,14 +486,14 @@ static inline void stop_ring(struct pgt_device *pdev, int ring_id)
 	/* wait for ring idle */
 	ring_wait_for_empty(pdev, ring_id, "stop-ring");
 	VGT_MMIO_WRITE(pdev, pdev->ring_mi_mode[ring_id],
-		       _REGBIT_MI_STOP_RINGS | (_REGBIT_MI_STOP_RINGS << 16));
+			_REGBIT_MI_STOP_RINGS | (_REGBIT_MI_STOP_RINGS << 16));
 }
 
 static inline void resume_ring(struct pgt_device *pdev, int ring_id)
 {
 	/* make sure ring resumed */
 	VGT_MMIO_WRITE(pdev, pdev->ring_mi_mode[ring_id],
-		       _REGBIT_MI_STOP_RINGS << 16);
+			_REGBIT_MI_STOP_RINGS << 16);
 	if (VGT_MMIO_READ(pdev, pdev->ring_mi_mode[ring_id]) & _REGBIT_MI_STOP_RINGS)
 		vgt_warn("!!!!!!!!!failed to clear stop ring bit\n");
 }
@@ -854,9 +854,9 @@ static bool vgt_save_context (struct vgt_device *vgt)
 		vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
 		vgt_ring_emit(ring, MI_SET_CONTEXT);
 		vgt_ring_emit(ring, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
-			      MI_SAVE_EXT_STATE_EN |
-			      MI_RESTORE_EXT_STATE_EN |
-			      rb->context_save_area);
+				MI_SAVE_EXT_STATE_EN |
+				MI_RESTORE_EXT_STATE_EN |
+				rb->context_save_area);
 		vgt_ring_emit(ring, MI_NOOP);
 		vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
 		vgt_ring_emit(ring, MI_NOOP);
@@ -927,18 +927,18 @@ static bool vgt_restore_context (struct vgt_device *vgt)
 		vgt_ring_emit(ring, MI_SET_CONTEXT);
 		if (rb->initialized)
 			vgt_ring_emit(ring, rb->context_save_area |
-				      MI_MM_SPACE_GTT |
-				      MI_SAVE_EXT_STATE_EN |
-				      MI_RESTORE_EXT_STATE_EN |
-				      MI_FORCE_RESTORE);
+					MI_MM_SPACE_GTT |
+					MI_SAVE_EXT_STATE_EN |
+					MI_RESTORE_EXT_STATE_EN |
+					MI_FORCE_RESTORE);
 		else {
 			printk("vGT(%d): first initialization. switch to dummy context.\n",
 					vgt->vgt_id);
 			vgt_ring_emit(ring, pdev->dummy_area |
-				      MI_MM_SPACE_GTT |
-				      MI_SAVE_EXT_STATE_EN |
-				      MI_RESTORE_EXT_STATE_EN |
-				      MI_RESTORE_INHIBIT);
+					MI_MM_SPACE_GTT |
+					MI_SAVE_EXT_STATE_EN |
+					MI_RESTORE_EXT_STATE_EN |
+					MI_RESTORE_INHIBIT);
 		}
 
 		vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
@@ -963,10 +963,10 @@ static bool vgt_restore_context (struct vgt_device *vgt)
 			vgt_ring_begin(ring, 8);
 			vgt_ring_emit(ring, MI_SET_CONTEXT);
 			vgt_ring_emit(ring, rb->active_vm_context |
-				      MI_MM_SPACE_GTT |
-				      MI_SAVE_EXT_STATE_EN |
-				      MI_RESTORE_EXT_STATE_EN |
-				      MI_FORCE_RESTORE);
+					MI_MM_SPACE_GTT |
+					MI_SAVE_EXT_STATE_EN |
+					MI_RESTORE_EXT_STATE_EN |
+					MI_FORCE_RESTORE);
 
 			vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
 			vgt_ring_emit(ring, 0);

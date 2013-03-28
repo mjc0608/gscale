@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -192,40 +192,40 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 }
 
 void vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
-     unsigned int port, unsigned int bytes, unsigned long val)
+	unsigned int port, unsigned int bytes, unsigned long val)
 {
-    vgt_dbg("vgt_hvm_write_cf8_cfc %x %d %lx\n", port, bytes, val);
-    if ( (port & ~3) == 0xcf8 ) {
-        ASSERT (bytes == 4);
-        ASSERT ((port & 3) == 0);
-        vgt->last_cf8 = (uint32_t) val;
-    }
-    else {
-        ASSERT ( (vgt->last_cf8 & 3) == 0);
-        ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
-             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
-        vgt_emulate_cfg_write (vgt,
-             (vgt->last_cf8 & 0xfc) + (port & 3),
-             &val, bytes);
-    }
+	vgt_dbg("vgt_hvm_write_cf8_cfc %x %d %lx\n", port, bytes, val);
+	if ( (port & ~3) == 0xcf8 ) {
+		ASSERT (bytes == 4);
+		ASSERT ((port & 3) == 0);
+		vgt->last_cf8 = (uint32_t) val;
+	}
+	else {
+		ASSERT((vgt->last_cf8 & 3) == 0);
+		ASSERT(((bytes == 4) && ((port & 3) == 0)) ||
+			((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
+		vgt_emulate_cfg_write (vgt,
+			(vgt->last_cf8 & 0xfc) + (port & 3),
+			&val, bytes);
+	}
 }
 
 void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
-       unsigned int port, unsigned int bytes, unsigned long *val)
+	unsigned int port, unsigned int bytes, unsigned long *val)
 {
-    unsigned long data;
+	unsigned long data;
 
-    if ((port & ~3)== 0xcf8) {
-        memcpy(val, (uint8_t*)&vgt->last_cf8 + (port & 3), bytes);
-    }
-    else {
-//        ASSERT ( (vgt->last_cf8 & 3) == 0);
-        ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
-            ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
-        vgt_emulate_cfg_read(vgt, (vgt->last_cf8 & 0xfc) + (port & 3),
-                     &data, bytes);
-        memcpy(val, &data, bytes);
-    }
-    vgt_dbg("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
-               port, bytes, *val);
+	if ((port & ~3)== 0xcf8) {
+		memcpy(val, (uint8_t*)&vgt->last_cf8 + (port & 3), bytes);
+	}
+	else {
+//		ASSERT ( (vgt->last_cf8 & 3) == 0);
+		ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
+			((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
+		vgt_emulate_cfg_read(vgt, (vgt->last_cf8 & 0xfc) + (port & 3),
+					&data, bytes);
+		memcpy(val, &data, bytes);
+	}
+	vgt_dbg("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
+			port, bytes, *val);
 }

@@ -17,7 +17,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -120,7 +120,7 @@ static int u32_array_open(struct inode *inode, struct file *file)
 
 /* TODO: this is generic function, can used to format ring_buffer and etc. */
 static size_t format_array(char *buf, size_t bufsize, const char *fmt,
-			   u32 *array, unsigned array_size)
+				u32 *array, unsigned array_size)
 {
 	size_t ret = 0;
 	unsigned i;
@@ -175,7 +175,7 @@ static char *format_array_alloc(const char *fmt, u32 *array, unsigned array_size
 
 /* TODO: data copied from kernel space to user space */
 static ssize_t u32_array_read(struct file *file, char __user *buf, size_t len,
-			      loff_t *ppos)
+				loff_t *ppos)
 {
 	struct inode *inode = file->f_path.dentry->d_inode;
 	struct array_data *data = inode->i_private;
@@ -199,9 +199,8 @@ static ssize_t u32_array_read(struct file *file, char __user *buf, size_t len,
 
 static int vgt_array_release(struct inode *inode, struct file *file)
 {
-    vfree(file->private_data);
-
-    return 0;
+	vfree(file->private_data);
+	return 0;
 }
 
 static const struct file_operations u32_array_fops = {
@@ -214,8 +213,8 @@ static const struct file_operations u32_array_fops = {
 
 #if 0
 static struct dentry *vgt_debugfs_create_u32_array(const char *name, mode_t mode,
-					    struct dentry *parent,
-					    u32 *array, unsigned elements)
+					struct dentry *parent,
+					u32 *array, unsigned elements)
 {
 	struct array_data *data = kmalloc(sizeof(*data), GFP_KERNEL);
 
@@ -230,8 +229,8 @@ static struct dentry *vgt_debugfs_create_u32_array(const char *name, mode_t mode
 #endif
 
 static struct dentry *vgt_debugfs_create_blob(const char *name, mode_t mode,
-					    struct dentry *parent,
-					    struct array_data *p)
+					struct dentry *parent,
+					struct array_data *p)
 {
 	ASSERT(p);
 	ASSERT(p->array);
@@ -290,16 +289,16 @@ static int vgt_show_regs(struct seq_file *m, void *data)
 	seq_printf(m, "MPT - Mediated Pass-Through based on owner type\n");
 	seq_printf(m, "WA - workaround regs with special risk\n");
 	seq_printf(m, "%8s: %8s (%-8s %-4s)\n",
-		   "Reg", "Flags", "Owner", "Type");
+			"Reg", "Flags", "Owner", "Type");
 	for (i = 0; i < pdev->mmio_size; i +=  REG_SIZE) {
 		if (!reg_is_accessed(pdev, i))
 			continue;
 
 		tot++;
 		seq_printf(m, "%8x: %8x (%-8s %-4s)\n",
-			   i, pdev->reg_info[REG_INDEX(i)],
-			   reg_show_reg_owner(pdev, i),
-			   reg_show_reg_type(pdev, i));
+			i, pdev->reg_info[REG_INDEX(i)],
+			reg_show_reg_owner(pdev, i),
+			reg_show_reg_type(pdev, i));
 	}
 	seq_printf(m, "------------------------------------------\n");
 	seq_printf(m, "Total %d accessed registers are shown\n", tot);
@@ -366,10 +365,10 @@ static int vgt_show_irqinfo(struct seq_file *m, void *data)
 	seq_printf(m, "--------------------------\n");
 	seq_printf(m, "Total %lld interrupts logged:\n", pstat->irq_num);
 	seq_printf(m, "#	WARNING: precisely this is the number of vGT \n"
-				  "#	physical interrupt handler be called,\n"
-				  "#	each calling several events can be\n"
-				  "#	been handled, so usually this number\n"
-				  "#	is less than the total events number.\n");
+			"#	physical interrupt handler be called,\n"
+			"#	each calling several events can be\n"
+			"#	been handled, so usually this number\n"
+			"#	is less than the total events number.\n");
 	for (i = 0; i < IRQ_MAX; i++) {
 		if (!pstat->events[i])
 			continue;
@@ -456,17 +455,17 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 	}
 
 	temp_d = debugfs_create_file("reginfo", 0444, d_vgt_debug,
-			 pdev, &reginfo_fops);
+		pdev, &reginfo_fops);
 	if (!temp_d)
 		return NULL;
 
 	temp_d = debugfs_create_file("preg", 0444, d_vgt_debug,
-			 pdev, &preg_fops);
+		pdev, &preg_fops);
 	if (!temp_d)
 		return NULL;
 
 	temp_d = debugfs_create_file("irqinfo", 0444, d_vgt_debug,
-			 pdev, &irqinfo_fops);
+		pdev, &irqinfo_fops);
 	if (!temp_d)
 		return NULL;
 
@@ -700,7 +699,6 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 			for (i = 0; i < pdev->max_engines; i++)
 				vgt_create_cmdstat_per_ring(vgt, i, cmdstat_dir_entry);
 	}
-
 
 	return 0;
 }

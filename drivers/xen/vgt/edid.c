@@ -13,7 +13,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -44,7 +44,7 @@ typedef enum {
 	VGT_EDID_ERROR = 3,
 } vgt_edid_log_t;
 
-#define EDID_LOG(log, emu, fmt, args...) 			\
+#define EDID_LOG(log, emu, fmt, args...)			\
 	do {							\
 		printk("[VGT_EDID");				\
 		if (emu == 0x12345678)				\
@@ -70,27 +70,27 @@ typedef enum {
 
 static int vgt_edid_log_level = 2;
 
-#define EDID_MSG(log, emu, fmt, args...) 			\
+#define EDID_MSG(log, emu, fmt, args...)			\
 	do {							\
 		if (log >= vgt_edid_log_level) {		\
 			EDID_LOG(log, emu, fmt, ##args);	\
 		}						\
 	} while (0)
 
-#define EDID_MSG_EH(log, fmt, args...) 				\
+#define EDID_MSG_EH(log, fmt, args...)				\
 	EDID_MSG(log, 0x12345678, fmt, ##args)
 
 #else /* DEBUG_VGT_EDID */
 
 #define ASSERT(x)
-#define EDID_MSG(log, emu, fmt, args...) 			\
+#define EDID_MSG(log, emu, fmt, args...)			\
 	do {							\
 		if (log >= VGT_EDID_WARN) {			\
 			EDID_LOG(log, emu, fmt, ##args);	\
 		}						\
 	} while (0)
 
-#define EDID_MSG_EH(log, fmt, args...) 				\
+#define EDID_MSG_EH(log, fmt, args...)				\
 	EDID_MSG(log, 0x12345678, fmt, ##args)
 
 #endif /* DEBUG_VGT_EDID */
@@ -133,10 +133,10 @@ static void edid_snap_write_byte(void *slave, unsigned char value)
 	 * set them both to be the input value.
 	 */
 	vgt_edid_t *edid = (vgt_edid_t *)slave;
-        ASSERT((edid->current_write == 0) &&
-	       (edid->current_read == 0));
-        edid->current_write = value;
-        edid->current_read = value;
+		ASSERT((edid->current_write == 0) &&
+			(edid->current_read == 0));
+		edid->current_write = value;
+		edid->current_read = value;
 	return;
 }
 
@@ -226,44 +226,44 @@ vgt_edid_data_t *vgt_create_edid(void)
 /* GMBUS0 */
 static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes)
 {
-    vgt_edid_data_t *edid_data = NULL;
-    vgt_reg_t wvalue = *(vgt_reg_t *)p_data;
-    switch (wvalue & _GMBUS_PIN_SEL_MASK) {
+	vgt_edid_data_t *edid_data = NULL;
+	vgt_reg_t wvalue = *(vgt_reg_t *)p_data;
+	switch (wvalue & _GMBUS_PIN_SEL_MASK) {
 	case 0: /* disabled. Be treated as reset */
-	    edid_data = NULL;
-	    break;
+		edid_data = NULL;
+		break;
 	case 1: /* LCTRCLK */
-	    printk("vGT(%d): WARNING: Accessing LCTRCLK which is not supported!\n",
-		    vgt->vgt_id);
-	    break;
+		printk("vGT(%d): WARNING: Accessing LCTRCLK which is not supported!\n",
+			vgt->vgt_id);
+		break;
 	case 2: /* Analog Mon */
-	    edid_data = vgt->vgt_edids[EDID_VGA];
-	    break;
+		edid_data = vgt->vgt_edids[EDID_VGA];
+		break;
 	case 3: /* LVDS */
-	    edid_data = vgt->vgt_edids[EDID_LVDS];
-	    break;
+		edid_data = vgt->vgt_edids[EDID_LVDS];
+		break;
 	case 4: /* Port C use */
-	    /* TODO: how about DP ??? */
-	    edid_data = vgt->vgt_edids[EDID_HDMIC];
-	    break;
+		/* TODO: how about DP ??? */
+		edid_data = vgt->vgt_edids[EDID_HDMIC];
+		break;
 	case 5: /* Port B use */
-	    /* TODO: how about DP ??? */
-	    edid_data = vgt->vgt_edids[EDID_HDMIB];
-	    break;
+		/* TODO: how about DP ??? */
+		edid_data = vgt->vgt_edids[EDID_HDMIB];
+		break;
 	case 6: /* Port D use */
-	    /* TODO: how about DP ??? */
-	    edid_data = vgt->vgt_edids[EDID_HDMID];
-	    break;
+		/* TODO: how about DP ??? */
+		edid_data = vgt->vgt_edids[EDID_HDMID];
+		break;
 	case 7:
-	    printk("vGT(%d): WARNING: GMBUS accessing reserved port!!!!\n", vgt->vgt_id);
-	    break;
+		printk("vGT(%d): WARNING: GMBUS accessing reserved port!!!!\n", vgt->vgt_id);
+		break;
 	default:
-	    printk("vGT(%d): EDID unknown ERROR!\n", vgt->vgt_id);
-    }
+		printk("vGT(%d): EDID unknown ERROR!\n", vgt->vgt_id);
+	}
 
-    vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
-    //vgt->vgt_i2c_bus.state = VGT_I2C_SEND;
-    vgt->vgt_i2c_bus.gmbus.pedid = edid_data;
+	vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
+	//vgt->vgt_i2c_bus.state = VGT_I2C_SEND;
+	vgt->vgt_i2c_bus.gmbus.pedid = edid_data;
 	vgt->vgt_i2c_bus.gmbus.phase = GMBUS_IDLE_PHASE;
 
 	/* Initialize status reg
@@ -275,17 +275,17 @@ static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt, unsigned int offset, v
 	else
 		__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_NAK;
 
-    memcpy(p_data, (char *)vgt->state.vReg + offset, bytes);
-    return true;
+	memcpy(p_data, (char *)vgt->state.vReg + offset, bytes);
+	return true;
 }
 
 /* TODO: */
 void vgt_reset_gmbus_controller(struct vgt_device *vgt)
 {
-    /* TODO: clear gmbus0 ? */
-    //__vreg(vgt, _REG_PCH_GMBUS0) = 0;
-    //__vreg(vgt, _REG_PCH_GMBUS1) = 0;
-    __vreg(vgt, _REG_PCH_GMBUS2) = _GMBUS_HW_RDY;
+	/* TODO: clear gmbus0 ? */
+	//__vreg(vgt, _REG_PCH_GMBUS0) = 0;
+	//__vreg(vgt, _REG_PCH_GMBUS1) = 0;
+	__vreg(vgt, _REG_PCH_GMBUS2) = _GMBUS_HW_RDY;
 	//__vreg(vgt, _REG_PCH_GMBUS3) = 0;
 	//__vreg(vgt, _REG_PCH_GMBUS4) = 0;
 	//__vreg(vgt, _REG_PCH_GMBUS5) = 0;
@@ -309,9 +309,9 @@ void *p_data, unsigned int bytes)
 		 * causes the HW_RDY bit transition to occur "*/
 	} else {
 		/* per bspec setting this bit can cause:
-		   1) INT status bit cleared
-		   2) HW_RDY bit asserted
-		   */
+		 1) INT status bit cleared
+		 2) HW_RDY bit asserted
+		 */
 		if (wvalue & _GMBUS_SW_CLR_INT) {
 			__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_INT_STAT;
 			__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_RDY;
@@ -352,11 +352,11 @@ void *p_data, unsigned int bytes)
 				break;
 			case GMBUS_STOP:
 				/* From spec:
-				   This can only cause a STOP to be generated
-				   if a GMBUS cycle is generated, the GMBUS is
-				   currently in a data/wait/idle phase, or it is in a
-				   WAIT phase
-				   */
+				This can only cause a STOP to be generated
+				if a GMBUS cycle is generated, the GMBUS is
+				currently in a data/wait/idle phase, or it is in a
+				WAIT phase
+				 */
 				if (gmbus1_bus_cycle(__vreg(vgt, offset)) != GMBUS_NOCYCLE) {
 					vgt_init_i2c_bus(i2c_bus);
 					/* After the 'stop' cycle, hw state would become
@@ -409,8 +409,8 @@ void *p_data, unsigned int bytes)
 bool vgt_gmbus3_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-    BUG();
-    return true;
+	BUG();
+	return true;
 }
 
 bool vgt_gmbus3_mmio_read(struct vgt_device *vgt, unsigned int offset,
@@ -628,7 +628,7 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 	}
 #ifdef AUX_CH_WORKAROUND
 	if ((op == VGT_AUX_NATIVE_WRITE) ||
-	    (op == VGT_AUX_NATIVE_READ)) {
+		(op == VGT_AUX_NATIVE_READ)) {
 		/* do not handle it */
 		return;
 	}
@@ -644,7 +644,7 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 	*i2c_bus->aux_ch.aux_registers[port_idx][reg] =
 		_REGBIT_DP_AUX_CH_CTL_DONE |
 		((ret_msg_size << _DP_AUX_CH_CTL_MESSAGE_SIZE_SHIFT) &
-		  _DP_AUX_CH_CTL_MESSAGE_SIZE_MASK);
+		_DP_AUX_CH_CTL_MESSAGE_SIZE_MASK);
 
 	if (msg_length == 3) {
 		if (!(op & VGT_AUX_I2C_MOT)) {
@@ -703,8 +703,8 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 	}
 
 	/* write the return value in AUX_CH_DATA reg which includes:
-	 *  ACK of I2C_WRITE
-	 *  returned byte if it is READ
+	 * ACK of I2C_WRITE
+	 * returned byte if it is READ
 	 */
 	aux_data_for_write |= (VGT_AUX_I2C_REPLY_ACK & 0xff) << 24;
 	*i2c_bus->aux_ch.aux_registers[port_idx][reg + 1] = aux_data_for_write;
