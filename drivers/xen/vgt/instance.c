@@ -51,14 +51,14 @@
  * bitmap of allocated vgt_ids.
  * bit = 0 means free ID, =1 means allocated ID.
  */
-unsigned long vgt_id_alloc_bitmap;
+static unsigned long vgt_id_alloc_bitmap;
 
-/*TODO: may need lock to protect default_deivce */
 struct vgt_device *vmid_2_vgt_device(int vmid)
 {
 	unsigned int bit;
 	struct vgt_device *vgt;
-	/* TODO: check if vgt_id_alloc_bitmap is ~0UL */
+
+	ASSERT(vgt_id_alloc_bitmap != ~0UL)
 	for_each_set_bit(bit, &vgt_id_alloc_bitmap, (8 * sizeof(unsigned long))) {
 		vgt = default_device.device[bit];
 		if (vgt->vm_id == vmid)
@@ -67,10 +67,11 @@ struct vgt_device *vmid_2_vgt_device(int vmid)
 	return NULL;
 }
 
-int allocate_vgt_id(void)
+static int allocate_vgt_id(void)
 {
 	unsigned long bit_index;
 
+	ASSERT(vgt_id_alloc_bitmap != ~0UL)
 	do {
 		bit_index = ffz (vgt_id_alloc_bitmap);
 		if (bit_index >= VGT_MAX_VMS) {
@@ -82,7 +83,7 @@ int allocate_vgt_id(void)
 	return bit_index;
 }
 
-void free_vgt_id(int vgt_id)
+static void free_vgt_id(int vgt_id)
 {
 	ASSERT(vgt_id >= 0 && vgt_id < VGT_MAX_VMS);
 	ASSERT(vgt_id_alloc_bitmap & (1UL << vgt_id));

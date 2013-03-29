@@ -233,7 +233,6 @@ typedef struct {
 //#define SZ_CONTEXT_AREA_PER_RING	4096
 #define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 256 KB for now */
 #define VGT_APERTURE_PER_INSTANCE_SZ		(4*SIZE_1MB)	/* 4MB per instance (?) */
-extern unsigned long vgt_id_alloc_bitmap;
 #define VGT_ID_ALLOC_BITMAP		((1UL << VGT_MAX_VMS) - 1)
 
 #define REG_SIZE			sizeof(vgt_reg_t)		/* size of gReg/sReg[0] */
