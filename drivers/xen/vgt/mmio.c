@@ -820,13 +820,6 @@ void vgt_setup_reg_info(struct pgt_device *pdev)
 	printk("vGT: setup tracked reg info\n");
 	vgt_initialize_reg_attr(pdev, vgt_base_reg_info,
 		vgt_get_base_reg_num(), true);
-
-#if 0
-	/* FIXME */
-	printk("vGT: (!!!!) setup catch-all ranges (predicated)\n");
-	vgt_initialize_reg_attr(pdev, vgt_temp_reg_info,
-		ARRAY_NUM(vgt_temp_reg_info), false);
-#endif
 }
 
 static void __vgt_initial_mmio_space (struct pgt_device *pdev,
@@ -858,10 +851,6 @@ bool vgt_initial_mmio_setup (struct pgt_device *pdev)
 	}
 
 	__vgt_initial_mmio_space(pdev, vgt_base_reg_info, vgt_get_base_reg_num());
-
-#if 0
-	__vgt_initial_mmio_space(pdev, vgt_temp_reg_info, ARRAY_NUM(vgt_temp_reg_info));
-#endif
 
 	return true;
 }
