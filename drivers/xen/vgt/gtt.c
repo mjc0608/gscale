@@ -221,8 +221,10 @@ int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages,
 
 		for (i = 0; i < nr; i++) {
 			mht = kmalloc(sizeof(*mht), GFP_ATOMIC);
-			if (!mht)
-				break; /* XXX */
+			if (!mht) {
+				vgt_err("out of memory!\n");
+				break;
+			}
 			mht->pfn = *p++;
 			mht->idx = *idx++;
 			vgt_add_wp_page_entry(vgt, mht);

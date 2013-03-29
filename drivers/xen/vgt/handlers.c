@@ -2175,8 +2175,10 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_GAB_CTL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 /*
- * TODO: framebuffer compression is disabled for now
+ * framebuffer compression is disabled for now
  * until it's handled at display context switch
+ * and we figure out how stolen memory should be virtualized (FBC needs use
+ * stolen memory).
  */
 {_REG_DPFC_CB_BASE, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_DPFC_CONTROL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
