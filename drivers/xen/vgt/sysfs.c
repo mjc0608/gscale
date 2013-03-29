@@ -47,10 +47,9 @@
 #include "vgt.h"
 
 struct kobject *vgt_ctrl_kobj;
-struct kset *vgt_kset;
+static struct kset *vgt_kset;
 static struct pgt_device *vgt_kobj_priv;
-struct vgt_device *vmid_2_vgt_device(int vmid);
-DEFINE_MUTEX(vgt_sysfs_lock);
+static DEFINE_MUTEX(vgt_sysfs_lock);
 
 static void vgt_kobj_release(struct kobject *kobj)
 {
@@ -104,7 +103,10 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
 	} else
 		return -EINVAL;
 
+	mutex_lock(&vgt_sysfs_lock);
 	rc = (vp.vm_id > 0) ? vgt_add_state_sysfs(vp) : vgt_del_state_sysfs(vp);
+	mutex_unlock(&vgt_sysfs_lock);
+
 	return rc < 0 ? rc : count;
 }
 
@@ -115,7 +117,6 @@ static ssize_t vgt_display_owner_show(struct kobject *kobj, struct kobj_attribut
 	return sprintf(buf,"%d\n", current_display_owner(vgt_kobj_priv)->vm_id);
 }
 
-struct vgt_device *vmid_2_vgt_device(int vmid);
 static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
 	const char *buf, size_t count)
 {
@@ -127,6 +128,8 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 
 	if (sscanf(buf, "%d", &vmid) != 1)
 		return -EINVAL;
+
+	mutex_lock(&vgt_sysfs_lock);
 
 	//TODO: vgt_kobj_priv is the same as pdev now. make it per-pdev???
 	spin_lock_irqsave(&vgt_kobj_priv->lock, flags);
@@ -154,6 +157,9 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 	do_vgt_display_switch(pdev);
 out:
 	spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
+
+	mutex_unlock(&vgt_sysfs_lock);
+
 	return ret;
 }
 
@@ -164,14 +170,24 @@ static ssize_t vgt_display_pointer_store(struct kobject *kobj, struct kobj_attri
 
 	if (sscanf(buf, "%du", &vmid) != 1)
 		return -EINVAL;
+
+	mutex_lock(&vgt_sysfs_lock);
 	vgt_set_display_pointer(vmid);
+	mutex_unlock(&vgt_sysfs_lock);
+
 	return count;
 }
 
 static ssize_t vgt_display_pointer_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
 {
-	return vgt_get_display_pointer(buf);
+	ssize_t ret;
+
+	mutex_lock(&vgt_sysfs_lock);
+	ret = vgt_get_display_pointer(buf);
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return ret;
 }
 
 static ssize_t vgt_ctx_switch_store(struct kobject *kobj, struct kobj_attribute *attr,
@@ -221,10 +237,13 @@ static ssize_t vgt_dpy_switch_show(struct kobject *kobj, struct kobj_attribute *
 	struct pgt_device *pdev = vgt_kobj_priv;
 	ssize_t buf_len;
 
+	mutex_lock(&vgt_sysfs_lock);
 	spin_lock_irq(&pdev->lock);
 	buf_len = get_avl_vm_aperture_gm_and_fence(vgt_kobj_priv, buf,
 			PAGE_SIZE);
 	spin_unlock_irq(&pdev->lock);
+	mutex_unlock(&vgt_sysfs_lock);
+
 	return buf_len;
 }
 
@@ -510,9 +529,7 @@ static int vgt_add_state_sysfs(vgt_params_t vp)
 	if (vmid_2_vgt_device(vp.vm_id))
 		return -EINVAL;
 
-	mutex_lock(&vgt_sysfs_lock);
 	retval = create_vgt_instance(vgt_kobj_priv, &vgt, vp);
-	mutex_unlock(&vgt_sysfs_lock);
 
 	if (retval < 0)
 		return retval;
@@ -545,7 +562,9 @@ static int vgt_del_state_sysfs(vgt_params_t vp)
 		return -ENODEV;
 
 	kobject_put(&vgt->kobj);
+
 	vgt_release_instance(vgt);
+
 	return 0;
 }
 
