@@ -294,7 +294,7 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 		/* get real physical address for that page */
 		s_addr = g2m_pfn(vgt->vm_id, addr);
 		if (s_addr == INVALID_MFN) {
-			vgt_err("vGT[%d]: Failed to get machine address for 0x%lx\n",
+			vgt_err("vGT: VM[%d]: Failed to get machine address for 0x%lx\n",
 				vgt->vm_id, (unsigned long)addr);
 			return -1;
 		}
@@ -560,7 +560,7 @@ static void vgt_init_ppgtt_hw(struct vgt_device *vgt, u32 base)
 void vgt_ppgtt_switch(struct vgt_device *vgt)
 {
 	u32 base = vgt->rb[0].sring_ppgtt_info.base;
-	vgt_dbg("vGT(%d): switch to ppgtt base 0x%x\n", vgt->vm_id, base);
+	vgt_dbg("vGT: VM(%d): switch to ppgtt base 0x%x\n", vgt->vm_id, base);
 	vgt_init_ppgtt_hw(vgt, base);
 }
 

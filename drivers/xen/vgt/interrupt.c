@@ -577,16 +577,16 @@ void vgt_propagate_virtual_event(struct vgt_device *vstate,
 		!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
 		test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))) &&
 		test_bit(_REGSHIFT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
-		if (vstate->vgt_id)
+		if (vstate->vm_id)
 			vgt_dbg("vGT: set bit (%d) for (%s) for VM (%d)\n",
-				bit, info->name, vstate->vgt_id);
+				bit, info->name, vstate->vm_id);
 		vgt_set_irq_pending(vstate);
 		vstate->stat.last_propagation = get_cycles();
 		vstate->stat.events[info->table[bit].event]++;
 	} else {
-		if (vstate->vgt_id) {
+		if (vstate->vm_id) {
 			vgt_dbg("vGT: propagate bit (%d) for (%s) for VM (%d) w/o injection\n",
-				bit, info->name, vstate->vgt_id);
+				bit, info->name, vstate->vm_id);
 			vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
 				__vreg(vstate, vgt_isr(info->reg_base)),
 				__vreg(vstate, vgt_imr(info->reg_base)),
@@ -615,10 +615,10 @@ void vgt_propagate_pch_virtual_event(struct vgt_device *vstate,
 	if (!test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
 		!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
 		test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base)))) {
-		vgt_dbg("vGT: set pch bit (%d) for VM (%d)\n", bit, vstate->vgt_id);
+		vgt_dbg("vGT: set pch bit (%d) for VM (%d)\n", bit, vstate->vm_id);
 		vgt_set_pch_irq_pending(vstate);
 	} else {
-		vgt_dbg("vGT: propagate pch bit (%d) for VM (%d) w/o injection\n", bit, vstate->vgt_id);
+		vgt_dbg("vGT: propagate pch bit (%d) for VM (%d) w/o injection\n", bit, vstate->vm_id);
 		vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x)i\n",
 			__vreg(vstate, vgt_isr(info->reg_base)),
 			__vreg(vstate, vgt_imr(info->reg_base)),
@@ -680,12 +680,12 @@ void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 	info.dom = vgt->vm_id;
 	info.address = *(uint32_t *)(cfg_space + MSI_CAP_ADDRESS);
 	info.data = *(uint16_t *)(cfg_space + MSI_CAP_DATA);
-	vgt_dbg("vGT(%d): hvm injections. address (%x) data(%x)!\n",
-		vgt->vgt_id, info.address, info.data);
+	vgt_dbg("vGT: VM(%d): hvm injections. address (%x) data(%x)!\n",
+		vgt->vm_id, info.address, info.data);
 
 	if (HYPERVISOR_vcpu_op(VCPUOP_inject_raw_msi,
 						smp_processor_id(), &info) < 0)
-		printk("vGT(%d): failed to inject vmsi\n", vgt->vgt_id);
+		printk("vGT: VM(%d): failed to inject vmsi\n", vgt->vm_id);
 }
 
 static int vgt_inject_virtual_interrupt(struct vgt_device *vstate)

@@ -312,7 +312,7 @@ void vgt_set_display_pointer(int vm_id)
 
 	VGT_MMIO_WRITE(vgt->pdev, _REG_DSPASURF, __sreg(vgt, _REG_DSPASURF));
 	VGT_MMIO_WRITE(vgt->pdev, _REG_CURABASE, __sreg(vgt, _REG_CURABASE));
-	printk("vGT: set display to vgt(%d) with (%x, %x)\n", vm_id,
+	printk("vGT: set display to VM(%d) with (%x, %x)\n", vm_id,
 		__sreg(vgt, _REG_DSPASURF), __sreg(vgt, _REG_CURABASE));
 	display_pointer_id = vm_id;
 }

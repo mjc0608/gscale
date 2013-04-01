@@ -1635,7 +1635,7 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 	for (i = 0; i < EDID_MAX; ++ i) {
 		if ((i == index) || (index == -1)) {
 			if (vgt->vgt_edids[i]) {
-				printk("EDID_CLEAR: Clear EDID[0x%x] of vgt %d\n",
+				printk("EDID_CLEAR: Clear EDID[0x%x] of VM%d\n",
 					i, vgt->vm_id);
 				kfree(vgt->vgt_edids[i]);
 				vgt->vgt_edids[i] = NULL;
