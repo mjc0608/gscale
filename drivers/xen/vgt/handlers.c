@@ -71,82 +71,6 @@ bool gmbus_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return vgt_i2c_handle_gmbus_write(vgt, offset, p_data, bytes);
 }
 
-#ifdef ENABLE_GPIO_EMULATION
-bool gpio_mmio_read(struct vgt_device *vgt, unsigned int offset,
-	void *p_data, unsigned int bytes)
-{
-	bool rc = true;
-	vgt_edid_data_t **pedid;
-
-	ASSERT(bytes == 4 && !(offset & (bytes - 1)));
-
-	// printk("[I2C_EDID] gpio_mmio_read( offset:0x%x, bytes:%d).\n", offset, bytes);
-	if (offset == _REG_PCH_GPIOA) {
-		//printk("vGT(%d): Reading GPIO_A.\n", vgt->vgt_id);
-		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_VGA];
-	} else if (offset == _REG_PCH_GPIOC) {
-		//printk("vGT(%d): Reading GPIO_C.\n", vgt->vgt_id);
-		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_LVDS];
-	} else if (offset == _REG_PCH_GPIOD) {
-		//printk("vGT(%d): Reading GPIO_D.\n", vgt->vgt_id);
-		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMIC];
-	} else if (offset == _REG_PCH_GPIOE) {
-		//printk("vGT(%d): Reading GPIO_E.\n", vgt->vgt_id);
-		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMIB];
-	} else if (offset == _REG_PCH_GPIOF) {
-		//printk("vGT(%d): Reading GPIO_F.\n", vgt->vgt_id);
-		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMID];
-	} else {
-		// not supported yet GPIO access
-		printk("vGT(%d): Not supported GPIO access! \n", vgt->vgt_id);
-		dump_stack();
-		ASSERT (0);
-		return false;
-	}
-
-	vgt_i2c_handle_gpio_read(&vgt->vgt_i2c_bus, pedid, p_data);
-
-	return rc;
-}
-
-bool gpio_mmio_write(struct vgt_device *vgt, unsigned int offset,
-	void *p_data, unsigned int bytes)
-{
-	bool rc = true;
-	vgt_edid_data_t **pedid;
-
-	ASSERT(bytes == 4 && !(offset & (bytes - 1)));
-
-	//printk("[I2C_EDID] gpio_mmio_write( offset:0x%x, bytes:%d, data:0x%x).\n", offset, bytes, *(unsigned int *)p_data);
-	if (offset == _REG_PCH_GPIOA) {
-		//printk("vGT(%d): Writing GPIO_A.\n", vgt->vgt_id);
-		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_VGA];
-	} else if (offset == _REG_PCH_GPIOC) {
-		//printk("vGT(%d): Writing GPIO_C.\n", vgt->vgt_id);
-		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_LVDS];
-	} else if (offset == _REG_PCH_GPIOD) {
-		//printk("vGT(%d): Writing GPIO_D.\n", vgt->vgt_id);
-		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMIC];
-	} else if (offset == _REG_PCH_GPIOE) {
-		//printk("vGT(%d): Writing GPIO_E.\n", vgt->vgt_id);
-		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMIB];
-	} else if (offset == _REG_PCH_GPIOF) {
-		//printk("vGT(%d): Writing GPIO_F.\n", vgt->vgt_id);
-		pedid = (vgt_edid_data_t **)&vgt->vgt_edids[EDID_HDMID];
-	} else {
-		// not supported yet GPIO access
-		printk("vGT(%d): Not supported GPIO access! \n", vgt->vgt_id);
-		dump_stack();
-		ASSERT (0);
-		return false;
-	}
-
-	vgt_i2c_handle_gpio_write(&vgt->vgt_i2c_bus, pedid, p_data);
-
-	return rc;
-}
-#endif /* ENABLE_GPIO_EMULATION */
-
 bool fence_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
@@ -2023,11 +1947,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_BLC_PWM_PCH_CTL2, 4, F_MGMT, 0, D_ALL, NULL, NULL},
 
 {_REG_PCH_GMBUS0, 4*4, F_VIRT, 0, D_ALL, gmbus_mmio_read, gmbus_mmio_write},
-#ifdef ENABLE_GPIO_EMULATION
-{_REG_PCH_GPIOA, 6*6, F_VIRT, 0, D_ALL, gpio_mmio_read, gpio_mmio_write},
-#else
 {_REG_PCH_GPIOA, 6*6, F_VIRT, 0, D_ALL, NULL, NULL},
-#endif
 
 {_REG_DP_BUFTRANS, 0x28, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PCH_DPB_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL,

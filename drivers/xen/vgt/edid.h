@@ -26,11 +26,6 @@
 #ifndef _VGT_EDID_H_
 #define _VGT_EDID_H_
 
-//#define ENABLE_GPIO_EMULATION
-#ifdef ENABLE_GPIO_EMULATION
-#include "mmio_gpio.h"
-#endif /* ENABLE_GPIO_EMULATION */
-
 #define EDID_SIZE		128
 #define EDID_ADDR		0x50 /* Linux hvm EDID addr (TODO: how to get this addr ? )*/
 
@@ -50,10 +45,6 @@
 typedef struct {
 	unsigned char edid_block[EDID_SIZE];
 }vgt_edid_data_t;
-
-#ifdef ENABLE_GPIO_EMULATION
-#include "vgt_mmio_gpio.h"
-#endif
 
 typedef enum {
 	GMBUS_NOCYCLE	= 0x0,
@@ -290,9 +281,6 @@ typedef struct {
 	vgt_edid_t edid_slave;
 
 	/* different implementations below */
-#ifdef ENABLE_GPIO_EMULATION
-	vgt_i2c_bitbang_t bitbang;
-#endif /* ENABLE_GPIO_EMULATION */
 	vgt_i2c_gmbus_t gmbus;
 	vgt_i2c_aux_ch_t aux_ch;
 }vgt_i2c_bus_t;
@@ -316,11 +304,5 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 				vgt_edid_data_t **pedid,
 				unsigned int offset,
 				VGT_DP_PORTS_IDX port_idx, void *p_data);
-#ifdef ENABLE_GPIO_EMULATION
-void vgt_i2c_handle_gpio_read(vgt_i2c_bus_t *i2c_bus,
-				vgt_edid_data_t **pedid, void *p_data);
-void vgt_i2c_handle_gpio_write(vgt_i2c_bus_t *i2c_bus,
-				vgt_edid_data_t **pedid, void *p_data);
-#endif /* ENABLE_GPIO_EMULATION */
 
 #endif /*_VGT_EDID_H_*/
