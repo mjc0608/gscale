@@ -391,10 +391,6 @@ void vgt_release_instance(struct vgt_device *vgt)
 	if (shadow_tail_based_qos)
 		vgt_destroy_rb_tailq(vgt);
 
-	/* FIXME: display switch will be
-	 * a disaster after this */
-	vgt_destroy_attached_port(vgt);
-
 	vgt_hvm_info_deinit(vgt);
 	vgt->pdev->device[vgt->vgt_id] = NULL;
 

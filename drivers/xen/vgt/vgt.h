@@ -650,49 +650,6 @@ enum vgt_output_type {
 	VGT_OUTPUT_MAX
 };
 
-struct vgt_port_struct {
-	bool enabled;
-	enum vgt_output_type output_type;
-	enum vgt_pipe attached_pipe;
-	enum vgt_plane attached_plane;
-	struct vgt_port_dsp_set_funcs *port_dsp_set_funcs;
-	void *private;
-};
-
-/* Both DP and eDP port use this */
-struct vgt_dp_port {
-	unsigned int dp_ctrl_reg;
-	vgt_reg_t dp_ctrl;
-	u8 link_bw;
-	u8 lane_count;
-	u8 link_configuration[DP_LINK_CONFIGURATION_SIZE];
-	u8 train_set[4];
-	bool is_pch_edp;
-};
-
-struct vgt_port_dsp_set_funcs {
-	void (*mode_fixup)(struct vgt_device *vgt,
-			struct vgt_port_struct *port_struct);
-	void (*prepare)(struct vgt_device *vgt,
-			struct vgt_port_struct *port_struct);
-	void (*mode_set)(struct vgt_device *vgt,
-			struct vgt_port_struct *port_struct);
-	void (*commit)(struct vgt_device *vgt,
-			struct vgt_port_struct *port_struct);
-	void (*detect)(struct vgt_device *vgt,
-			struct vgt_port_struct *port_struct);
-};
-
-
-void vgt_destroy_attached_port(struct vgt_device *vgt);
-struct vgt_dp_port *init_vgt_dp_port_private(
-		unsigned int dp_ctrl_reg,
-		bool is_pch_edp);
-int init_vgt_port_struct(struct vgt_device *vgt,
-		enum vgt_pipe pipe,
-		enum vgt_plane plane,
-		enum vgt_output_type otype);
-
 struct pgt_statistics {
 	u64	irq_num;
 	u64	last_pirq;
@@ -1434,11 +1391,6 @@ static inline unsigned long __REG_READ(struct pgt_device *pdev,
 	VGT_MMIO_WRITE(vgt->pdev, off, __vreg(vgt, off))
 
 #define ARRAY_NUM(x)		(sizeof(x) / sizeof(x[0]))
-
-/* Save/Restore display context */
-int vgt_save_state(struct vgt_device *vgt);
-int vgt_restore_state(struct vgt_device *vgt);
-
 
 /* context scheduler */
 #define CYCLES_PER_USEC	0x10c7ull
