@@ -738,7 +738,7 @@ void vgt_init_i2c_bus(vgt_i2c_bus_t *i2c_bus)
 	 * line is free
 	 */
 	i2c_bus->bitbang.sda_state = VGT_I2C_HIGH;
-	i2c_bus->bitbang.sda_state = VGT_I2C_HIGH;
+	i2c_bus->bitbang.scl_state = VGT_I2C_HIGH;
 #endif /* ENABLE_GPIO_EMULATION */
 
 	memset(&i2c_bus->gmbus, 0, sizeof(vgt_i2c_gmbus_t));
