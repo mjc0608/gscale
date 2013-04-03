@@ -544,24 +544,27 @@ int vgt_hvm_enable (struct vgt_device *vgt)
 	return rc;
 }
 
-int vgt_hvm_map_opregion (struct vgt_device *vgt, int map)
+int vgt_hvm_opregion_map(struct vgt_device *vgt, int map)
 {
-	uint32_t opregion;
+	void *opregion;
 	struct xen_hvm_vgt_map_mmio memmap;
 	int rc;
+	int i;
 
-	opregion = vgt->opregion_pa;
+	opregion = vgt->state.opregion_va;
 
-	printk("Direct map OpRegion 0x%x\n", opregion);
+	memset(&memmap, 0, sizeof(memmap));
+	for (i = 0; i < VGT_OPREGION_PAGES; i++) {
 
-	memmap.first_gfn = opregion >> PAGE_SHIFT;
-	memmap.first_mfn = opregion >> PAGE_SHIFT;
-	memmap.nr_mfns = VGT_OPREGION_PAGES;
-	memmap.map = map;
-	memmap.domid = vgt->vm_id;
-	rc = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
-	if (rc != 0)
-		printk(KERN_ERR "vgt_hvm_map_opregion fail with %d!\n", rc);
+		memmap.first_gfn = vgt->state.opregion_gfn[i];
+		memmap.first_mfn = virt_to_mfn(opregion + i*PAGE_SIZE);
+		memmap.nr_mfns = 1;
+		memmap.map = map;
+		memmap.domid = vgt->vm_id;
+		rc = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
+		if (rc != 0)
+			vgt_err("vgt_hvm_map_opregion fail with %d!\n", rc);
+	}
 
 	return rc;
 }

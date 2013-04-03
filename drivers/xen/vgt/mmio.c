@@ -26,6 +26,7 @@
  */
 
 #include <linux/acpi.h>
+#include <linux/pci.h>
 
 #include <xen/events.h>
 #include <xen/xen-ops.h>
@@ -627,27 +628,62 @@ static irqreturn_t vgt_hvm_io_req_handler(int irq, void* dev)
 	return IRQ_HANDLED;
 }
 
-static void vgt_hvm_opregion_init(struct vgt_device *vgt)
+static bool vgt_hvm_opregion_resinit(struct vgt_device *vgt, uint32_t gpa)
 {
-	uint8_t* buf;
-	vgt->opregion_pa = *(uint32_t*)(vgt->state.cfg_space + VGT_REG_CFG_OPREGION );
-	vgt->opregion_va = acpi_os_ioremap(vgt->opregion_pa,
-				VGT_OPREGION_PAGES);
-	ASSERT(vgt->opregion_va);
+	void *orig_va = vgt->pdev->opregion_va;
+	uint8_t	*buf;
+	int i;
+
+	if (vgt->state.opregion_va) {
+		vgt_err("VM%d tried to init opregion multiple times!\n",
+				vgt->vm_id);
+		return false;
+	}
+	if (orig_va == NULL) {
+		vgt_err("VM%d: No mapped OpRegion available\n", vgt->vm_id);
+		return false;
+	}
+
+	vgt->state.opregion_va = (void *)__get_free_pages(GFP_ATOMIC |
+			GFP_DMA32 | __GFP_ZERO,
+			VGT_OPREGION_PORDER);
+	if (vgt->state.opregion_va == NULL) {
+		vgt_err("VM%d: failed to allocate memory for opregion\n",
+				vgt->vm_id);
+		return false;
+	}
+
+	memcpy_fromio(vgt->state.opregion_va, orig_va, VGT_OPREGION_SIZE);
+
+	for (i = 0; i < VGT_OPREGION_PAGES; i++)
+		vgt->state.opregion_gfn[i] = (gpa >> PAGE_SHIFT) + i;
 
 	/* for unknown reason, the value in LID field is incorrect
 	 * which block the windows guest, so workaround it by force
 	 * setting it to "OPEN"
 	 */
-
-	buf = (uint8_t*)vgt->opregion_va;
+	buf = (uint8_t *)vgt->state.opregion_va;
 	buf[VGT_OPREGION_REG_CLID] = 0x3;
+
+	return true;
 }
 
-int vgt_hvm_io_init(struct vgt_device *vgt)
+int vgt_hvm_opregion_init(struct vgt_device *vgt, uint32_t gpa)
 {
-	vgt_hvm_opregion_init(vgt);
-	return vgt_hvm_map_opregion(vgt, 1);
+	if (vgt_hvm_opregion_resinit(vgt, gpa))
+		return vgt_hvm_opregion_map(vgt, 1);
+
+	return false;
+}
+
+void vgt_initial_opregion_setup(struct pgt_device *pdev)
+{
+	pci_read_config_dword(pdev->pdev, VGT_REG_CFG_OPREGION,
+			&pdev->opregion_pa);
+	pdev->opregion_va = acpi_os_ioremap(pdev->opregion_pa,
+			VGT_OPREGION_SIZE);
+	if (pdev->opregion_va == NULL)
+		vgt_err("Directly map OpRegion failed\n");
 }
 
 int vgt_hvm_info_init(struct vgt_device *vgt)
@@ -709,8 +745,11 @@ void vgt_hvm_info_deinit(struct vgt_device *vgt)
 	if (info == NULL)
 		return;
 
-	if (vgt->opregion_va)
-		iounmap(vgt->opregion_va);
+	if (vgt->state.opregion_va) {
+		vgt_hvm_opregion_map(vgt, 0);
+		free_pages((unsigned long)vgt->state.opregion_va,
+				VGT_OPREGION_PORDER);
+	}
 
 	if (!info->nr_vcpu || info->evtchn_irq == NULL)
 		goto out1;

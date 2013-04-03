@@ -260,6 +260,10 @@ typedef struct {
 	uint8_t saveGR[25];	/* CRT controller register */
 	uint8_t saveAR[21];
 	uint8_t saveCR[37];
+
+	/* OpRegion state */
+	void		*opregion_va;
+	uint64_t	opregion_gfn[VGT_OPREGION_PAGES];
 } vgt_state_t;
 
 #define VGT_PPGTT_PDE_ENTRIES	512 /* current 512 entires for 2G mapping */
@@ -392,7 +396,7 @@ extern bool need_scan_attached_ports;
 extern bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 		struct vgt_device *next_vgt);
 extern int vgt_hvm_info_init(struct vgt_device *vgt);
-extern int vgt_hvm_io_init(struct vgt_device *vgt);
+extern int vgt_hvm_opregion_init(struct vgt_device *vgt, uint32_t gpa);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
 extern int vgt_hvm_enable(struct vgt_device *vgt);
 extern void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs);
@@ -499,9 +503,6 @@ struct vgt_device {
 	struct vgt_statistics	stat;		/* statistics info */
 
 	bool		ballooning;		/* VM supports ballooning */
-	void*		opregion_va;
-	uint32_t	opregion_pa;
-
 	struct work_struct fb_debugfs_work;
 
 	/* PPGTT info: currently not per-ring but assume three rings share same
@@ -766,6 +767,9 @@ struct pgt_device {
 	struct vgt_mmio_dev *mmio_dev;
 
 	struct vgt_ring_buffer *ring_buffer; /* vGT ring buffer */
+
+	uint32_t opregion_pa;
+	void *opregion_va;
 };
 
 extern struct pgt_device *perf_pgt;
@@ -1053,6 +1057,7 @@ extern void vgt_toggle_ctx_switch(bool enable);
 extern void vgt_setup_reg_info(struct pgt_device *pdev);
 extern bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev);
 extern bool vgt_initial_mmio_setup (struct pgt_device *pdev);
+extern void vgt_initial_opregion_setup(struct pgt_device *pdev);
 extern void state_vreg_init(struct vgt_device *vgt);
 extern void state_sreg_init(struct vgt_device *vgt);
 
@@ -1914,6 +1919,36 @@ static inline bool vgt_has_pch_irq_pending(struct vgt_device *vstate)
 		*vgt_vreg(state, reg) = val;			\
 	} while (0)
 
+#define VGT_OPREGION_FUNC(scic)						\
+	({								\
+		uint32_t __ret;						\
+		__ret = (scic & _REGBIT_OPREGION_SCIC_FUNC_MASK) >>	\
+		_REGBIT_OPREGION_SCIC_FUNC_SHIFT;			\
+		__ret;							\
+	})
+
+#define VGT_OPREGION_SUBFUNC(scic)					\
+	({								\
+		uint32_t __ret;						\
+		__ret = (scic & _REGBIT_OPREGION_SCIC_SUBFUNC_MASK) >>	\
+			_REGBIT_OPREGION_SCIC_SUBFUNC_SHIFT;		\
+		__ret;							\
+	})
+/* Only allowing capability get */
+static inline bool vgt_opregion_is_capability_get(uint32_t scic)
+{
+	uint32_t func, subfunc;
+
+	func = VGT_OPREGION_FUNC(scic);
+	subfunc = VGT_OPREGION_SUBFUNC(scic);
+
+	if (func == VGT_OPREGION_SCIC_Q_FUNC &&
+			subfunc == VGT_OPREGION_SCIC_Q_SUBFUNC)
+		return true;
+
+	return false;
+}
+
 extern struct vgt_irq_ops snb_irq_ops;
 void inject_hvm_virtual_interrupt(struct vgt_device *vgt);
 void inject_dom0_virtual_interrupt(struct vgt_device *vgt);
@@ -2177,7 +2212,7 @@ void vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
 void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
 	unsigned int port, unsigned int bytes, unsigned long *val);
 
-int vgt_hvm_map_opregion (struct vgt_device *vgt, int map);
+int vgt_hvm_opregion_map(struct vgt_device *vgt, int map);
 struct vm_struct *map_hvm_iopage(struct vgt_device *vgt);
 int hvm_get_parameter_by_dom(domid_t domid, int idx, uint64_t *value);
 int xen_get_nr_vcpu(int vm_id);

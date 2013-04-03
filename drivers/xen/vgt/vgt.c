@@ -184,6 +184,7 @@ bool initial_phys_states(struct pgt_device *pdev)
 #endif
 
 	vgt_initial_mmio_setup(pdev);
+	vgt_initial_opregion_setup(pdev);
 
 	/* FIXME: GMBUS2 has an in-use bit as the hw semaphore, and we should recover
 	 * it after the snapshot. Remove this workaround after GMBUS virtualization
@@ -435,6 +436,9 @@ void vgt_destroy(void)
 		iounmap(pdev->gttmmio_base_va);
 	if (pdev->gmadr_va)
 		iounmap(pdev->gmadr_va);
+	if (pdev->opregion_va)
+		iounmap(pdev->opregion_va);
+
 	while ( !list_empty(&pdev->rendering_idleq_head)) {
 		for (pos = pdev->rendering_idleq_head.next;
 			pos != &pdev->rendering_idleq_head; pos = next) {

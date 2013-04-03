@@ -73,6 +73,37 @@ static bool vgt_cfg_sci_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+/*
+ * emulate the GetBIOSData function with 'supported calls' subfunction
+ */
+static void vgt_hvm_opregion_handle_request(struct vgt_device *vgt, uint32_t swsci)
+{
+	uint32_t *scic, *parm;
+	scic = vgt->state.opregion_va + VGT_OPREGION_REG_SCIC;
+	parm = vgt->state.opregion_va + VGT_OPREGION_REG_PARM;
+
+	if (!(swsci & _REGBIT_CFG_SWSCI_SCI_SELECT)) {
+		vgt_warn("VM%d requesting SMI service\n", vgt->vm_id);
+		return;
+	}
+	/* ignore non 0->1 trasitions */
+	if ((vgt->state.cfg_space[VGT_REG_CFG_SWSCI_TRIGGER] &
+				_REGBIT_CFG_SWSCI_SCI_TRIGGER) ||
+			!(swsci & _REGBIT_CFG_SWSCI_SCI_TRIGGER)) {
+		return;
+	}
+
+	if (!vgt_opregion_is_capability_get(*scic)) {
+		vgt_warn("VM%d requesting runtime service: func 0x%x, subfunc 0x%x\n",
+				vgt->vm_id, VGT_OPREGION_FUNC(*scic),
+				VGT_OPREGION_SUBFUNC(*scic));
+		return;
+	}
+
+	*scic = 0;
+	*parm = 0;
+}
+
 bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int offset, void *p_data, int bytes)
 {
 
@@ -84,12 +115,12 @@ bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int offset, void *p_d
 	switch (offset) {
 		case 0:
 		case 4:
-		break;
+			break;
 		case VGT_REG_CFG_SWSCI_TRIGGER:
 			vgt_cfg_sci_read(vgt, offset, p_data, bytes);
 			break;
 		default:
-		break;
+			break;
 	}
 	return true;
 }
@@ -141,7 +172,24 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 			break;
 
 		case VGT_REG_CFG_SWSCI_TRIGGER:
-			rc = vgt_cfg_sci_write(vgt, off, p_data, bytes);
+			new = *(uint32_t *)p_data;
+			if (vgt->vm_id == 0)
+				rc = vgt_cfg_sci_write(vgt, off, p_data, bytes);
+			else
+				vgt_hvm_opregion_handle_request(vgt, new);
+			break;
+
+		case VGT_REG_CFG_OPREGION:
+			new = *(uint32_t *)p_data;
+			if (vgt->vm_id == 0) {
+				/* normally domain 0 shouldn't write this reg */
+				memcpy(&vgt->state.cfg_space[off], p_data, bytes);
+			} else if (vgt->state.opregion_va == NULL) {
+				vgt_hvm_opregion_init(vgt, new);
+				memcpy(&vgt->state.cfg_space[off], p_data, bytes);
+			} else
+				vgt_warn("VM%d write OPREGION multiple times",
+						vgt->vm_id);
 			break;
 
 		case VGT_REG_CFG_SPACE_BAR1+4:

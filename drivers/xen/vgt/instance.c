@@ -248,7 +248,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	if (vgt->vm_id != 0){
 		/* HVM specific init */
 		if ((rc = vgt_hvm_info_init(vgt)) < 0 ||
-			(rc = vgt_hvm_io_init(vgt)) < 0 ||
 			(rc = vgt_hvm_enable(vgt)) < 0)
 			goto err;
 		if (pdev->enable_ppgtt) {
