@@ -32,20 +32,6 @@
 #include <xen/vgt.h>
 #include "vgt.h"
 
-#undef VGT_DEBUG
-#define vgt_printk(fmt, args...)					\
-	do {								\
-		printk("%s: %d: vGT: "fmt"\n", __func__, __LINE__, ##args);\
-	} while (0)
-
-#define show_sreg(vgt, reg)				\
-	do {						\
-		vgt_reg_t val;				\
-		ASSERT(!((reg) & 0x3));			\
-		val = __sreg(vgt, (reg));		\
-		vgt_printk("vgt(%d): sreg(%08x) value(%08x)", vgt->vm_id, (reg), val); \
-	} while (0)
-
 #define vgt_restore_mmio_reg(offset)							\
 	do {										\
 		__sreg(vgt, (offset)) = mmio_g2h_gmadr(vgt, (offset), __vreg(vgt, (offset))); \
@@ -63,43 +49,6 @@
 		__vreg(vgt, (offset)) = mmio_h2g_gmadr(vgt, (offset), __sreg(vgt, (offset)));\
 	} while(0)
 
-#define not_done()					\
-	do {						\
-		printk(KERN_WARNING"%s: %d:not done yet!\n", __func__, __LINE__); \
-		BUG();					\
-	} while(0)
-
-static void vgt_wait_for_vblank(struct vgt_device *vgt, enum vgt_pipe pipe)
-{
-	vgt_reg_t o_cnt, n_cnt;
-	unsigned int reg;
-	struct pgt_device *pdev = vgt->pdev;
-
-	ASSERT(pipe < PIPE_C);
-
-	reg = VGT_PIPE_FRMCOUNT(pipe);
-	o_cnt = VGT_MMIO_READ(pdev, reg);
-	mdelay(50);
-	n_cnt = VGT_MMIO_READ(pdev, reg);
-	if (n_cnt != o_cnt) {
-		vgt_printk("vblank on %s done!", VGT_PIPE_NAME(pipe));
-		return;
-	} else {
-		/* For debug purpose */
-#if 0
-		vgt_reg_t deier, deiir, deimr, pipeconf,
-		deier = VGT_MMIO_READ(pdev, _REG_DEIER);
-		deimr = VGT_MMIO_READ(pdev, _REG_DEIMR);
-		deiir = VGT_MMIO_READ(pdev, _REG_DEIIR);
-		pipeconf = VGT_MMIO_READ(pdev, VGT_PIPECONF(pipe));
-		vgt_printk("deier(%08x), deiir(%08x), deimr(%08x), pipeconf(%08x)"
-				" delay another 50 ms...",
-				deier, deiir, deimr, pipeconf);
-#endif
-		vgt_printk("vblank on %s time-out!", VGT_PIPE_NAME(pipe));
-	}
-}
-
 static void vgt_update_cursor(struct vgt_device *vgt,
 		enum vgt_pipe pipe)
 {
@@ -107,7 +56,6 @@ static void vgt_update_cursor(struct vgt_device *vgt,
 	vgt_restore_sreg(VGT_CURPOS(pipe));
 	vgt_restore_sreg(VGT_CURCNTR(pipe));
 	vgt_restore_sreg(VGT_CURBASE(pipe));
-	vgt_wait_for_vblank(vgt, pipe);
 }
 
 static void vgt_restore_display(struct vgt_device *vgt)
@@ -194,7 +142,7 @@ static void vgt_flush_display_plane(struct vgt_device *vgt,
 
 	ASSERT(plane < PLANE_C);
 
-	vgt_printk("flush display %s", VGT_PLANE_NAME(plane));
+	vgt_dbg("flush display %s", VGT_PLANE_NAME(plane));
 	reg_data = VGT_MMIO_READ(pdev, VGT_DSPLINOFF(plane));
 	VGT_MMIO_WRITE(pdev, VGT_DSPLINOFF(plane), reg_data);
 	reg_data = VGT_MMIO_READ(pdev, VGT_DSPSURF(plane));
@@ -214,23 +162,23 @@ static int vgt_restore_state(struct vgt_device *vgt)
 	vgt_restore_mmio_reg(_REG_FDI_RXA_IMR);
 	vgt_restore_mmio_reg(_REG_FDI_RXB_IMR);
 
-	printk("vGT: restoring DSPAXXX ...\n");
+	vgt_dbg("vGT: restoring DSPAXXX ...\n");
 	vgt_restore_sreg(_REG_DSPACNTR);
 	vgt_restore_sreg(_REG_DSPASTRIDE);
 	vgt_restore_sreg(_REG_DSPASURF);
 	vgt_restore_sreg(_REG_DSPATILEOFF);
 	vgt_restore_sreg(_REG_DSPALINOFF);
 	VGT_POST_READ(vgt->pdev, _REG_DSPACNTR);
-	printk("vGT: restoring DSPAXXX done!\n");
+	vgt_dbg("vGT: restoring DSPAXXX done!\n");
 
-	printk("vGT: restoring DSPBXXX ...\n");
+	vgt_dbg("vGT: restoring DSPBXXX ...\n");
 	vgt_restore_sreg(_REG_DSPBCNTR);
 	vgt_restore_sreg(_REG_DSPBSTRIDE);
 	vgt_restore_sreg(_REG_DSPBSURF);
 	vgt_restore_sreg(_REG_DSPBTILEOFF);
 	vgt_restore_sreg(_REG_DSPBLINOFF);
 	VGT_POST_READ(vgt->pdev, _REG_DSPACNTR);
-	printk("vGT: restoring DSPBXXX done!\n");
+	vgt_dbg("vGT: restoring DSPBXXX done!\n");
 
 	for (i = 0; i < 16; i++) {
 		vgt_restore_mmio_reg(_REG_SWF00 + (i << 2));
@@ -266,7 +214,7 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 	if (current_display_owner(pdev) == next_display_owner)
 		goto out;
 
-	printk("vGT: doing display switch: from %p to %p\n",
+	vgt_dbg("vGT: doing display switch: from %p to %p\n",
 			current_display_owner(pdev), next_display_owner);
 
 	ASSERT(spin_is_locked(&pdev->lock));
@@ -291,7 +239,7 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 	 * Need send to both prev and next owner.
 	 */
 	if (test_bit(VGT_REQUEST_IRQ, (void*)&pdev->request)) {
-		printk("vGT: handle pending interrupt in the display context switch time\n");
+		vgt_dbg("vGT: handle pending interrupt in the display context switch time\n");
 		clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 		vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
 	}
@@ -306,13 +254,13 @@ void vgt_set_display_pointer(int vm_id)
 	struct vgt_device *vgt = vmid_2_vgt_device(vm_id);
 
 	if (!vgt) {
-		printk("vGT: invalid vm_id (%d)\n", vm_id);
+		vgt_dbg("vGT: invalid vm_id (%d)\n", vm_id);
 		return;
 	}
 
 	VGT_MMIO_WRITE(vgt->pdev, _REG_DSPASURF, __sreg(vgt, _REG_DSPASURF));
 	VGT_MMIO_WRITE(vgt->pdev, _REG_CURABASE, __sreg(vgt, _REG_CURABASE));
-	printk("vGT: set display to VM(%d) with (%x, %x)\n", vm_id,
+	vgt_dbg("vGT: set display to VM(%d) with (%x, %x)\n", vm_id,
 		__sreg(vgt, _REG_DSPASURF), __sreg(vgt, _REG_CURABASE));
 	display_pointer_id = vm_id;
 }
