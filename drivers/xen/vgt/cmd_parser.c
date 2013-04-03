@@ -24,10 +24,7 @@
  *
  */
 
-#include <linux/linkage.h>
-#include <linux/module.h>
 #include <linux/slab.h>
-#include <linux/circ_buf.h>
 #include <xen/vgt.h>
 #include <xen/vgt_cmd_parser.h>
 #include "vgt.h"

@@ -27,25 +27,15 @@
  * in the file called LICENSE.GPL.
  *
  */
-/* TODO: clean up redundant head files */
-/* TODO: this file's code copied from arch/x86/xen/debugfs.c */
-#include <linux/linkage.h>
+/* TODO: this file's code copied from arch/x86/xen/debugfs.c and
+ * fs/debugfs/file.c. Can we clean up and/or minimize this file???
+ */
 #include <linux/module.h>
-#include <linux/types.h>
-#include <linux/list.h>
-#include <linux/bitops.h>
-#include <linux/slab.h>
-#include <linux/kthread.h>
 #include <linux/pci.h>
-#include <linux/hash.h>
-#include <linux/delay.h>
-#include <asm/bitops.h>
-#include <drm/intel-gtt.h>
-#include <asm/cacheflush.h>
+#include <linux/debugfs.h>
+
 #include <xen/vgt.h>
 #include "vgt.h"
-#include <linux/debugfs.h>
-#include <linux/module.h>
 
 /* Maximum lenth of stringlized integer is 10 */
 #define MAX_VM_NAME_LEN (3 + 10)

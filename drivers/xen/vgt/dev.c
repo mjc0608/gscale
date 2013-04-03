@@ -25,11 +25,7 @@
  * in the file called LICENSE.GPL.
  *
  */
-#include <linux/kernel.h>
-#include <linux/kobject.h>
-#include <linux/linkage.h>
 #include <linux/module.h>
-#include <linux/types.h>
 #include <linux/device.h>
 #include <linux/mm.h>
 #include <linux/fs.h>

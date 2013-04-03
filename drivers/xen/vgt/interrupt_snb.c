@@ -24,9 +24,7 @@
  *
  */
 
-#include <linux/linkage.h>
 #include <linux/module.h>
-#include <linux/bitops.h>
 #include <xen/vgt.h>
 #include "vgt.h"
 

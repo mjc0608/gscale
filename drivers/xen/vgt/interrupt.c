@@ -23,13 +23,7 @@
  * in the file called LICENSE.GPL.
  *
  */
-
-#include <linux/linkage.h>
 #include <linux/module.h>
-#include <linux/types.h>
-#include <linux/bitops.h>
-#include <linux/slab.h>
-#include <linux/list.h>
 #include <linux/pci.h>
 #include <xen/events.h>
 #include <xen/vgt.h>

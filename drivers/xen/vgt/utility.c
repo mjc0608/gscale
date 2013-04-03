@@ -24,31 +24,20 @@
  *
  */
 
-#include <linux/linkage.h>
-#include <linux/module.h>
-#include <linux/types.h>
-#include <linux/list.h>
-#include <linux/bitops.h>
-#include <linux/slab.h>
-#include <linux/kthread.h>
 #include <linux/pci.h>
-#include <linux/hash.h>
 #include <linux/delay.h>
-#include <linux/highmem.h>
-#include <asm/bitops.h>
+
 #include <drm/intel-gtt.h>
+
 #include <asm/cacheflush.h>
 #include <asm/xen/hypercall.h>
-#include <asm/xen/hypervisor.h>
 #include <asm/xen/page.h>
+
 #include <xen/vgt.h>
-#include <xen/interface/xen.h>
 #include <xen/xen-ops.h>
-#include <xen/interface/xen.h>
 #include <xen/interface/memory.h>
-#include <xen/interface/hvm/hvm_op.h>
 #include <xen/interface/hvm/params.h>
-#include <xen/interface/hvm/ioreq.h>
+
 #include "vgt.h"
 
 /*

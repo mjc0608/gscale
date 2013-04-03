@@ -24,14 +24,10 @@
  *
  */
 
-#include <linux/linkage.h>
-#include <linux/module.h>
-#include <linux/types.h>
-#include <linux/highmem.h>
 #include <linux/slab.h>
 
 #include <xen/vgt.h>
-#include <xen/vgt-if.h>
+
 #include "reg.h"
 #include "vgt.h"
 #include "edid.h"

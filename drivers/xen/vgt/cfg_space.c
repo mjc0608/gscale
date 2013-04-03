@@ -24,30 +24,9 @@
  *
  */
 
-#include <linux/linkage.h>
-#include <linux/module.h>
-#include <linux/types.h>
-#include <linux/list.h>
-#include <linux/slab.h>
-#include <linux/pci.h>
-#include <linux/delay.h>
-#include <linux/acpi.h>
-
 #include <asm/xen/hypercall.h>
-#include <asm/xen/hypervisor.h>
-
-#include <xen/xen.h>
-#include <xen/page.h>
-#include <xen/events.h>
-#include <xen/xen-ops.h>
-#include <xen/interface/xen.h>
-#include <xen/interface/hvm/hvm_op.h>
-#include <xen/interface/hvm/params.h>
-#include <xen/interface/hvm/ioreq.h>
-#include <xen/interface/vcpu.h>
 
 #include <xen/vgt.h>
-#include <xen/vgt-if.h>
 #include "vgt.h"
 
 typedef union _SCI_REG_DATA{

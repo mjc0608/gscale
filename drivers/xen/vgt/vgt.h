@@ -33,12 +33,14 @@
 #include <linux/wait.h>
 #include <linux/semaphore.h>
 #include <linux/cdev.h>
+#include <linux/hashtable.h>
+
 #include <xen/interface/hvm/ioreq.h>
+#include <xen/vgt-if.h>
+
 #include "edid.h"
 #include "reg.h"
 #include "ringbuffer.h"
-#include <xen/vgt-if.h>
-#include <linux/hashtable.h>
 
 struct pgt_device;
 extern struct vgt_device *dom0_vgt;

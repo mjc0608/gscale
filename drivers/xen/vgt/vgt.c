@@ -23,29 +23,14 @@
  * in the file called LICENSE.GPL.
  */
 
-#include <linux/linkage.h>
 #include <linux/module.h>
-#include <linux/types.h>
-#include <linux/list.h>
-#include <linux/bitops.h>
-#include <linux/slab.h>
 #include <linux/kthread.h>
 #include <linux/pci.h>
-#include <linux/hash.h>
-#include <linux/delay.h>
-#include <linux/highmem.h>
-#include <asm/bitops.h>
-#include <drm/intel-gtt.h>
-#include <asm/cacheflush.h>
-#include <asm/xen/hypercall.h>
-#include <asm/xen/hypervisor.h>
-#include <asm/xen/page.h>
+
 #include <xen/vgt.h>
-#include <xen/interface/xen.h>
-#include <xen/xen-ops.h>
+
 #include "vgt.h"
 #include "devtable.h"
-#include <xen/vgt-if.h>
 
 MODULE_AUTHOR("Intel Corporation");
 MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");

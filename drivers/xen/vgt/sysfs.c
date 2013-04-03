@@ -23,25 +23,7 @@
  * in the file called LICENSE.GPL.
  *
  */
-/*TODO: clean up unnecessary head files*/
-#include <linux/kernel.h>
-#include <linux/kobject.h>
-#include <linux/string.h>
-#include <linux/sysfs.h>
-#include <linux/module.h>
-//#include <linux/init.h>
-#include <linux/linkage.h>
-#include <linux/types.h>
-#include <linux/list.h>
-#include <linux/bitops.h>
 #include <linux/slab.h>
-#include <linux/kthread.h>
-#include <linux/pci.h>
-#include <linux/hash.h>
-#include <linux/delay.h>
-#include <asm/bitops.h>
-#include <drm/intel-gtt.h>
-#include <asm/cacheflush.h>
 #include <xen/vgt.h>
 #include <asm/xen/x86_emulate.h> /* only for X86EMUL_OKAY */
 #include "vgt.h"

@@ -21,25 +21,9 @@
  * in the file called LICENSE.GPL.
  *
  */
-#include <linux/linkage.h>
-#include <linux/module.h>
-#include <linux/types.h>
-#include <linux/list.h>
-#include <linux/bitops.h>
-#include <linux/slab.h>
-#include <linux/kthread.h>
 #include <linux/pci.h>
-#include <linux/hash.h>
-#include <linux/delay.h>
-#include <linux/highmem.h>
-#include <linux/sched.h>
-#include <asm/bitops.h>
-#include <drm/intel-gtt.h>
-#include <asm/cacheflush.h>
 #include <xen/vgt.h>
 #include "vgt.h"
-#include "devtable.h"
-#include <xen/vgt-if.h>
 
 /* Lets move context scheduler specific parameters here */
 bool timer_based_qos = true;
