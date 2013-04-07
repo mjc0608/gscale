@@ -282,6 +282,9 @@ void vgt_reset_gmbus_controller(struct vgt_device *vgt)
 	//__vreg(vgt, _REG_PCH_GMBUS0) = 0;
 	//__vreg(vgt, _REG_PCH_GMBUS1) = 0;
 	__vreg(vgt, _REG_PCH_GMBUS2) = _GMBUS_HW_RDY;
+	if (!vgt->vgt_i2c_bus.gmbus.pedid) {
+		__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_NAK;
+	}
 	//__vreg(vgt, _REG_PCH_GMBUS3) = 0;
 	//__vreg(vgt, _REG_PCH_GMBUS4) = 0;
 	//__vreg(vgt, _REG_PCH_GMBUS5) = 0;
