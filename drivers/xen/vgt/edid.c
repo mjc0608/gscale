@@ -147,7 +147,11 @@ static unsigned char edid_get_snap_byte(void *slave)
 			"edid_get_snap_byte with offset %d and value %d\n",
 			edid->current_read,
 			edid->edid_data->edid_block[edid->current_read]);
-	return edid->edid_data->edid_block[edid->current_read ++];
+	if (edid->edid_data) {
+		return edid->edid_data->edid_block[edid->current_read ++];
+	} else {
+		return 0;
+	}
 }
 
 /* edid_snap_stop()
