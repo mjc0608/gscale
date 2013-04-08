@@ -143,7 +143,7 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 			new = *(uint32_t *)p_data;
 			printk("Programming bar 0x%x with 0x%x\n", off, new);
 			size = vgt->state.bar_size[(off - VGT_REG_CFG_SPACE_BAR0)/8];
-			if ( new == 0xFFFFFFFF || new == 0xFFFFF800 ) {
+			if (new == 0xFFFFFFFF) {
 				/*
 				 * Power-up software can determine how much address
 				 * space the device requires by writing a value of
