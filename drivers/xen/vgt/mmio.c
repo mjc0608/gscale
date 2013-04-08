@@ -861,7 +861,7 @@ static void __vgt_initial_mmio_space (struct pgt_device *pdev,
 
 		for (j = 0; j < attr->size; j += 4) {
 			pdev->initial_mmio_state[REG_INDEX(attr->reg + j)] =
-				readl(pdev->gttmmio_base_va + attr->reg + j);
+				VGT_MMIO_READ(pdev, attr->reg + j);
 		}
 	}
 
