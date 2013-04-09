@@ -199,7 +199,7 @@ static int vgt_restore_state(struct vgt_device *vgt)
 /*
  * Do monitor owner switch.
  */
-void vgt_switch_display_owner(struct vgt_device *prev,
+void vgt_switch_foreground_vm(struct vgt_device *prev,
 	struct vgt_device *next)
 {
 	ASSERT(fastpath_dpy_switch);
@@ -212,19 +212,18 @@ void do_vgt_display_switch(struct vgt_device *to_vgt)
 	struct pgt_device *pdev = to_vgt->pdev;
 
 	vgt_dbg("vGT: doing display switch: from %p to %p\n",
-			current_display_owner(pdev), to_vgt);
+			current_foreground_vm(pdev), to_vgt);
 
 	ASSERT(spin_is_locked(&pdev->lock));
 	vgt_dbg("before irq save\n");
 	pdev->in_ctx_switch = 1;
-	vgt_irq_save_context(current_display_owner(pdev),
+	vgt_irq_save_context(current_foreground_vm(pdev),
 			VGT_OT_DISPLAY);
 	vgt_dbg("after irq save\n");
 
-	vgt_switch_display_owner(current_display_owner(pdev),
+	vgt_switch_foreground_vm(current_foreground_vm(pdev),
 			to_vgt);
-	previous_display_owner(pdev) = current_display_owner(pdev);
-	current_display_owner(pdev) = to_vgt;
+	current_foreground_vm(pdev) = to_vgt;
 
 	vgt_dbg("before irq restore\n");
 	vgt_irq_restore_context(to_vgt, VGT_OT_DISPLAY);

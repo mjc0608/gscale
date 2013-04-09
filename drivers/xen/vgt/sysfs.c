@@ -102,6 +102,26 @@ static ssize_t vgt_display_owner_show(struct kobject *kobj, struct kobj_attribut
 static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
 	const char *buf, size_t count)
 {
+	int vmid;
+	if (sscanf(buf, "%d", &vmid) != 1)
+		return -EINVAL;
+
+	if (vmid != 0) {
+		vgt_warn("Cannot change display_owner to vms other than domain0!\n");
+	}
+
+	return count;
+}
+
+static ssize_t vgt_foreground_vm_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	return sprintf(buf,"%d\n", current_foreground_vm(vgt_kobj_priv)->vm_id);
+}
+
+static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribute *attr,
+	const char *buf, size_t count)
+{
 	unsigned long flags;
 	int ret = count;
 	int vmid;
@@ -113,7 +133,6 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 
 	mutex_lock(&vgt_sysfs_lock);
 
-	//TODO: vgt_kobj_priv is the same as pdev now. make it per-pdev???
 	spin_lock_irqsave(&vgt_kobj_priv->lock, flags);
 
 	next_vgt = vmid_2_vgt_device(vmid);
@@ -124,7 +143,7 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 	}
 
 	pdev = next_vgt->pdev;
-	if (current_display_owner(pdev) == next_vgt) {
+	if (current_foreground_vm(pdev) == next_vgt) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -263,7 +282,8 @@ static struct kobj_attribute create_vgt_instance_attrs =
 	__ATTR(create_vgt_instance, 0220, NULL, vgt_create_instance_store);
 static struct kobj_attribute display_owner_ctrl_attrs =
 	__ATTR(display_owner, 0660, vgt_display_owner_show, vgt_display_owner_store);
-
+static struct kobj_attribute foreground_vm_ctrl_attrs =
+	__ATTR(foreground_vm, 0660, vgt_foreground_vm_show, vgt_foreground_vm_store);
 static struct kobj_attribute display_pointer_attrs =
 	__ATTR(display_pointer, 0660, vgt_display_pointer_show, vgt_display_pointer_store);
 
@@ -282,6 +302,7 @@ static struct kobj_attribute available_res_attrs =
 static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
 	&display_owner_ctrl_attrs.attr,
+	&foreground_vm_ctrl_attrs.attr,
 	&display_pointer_attrs.attr,
 	&hot_plug_event_attrs.attr,
 	&ctx_switch_attrs.attr,

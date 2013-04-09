@@ -346,6 +346,7 @@ int vgt_initialize(struct pci_dev *dev)
 	else
 		vgt_ctx_switch = 0;
 	current_display_owner(pdev) = vgt_dom0;
+	current_foreground_vm(pdev) = vgt_dom0;
 	current_pm_owner(pdev) = vgt_dom0;
 	current_mgmt_owner(pdev) = vgt_dom0;
 	pdev->ctx_check = 0;

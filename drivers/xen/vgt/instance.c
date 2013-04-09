@@ -265,7 +265,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 			current_render_owner(pdev) = vgt;
 
 		if (hvm_dpy_owner)
-			current_display_owner(pdev) = vgt;
+			current_foreground_vm(pdev) = vgt;
 	}
 	bitmap_zero(vgt->enabled_rings, MAX_ENGINES);
 	bitmap_zero(vgt->started_rings, MAX_ENGINES);
@@ -328,11 +328,15 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	spin_lock_irq(&pdev->lock);
 	printk("check display ownership...\n");
-	/* switch the display owner to Dom0 if needed */
+
 	if (current_display_owner(pdev) == vgt) {
-		printk("switch display ownership back to dom0\n");
+		vgt_dbg("switch display ownership back to dom0\n");
+		current_display_owner(pdev) = vgt_dom0;
+	}
+
+	if (current_foreground_vm(pdev) == vgt) {
+		vgt_dbg("switch foreground vm back to dom0\n");
 		do_vgt_display_switch(vgt_dom0);
-		previous_display_owner(pdev) = NULL;
 	}
 
 	printk("check render ownership...\n");
