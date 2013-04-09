@@ -123,20 +123,13 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 		goto out;
 	}
 
-	/* Is the switch already ongoing? */
-	if (next_display_owner != NULL) {
-		ret = -EBUSY;
-		goto out;
-	}
-
 	pdev = next_vgt->pdev;
 	if (current_display_owner(pdev) == next_vgt) {
 		ret = -EINVAL;
 		goto out;
 	}
 
-	next_display_owner = next_vgt;
-	do_vgt_display_switch(pdev);
+	do_vgt_display_switch(next_vgt);
 out:
 	spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
 

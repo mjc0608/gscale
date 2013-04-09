@@ -331,12 +331,8 @@ void vgt_release_instance(struct vgt_device *vgt)
 	/* switch the display owner to Dom0 if needed */
 	if (current_display_owner(pdev) == vgt) {
 		printk("switch display ownership back to dom0\n");
-		next_display_owner = vgt_dom0;
-		do_vgt_display_switch(pdev);
+		do_vgt_display_switch(vgt_dom0);
 		previous_display_owner(pdev) = NULL;
-	} else if (next_display_owner == vgt) {
-		/* clear possible pending display_owner switch request. */
-		next_display_owner = NULL;
 	}
 
 	printk("check render ownership...\n");

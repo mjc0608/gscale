@@ -196,8 +196,6 @@ static int vgt_restore_state(struct vgt_device *vgt)
 	return 0;
 }
 
-struct vgt_device *next_display_owner;
-
 /*
  * Do monitor owner switch.
  */
@@ -209,13 +207,12 @@ void vgt_switch_display_owner(struct vgt_device *prev,
 	vgt_restore_state(next);
 }
 
-void do_vgt_display_switch(struct pgt_device *pdev)
+void do_vgt_display_switch(struct vgt_device *to_vgt)
 {
-	if (current_display_owner(pdev) == next_display_owner)
-		goto out;
+	struct pgt_device *pdev = to_vgt->pdev;
 
 	vgt_dbg("vGT: doing display switch: from %p to %p\n",
-			current_display_owner(pdev), next_display_owner);
+			current_display_owner(pdev), to_vgt);
 
 	ASSERT(spin_is_locked(&pdev->lock));
 	vgt_dbg("before irq save\n");
@@ -225,12 +222,12 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 	vgt_dbg("after irq save\n");
 
 	vgt_switch_display_owner(current_display_owner(pdev),
-			next_display_owner);
+			to_vgt);
 	previous_display_owner(pdev) = current_display_owner(pdev);
-	current_display_owner(pdev) = next_display_owner;
+	current_display_owner(pdev) = to_vgt;
 
 	vgt_dbg("before irq restore\n");
-	vgt_irq_restore_context(next_display_owner, VGT_OT_DISPLAY);
+	vgt_irq_restore_context(to_vgt, VGT_OT_DISPLAY);
 	vgt_dbg("after irq restore\n");
 
 	pdev->in_ctx_switch = 0;
@@ -243,9 +240,6 @@ void do_vgt_display_switch(struct pgt_device *pdev)
 		clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 		vgt_handle_virtual_interrupt(pdev, VGT_OT_DISPLAY);
 	}
-
-out:
-	next_display_owner = NULL; /* mark the end of a display_owner switch */
 }
 
 static int display_pointer_id = 0;
