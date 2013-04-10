@@ -384,6 +384,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	for (i = 0; i < EDID_MAX; ++ i) {
 		if (vgt->vgt_edids[i]) {
 			kfree(vgt->vgt_edids[i]);
+			vgt->vgt_edids[i] = NULL;
 		}
 	}
 
