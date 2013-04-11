@@ -1433,9 +1433,82 @@ do {									\
 	}								\
 } while(0);
 
+int vgt_get_phys_edid_from_gmbus(struct pgt_device *pdev,
+		char *buf, u8 slave_addr,
+		u8 nr_bytes, u8 gmbus_port)
+{
+
+	int length;
+	int val;
+	int timeout;
+
+	ASSERT(nr_bytes < _GMBUS_TRANS_MAX_BYTES);
+
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, gmbus_port);
+	// write addr and offset
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS3, 0);
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1,
+			_GMBUS_SW_RDY |
+			_GMBUS_CYCLE_WAIT |
+			(1 << _GMBUS_BYTE_COUNT_SHIFT) |
+			(EDID_ADDR << _GMBUS_SLAVE_ADDR_SHIFT) |
+			_GMBUS_SLAVE_WRITE);
+	(void)VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
+
+	EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+				& (_GMBUS_NAK | _GMBUS_HW_WAIT)), 5, 10, timeout);
+
+	if (timeout || (val & _GMBUS_NAK)) {
+		VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
+		VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
+		return -EIO;
+	}
+
+	/* start read */
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1,
+			_GMBUS_SW_RDY |
+			_GMBUS_CYCLE_STOP | _GMBUS_CYCLE_WAIT |
+			(nr_bytes << _GMBUS_BYTE_COUNT_SHIFT) |
+			(slave_addr << _GMBUS_SLAVE_ADDR_SHIFT) |
+			_GMBUS_SLAVE_READ);
+	(void)VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
+
+	length = 0;
+	do {
+		int j = 0;
+		EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+					& (_GMBUS_NAK | _GMBUS_HW_RDY)), 5, 10, timeout);
+		if (timeout || (val & _GMBUS_NAK)) {
+			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
+			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
+			return -EIO;
+			break;
+		}
+
+		val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS3);
+		for (j = 0; j < 4; ++ j) {
+			buf[length] = (val) & 0xff;
+			length ++;
+			val >>= 8;
+		}
+	} while (length < nr_bytes);
+
+	/* finish reading. Check the hw state and disable gmbus. */
+	EDID_REPEAT_UNTIL((((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+					& _GMBUS_ACTIVE) == 0), 5, 10, timeout);
+	if (timeout) {
+		printk("vGT: timeout while waiting for gmbus to be inactive. Will force close.\n");
+		return -EIO;
+	}
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
+
+	return 0;
+
+}
+
 void vgt_probe_edid(struct pgt_device *pdev, int index)
 {
-	int i;
+	int i, ret;
 
 	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
 
@@ -1521,68 +1594,25 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		}
 
 		if (gmbus_port) {
-			int length;
-			int val;
-			int timeout;
-			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, gmbus_port);
-			// write addr and offset
-			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS3, 0);
-			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1,
-					_GMBUS_SW_RDY |
-					_GMBUS_CYCLE_WAIT |
-					(1 << _GMBUS_BYTE_COUNT_SHIFT) |
-					(EDID_ADDR << _GMBUS_SLAVE_ADDR_SHIFT) |
-					_GMBUS_SLAVE_WRITE);
-			(void)VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
-
-			EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
-				& (_GMBUS_NAK | _GMBUS_HW_WAIT)), 5, 10, timeout);
-
-			if (timeout || (val & _GMBUS_NAK)) {
-				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
-				VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
+			ret = vgt_get_phys_edid_from_gmbus(pdev,
+					(*pedid)->edid_block, EDID_ADDR,
+					EDID_SIZE, gmbus_port);
+			if (ret) {
+				vgt_warn("Failed to probe EDID from pin(%d)\n",
+						gmbus_port);
 				kfree(*pedid);
 				*pedid = NULL;
 				continue;
 			}
-
-			// start read.
-			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1,
-					_GMBUS_SW_RDY |
-					_GMBUS_CYCLE_STOP | _GMBUS_CYCLE_WAIT |
-					(EDID_SIZE << _GMBUS_BYTE_COUNT_SHIFT) |
-					(EDID_ADDR << _GMBUS_SLAVE_ADDR_SHIFT) |
-					_GMBUS_SLAVE_READ);
-			(void)VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
-
-			length = 0;
-			do {
-				int j = 0;
-				EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
-					& (_GMBUS_NAK | _GMBUS_HW_RDY)), 5, 10, timeout);
-				if (timeout || (val & _GMBUS_NAK)) {
-					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
-					VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
-					kfree(*pedid);
-					*pedid = NULL;
-					break;
-				}
-
-				val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS3);
-				for (j = 0; j < 4; ++ j) {
-					(*pedid)->edid_block[length] = (val) & 0xff;
-					length ++;
-					val >>= 8;
-				}
-			} while (length < EDID_SIZE);
-
-			/* finish reading. Check the hw state and disable gmbus. */
-			EDID_REPEAT_UNTIL((((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
-						& _GMBUS_ACTIVE) == 0), 5, 10, timeout);
-			if (timeout) {
-				printk("vGT: timeout while waiting for gmbus to be inactive. Will force close.\n");
+			/* Check the extension */
+			if ((*pedid)->edid_block[0x7e]) {
+				/* Disable the extension whilst
+				 * keep the checksum
+				 */
+				u8 *block = (*pedid)->edid_block;
+				block[0x7f] += block[0x7e];
+				block[0x7e] = 0;
 			}
-			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
 		}
 
 		if (aux_ch_addr) {
