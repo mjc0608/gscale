@@ -164,19 +164,9 @@ bool initial_phys_states(struct pgt_device *pdev)
 	pdev->gmadr_base = bar1 & ~0xf;
 	printk("gttmmio: 0x%llx, gmadr: 0x%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
 
-	/* TODO: no need for this mapping since hypercall is used */
-	pdev->gttmmio_base_va = ioremap (pdev->gttmmio_base,
-		pdev->mmio_size + pdev->gtt_size);
-	if ( pdev->gttmmio_base_va == NULL ) {
-		printk("Insufficient memory for ioremap1\n");
-		return false;
-	}
-	printk("gttmmio_base_va: 0x%llx\n", (uint64_t)pdev->gttmmio_base_va);
-
 #if 1		// TODO: runtime sanity check warning...
 	pdev->gmadr_va = ioremap (pdev->gmadr_base, pdev->bar_size[1]);
 	if ( pdev->gmadr_va == NULL ) {
-		iounmap(pdev->gttmmio_base_va);
 		printk("Insufficient memory for ioremap2\n");
 		return false;
 	}
@@ -426,8 +416,7 @@ void vgt_destroy(void)
 	vgt_release_debugfs();
 
 	free_gtt(pdev);
-	if (pdev->gttmmio_base_va)
-		iounmap(pdev->gttmmio_base_va);
+
 	if (pdev->gmadr_va)
 		iounmap(pdev->gmadr_va);
 	if (pdev->opregion_va)

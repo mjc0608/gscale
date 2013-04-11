@@ -682,7 +682,6 @@ struct pgt_device {
 	uint64_t total_gm_sz;	/* size of available GM space, e.g 2M GTT is 2GB */
 
 	uint64_t gttmmio_base;	/* base of GTT and MMIO */
-	void *gttmmio_base_va;	/* virtual base of mmio */
 	uint64_t gmadr_base;	/* base of GMADR */
 	void *gmadr_va;		/* virtual base of GMADR */
 	u32 mmio_size;
@@ -1289,8 +1288,6 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 		g_gm_is_hidden(vgt, g_start + size - 1);
 }
 
-#define GTT_BASE(pdev)		(pdev->gttmmio_base + pdev->mmio_size)
-#define GTT_VBASE(pdev)		(pdev->gttmmio_base_va + pdev->mmio_size)
 #define GTT_SIZE				(2* SIZE_1MB)
 #define reg_is_mmio(pdev, reg)	\
 	(reg >= 0 && reg < pdev->mmio_size)
@@ -1307,12 +1304,6 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 	((u32)((addr - gm_base(pdev)) >> GTT_PAGE_SHIFT))
 
 #define GTT_OFFSET_TO_INDEX(offset)		((offset) >> 2)
-
-#define GTT_ADDR(pdev, index)		\
-	(GTT_BASE(pdev) + index * GTT_ENTRY_SIZE)
-
-#define GTT_VADDR(pdev, index)		\
-	((u32*)GTT_VBASE(pdev) + index)
 
 static inline uint32_t g2h_gtt_index(struct vgt_device *vgt, uint32_t g_index)
 {
