@@ -30,24 +30,15 @@
 
 struct kobject *vgt_ctrl_kobj;
 static struct kset *vgt_kset;
-static struct pgt_device *vgt_kobj_priv;
 static DEFINE_MUTEX(vgt_sysfs_lock);
 
 static void vgt_kobj_release(struct kobject *kobj)
 {
 	pr_debug("kobject: (%p): %s\n", kobj, __func__);
-	/* FIXME: we do not deallocate our kobject */
+	/* NOTE: we do not deallocate our kobject */
+	/* see the comment before vgt_init_sysfs() */
 	//kfree(kobj);
 }
-
-#if 0
-static ssize_t vgt_create_instance_show(struct kobject *kobj, struct kobj_attribute *attr,
-			char *buf)
-{
-	/* TODO: show some global statistics ? */
-	return sprintf(buf, "To be done...\n");
-}
-#endif
 
 static int vgt_add_state_sysfs(vgt_params_t vp);
 static int vgt_del_state_sysfs(vgt_params_t vp);
@@ -95,8 +86,8 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
 static ssize_t vgt_display_owner_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
 {
-	/* TODO: show the current owner ??? */
-	return sprintf(buf,"%d\n", current_display_owner(vgt_kobj_priv)->vm_id);
+	struct pgt_device *pdev = &default_device;
+	return sprintf(buf,"%d\n", current_display_owner(pdev)->vm_id);
 }
 
 static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribute *attr,
@@ -116,7 +107,7 @@ static ssize_t vgt_display_owner_store(struct kobject *kobj, struct kobj_attribu
 static ssize_t vgt_foreground_vm_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
 {
-	return sprintf(buf,"%d\n", current_foreground_vm(vgt_kobj_priv)->vm_id);
+	return sprintf(buf,"%d\n", current_foreground_vm((&default_device))->vm_id);
 }
 
 static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribute *attr,
@@ -133,7 +124,7 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 
 	mutex_lock(&vgt_sysfs_lock);
 
-	spin_lock_irqsave(&vgt_kobj_priv->lock, flags);
+	spin_lock_irqsave(&default_device.lock, flags);
 
 	next_vgt = vmid_2_vgt_device(vmid);
 	if (next_vgt == NULL) {
@@ -150,7 +141,7 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 
 	do_vgt_fast_display_switch(next_vgt);
 out:
-	spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
+	spin_unlock_irqrestore(&default_device.lock, flags);
 
 	mutex_unlock(&vgt_sysfs_lock);
 
@@ -246,12 +237,12 @@ static ssize_t vgt_dpy_switch_show(struct kobject *kobj, struct kobj_attribute *
  static ssize_t vgt_available_res_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
 {
-	struct pgt_device *pdev = vgt_kobj_priv;
+	struct pgt_device *pdev = &default_device;
 	ssize_t buf_len;
 
 	mutex_lock(&vgt_sysfs_lock);
 	spin_lock_irq(&pdev->lock);
-	buf_len = get_avl_vm_aperture_gm_and_fence(vgt_kobj_priv, buf,
+	buf_len = get_avl_vm_aperture_gm_and_fence(pdev, buf,
 			PAGE_SIZE);
 	spin_unlock_irq(&pdev->lock);
 	mutex_unlock(&vgt_sysfs_lock);
@@ -292,7 +283,7 @@ static ssize_t vgt_hot_plug_trigger(struct kobject *kobj,
 	unsigned hotplug_cmd = 0;
 	if (sscanf(buf, "%du", &hotplug_cmd) != 1);
 		return -EINVAL;
-	vgt_trigger_display_hot_plug(vgt_kobj_priv, (vgt_hotplug_cmd_t)hotplug_cmd);
+	vgt_trigger_display_hot_plug(&default_device, (vgt_hotplug_cmd_t)hotplug_cmd);
 	return count;
 }
 
@@ -455,7 +446,7 @@ igd_mmio_read(struct file *filp, struct kobject *kobj,
 		struct bin_attribute *bin_attr,
 		char *buf, loff_t off, size_t count)
 {
-	struct pgt_device *pdev = vgt_kobj_priv;
+	struct pgt_device *pdev = &default_device;
 	size_t init_count = count, len;
 	unsigned long data;
 
@@ -489,7 +480,7 @@ igd_mmio_write(struct file* filp, struct kobject *kobj,
 		struct bin_attribute *bin_attr,
 		char *buf, loff_t off, size_t count)
 {
-	struct pgt_device *pdev = vgt_kobj_priv;
+	struct pgt_device *pdev = &default_device;
 	size_t init_count = count, len;
 	unsigned long data;
 
@@ -547,7 +538,7 @@ static int vgt_add_state_sysfs(vgt_params_t vp)
 	if (vmid_2_vgt_device(vp.vm_id))
 		return -EINVAL;
 
-	retval = create_vgt_instance(vgt_kobj_priv, &vgt, vp);
+	retval = create_vgt_instance(&default_device, &vgt, vp);
 
 	if (retval < 0)
 		return retval;
@@ -569,7 +560,6 @@ static int vgt_add_state_sysfs(vgt_params_t vp)
 	return retval;
 }
 
-//TODO: what if the ioemu doesn't destroy the vgt instance? e.g, ioemu crash?
 static int vgt_del_state_sysfs(vgt_params_t vp)
 {
 	struct vgt_device *vgt;
@@ -612,6 +602,5 @@ int vgt_init_sysfs(struct pgt_device *pdev)
 	if (retval < 0)
 		return retval;
 
-	vgt_kobj_priv = pdev;
 	return 0;
 }
