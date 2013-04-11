@@ -546,9 +546,6 @@
 #define _REG_VGA0	0x6000
 #define _REG_VGA1	0x6004
 #define _REG_VGA_PD	0x6010
-/* FIXME: PIO ?? */
-#define _REG_DPLL_A	0x06014
-#define _REG_DPLL_B	0x06018
 
 /* refresh rate hardware control */
 #define _REG_PIPEA_DATA_M1		0x60030
@@ -664,15 +661,6 @@
 #define _REGBIT_ADPA_VSYNC_ACTIVE_HIGH		(1 << 4)
 #define _REGBIT_ADPA_HSYNC_ACTIVE_HIGH		(1 << 3)
 
-/* CPT(bits definitions belonging to adpa/lvds)
- * FIXME: fix the naming for these bits ?
- */
-#define _REGBIT_PORT_TRANS_A_SEL_CPT		0
-#define _REGBIT_PORT_TRANS_B_SEL_CPT		(1 << 29)
-#define _REGBIT_PORT_TRANS_C_SEL_CPT		(2 << 29)
-#define _REGBIT_PORT_TRANS_SEL_MASK		(3 << 29)
-#define _REGBIT_PORT_TRANS_SEL_CPT(pipe)	((pipe) << 29)
-
 /* Display port */
 #define _REG_DP_B_CTL	0xe4100
 #define _REG_DP_C_CTL	0xe4200
@@ -730,10 +718,6 @@
 
 /* PCH SDVOB multiplex with HDMIB */
 #define _REG_PCH_LVDS	0xe1180
-#define _REGBIT_LVDS_PORT_ENABLE	(1 << 31)
-#define LVDS_TRANS_SEL_MASK		(3 << 29)
-/* FIXME: actually it choose transcoder B */
-#define _REGBIT_LVDS_PIPEB_SELECT	(1 << 30)
 
 #define _REG_BLC_PWM_CPU_CTL2	0x48250
 
@@ -960,20 +944,6 @@ union _TRANS_CONFIG
 #define _REG_LGC_PALETTE_A		0x4a000
 #define _REG_LGC_PALETTE_B		0x4a800
 #define VGT_LGC_PALETTE(pipe) _VGT_PIPE(pipe, _REG_LGC_PALETTE_A, _REG_LGC_PALETTE_B)
-
-/*
- * SDVO/UDI pixel multiplier for VGA, same as DPLL_MD_UDI_MULTIPLIER_MASK.
- * This best be set to the default value (3) or the CRT won't work. No,
- * I don't entirely understand what this does...
- */
-#define _REG_DPLL_A_MD 0x0601c /* 965+ only */
-#define _REG_DPLL_B_MD 0x06020 /* 965+ only */
-/*FIXME: this offset conflict with the definition in SNB Bspec */
-//#define _REG_BLC_PWM_CTL2		0x61250 /* 965+ only */
-#define _REG_FPA0	0x06040
-#define _REG_FPA1	0x06044
-#define _REG_FPB0	0x06048
-#define _REG_FPB1	0x0604c
 
 /* Display Port */
 #define _REG_DP_TP_CTL_A		0x64040
@@ -1237,7 +1207,6 @@ enum vgt_port_type {
 #define        _REGBIT_MASTER_INTERRUPT	(1 << 31)
 #define        _REGBIT_DP_A_HOTPLUG		(1 << 19)
 #define        _REGBIT_PIPE_A_VBLANK		(1 << 7)
-/* FIXME: make better name for shift and bit */
 #define        _REGSHIFT_PCH			21
 #define        _REGBIT_PCH			(1 << 21)
 /* GEN7 */
