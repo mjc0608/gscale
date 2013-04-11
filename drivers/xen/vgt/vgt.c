@@ -291,7 +291,6 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
  *  return 0: success
  *	-1: error
  */
-//int vgt_add_state_sysfs(struct vgt_device *vgt);
 int vgt_initialize(struct pci_dev *dev)
 {
 	struct pgt_device *pdev = &default_device;
@@ -368,11 +367,6 @@ int vgt_initialize(struct pci_dev *dev)
 
 	list_add(&pdev->list, &pgt_devices);
 
-	/* FIXME: only support ONE vgt device now,
-	 * you cannot call this function more than
-	 * once
-	 */
-	//vgt_add_state_sysfs(vgt_dom0);
 	vgt_init_sysfs(pdev);
 
 #ifdef VGT_DEBUGFS_DUMP_FB
