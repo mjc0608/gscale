@@ -255,13 +255,6 @@ typedef struct {
 
 	uint32_t	bar_size[VGT_BAR_NUM];	/* 0: GTTMMIO, 1: GMADR, 2: PIO bar size */
 
-	/* FIXME: take them as part of vReg/sReg ??? */
-	/* save indexed MMIO */
-	uint8_t saveSR[8];	/* sequencer data register */
-	uint8_t saveGR[25];	/* CRT controller register */
-	uint8_t saveAR[21];
-	uint8_t saveCR[37];
-
 	/* OpRegion state */
 	void		*opregion_va;
 	uint64_t	opregion_gfn[VGT_OPREGION_PAGES];
@@ -442,7 +435,7 @@ struct vgt_sched_info {
 	int32_t priority;
 	int32_t weight;
 	int64_t time_slice;
-	/*TODO: more properties and policies should be added in*/
+	/* more properties and policies should be added in*/
 };
 
 #define VGT_TBS_DEFAULT_PERIOD (15 * 1000000) /* 15 ms */
@@ -1357,7 +1350,6 @@ static inline void __REG_WRITE(struct pgt_device *pdev,
 	 */
 	if (pdev->in_ctx_switch)
 		reg_set_saved(pdev, reg);
-	/* TODO: any license issue? */
 	ret = hcall_mmio_write(_vgt_mmio_pa(pdev, reg), bytes, val);
 	//ASSERT(ret == X86EMUL_OKAY);
 }
@@ -1370,7 +1362,6 @@ static inline unsigned long __REG_READ(struct pgt_device *pdev,
 
 	if (pdev->in_ctx_switch)
 		reg_set_saved(pdev, reg);
-	/* TODO: any license issue? */
 	ret = hcall_mmio_read(_vgt_mmio_pa(pdev, reg), bytes, &data);
 	//ASSERT(ret == X86EMUL_OKAY);
 
@@ -1566,8 +1557,9 @@ static inline bool is_ring_empty(struct pgt_device *pdev, int ring_id)
 
 	head &= RB_HEAD_OFF_MASK;
 	/*
-	 * FIXME: PRM said bit2-20 for head count, but bit3-20 for tail count
-	 * however doing that makes tail always head/2.
+	 * PRM said bit2-20 for head count, but bit3-20 for tail count:
+	 * this means: HW increases HEAD by 4, and SW must increase TAIL
+	 * by 8(SW must add padding of MI_NOOP if necessary).
 	 */
 	tail &= RB_TAIL_OFF_MASK;
 	return (head == tail);
@@ -1584,19 +1576,14 @@ static inline bool is_ring_enabled (struct pgt_device *pdev, int ring_id)
 	return (VGT_MMIO_READ(pdev, RB_CTL(pdev, ring_id)) & 1);	/* bit 0: enable/disable RB */
 }
 
-/* FIXME: use readl/writel as Xen doesn't trap GTT access now */
 static inline u32 vgt_read_gtt(struct pgt_device *pdev, u32 index)
 {
-//	printk("vgt_read_gtt: index=0x%x, gtt_addr=%lx\n", index, GTT_ADDR(pdev, index));
 	return VGT_MMIO_READ(pdev, pdev->mmio_size + index*GTT_ENTRY_SIZE);
-	//return readl(GTT_VADDR(pdev, index));
 }
 
 static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 {
-//	printk("vgt_write_gtt: index=0x%x, gtt_addr=%lx\n", index, GTT_ADDR(pdev, index));
 	VGT_MMIO_WRITE(pdev, pdev->mmio_size + index*GTT_ENTRY_SIZE , val);
-	//writel(val, GTT_VADDR(pdev, index));
 }
 
 static inline void vgt_pci_bar_write_32(struct vgt_device *vgt, uint32_t bar_offset, uint32_t val)
