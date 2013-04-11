@@ -134,7 +134,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	if ((rc = create_state_instance(vgt)) < 0)
 		goto err;
 
-	/* TODO: hard code ballooning now. We can support non-ballooning too in the future */
+	/* Hard code ballooning now. We can support non-ballooning too in the future */
 	vgt->ballooning = true;
 
 	/* present aperture to the guest at the same host address */
