@@ -336,7 +336,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	unsigned long flags;
 	vgt_reg_t old_vreg=0, old_sreg=0;
 
-	/* XXX PPGTT PTE WP comes here too. */
+	/* PPGTT PTE WP comes here too. */
 	if (pdev->enable_ppgtt && vgt->vm_id != 0 && vgt->ppgtt_initialized) {
 		struct vgt_wp_page_entry *wp;
 		wp = vgt_find_wp_page_entry(vgt, pa >> PAGE_SHIFT);
@@ -462,7 +462,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 					&tmp, req->size);
 				gpa = req->data + sign * i * req->size;
 				gva = vgt_vmem_gpa_2_va(vgt, gpa);
-				// XXX: FIXME: on the SNB laptop, writing tmp to gva can
+				// On the SNB laptop, writing tmp to gva can
 				//cause bug 119. So let's do the writing only on HSW for now.
 				if (gva != NULL && vgt->pdev->is_haswell)
 					memcpy(gva, &tmp, req->size);
