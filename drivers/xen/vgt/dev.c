@@ -32,7 +32,6 @@
 #include <xen/vgt.h>
 #include "vgt.h"
 
-struct pgt_device *default_pgt;
 static int vgt_mmio_dev_pgfault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	struct file *vm_file = vma->vm_file;
@@ -83,21 +82,20 @@ static int vgt_mmio_dev_mmap(struct file *filp, struct vm_area_struct *vma)
 
 static int vgt_mmio_dev_open(struct inode *inode, struct file *filp)
 {
-	/* TODO: we will use vm_id later to indicate */
 	unsigned int vgt_id = iminor(inode);
 	ASSERT(vgt_id < VGT_MAX_VMS);
 
-	if (!(default_pgt->device[vgt_id]))
+	if (!(default_device.device[vgt_id]))
 		return -ENODEV;
 
 	/* point to device(data) */
-	filp->private_data = default_pgt->device[vgt_id];
+	filp->private_data = default_device.device[vgt_id];
 	//ASSERT(filp->private_data == vgt_dom0);
 
 	return 0;
 }
 
-struct file_operations vgt_mmio_dev_fops = {
+static struct file_operations vgt_mmio_dev_fops = {
 	.owner = THIS_MODULE,
 	.open = vgt_mmio_dev_open,
 	.mmap = vgt_mmio_dev_mmap,
@@ -108,43 +106,35 @@ struct file_operations vgt_mmio_dev_fops = {
 
 int vgt_init_mmio_device(struct pgt_device *pdev)
 {
-	int retval = -EINVAL, devid;
-	struct vgt_mmio_dev *mmio_dev;
-	/* just use one mmio device */
-	ASSERT(pdev);
+	int retval, devid;
+	struct vgt_mmio_dev *mmio_dev = NULL;
 
-	default_pgt = pdev;
+	if ((retval = alloc_chrdev_region(&devid, 0,
+			VGT_MAX_VMS, VGT_MMIO_DEV_NAME)) < 0) {
+		vgt_err("failed to alloc chrdev region!\n");
+		return retval;
+	}
 
-	mmio_dev = vmalloc(sizeof(struct vgt_mmio_dev));
-	if (!mmio_dev) {
-		printk("vGT: failed to alloc struct vgt_mmio_dev!\n");
+	if ((mmio_dev = vmalloc(sizeof(struct vgt_mmio_dev))) == NULL) {
+		vgt_err("failed to alloc struct vgt_mmio_dev!\n");
 		return -ENOMEM;
 	}
-	pdev->mmio_dev = mmio_dev;
 
-	mmio_dev->devid_major = -EINVAL;  /* FIXME: OK with this ? */
-	mmio_dev->dev_name = VGT_MMIO_DEV_NAME;
-
-	retval = alloc_chrdev_region(&devid, 0,
-			VGT_MAX_VMS, mmio_dev->dev_name);
-	if (retval < 0) {
-		printk("vGT: failed to alloc chrdev region!\n");
-		goto free_mmio_dev;
-	}
 	mmio_dev->devid_major = MAJOR(devid);
+	mmio_dev->dev_name = VGT_MMIO_DEV_NAME;
+	pdev->mmio_dev = mmio_dev;
 
 	cdev_init(&mmio_dev->cdev, &vgt_mmio_dev_fops);
 
-	retval = cdev_add(&mmio_dev->cdev, devid, VGT_MAX_VMS);
-	if (retval < 0) {
-		printk("vGT: failed to add char device vgt_mmio_dev!\n");
+	if ((retval = cdev_add(&mmio_dev->cdev, devid, VGT_MAX_VMS)) < 0) {
+		vgt_err("failed to add char device vgt_mmio_dev!\n");
 		goto free_chrdev_region;
 	}
 
 	mmio_dev->class = class_create(THIS_MODULE,
 			mmio_dev->dev_name);
 	if (IS_ERR_OR_NULL(mmio_dev->class)) {
-		printk("vGT: mmio device class creation failed!\n");
+		vgt_err("mmio device class creation failed!\n");
 		retval = -EINVAL;
 		goto delete_cdev;
 	}
@@ -157,7 +147,6 @@ free_chrdev_region:
 	unregister_chrdev_region(
 			MKDEV(mmio_dev->devid_major, 0),
 			VGT_MAX_VMS);
-free_mmio_dev:
 	vfree(mmio_dev);
 
 	return retval;
