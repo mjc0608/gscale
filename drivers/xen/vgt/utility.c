@@ -340,7 +340,7 @@ u32 __inline dma_addr_to_pte_uc(struct pgt_device *pdev, dma_addr_t addr)
 struct page *pages[VGT_APERTURE_PAGES];
 struct page *dummy_page;
 dma_addr_t dummy_addr;
-/* TODO: check license. May move to another file */
+
 int setup_gtt(struct pgt_device *pdev)
 {
 	struct page *page;
