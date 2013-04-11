@@ -228,9 +228,6 @@ void vgt_toggle_ctx_switch(bool enable)
  * simple global spinlock now should be enough to protect the whole
  * vreg/sreg/ hwreg. In the future we can futher tune this part on
  * a necessary base.
- *
- * TODO: display switch time is long in seconds, which should be split
- * from the main thread, and also minimize its lock granularity.
  */
 int vgt_thread(void *priv)
 {
@@ -346,13 +343,7 @@ int vgt_thread(void *priv)
 
 				//show_seqno(pdev);
 				if (!vgt_save_context(prev)) {
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("vGT: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
+					vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
 						vgt_ctx_check(pdev),
 						vgt_ctx_switch(pdev),
 						prev->vgt_id,
@@ -366,13 +357,7 @@ int vgt_thread(void *priv)
 				vgt_irq_save_context(prev, VGT_OT_RENDER);
 
 				if (!vgt_restore_context(next)) {
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-					printk("vGT: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
+					vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
 						vgt_ctx_check(pdev),
 						vgt_ctx_switch(pdev),
 						prev->vgt_id,
