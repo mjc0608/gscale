@@ -108,7 +108,7 @@ static int u32_array_open(struct inode *inode, struct file *file)
 	return nonseekable_open(inode, file);
 }
 
-/* TODO: this is generic function, can used to format ring_buffer and etc. */
+/* This is generic function, used to format ring_buffer and etc. */
 static size_t format_array(char *buf, size_t bufsize, const char *fmt,
 				u32 *array, unsigned array_size)
 {
@@ -146,7 +146,6 @@ static size_t format_array(char *buf, size_t bufsize, const char *fmt,
 	return ret;
 }
 
-/*TODO: what is this function used for ??? */
 static char *format_array_alloc(const char *fmt, u32 *array, unsigned array_size)
 {
 	/* very tricky way */
@@ -163,7 +162,7 @@ static char *format_array_alloc(const char *fmt, u32 *array, unsigned array_size
 	return ret;
 }
 
-/* TODO: data copied from kernel space to user space */
+/* data copied from kernel space to user space */
 static ssize_t u32_array_read(struct file *file, char __user *buf, size_t len,
 				loff_t *ppos)
 {
@@ -418,8 +417,7 @@ static const struct file_operations irqinfo_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
-/* TODO: initialize vGT debufs top directory */
-/* FIXME: how about the second graphics card */
+/* initialize vGT debufs top directory */
 struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 {
 	struct dentry *temp_d;
@@ -466,7 +464,7 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 /* When surface A/B base address or size changed use this function
  * to update fb debugfs, and since the update for surface base
  * indicate the completion of fb update so only reconstruct debugfs
- * when detect such changes. FIXME: only support surface A right now
+ * when detect such changes. NOTE: only support surface A right now
  */
 #define _REG_SURF_BASE(p)	((p) == PIPE_A ? _REG_DSPASURF : _REG_DSPBSURF)
 #define _REG_SURF_SZ(p)	((p) == PIPE_A ? _REG_DSPASIZE : _REG_DSPBSIZE)
@@ -490,7 +488,7 @@ static void fb_debugfs_work_func(struct work_struct *work)
 	if (!surf_base)
 		return;
 
-	/* FIXME: Not sure why i915 just does not use _REG_DSPASIZE or
+	/* NOTE: Not sure why i915 just does not use _REG_DSPASIZE or
 	 * _REG_DSPBSIZE to store the fb size, defualt in fb console
 	 * mode, the size is 5763072 (4096 * 1407) */
 	if (surf_sz == 0) {
@@ -589,8 +587,6 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		printk(KERN_ERR "vGT: creation faiure for debugfs directory: vm%d\n", vgt->vm_id);
 		return -EINVAL;
 	}
-
-	/* TODO: create debugfs file per vgt as you like */
 
 	/* virtual mmio space dump */
 	p = &vgt_debugfs_data[vgt_id][VGT_DEBUGFS_VIRTUAL_MMIO];
