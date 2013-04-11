@@ -231,6 +231,7 @@ typedef struct {
 #define VGT_MAX_NUM_FENCES		16
 #define VGT_FENCE_BITMAP_BITS	VGT_MAX_NUM_FENCES
 #define VGT_RSVD_APERTURE_BITMAP_BITS (VGT_RSVD_APERTURE_SZ/PAGE_SIZE)
+#define VGT_APERTURE_PAGES	(VGT_RSVD_APERTURE_SZ >> PAGE_SHIFT)
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
 #define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 256 KB for now */
@@ -714,6 +715,9 @@ struct pgt_device {
 	/* 1 bit corresponds to 1 vgt virtual force wake request */
 	DECLARE_BITMAP(v_force_wake_bitmap, VGT_MAX_VMS);
 	spinlock_t v_force_wake_lock;
+
+	struct page *dummy_page;
+	struct page *(*rsvd_apertuer_pages)[VGT_APERTURE_PAGES];
 
 	uint64_t rsvd_aperture_sz;
 	uint64_t rsvd_aperture_base;
@@ -1277,7 +1281,6 @@ extern unsigned long rsvd_aperture_alloc(struct pgt_device *pdev,
 extern void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start,
 		unsigned long size);
 
-extern dma_addr_t dummy_addr;
 /*
  * check whether a structure pointed by MMIO, or an instruction filled in
  * the command buffer, may cross the visible and invisible boundary. That

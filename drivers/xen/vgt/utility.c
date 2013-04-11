@@ -335,34 +335,58 @@ u32 __inline dma_addr_to_pte_uc(struct pgt_device *pdev, dma_addr_t addr)
 	return pte;
 }
 
-/* FIXME: allocate instead of static */
-#define VGT_APERTURE_PAGES	(VGT_RSVD_APERTURE_SZ >> GTT_PAGE_SHIFT)
-struct page *pages[VGT_APERTURE_PAGES];
-struct page *dummy_page;
-dma_addr_t dummy_addr;
+static void vgt_free_gtt_pages(struct pgt_device *pdev)
+{
+	int i;
+	struct page *dummy_page = pdev->dummy_page;
+	struct page *(*pages)[VGT_APERTURE_PAGES] =
+		pdev->rsvd_apertuer_pages;
+
+	if (pages != NULL) {
+		for (i = 0; i < VGT_APERTURE_PAGES; i++) {
+			if ((*pages)[i] == NULL)
+				continue;
+			put_page((*pages)[i]);
+			__free_page((*pages)[i]);
+		}
+		kfree(pages);
+	}
+
+	if (dummy_page != NULL) {
+		put_page(dummy_page);
+		__free_page(dummy_page);
+	}
+}
 
 int setup_gtt(struct pgt_device *pdev)
 {
+	struct page *dummy_page;
+	struct page *(*pages)[VGT_APERTURE_PAGES];
 	struct page *page;
+
 	int i, ret, index;
 	dma_addr_t dma_addr;
 	u32 pte;
 
 	check_gtt(pdev);
+
 	printk("vGT: clear all GTT entries.\n");
+
 	dummy_page = alloc_page(GFP_KERNEL | __GFP_ZERO | GFP_DMA32);
 	if (!dummy_page)
 		return -ENOMEM;
+	pdev->dummy_page = dummy_page;
 
 	get_page(dummy_page);
 	set_pages_uc(dummy_page, 1);
 	dma_addr = pci_map_page(pdev->pdev, dummy_page, 0, PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
-	if (pci_dma_mapping_error(pdev->pdev, dma_addr))
-		return -EINVAL;
+	if (pci_dma_mapping_error(pdev->pdev, dma_addr)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	pte = dma_addr_to_pte_uc(pdev, dma_addr);
 	printk("....dummy page (0x%llx, 0x%llx)\n", page_to_phys(dummy_page), dma_addr);
-	dummy_addr = dma_addr;
 
 	/* for debug purpose */
 	memset(pfn_to_kaddr(page_to_pfn(dummy_page)), 0x77, PAGE_SIZE);
@@ -376,8 +400,17 @@ int setup_gtt(struct pgt_device *pdev)
 	vgt_dbg("content at 0x8064000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x8064000));
 
 	check_gtt(pdev);
+
 	printk("vGT: allocate vGT aperture\n");
 	/* Fill GTT range owned by vGT driver */
+
+	ASSERT(sizeof(*pages) == VGT_APERTURE_PAGES * sizeof(struct page*));
+	if ((pages = kzalloc(sizeof(*pages), GFP_KERNEL)) == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	pdev->rsvd_apertuer_pages = pages;
+
 	index = GTT_INDEX(pdev, aperture_2_gm(pdev, pdev->rsvd_aperture_base));
 	for (i = 0; i < VGT_APERTURE_PAGES; i++) {
 		/* need a DMA flag? */
@@ -392,7 +425,7 @@ int setup_gtt(struct pgt_device *pdev)
 		/* use wc instead! */
 		set_pages_uc(page, 1);
 
-		pages[i] = page;
+		(*pages)[i] = page;
 
 		/* dom0 needs DMAR anyway */
 		dma_addr = pci_map_page(pdev->pdev, page, 0, PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
@@ -415,25 +448,17 @@ int setup_gtt(struct pgt_device *pdev)
 	return 0;
 err_out:
 	printk("vGT: error in GTT initialization\n");
-	for (i = 0; i < VGT_APERTURE_PAGES; i++)
-		if (pages[i]) {
-			put_page(pages[i]);
-			__free_page(pages[i]);
-		}
+	vgt_free_gtt_pages(pdev);
 
 	return ret;
 }
 
 void free_gtt(struct pgt_device *pdev)
 {
-	int i;
 	intel_gtt_clear_range(0,
 		(phys_aperture_sz(pdev) - GTT_PAGE_SIZE)/PAGE_SIZE);
-	for (i = 0; i < phys_aperture_pages(pdev); i++)
-		if (pages[i]) {
-			put_page(pages[i]);
-			__free_page(pages[i]);
-		}
+
+	vgt_free_gtt_pages(pdev);
 }
 
 static inline int ring_space(struct vgt_ring_buffer *ring)
