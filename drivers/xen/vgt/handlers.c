@@ -1195,12 +1195,54 @@ bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
-#ifdef VGT_DEBUGFS_DUMP_FB
+bool dpy_plane_mmio_read(struct vgt_device *vgt, unsigned int offset,
+			void *p_data, unsigned int bytes)
+{
+	ASSERT (bytes == 4);
+
+	if (current_foreground_vm(vgt->pdev) == vgt) {
+		__sreg(vgt, offset) = VGT_MMIO_READ(vgt->pdev, offset);
+		__vreg(vgt, offset) = mmio_h2g_gmadr(vgt, offset,
+							__sreg(vgt, offset));
+	}
+
+	*(vgt_reg_t *)p_data = __vreg(vgt, offset);
+
+	return true;
+}
+
+bool dpy_plane_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	ASSERT (bytes == 4);
+	memcpy ((char *)vgt->state.vReg + offset, p_data, bytes);
+	memcpy ((char *)vgt->state.sReg + offset, p_data, bytes);
+	if (current_foreground_vm(vgt->pdev) == vgt) {
+		VGT_MMIO_WRITE(vgt->pdev, offset, __sreg(vgt, offset));
+	}
+	return true;
+}
+
 bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
+	enum vgt_pipe pipe = VGT_SURFPIPE(offset);
+	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
+	vgt_dbg("%s: =======: write vReg(%x), sReg(%x)\n", __func__,
+			__vreg(vgt, offset),
+			__sreg(vgt, offset));
+	if (current_foreground_vm(vgt->pdev) != vgt) {
+		/* update SURFLIVE registers to tell driver that the
+		   surface write has succeeded.
+		 */
+		__vreg(vgt, VGT_DSPSURFLIVE(pipe)) = __vreg(vgt, offset);
+		__sreg(vgt, VGT_DSPSURFLIVE(pipe)) = __sreg(vgt, offset);
+	}
+
+#ifdef VGT_DEBUGFS_DUMP_FB
 	bool rc;
 	struct pgt_device *pdev = vgt->pdev;
+
 	struct work_struct *work = &vgt->fb_debugfs_work;
 
 	ASSERT(bytes == 4 && (offset & 0x3) == 0)
@@ -1210,19 +1252,21 @@ bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		return rc;
 
 	ASSERT(work);
-	if (offset == _REG_DSPASURF)
-		surf_used_pipe = PIPE_A;
-	else if (offset == _REG_DSPBSURF)
-		surf_used_pipe = PIPE_B;
-	else /* PIPE_C ? */
-		BUG();
+	surf_used_pipe = pipe;
 
 	if (0 == queue_work(pdev->pgt_wq, &vgt->fb_debugfs_work))
 		vgt_dbg("vGT: failed to submit aready attached work!\n");
+#endif
 
 	return true;
 }
-#endif
+
+bool dspsurflive_mmio_write (struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	/* surflive is readonly registers. ignore the write from driver*/
+	return true;
+}
 
 bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
@@ -1814,41 +1858,63 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIPEB_FRMCOUNT, 4, F_DPY, 0, D_ALL, pipe_frmcount_mmio_read, NULL},
 {_REG_PIPEBSTAT, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
-{_REG_CURABASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
+{_REG_CURABASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
+						dpy_plane_mmio_write},
 {0x700AC, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
-{_REG_CURACNTR, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_CURAPOS, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_CURACNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+						dpy_plane_mmio_write},
+{_REG_CURAPOS, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+						dpy_plane_mmio_write},
 {_REG_CURAPALET_0, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_CURAPALET_1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_CURAPALET_2, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_CURAPALET_3, 4, F_DPY, 0, D_ALL, NULL, NULL},
 /* FIXME: it contains physical address */
 {0x7008C, 4, F_DPY, 0, D_ALL, NULL, vgt_error_handler},
-{_REG_CURBBASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
+{_REG_CURBBASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
+						dpy_plane_mmio_write},
 {0x700EC, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
-{_REG_CURBCNTR, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_CURBPOS, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_CURBCNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+						dpy_plane_mmio_write},
+{_REG_CURBPOS, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+						dpy_plane_mmio_write},
 {0x700D0, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {0x700D4, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {0x700D8, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {0x700DC, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
-{_REG_DSPACNTR, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPASURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
-{_REG_DSPASURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
-{_REG_DSPALINOFF, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPASTRIDE, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPAPOS, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPASIZE, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPATILEOFF, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPBCNTR, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPBSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
-{_REG_DSPBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
-{_REG_DSPBLINOFF, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPBSTRIDE, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPBPOS, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPBSIZE, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPBTILEOFF, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_DSPACNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPASURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
+							dspsurf_mmio_write},
+{_REG_DSPASURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPALINOFF, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPASTRIDE, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPAPOS, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPASIZE, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPATILEOFF, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPBCNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPBSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
+							dspsurf_mmio_write},
+{_REG_DSPBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
+							dspsurflive_mmio_write},
+{_REG_DSPBLINOFF, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPBSTRIDE, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPBPOS, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPBSIZE, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
+{_REG_DSPBTILEOFF, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
+							dpy_plane_mmio_write},
 
 {_REG_DVSACNTR, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_DVSASURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
@@ -2111,22 +2177,27 @@ reg_attr_t vgt_base_reg_info[] = {
 	 *	 removed and then placed under mgmt category, meaning
 	 *	 controlled by dom0 only
 	 */
-{_REG_TILECTL, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_DISP_ARB_CTL, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_DISP_ARB_CTL2, 4, F_WA, 0, D_ALL, NULL, NULL},
+
+{_REG_TILECTL, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
+{_REG_DISP_ARB_CTL, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_DISP_ARB_CTL2, 4, F_DPY, 0, D_ALL, NULL, NULL},
+
 {0x2050, 4, F_WA, 0, D_ALL, NULL, NULL},
 {0x12050, 4, F_WA, 0, D_ALL, NULL, NULL},
 {0x22050, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_DISPLAY_CHICKEN_BITS_1, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
-{_REG_DISPLAY_CHICKEN_BITS_2, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
-{_REG_DSPCLK_GATE_D, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
-{_REG_SOUTH_CHICKEN1, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_SOUTH_CHICKEN2, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_TRANSA_CHICKEN1, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_TRANSB_CHICKEN1, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_SOUTH_DSPCLK_GATE_D, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_TRANSA_CHICKEN2, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_TRANSB_CHICKEN2, 4, F_WA, 0, D_ALL, NULL, NULL},
+
+{_REG_DISPLAY_CHICKEN_BITS_1, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_DISPLAY_CHICKEN_BITS_2, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_DSPCLK_GATE_D, 4, F_DPY, 0, D_ALL, NULL, NULL},
+
+{_REG_SOUTH_CHICKEN1, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_SOUTH_CHICKEN2, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_TRANSA_CHICKEN1, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_TRANSB_CHICKEN1, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_SOUTH_DSPCLK_GATE_D, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_TRANSA_CHICKEN2, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_TRANSB_CHICKEN2, 4, F_DPY, 0, D_ALL, NULL, NULL},
+
 {0x3c, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
 {_REG_UCG_CTL1, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
 {_REG_UCG_CTL2, 4, F_BOOTTIME, 0, D_ALL, NULL, NULL},
@@ -2200,9 +2271,11 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PRECSC_B_LOW_COLOR_CHANNEL_OFFSET, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_SWF, 0x110, F_VIRT, 0, D_SNB, NULL, NULL},
 {_REG_SWF, 0x90, F_VIRT, 0, D_GEN7PLUS, NULL, NULL},
-{0x60110, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x61110, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x70400, 4, F_WA, 0, D_ALL, NULL, NULL},
+
+{0x60110, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x61110, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x70400, 4, F_DPY, 0, D_ALL, NULL, NULL},
+
 {0xce044, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0xe6500, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0xe6504, 4, F_VIRT, 0, D_ALL, NULL, NULL},
@@ -2213,8 +2286,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {0xe6800, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0xe6804, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 /* now looks gmbus handler can't cover 4/5 ports */
-{_REG_PCH_GMBUS4, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_PCH_GMBUS5, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_PCH_GMBUS4, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_PCH_GMBUS5, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
 {_REG_SUPER_QUEUE_CONFIG, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_MISC_CLOCK_GATING, 4, F_VIRT, 0, D_ALL, NULL, NULL},
@@ -2254,17 +2327,18 @@ reg_attr_t vgt_base_reg_info[] = {
 /* HSW */
 {0x120010, 4, F_WA, 0, D_HSW, NULL, NULL},
 {0x9008, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_DP_A_HOTPLUG_CNTL, 4, F_WA, 0, D_HSW, NULL, NULL},
+{_REG_DP_A_HOTPLUG_CNTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_VECS_TAIL, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_VECS_HEAD, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_VECS_START, 4, F_WA, 0xFFFFF000, D_HSW, NULL, NULL},
-{_REG_VECS_CTL, 4, F_WA, 0, D_HSW, NULL, NULL},
+{_REG_VECS_CTL, 4, F_WA, 0, D_HSW, NULL, NULL},//for TLB
 {_REG_GFX_FLSH_CNT, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_GEN7_COMMON_SLICE_CHICKEN1, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_GEN7_L3CNTLREG1, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_GEN7_L3_CHICKEN_MODE_REGISTER, 4, F_WA, 0, D_HSW, NULL, NULL},
 {_REG_GEN7_SQ_CHICKEN_MBCUNIT_CONFIG, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_WM_DBG, 4, F_WA, 0, D_HSW, NULL, NULL},
+{_REG_WM_DBG, 4, F_DPY, 0, D_HSW, NULL, NULL},
+
 {0x2020, 4, F_WA, 0, D_ALL, NULL, NULL},
 {_REG_IER, 4, F_WA, 0, D_HSW, NULL, NULL},
 {0x20e8, 4, F_WA, 0, D_HSW, NULL, NULL},
@@ -2286,68 +2360,91 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x44084, 4, F_WA, 0, D_HSW, NULL, NULL},
 {0x4408c, 4, F_WA, 0, D_HSW, NULL, NULL},
 {0x45260, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x45270, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_SPLL_CTL, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_WRPLL_CTL1, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_WRPLL_CTL2, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_PORT_CLK_SEL_DDIC, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_PORT_CLK_SEL_DDIE, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_TRANS_CLK_SEL_A, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x46408, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x46508, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x49040, 0xc, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{0x49080, 4, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{0x49090, 0x14, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{0x49180, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x49190, 0x14, F_WA, 0, D_HSW, NULL, NULL},
-{0x49280, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x49290, 0x14, F_WA, 0, D_HSW, NULL, NULL},
-{0x4a400, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x4a480, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x6002c, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x60200, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0xc2014, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_SBI_ADDR, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_SBI_DATA, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_SBI_CTL_STAT, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0xc6020, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0xf200c, 4, F_WA, 0, D_HSW, NULL, NULL},
+{_REG_PIPE_WM_LINETIME_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SPLL_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_WRPLL_CTL1, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_WRPLL_CTL2, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_PORT_CLK_SEL_DDIC, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_PORT_CLK_SEL_DDIE, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_TRANS_CLK_SEL_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x46408, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x46508, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x49040, 0xc, F_DPY, 0, D_HSW, NULL, NULL},
+{0x49080, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x49090, 0x14, F_DPY, 0, D_HSW, NULL, NULL},
+{0x49180, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x49190, 0x14, F_DPY, 0, D_HSW, NULL, NULL},
+{0x49280, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x49290, 0x14, F_DPY, 0, D_HSW, NULL, NULL},
+{0x4A400, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x4A480, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x6002C, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_HSW_VIDEO_DIP_CTL_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SFUSE_STRAP, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SBI_ADDR, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SBI_DATA, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SBI_CTL_STAT, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_PIXCLK_GATE, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0xF200C, 4, F_DPY, 0, D_SNB, NULL, NULL},
 {0x1082c0, 4, F_WA, 0, D_HSW, NULL, NULL},
 {0x13005c, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_TRANS_DDI_FUNC_CTL_A, 4, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{0x64010, 8, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_DP_TP_CTL_A, 4, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{_REG_DP_B, 4, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{_REG_DP_TP_CTL_B, 4, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{_REG_DP_C, 4, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{_REG_DP_TP_CTL_C, 4, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{_REG_DP_D, 4, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{_REG_DP_TP_CTL_D, 4, F_BOOTTIME, 0, D_HSW, NULL, NULL},
-{0x64400, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x64440, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x64444, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x64e00, 0x50, F_WA, 0, D_HSW, NULL, NULL},
-{0x64e60, 0x50, F_WA, 0, D_HSW, NULL, NULL},
-{0x64ec0, 0x50, F_WA, 0, D_HSW, NULL, NULL},
-{0x64f20, 0x50, F_WA, 0, D_HSW, NULL, NULL},
-{0x64f80, 0x50, F_WA, 0, D_HSW, NULL, NULL},
-{0x65000, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x650c0, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x6661c, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x66c00, 8, F_WA, 0, D_HSW, NULL, NULL},
-{0x6f400, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x70280, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x7029c, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x70304, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x71080, 8, F_WA, 0, D_HSW, NULL, NULL},
-{0x71280, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x7129c, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x71304, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x72008, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x72080, 8, F_WA, 0, D_HSW, NULL, NULL},
-{0x72280, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x7229c, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x72304, 4, F_WA, 0, D_HSW, NULL, NULL},
+
+{_REG_DPA_AUX_CH_CTL, 8, F_DPY, 0, D_HSW, dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
+
+#if 0
+{0x64100, 4, F_DPY, 0, D_HSW, dp_ctl_mmio_read, dp_ctl_mmio_write},
+{0x64200, 4, F_DPY, 0, D_HSW, dp_ctl_mmio_read, dp_ctl_mmio_write},
+{0x64300, 4, F_DPY, 0, D_HSW, dp_ctl_mmio_read, dp_ctl_mmio_write},
+{0x64400, 4, F_DPY, 0, D_HSW, dp_ctl_mmio_read, dp_ctl_mmio_write},
+#else
+{_REG_DP_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DP_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DP_D, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x64400, 4, F_DPY, 0, D_HSW, NULL, NULL},
+#endif
+
+{_REG_DP_TP_CTL_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DP_TP_CTL_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DP_TP_CTL_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DP_TP_CTL_D, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x64440, 4, F_DPY, 0, D_HSW, NULL, NULL},
+
+{_REG_DP_TP_STATUS_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DP_TP_STATUS_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x64244, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x64344, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x64444, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DDI_BUF_TRANS_A, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
+{0x64E60, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
+{0x64Ec0, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
+{0x64F20, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
+{0x64F80, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_HSW_AUD_CONFIG_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x650C0, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x6661c, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x66C00, 8, F_DPY, 0, D_HSW, NULL, NULL},
+
+{_REG_TRANS_DDI_FUNC_CTL_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_TRANS_DDI_FUNC_CTL_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_TRANS_DDI_FUNC_CTL_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_TRANS_DDI_FUNC_CTL_EDP, 4, F_DPY, 0, D_HSW, NULL, NULL},
+
+{_REG_SPRA_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SPRB_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
+
+{0x7029C, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x7129C, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x7229c, 4, F_DPY, 0, D_HSW, NULL, NULL},
+
+{_REG_SPRA_SCALE, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SPRB_SCALE, 4, F_DPY, 0, D_HSW, NULL, NULL},
+
+{_REG_CURBCNTR_IVB, 8, F_DPY, 0, D_HSW, NULL, NULL},
+
+{0x72008, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x72080, 8, F_DPY, 0, D_HSW, NULL, NULL},
+{0x72280, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x72304, 4, F_DPY, 0, D_HSW, NULL, NULL}
 };
 
 bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
@@ -2392,10 +2489,6 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 		}
 	}
 
-#ifdef VGT_DEBUGFS_DUMP_FB
-	reg_update_handlers(pdev, _REG_DSPASURF, 4, NULL, dspsurf_mmio_write);
-	reg_update_handlers(pdev, _REG_DSPBSURF, 4, NULL, dspsurf_mmio_write);
-#endif
 	return true;
 }
 

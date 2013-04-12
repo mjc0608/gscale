@@ -188,8 +188,6 @@ static void vgt_update_reg(struct vgt_device *vgt, unsigned int reg)
 	 * update preg if boot_time or vgt is reg's cur owner
 	 */
 	__sreg(vgt, reg) = mmio_g2h_gmadr(vgt, reg, __vreg(vgt, reg));
-	if (reg == _REG_DSPASURF)
-		vgt_dbg("%s: =======: write vReg(%x), sReg(%x)\n", __func__, __vreg(vgt, reg), __sreg(vgt, reg));
 	if (reg_hw_access(vgt, reg))
 		VGT_MMIO_WRITE(pdev, reg, __sreg(vgt, reg));
 }
@@ -393,18 +391,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 		mht->write(vgt, offset, p_data, bytes);
 	else {
 		default_mmio_write(vgt, offset, p_data, bytes);
-	}
-
-
-	if (offset == _REG_DSPASURF || offset == _REG_DSPBSURF) {
-		vgt_dbg("vGT(%d): write to surface base (%x) with (%x), pReg(%x)\n",
-			vgt->vgt_id, offset, __vreg(vgt, offset),
-			VGT_MMIO_READ(pdev, offset));
-		/* update live reg as vm may wait on the update */
-		if (!reg_hw_access(vgt, offset)) {
-			__vreg(vgt, offset + 0x10) = __vreg(vgt, offset);
-			__sreg(vgt, offset + 0x10) = __sreg(vgt, offset);
-		}
 	}
 
 	/* higher 16bits of mode ctl regs are mask bits for change */

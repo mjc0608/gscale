@@ -33,8 +33,8 @@
 /*
  * Definition of MMIO registers.
  */
-/* TODO: how about PIPE_C ??? */
 #define _VGT_PIPE(pipe, a, b)	((a) + (pipe)*((b)-(a)))
+#define _VGT_GET_PIPE(reg, a, b)	(((reg)-(a))/((b)-(a)))
 
 #define _REG_INVALID	0xFFFFFFFF
 
@@ -244,6 +244,7 @@
 
 #define _REGBIT_CURSOR_MODE	0x27	/* like a mask */
 #define _REGBIT_GAMMA_ENABLE (1 << 26)
+
 #define VGT_CURCNTR(pipe)	_VGT_PIPE(pipe, _REG_CURACNTR, _REG_CURBCNTR)
 #define VGT_CURBASE(pipe)	_VGT_PIPE(pipe, _REG_CURABASE, _REG_CURBBASE)
 #define VGT_CURPOS(pipe)	_VGT_PIPE(pipe, _REG_CURAPOS, _REG_CURBPOS)
@@ -274,11 +275,14 @@
 #define _REG_DSPBSURFLIVE	0x711AC
 
 #define VGT_DSPSURF(plane)	_VGT_PIPE(plane, _REG_DSPASURF, _REG_DSPBSURF)
+#define VGT_DSPSURFLIVE(plane)	_VGT_PIPE(plane, _REG_DSPASURFLIVE, _REG_DSPBSURFLIVE)
 #define VGT_DSPCNTR(plane)	_VGT_PIPE(plane, _REG_DSPACNTR, _REG_DSPBCNTR)
 /* display plane linear offset */
 #define VGT_DSPLINOFF(plane) _VGT_PIPE(plane, _REG_DSPALINOFF, _REG_DSPBLINOFF)
 #define VGT_DSPSTRIDE(plane) _VGT_PIPE(plane, _REG_DSPASTRIDE, _REG_DSPBSTRIDE)
 #define VGT_DSPTILEOFF(plane) _VGT_PIPE(plane, _REG_DSPATILEOFF, _REG_DSPBTILEOFF)
+
+#define VGT_SURFPIPE(dspsurf) _VGT_GET_PIPE(dspsurf, _REG_DSPASURF,_REG_DSPBSURF)
 
 #define _REG_DVSACNTR		0x72180
 #define _REG_DVSALINOFF		0x72184
@@ -1357,11 +1361,35 @@ enum vgt_port_type {
 #define _REG_SBI_CTL_STAT		0xc6008
 
 #define _REG_TRANS_DDI_FUNC_CTL_A	0x60400
+#define _REG_TRANS_DDI_FUNC_CTL_B	0x61400
+#define _REG_TRANS_DDI_FUNC_CTL_C	0x62400
+#define _REG_TRANS_DDI_FUNC_CTL_EDP	0x6F400
 
 #define _REG_GEN7_COMMON_SLICE_CHICKEN1		0x7010
 #define _REG_GEN7_L3CNTLREG1			0xB01C
 #define _REG_GEN7_L3_CHICKEN_MODE_REGISTER	0xB030
 #define _REG_GEN7_SQ_CHICKEN_MBCUNIT_CONFIG	0x9030
 #define _REG_WM_DBG				0x45280
+
+#define _REG_PIPE_WM_LINETIME_A			0x45270
+
+#define _REG_HSW_VIDEO_DIP_CTL_A		0x60200
+
+#define _REG_DPA_AUX_CH_CTL			0x64010
+
+#define _REG_DP_TP_STATUS_A			0x64044
+#define _REG_DP_TP_STATUS_B			0x64144
+#define _REG_DDI_BUF_TRANS_A			0x64E00
+#define _REG_HSW_AUD_CONFIG_A			0x65000
+
+#define _REG_SPRA_CTL				0x70280
+#define _REG_SPRA_SCALE				0x70304
+#define _REG_CURBCNTR_IVB			0x71080
+
+#define _REG_SPRB_CTL				0x71280
+#define _REG_SPRB_SCALE				0x71304
+
+#define _REG_SFUSE_STRAP			0xC2014
+#define _REG_PIXCLK_GATE			0xC6020
 
 #endif	/* _VGT_REG_H_ */
