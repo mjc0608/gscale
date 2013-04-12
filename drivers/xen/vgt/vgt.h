@@ -1680,7 +1680,7 @@ struct vgt_irq_info {
 	struct vgt_irq_info_entry table[VGT_IRQ_BITWIDTH];
 };
 
-#define VGT_DPY_EMUL_PERIOD	500000000	// 500ms for now
+#define VGT_DPY_EMUL_PERIOD	16000000	// 16ms for now
 
 struct vgt_irq_ops {
 	void (*init) (struct pgt_device *dev);
