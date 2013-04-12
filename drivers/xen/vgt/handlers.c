@@ -690,6 +690,9 @@ bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	 * after aux_ch virtualization has been completely supported.
 	 */
 	rc = default_mmio_read(vgt, offset, p_data, bytes);
+	if (offset == 0x64010 || offset == 0x64014) {
+		return rc;
+	}
 #endif /* AUX_CH_WORKAROUND */
 
 	port_idx = vgt_get_dp_port_idx(offset);
@@ -1252,9 +1255,10 @@ bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
 
 	if (!reg_hw_access(vgt, reg) &&
-			((reg == _REG_PCH_DPB_AUX_CH_CTL) ||
-		(reg == _REG_PCH_DPC_AUX_CH_CTL) ||
-		(reg == _REG_PCH_DPD_AUX_CH_CTL))) {
+			((reg == 0x64010) || (reg == 0x64014) ||
+			(reg == _REG_PCH_DPB_AUX_CH_CTL) ||
+			(reg == _REG_PCH_DPC_AUX_CH_CTL) ||
+			(reg == _REG_PCH_DPD_AUX_CH_CTL))) {
 		data = __vreg(vgt, reg);
 		if (data & _REGBIT_DP_AUX_CH_CTL_DONE)
 			data &= ~_REGBIT_DP_AUX_CH_CTL_DONE;
@@ -1267,6 +1271,10 @@ bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 			data &= ~_REGBIT_DP_AUX_CH_CTL_SEND_BUSY;
 		}
 		__vreg(vgt, reg) = data;
+	}
+
+	if (offset == 0x64010 || offset == 0x64014) {
+		return true;
 	}
 #endif /* AUX_CH_WORKAROUND */
 	switch (port_idx) {
