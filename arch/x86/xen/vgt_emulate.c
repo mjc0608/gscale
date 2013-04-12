@@ -75,7 +75,7 @@ void xen_vgt_dom0_ready(struct vgt_device *vgt)
 #define dprintk(fmt, a...)
 #endif
 
-struct vcpu_io_forwarding_request trap_req;
+static struct vcpu_io_forwarding_request trap_req;
 
 static inline uint16_t get_selector(
 	enum x86_segment seg, struct cpu_user_regs *regs)
@@ -207,6 +207,7 @@ static int is_vgt_trap_pio(unsigned int port)
 {
 	int i;
 
+	BUG_ON(trap_req.nr_pio_frags == -1 || trap_req.nr_pio_frags == 0);
 	for (i=0; i<trap_req.nr_pio_frags; i++) {
 		if ( port >= trap_req.pio_frags[i].s &&
 			port <= trap_req.pio_frags[i].e )
@@ -584,6 +585,7 @@ static int is_vgt_trap_address(unsigned long pa)
 
 	/* Trap address is in page unit. */
 	pa &= PAGE_MASK;
+	BUG_ON(trap_req.nr_mmio_frags == -1 || trap_req.nr_mmio_frags == 0);
 	for (i=0; i<trap_req.nr_mmio_frags; i++)
 	{
 		if ( pa >= trap_req.mmio_frags[i].s &&
@@ -895,28 +897,26 @@ int xen_register_vgt_driver(vgt_ops_t *ops)
 {
 	init_per_cpu_context();
 
-	if (!register_gp_prehandler(xen_vgt_handler)) {
-		trap_req.nr_pio_frags = 1;
-		trap_req.pio_frags[0].s = 0x3B0;
-		trap_req.pio_frags[0].e = 0x3DF;
-		trap_req.nr_mmio_frags = -1;	/* let hypervisor tell */
-		printk("vGT: install GP handler successfully\n");
-		if (HYPERVISOR_vcpu_op(VCPUOP_start_io_forward, 0, &trap_req) < 0) {
-			printk("vGT: failed to start I/O forwarding\n");
-			return -EINVAL;
-		} else {
-			printk("vGT: trap_req.nr_mmio_frags: mmio %d %lx %lx\n",
-				trap_req.nr_mmio_frags,
-				(long)trap_req.mmio_frags[0].s,
-				(long)trap_req.mmio_frags[0].e
-				);
-		}
-	} else {
-		printk("vGT: fail to install GP handler\n");
-		return -EINVAL;
-	}
+	BUG_ON(register_gp_prehandler(xen_vgt_handler) != 0);
 
+	/* query the pio/mmio trapped ranges that are set by the vgt driver.
+	 * trap_req is needed by the emulator.
+	 */
+	trap_req.nr_pio_frags = -1;
+	trap_req.nr_mmio_frags = -1;
+
+	BUG_ON(HYPERVISOR_vcpu_op(VCPUOP_start_io_forward, 0, &trap_req) != 0);
 	vgt_ops = ops;
+
+	printk("vGT: trap_req.nr_pio_frags: pio %d %lx %lx\n",
+		trap_req.nr_pio_frags,
+		(long)trap_req.pio_frags[0].s,
+		(long)trap_req.pio_frags[0].e);
+	printk("vGT: trap_req.nr_mmio_frags: mmio %d %lx %lx\n",
+		trap_req.nr_mmio_frags,
+		(long)trap_req.mmio_frags[0].s,
+		(long)trap_req.mmio_frags[0].e);
+	printk("vGT: install GP handler successfully\n");
 	return 0;
 }
 

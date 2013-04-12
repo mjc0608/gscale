@@ -656,6 +656,8 @@ struct pgt_statistics {
 	u64	events[IRQ_MAX];
 };
 
+#define PCI_BDF2(b,df)  ((((b) & 0xff) << 8) | ((df) & 0xff))
+
 struct vgt_mmio_dev;
 
 /* per-device structure */
@@ -748,6 +750,7 @@ struct pgt_device {
 	 * */
 	struct workqueue_struct *pgt_wq;
 
+	u8 gen_dev_type;
 	u8 is_sandybridge : 1;
 	u8 is_ivybridge : 1;
 	u8 is_haswell : 1;

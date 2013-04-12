@@ -26,7 +26,8 @@
 #include <linux/module.h>
 #include <linux/kthread.h>
 #include <linux/pci.h>
-
+#include <asm/xen/hypercall.h>
+#include <xen/interface/vcpu.h>
 #include <xen/vgt.h>
 
 #include "vgt.h"
@@ -116,6 +117,47 @@ struct pgt_device default_device = {
 
 struct vgt_device *vgt_dom0;
 
+static bool vgt_start_io_forwarding(struct pgt_device *pdev)
+{
+	struct vcpu_io_forwarding_request trap_req;
+	uint64_t bar0; /* the MMIO BAR for regs(2MB) and GTT */
+
+	struct xen_platform_op xpop;
+
+
+	bar0 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
+	bar0 &= ~0xf;	/* bit0~3 of the bar is the attribution info */
+
+	trap_req.nr_pio_frags = 1;
+	trap_req.pio_frags[0].s = 0x3B0;
+	trap_req.pio_frags[0].e = 0x3DF;
+	trap_req.nr_mmio_frags = 1;
+	trap_req.mmio_frags[0].s = bar0;
+	trap_req.mmio_frags[0].e = (bar0 + pdev->bar_size[0] - 1) & PAGE_MASK;
+
+	if (HYPERVISOR_vcpu_op(VCPUOP_start_io_forward, 0, &trap_req) < 0) {
+		vgt_err("vGT: failed to start I/O forwarding\n");
+		return false;
+	}
+
+	if (xen_register_vgt_driver(&vgt_xops) != 0)
+		return false;
+
+	/*
+	 * Pass the GEN device's BDF and the type(SNB/IVB/HSW?) to
+	 * the xen hypervisor: xen needs the info to decide which device's
+	 * PCI CFG R/W access should be forwarded to the vgt driver, and
+	 * to decice the proper forcewake logic.
+	 */
+	xpop.cmd = XENPF_set_vgt_info;
+	xpop.u.vgt_info.gen_dev_bdf = PCI_BDF2(pdev->pbus->number, pdev->devfn);
+	xpop.u.vgt_info.gen_dev_type = pdev->gen_dev_type;
+	if (HYPERVISOR_dom0_op(&xpop) != 0)
+		return false;
+
+	return true;
+}
+
 bool initial_phys_states(struct pgt_device *pdev)
 {
 	int i;
@@ -164,6 +206,16 @@ bool initial_phys_states(struct pgt_device *pdev)
 	pdev->gmadr_base = bar1 & ~0xf;
 	printk("gttmmio: 0x%llx, gmadr: 0x%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
 
+	/* start the io forwarding! */
+	if (!vgt_start_io_forwarding(pdev))
+		return false;;
+
+	/*
+	 * From now on, the vgt driver can invoke the
+	 * VGT_MMIO_READ()/VGT_MMIO_WRITE()hypercalls, and any access to the
+	 * 4MB MMIO of the GEN device is trapped into the vgt driver.
+	 */
+
 #if 1		// TODO: runtime sanity check warning...
 	pdev->gmadr_va = ioremap (pdev->gmadr_base, pdev->bar_size[1]);
 	if ( pdev->gmadr_va == NULL ) {
@@ -192,18 +244,21 @@ static bool vgt_set_device_type(struct pgt_device *pdev)
 {
 	if (_is_sandybridge(pdev->pdev->device)) {
 		pdev->is_sandybridge = 1;
+		pdev->gen_dev_type = XEN_IGD_SNB;
 		vgt_info("Detected Sandybridge\n");
 		return true;
 	}
 
 	if (_is_ivybridge(pdev->pdev->device)) {
 		pdev->is_ivybridge = 1;
+		pdev->gen_dev_type = XEN_IGD_IVB;
 		vgt_info("Detected Ivybridge\n");
 		return true;
 	}
 
 	if (_is_haswell(pdev->pdev->device)) {
 		pdev->is_haswell = 1;
+		pdev->gen_dev_type = XEN_IGD_HSW;
 		vgt_info("Detected Haswell\n");
 		return true;
 	}
@@ -454,7 +509,7 @@ int xen_start_vgt(struct pci_dev *pdev)
 		return 0;
 	}
 
-	return vgt_initialize(pdev) == 0;
+	return vgt_initialize(pdev);
 }
 
 EXPORT_SYMBOL(xen_start_vgt);
@@ -488,7 +543,7 @@ static int __init vgt_init_module(void)
 
 	vgt_klog_init();
 
-	return xen_register_vgt_driver(&vgt_xops);
+	return 0;
 }
 module_init(vgt_init_module);
 
