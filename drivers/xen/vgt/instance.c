@@ -336,7 +336,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	if (current_foreground_vm(pdev) == vgt) {
 		vgt_dbg("switch foreground vm back to dom0\n");
-		do_vgt_display_switch(vgt_dom0);
+		do_vgt_fast_display_switch(vgt_dom0);
 	}
 
 	printk("check render ownership...\n");

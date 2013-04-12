@@ -148,7 +148,7 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 		goto out;
 	}
 
-	do_vgt_display_switch(next_vgt);
+	do_vgt_fast_display_switch(next_vgt);
 out:
 	spin_unlock_irqrestore(&vgt_kobj_priv->lock, flags);
 
