@@ -1743,6 +1743,31 @@ static bool err_int_w(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+static bool sbi_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc;
+
+	ASSERT(bytes == 4);
+	ASSERT((offset & (bytes - 1)) == 0);
+
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
+
+	if (!reg_hw_access(vgt, offset)) {
+		vgt_reg_t data = __vreg(vgt, offset);
+
+		data &= ~(_SBI_STAT_MASK << _SBI_STAT_SHIFT);
+		data |= _SBI_READY;
+
+		data &= ~(_SBI_RESPONSE_MASK << _SBI_RESPONSE_SHIFT);
+		data |= _SBI_RESPONSE_SUCCESS;
+
+		__vreg(vgt, offset) = data;
+	}
+
+	return rc;
+}
+
 /*
  * Base reg information which is common on all platforms
  */
@@ -2383,7 +2408,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_SFUSE_STRAP, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_SBI_ADDR, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_SBI_DATA, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_SBI_CTL_STAT, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SBI_CTL_STAT, 4, F_DPY, 0, D_HSW, NULL, sbi_mmio_write},
 {_REG_PIXCLK_GATE, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {0xF200C, 4, F_DPY, 0, D_SNB, NULL, NULL},
 {0x1082c0, 4, F_WA, 0, D_HSW, NULL, NULL},
