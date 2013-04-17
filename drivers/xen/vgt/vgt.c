@@ -313,6 +313,9 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	memset(pdev->port_detect_status, 0, sizeof(pdev->port_detect_status));
 	bitmap_zero(pdev->dpy_emul_request, VGT_MAX_VMS);
 
+	/* initialize DPCD pointers of all DPs to NULL */
+	memset(pdev->pdev_dpcds, 0, sizeof(struct vgt_dpcd_data *) * DPCD_MAX);
+
 	if (!initial_phys_states(pdev)) {
 		printk("vGT: failed to initialize physical state\n");
 		return false;
@@ -368,6 +371,8 @@ int vgt_initialize(struct pci_dev *dev)
 
 	/* initialize EDID data */
 	vgt_probe_edid(pdev, -1);
+
+	vgt_probe_dpcd(pdev, -1);
 	pdev->probe_ports = true;
 
 	/* create debugfs interface */

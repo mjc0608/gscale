@@ -550,3 +550,15 @@ uint32_t *vgt_get_vgtt_base(int domid)
 	return (uint32_t *)vgt->vgtt;
 }
 EXPORT_SYMBOL_GPL(vgt_get_vgtt_base);
+
+void vgt_print_dpcd(struct vgt_dpcd_data *dpcd)
+{
+	int idx;
+	uint8_t *data = dpcd->data;
+
+	for (idx = 0; idx < DPCD_SIZE; ++idx) {
+		printk("0x%0x ", data[idx]);
+		if (((idx + 1) & 0xf) == 0)
+			printk("\n");
+	}
+}

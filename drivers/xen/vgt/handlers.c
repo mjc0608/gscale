@@ -696,18 +696,12 @@ bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	ASSERT(bytes == 4);
 	ASSERT((offset & (bytes - 1)) == 0);
 
-#ifdef AUX_CH_WORKAROUND
-	/*TODO
-	 *
-	 * Old logic to simply do the default_mmio access. This is kept
-	 * to maintain the system behavior unchanged. It will be chagned
-	 * after aux_ch virtualization has been completely supported.
-	 */
 	rc = default_mmio_read(vgt, offset, p_data, bytes);
+
+	/* workaround for eDP which we do not support currently */
 	if (offset == 0x64010 || offset == 0x64014) {
 		return rc;
 	}
-#endif /* AUX_CH_WORKAROUND */
 
 	port_idx = vgt_get_dp_port_idx(offset);
 	switch (port_idx) {
@@ -1282,92 +1276,242 @@ bool dspsurflive_mmio_write (struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static void dp_aux_ch_ctl_trans_done(struct vgt_device *vgt, vgt_reg_t value,
+	 unsigned int reg, int len)
+{
+	/* mark transaction done */
+	value |= _REGBIT_DP_AUX_CH_CTL_DONE;
+	value &= ~_REGBIT_DP_AUX_CH_CTL_SEND_BUSY;
+	value &= ~_REGBIT_DP_AUX_CH_CTL_RECV_ERR;
+	value &= ~_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR;
+	/* message size */
+	value &= ~(0xf << 20);
+	value |= (len << 20);
+	__vreg(vgt, reg) = value;
+}
+
+static void dp_aux_ch_ctl_link_training(struct vgt_dpcd_data *dpcd, uint8_t t)
+{
+	if ((t & DPCD_TRAINING_PATTERN_SET_MASK) == DPCD_TRAINING_PATTERN_1) {
+
+		/* training pattern 1 for CR */
+		/* set LANE0_CR_DONE, LANE1_CR_DONE */
+		dpcd->data[DPCD_LANE0_1_STATUS] |= DPCD_LANES_CR_DONE;
+		/* set LANE2_CR_DONE, LANE3_CR_DONE */
+		dpcd->data[DPCD_LANE2_3_STATUS] |= DPCD_LANES_CR_DONE;
+
+	} else if ((t & DPCD_TRAINING_PATTERN_SET_MASK) ==
+		DPCD_TRAINING_PATTERN_2) {
+
+		/* training pattern 2 for EQ */
+
+		/* Set CHANNEL_EQ_DONE and  SYMBOL_LOCKED for Lane0_1 */
+		dpcd->data[DPCD_LANE0_1_STATUS] |= DPCD_LANES_EQ_DONE;
+		dpcd->data[DPCD_LANE0_1_STATUS] |= DPCD_SYMBOL_LOCKED;
+
+		/* Set CHANNEL_EQ_DONE and  SYMBOL_LOCKED for Lane2_3 */
+		dpcd->data[DPCD_LANE2_3_STATUS] |= DPCD_LANES_EQ_DONE;
+		dpcd->data[DPCD_LANE2_3_STATUS] |= DPCD_SYMBOL_LOCKED;
+		/* set INTERLANE_ALIGN_DONE */
+		dpcd->data[DPCD_LANE_ALIGN_STATUS_UPDATED] |=
+			DPCD_INTERLANE_ALIGN_DONE;
+
+	} else if ((t & DPCD_TRAINING_PATTERN_SET_MASK) ==
+		DPCD_LINK_TRAINING_DISABLED) {
+
+		/* finish link training */
+		/* set sink status as synchronized */
+		dpcd->data[DPCD_SINK_STATUS] = DPCD_SINK_IN_SYNC;
+	}
+
+}
+
 bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	unsigned int reg = 0;
-	uint32_t data;
-	bool rc;
+	vgt_reg_t value = *(vgt_reg_t *)p_data;
+	int msg, addr, ctrl, op, len;
 	vgt_edid_data_t **pedid = NULL;
+	struct vgt_dpcd_data *dpcd = NULL;
 	VGT_DP_PORTS_IDX port_idx = vgt_get_dp_port_idx(offset);
 
 	ASSERT(bytes == 4);
 	ASSERT((offset & (bytes - 1)) == 0);
 
-#ifdef AUX_CH_WORKAROUND
-	/* TODO
-	 * It is the old logic just to make the i915 driver init not being
-	 * blocked by aux_ch. More decent handling is needed.
-	 *
-	 * Currently the code is kept for incremental code change. When adding
-	 * EDID support, we do not want other things through AUX_CH is
-	 * destroyed. AUX_CH supports two modes. One is native mode and
-	 * another is I2C-over-AUX_CH. We do full virtualization for the latter
-	 * case and seems that the EDID access is the only user of this.
-	 *
-	 * In future, the native mode of AUX_CH access will be handled. Then
-	 * the trick below is not needed.
-	 */
-	reg = offset & ~(bytes -1);
+	reg = offset & ~(bytes - 1);
 
-	rc = default_mmio_write(vgt, offset, p_data, bytes);
+	default_mmio_write(vgt, offset, p_data, bytes);
 
-	if (!reg_hw_access(vgt, reg) &&
-			((reg == 0x64010) || (reg == 0x64014) ||
-			(reg == _REG_PCH_DPB_AUX_CH_CTL) ||
-			(reg == _REG_PCH_DPC_AUX_CH_CTL) ||
-			(reg == _REG_PCH_DPD_AUX_CH_CTL))) {
-		data = __vreg(vgt, reg);
-		if (data & _REGBIT_DP_AUX_CH_CTL_DONE)
-			data &= ~_REGBIT_DP_AUX_CH_CTL_DONE;
-		if (data & _REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR)
-			data &= ~_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR;
-		if (data & _REGBIT_DP_AUX_CH_CTL_RECV_ERR)
-			data &= ~_REGBIT_DP_AUX_CH_CTL_RECV_ERR;
-		if (data & _REGBIT_DP_AUX_CH_CTL_SEND_BUSY){
-			data |= _REGBIT_DP_AUX_CH_CTL_DONE;
-			data &= ~_REGBIT_DP_AUX_CH_CTL_SEND_BUSY;
-		}
-		__vreg(vgt, reg) = data;
-	}
+	/* HW access had been handled by default_mmio_write() */
+	if (reg_hw_access(vgt, reg))
+		return true;
 
-	if (offset == 0x64010 || offset == 0x64014) {
+	if (reg == 0x64010) {
+		/* workaround for eDP which currently we do not support */
+		/* ACK the write */
+		__vreg(vgt, reg + 4) = 0;
+
+		dp_aux_ch_ctl_trans_done(vgt, value, reg, 0);
 		return true;
 	}
-#endif /* AUX_CH_WORKAROUND */
+
+	if (reg != _REG_PCH_DPB_AUX_CH_CTL &&
+	    reg != _REG_PCH_DPC_AUX_CH_CTL &&
+	    reg != _REG_PCH_DPD_AUX_CH_CTL) {
+		/* write to the data registers */
+		return true;
+	}
+
+	if (!(value & _REGBIT_DP_AUX_CH_CTL_SEND_BUSY)) {
+		/* just want to clear the sticky bits */
+		__vreg(vgt, reg) = 0;
+		return true;
+	}
+
 	switch (port_idx) {
 	case VGT_DPB_IDX:
 		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPB];
+		dpcd = vgt->vgt_dpcds[DPCD_DPB];
 		break;
 	case VGT_DPC_IDX:
 		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPC];
+		dpcd = vgt->vgt_dpcds[DPCD_DPC];
 		break;
 	case VGT_DPD_IDX:
 		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPD];
+		dpcd = vgt->vgt_dpcds[DPCD_DPD];
 		break;
 	default:
-		printk("vGT(%d): WARNING: Unsupported DP port access!\n",
+		vgt_warn("vGT(%d): Unsupported DP port access!\n",
 				vgt->vgt_id);
 		BUG();
 		break;
 	}
+
+	/* read out message from DATA1 register */
+	msg = __vreg(vgt, reg + 4);
+	addr = (msg >> 8) & 0xffff;
+	ctrl = (msg >> 24) & 0xff;
+	len = msg & 0xff;
+	op = ctrl >> 4;
+
+	if (op == VGT_AUX_NATIVE_WRITE) {
+		int t;
+		uint8_t buf[16];
+
+		if ((addr + len + 1) >= DPCD_SIZE) {
+			/*
+			 * Write request exceeds what we supported,
+			 * DCPD spec: When a Source Device is writing a DPCD
+			 * address not supported by the Sink Device, the Sink
+			 * Device shall reply with AUX NACK and “M” equal to zero.
+			 */
+
+			/* NAK the write */
+			__vreg(vgt, reg + 4) = AUX_NATIVE_REPLY_NAK;
+
+			dp_aux_ch_ctl_trans_done(vgt, value, reg, 2);
+
+			return true;
+		}
+
+		/*
+		 * Write request format: (command + address) occupies
+		 * 3 bytes, followed by (len + 1) bytes of data.
+		 */
+		ASSERT((len + 4) <= AUX_BURST_SIZE);
+
+		/* unpack data from vreg to buf */
+		for (t = 0; t < 4; t ++) {
+			vgt_reg_t r = __vreg(vgt, reg + 8 + t*4);
+
+			buf[t*4] = (r >> 24) & 0xff;
+			buf[t*4 + 1] = (r >> 16) & 0xff;
+			buf[t*4 + 2] = (r >> 8) & 0xff;
+			buf[t*4 + 3] = r & 0xff;
+		}
+
+		/* write to virtual DPCD */
+		for (t = 0; t <= len; t ++) {
+			int p = addr + t;
+
+			dpcd->data[p] = buf[t];
+
+			/* check for link training */
+			if (p == DPCD_TRAINING_PATTERN_SET)
+				dp_aux_ch_ctl_link_training(dpcd, buf[t]);
+		}
+
+		/* ACK the write */
+		__vreg(vgt, reg + 4) = 0;
+
+		dp_aux_ch_ctl_trans_done(vgt, value, reg, 1);
+
+		return true;
+	}
+
+	if (op == VGT_AUX_NATIVE_READ) {
+		int idx, i, ret = 0;
+
+		if ((addr + len + 1) >= DPCD_SIZE) {
+			/*
+			 * read request exceeds what we supported
+			 * DPCD spec: A Sink Device receiving a Native AUX CH
+			 * read request for an unsupported DPCD address must
+			 * reply with an AUX ACK and read data set equal to
+			 * zero instead of replying with AUX NACK.
+			 */
+
+			/* ACK the READ*/
+			__vreg(vgt, reg + 4) = 0;
+			__vreg(vgt, reg + 8) = 0;
+			__vreg(vgt, reg + 12) = 0;
+			__vreg(vgt, reg + 16) = 0;
+			__vreg(vgt, reg + 20) = 0;
+
+			dp_aux_ch_ctl_trans_done(vgt ,value, reg, len + 2);
+
+			return true;
+		}
+
+		for (idx = 1; idx <= 5; idx ++) {
+			/* clear the data registers */
+			__vreg(vgt, reg + 4 * idx) = 0;
+		}
+
+		/*
+		 * Read reply format: ACK (1 byte) plus (len + 1) bytes of data.
+		 */
+		ASSERT((len + 2) <= AUX_BURST_SIZE);
+
+		/* read from virtual DPCD to vreg */
+		/* first 4 bytes: [ACK][addr][addr+1][addr+2] */
+		for (i = 1; i <= (len + 1); i ++) {
+			int t;
+
+			t = dpcd->data[addr + i - 1];
+			t <<= (24 - 8*(i%4));
+			ret |= t;
+
+			if ((i%4 == 3) || (i == (len + 1))) {
+				__vreg(vgt, reg + (i/4 + 1)*4) = ret;
+				ret = 0;
+			}
+		}
+
+		dp_aux_ch_ctl_trans_done(vgt, value, reg, len + 2);
+
+		return true;
+	}
+
+	/* i2c transaction starts */
+
 	vgt_i2c_handle_aux_ch_write(&vgt->vgt_i2c_bus, pedid,
 				offset, port_idx, p_data);
 	return true;
 }
 
-#ifdef AUX_CH_WORKAROUND
-void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs)
-{
-	int i, j;
-	for (i = 0; i < VGT_DP_NUM; ++ i) {
-		for (j = 0; j < AUX_REGISTER_NUM; ++ j) {
-			i2c_bus->aux_ch.aux_registers[i][j] =
-				&(i2c_bus->aux_ch.aux_shadow_reg[i][j]);
-		}
-	}
-}
-#else /* AUX_CH_WORKAROUND */
 static inline void vgt_aux_register_assign(aux_reg_t *dst[AUX_REGISTER_NUM],
 					vgt_reg_t *reg_base)
 {
@@ -1382,16 +1526,15 @@ static inline void vgt_aux_register_assign(aux_reg_t *dst[AUX_REGISTER_NUM],
 
 void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs)
 {
-	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DP_B],
+	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DPB_IDX],
 		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPB_AUX_CH_CTL));
 
-	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DP_C],
+	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DPC_IDX],
 		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPC_AUX_CH_CTL));
 
-	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DP_D],
+	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DPD_IDX],
 		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPD_AUX_CH_CTL));
 }
-#endif /* AUX_CH_WORKAROUND */
 
 /* vgt_aux_ch_transaction()
  *
@@ -1742,6 +1885,148 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 					i, vgt->vm_id);
 				kfree(vgt->vgt_edids[i]);
 				vgt->vgt_edids[i] = NULL;
+			}
+		}
+	}
+}
+
+/*
+ * Get physical DPCD data from DP. DP is specified by index parameter.
+ */
+void vgt_probe_dpcd(struct pgt_device *pdev, int index)
+{
+	int i;
+
+	for (i = 0; i < DPCD_MAX; i++) {
+		unsigned int aux_ch_addr = 0;
+		struct vgt_dpcd_data **dpcd = &(pdev->pdev_dpcds[i]);
+
+		if ((i != index) && (index != -1))
+			continue;
+
+		switch (i) {
+		case DPCD_DPB:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPB_AUX_CH_CTL) | _DP_DETECTED) {
+				vgt_info("DPCD_PROBE: DP B Detected.\n");
+				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
+			} else {
+				vgt_info("DPCD_PROBE: DP B is not detected.\n");
+			}
+			break;
+		case DPCD_DPC:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPC_AUX_CH_CTL) | _DP_DETECTED) {
+				vgt_info("DPCD_PROBE: DP C Detected.\n");
+				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
+			} else {
+				vgt_info("DPCD_PROBE: DP C is not detected.\n");
+			}
+			break;
+		case DPCD_DPD:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPD_AUX_CH_CTL) | _DP_DETECTED) {
+				vgt_info("DPCD_PROBE: DP D Detected.\n");
+				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
+			} else {
+				vgt_info("DPCD_PROBE: DP D is not detected.\n");
+			}
+			break;
+		default:
+			vgt_err("DPCD_PROBE: invalid DP number.\n");
+			break;
+
+		}
+
+		if (aux_ch_addr) {
+			unsigned int msg = 0;
+			unsigned int value;
+			uint16_t dpcd_addr;
+
+			if (!*dpcd) {
+				*dpcd = kmalloc(sizeof(struct vgt_dpcd_data), GFP_KERNEL);
+				if (*dpcd == NULL) {
+					vgt_err("Insufficient memory\n");
+					BUG();
+				}
+			}
+
+			for (dpcd_addr = 0; dpcd_addr < DPCD_SIZE; dpcd_addr++) {
+				uint8_t low = dpcd_addr & 0x00ff;
+				uint8_t high = (dpcd_addr & 0xff00) >> 8;
+
+				/* Read one byte at a time, so set len to 0 */
+				msg = ((VGT_AUX_NATIVE_READ << 4) << 24) |
+					(high << 16) |
+					(low << 8);
+
+				value = vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 4);
+				/*
+				 * The MSB of value is the trascation status,
+				 *i the second MSB is the returned data.
+				 */
+				(*dpcd)->data[dpcd_addr] = ((value) & 0xff0000) >> 16;
+			}
+		}
+
+		if (*dpcd && vgt_debug) {
+			vgt_info("DPCD_PROBE: DPCD is:\n");
+			vgt_print_dpcd(*dpcd);
+		}
+
+	}
+}
+
+void vgt_propagate_dpcd(struct vgt_device *vgt, int index)
+{
+	int i;
+
+	for (i = 0; i < DPCD_MAX; ++i) {
+		struct vgt_dpcd_data *dpcd = vgt->pdev->pdev_dpcds[i];
+
+		if ((i != index) && (index != -1))
+			continue;
+
+		if (!dpcd) {
+			vgt_info("DPCD_PROPAGATE: Clear DPCD %d\n", i);
+			if (vgt->vgt_dpcds[i]) {
+				kfree(vgt->vgt_dpcds[i]);
+				vgt->vgt_dpcds[i] = NULL;
+			}
+		} else {
+			vgt_info("DPCD_PROPAGATE: Propagate DPCD %d\n", i);
+			if (!vgt->vgt_dpcds[i]) {
+				vgt->vgt_dpcds[i] = kmalloc(
+					sizeof(struct vgt_dpcd_data), GFP_KERNEL);
+				if (vgt->vgt_dpcds[i] == NULL) {
+					vgt_err("Insufficient memory\n");
+					BUG();
+					return;
+				}
+			}
+			memcpy(vgt->vgt_dpcds[i], dpcd,
+				sizeof(struct vgt_dpcd_data));
+
+			/* mask off CP */
+			vgt->vgt_dpcds[i]->data[DPCD_SINK_COUNT] &=
+				~DPCD_CP_READY_MASK;
+
+			if (vgt_debug) {
+				vgt_info("DPCD_PROPAGATE: DPCD[%d] is:\n", i);
+				vgt_print_dpcd(vgt->vgt_dpcds[i]);
+			}
+		}
+	}
+}
+
+void vgt_clear_dpcd(struct vgt_device *vgt, int index)
+{
+	int i;
+
+	for (i = 0; i < DPCD_MAX; ++i) {
+		if ((i == index) || (index == -1)) {
+			if (vgt->vgt_dpcds[i]) {
+				vgt_dbg("DPCD clear: Clear DPCD[0x%x] of VM%d\n",
+					i, vgt->vm_id);
+				kfree(vgt->vgt_dpcds[i]);
+				vgt->vgt_dpcds[i] = NULL;
 			}
 		}
 	}

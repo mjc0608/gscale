@@ -212,22 +212,9 @@ typedef unsigned int aux_reg_t;
  * with restart ...
  */
 
-/* AUX_CH_WORKAROUND is defined before the full support of AUX_CH mmio access.
- * Right now I2C over AUX_CH is fully virtualized whereas AUX_CH native access
- * is passed through.
- */
-#define AUX_CH_WORKAROUND
-
 typedef struct {
 	bool i2c_over_aux_ch;
 	bool aux_ch_mot;
-#ifdef AUX_CH_WORKAROUND
-	/* aux_shadow_reg is a workaround before AUX_CH native access is
-	 * supported. After this, the vreg defined in vgt will be used
-	 * instead. Otherwise we use separate regs for emulation.
-	 */
-	aux_reg_t aux_shadow_reg[VGT_DP_NUM][AUX_REGISTER_NUM];
-#endif /* AUX_CH_WORKAROUND */
 	aux_reg_t *aux_registers[VGT_DP_NUM][AUX_REGISTER_NUM];
 }vgt_i2c_aux_ch_t;
 

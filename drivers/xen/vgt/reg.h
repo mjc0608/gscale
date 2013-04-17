@@ -976,7 +976,10 @@ union _TRANS_CONFIG
 
 #define AUX_NATIVE_REPLY_MASK	(0x3 << 4)
 #define AUX_NATIVE_REPLY_ACK	(0x0 << 4)
+#define AUX_NATIVE_REPLY_NAK	(0x1 << 4)
 #define AUX_NATIVE_REPLY_DEFER	(0x2 << 4)
+
+#define AUX_BURST_SIZE		16
 
 /* DPCD 0x106 */
 

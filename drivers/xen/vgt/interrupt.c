@@ -293,6 +293,7 @@ bool vgt_default_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt
 bool vgt_hotplug_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev)
 {
 	vgt_probe_edid(dev, -1);
+	vgt_probe_dpcd(dev, -1);
 	return vgt_default_uevent_handler(uevent_entry, dev);
 }
 
@@ -1692,9 +1693,12 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 	int i;
 	enum vgt_event_type event = IRQ_MAX;
 	edid_index_t edid_idx = EDID_MAX;
+	enum dpcd_index dpcd_idx;
 
 	if (get_event_and_edid_info(hotplug_cmd, &event, &edid_idx) < 0)
 		return;
+
+	dpcd_idx = edid_idx - EDID_DPB;
 
 	/* Default: send hotplug virtual interrupts to all VMs currently.
 	 * Since 'vmid' has no concern with vgt_id, e.g.  if you have a HVM
@@ -1712,9 +1716,13 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 		if (hotplug_cmd.action == 0x1) {
 			/* plug in */
 			vgt_propagate_edid(vgt, edid_idx);
+			if (dpcd_idx >= DPCD_DPB)
+				vgt_propagate_dpcd(vgt, dpcd_idx);
 		} else {
 			/* pull out */
 			vgt_clear_edid(vgt, edid_idx);
+			if (dpcd_idx >= DPCD_DPB)
+				vgt_clear_dpcd(vgt, dpcd_idx);
 		}
 
 		vgt_trigger_virtual_event(vgt, event, true);

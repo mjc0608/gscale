@@ -644,13 +644,6 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 		/* The ctl write to clear some states */
 		return;
 	}
-#ifdef AUX_CH_WORKAROUND
-	if ((op == VGT_AUX_NATIVE_WRITE) ||
-		(op == VGT_AUX_NATIVE_READ)) {
-		/* do not handle it */
-		return;
-	}
-#endif /* AUX_CH_WORKAROUND */
 
 	if (!auxch_emulate) {
 		return;

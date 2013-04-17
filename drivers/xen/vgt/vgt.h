@@ -474,6 +474,47 @@ struct vgt_tailq {
 };
 #define vgt_tailq_idx(idx) ((idx) & VGT_TAILQ_IDX_MASK)
 
+/* DPCD start */
+#define DPCD_SIZE	0x700
+
+struct vgt_dpcd_data {
+	u8 data[DPCD_SIZE];
+};
+
+enum dpcd_index {
+	DPCD_DPB = 0,
+	DPCD_DPC,
+	DPCD_DPD,
+	DPCD_MAX
+};
+
+/* DPCD addresses */
+#define DPCD_TRAINING_PATTERN_SET	0x102
+#define	DPCD_SINK_COUNT			0x200
+#define DPCD_LANE0_1_STATUS		0x202
+#define DPCD_LANE2_3_STATUS		0x203
+#define DPCD_LANE_ALIGN_STATUS_UPDATED	0x204
+#define DPCD_SINK_STATUS		0x205
+
+/* link training */
+#define DPCD_TRAINING_PATTERN_SET_MASK	0x03
+#define DPCD_LINK_TRAINING_DISABLED	0x00
+#define DPCD_TRAINING_PATTERN_1		0x01
+#define DPCD_TRAINING_PATTERN_2		0x02
+
+#define DPCD_CP_READY_MASK		(1 << 6)
+
+/* lane status */
+#define DPCD_LANES_CR_DONE		0x11
+#define DPCD_LANES_EQ_DONE		0x22
+#define DPCD_SYMBOL_LOCKED		0x44
+
+#define DPCD_INTERLANE_ALIGN_DONE	0x01
+
+#define DPCD_SINK_IN_SYNC		0x03
+
+/* DPCD end */
+
 struct vgt_device {
 	int vgt_id;		/* 0 is always for dom0 */
 	int vm_id;		/* domain ID per hypervisor */
@@ -486,6 +527,7 @@ struct vgt_device {
 	struct vgt_port_struct *attached_port[I915_MAX_PIPES]; /* one port per PIPE */
 	vgt_i2c_bus_t		vgt_i2c_bus;	/* i2c bus state emulaton for reading EDID */
 	vgt_edid_data_t		*vgt_edids[EDID_MAX];	/* per display EDID information */
+	struct vgt_dpcd_data		*vgt_dpcds[DPCD_MAX];	/* per display DPCD information */
 
 	uint64_t	aperture_base;
 	void		*aperture_base_va;
@@ -712,6 +754,7 @@ struct pgt_device {
 	u32 ring_mi_mode[MAX_ENGINES];
 
 	vgt_edid_data_t		*pdev_edids[EDID_MAX];	/* per display EDID information */
+	struct vgt_dpcd_data	*pdev_dpcds[DPCD_MAX];	/* per display DPCD information */
 
 	 /* 1 bit corresponds to 1MB in the GM space */
 	DECLARE_BITMAP(gm_bitmap, VGT_GM_BITMAP_BITS);
@@ -2071,6 +2114,9 @@ extern ssize_t vgt_get_display_pointer(char *buf);
 extern void vgt_probe_edid(struct pgt_device *pdev, int index);
 extern void vgt_propagate_edid(struct vgt_device *vgt, int index);
 extern void vgt_clear_edid(struct vgt_device *vgt, int index);
+extern void vgt_probe_dpcd(struct pgt_device *pdev, int index);
+extern void vgt_propagate_dpcd(struct vgt_device *vgt, int index);
+extern void vgt_clear_dpcd(struct vgt_device *vgt, int index);
 
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);
 bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes);
@@ -2232,4 +2278,6 @@ int vgt_vmem_init(struct vgt_device *vgt);
 void vgt_vmem_destroy(struct vgt_device *vgt);
 void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 struct vgt_device *vmid_2_vgt_device(int vmid);
+extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);
+
 #endif	/* _VGT_DRV_H_ */
