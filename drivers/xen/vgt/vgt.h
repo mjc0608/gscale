@@ -1052,6 +1052,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 #define F_MGMT			VGT_OT_MGMT
 
 extern int vgt_ctx_switch;
+extern bool vgt_validate_ctx_switch;
 extern bool fastpath_dpy_switch;
 extern void vgt_toggle_ctx_switch(bool enable);
 extern void vgt_setup_reg_info(struct pgt_device *pdev);

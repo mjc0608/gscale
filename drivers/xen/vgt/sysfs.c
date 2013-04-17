@@ -197,11 +197,29 @@ static ssize_t vgt_ctx_switch_store(struct kobject *kobj, struct kobj_attribute 
 	return count;
 }
 
+static ssize_t vgt_validate_ctx_switch_store(struct kobject *kobj,
+			struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (sscanf(buf, "%du", &val) != 1)
+		return -EINVAL;
+	vgt_validate_ctx_switch = !!val;
+	return count;
+}
+
 static ssize_t vgt_ctx_switch_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
 {
 	return sprintf(buf, "VGT context switch: %s\n",
 			vgt_ctx_switch ? "enabled" : "disabled");
+}
+
+static ssize_t vgt_validate_ctx_switch_show(struct kobject *kobj,
+			struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "VGT check mmio restore: %s\n",
+			vgt_validate_ctx_switch ? "enabled" : "disabled");
 }
 
 static ssize_t vgt_dpy_switch_store(struct kobject *kobj, struct kobj_attribute *attr,
@@ -293,6 +311,9 @@ static struct kobj_attribute hot_plug_event_attrs =
 static struct kobj_attribute ctx_switch_attrs =
 	__ATTR(ctx_switch, 0660, vgt_ctx_switch_show, vgt_ctx_switch_store);
 
+static struct kobj_attribute validate_ctx_switch_attrs =
+	__ATTR(validate_ctx_switch, 0660, vgt_validate_ctx_switch_show, vgt_validate_ctx_switch_store);
+
 static struct kobj_attribute dpy_switch_attrs =
 	__ATTR(display_switch_method, 0660, vgt_dpy_switch_show, vgt_dpy_switch_store);
 
@@ -306,6 +327,7 @@ static struct attribute *vgt_ctrl_attrs[] = {
 	&display_pointer_attrs.attr,
 	&hot_plug_event_attrs.attr,
 	&ctx_switch_attrs.attr,
+	&validate_ctx_switch_attrs.attr,
 	&dpy_switch_attrs.attr,
 	&available_res_attrs.attr,
 	NULL,	/* need to NULL terminate the list of attributes */

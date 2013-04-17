@@ -45,6 +45,7 @@ u64	context_switch_cost = 0;
 u64	context_switch_num = 0;
 
 int vgt_ctx_switch = 1;
+bool vgt_validate_ctx_switch = false;
 
 /*
  * TODO: the context layout could be different on generations.
@@ -725,6 +726,7 @@ static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs
 {
 	struct pgt_device *pdev = vgt->pdev;
 	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
+	vgt_reg_t  res_val; /*restored value of mmio register*/
 	int i;
 
 	sreg = vgt->state.sReg;
@@ -749,6 +751,16 @@ static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs
 		}
 		VGT_MMIO_WRITE(vgt->pdev, reg, val);
 		vgt_dbg("....restore mmio (%x) with (%x)\n", reg, val);
+
+		if(!vgt_validate_ctx_switch)
+			continue;
+		res_val = VGT_MMIO_READ(vgt->pdev, reg);
+		if(res_val == val)
+			continue;
+		if (!reg_mode_ctl(pdev, reg) ||
+			 ((res_val ^ val) & (reg_aux_mode_mask(pdev, reg) >> 16)))
+			vgt_warn("restore %x: failed:  val=%x, val_read_back=%x\n",
+				reg, val, res_val);
 	}
 }
 
