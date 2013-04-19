@@ -1,18 +1,10 @@
 /*
  * Debugfs interfaces
  *
- * WARNING: This file is provided under a GPL license since some codes
- * copied from some drivers.
- *
- * When using or
- * redistributing this file, you may do so under either license.
- *
- * GPL LICENSE SUMMARY
- *
- * Copyright(c) 2011 Intel Corporation. All rights reserved.
+ * Copyright(c) 2011-2013 Intel Corporation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
- * it under the terms of version 2 of the GNU General Public License as
+ * it under the terms of Version 2 of the GNU General Public License as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful, but
@@ -23,10 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
- * The full GNU General Public License is included in this distribution
- * in the file called LICENSE.GPL.
- *
  */
+
 /* TODO: this file's code copied from arch/x86/xen/debugfs.c and
  * fs/debugfs/file.c. Can we clean up and/or minimize this file???
  */
