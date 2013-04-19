@@ -36,6 +36,7 @@
 #include <linux/hashtable.h>
 
 #include <xen/interface/hvm/ioreq.h>
+#include <xen/interface/platform.h>
 #include <xen/vgt-if.h>
 
 #include "edid.h"
@@ -75,7 +76,7 @@ extern bool hvm_owner;
 extern bool hvm_super_owner;
 extern bool vgt_primary;
 extern bool vgt_debug;
-extern bool novgt;
+extern bool vgt_enabled;
 extern bool fastpath_dpy_switch;
 extern bool shadow_tail_based_qos;
 extern bool event_based_qos;

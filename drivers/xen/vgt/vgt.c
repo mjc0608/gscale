@@ -59,8 +59,8 @@ module_param_named(vgt_primary, vgt_primary, bool, 0600);
 bool vgt_debug = false;
 module_param_named(debug, vgt_debug, bool, 0600);
 
-bool novgt = false;
-module_param_named(novgt, novgt, bool, 0400);
+bool vgt_enabled = true;
+module_param_named(vgt, vgt_enabled, bool, 0400);
 
 bool fastpath_dpy_switch = true;
 module_param_named(fastpath_dpy_switch, fastpath_dpy_switch, bool, 0600);
@@ -342,7 +342,7 @@ int vgt_initialize(struct pci_dev *dev)
 	struct task_struct *p_thread;
 	vgt_params_t vp;
 
-	if (novgt)
+	if (!vgt_enabled)
 		return 0;
 
 	spin_lock_init(&pdev->lock);
