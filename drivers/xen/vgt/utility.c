@@ -39,6 +39,8 @@
  * SOFTWARE.
  */
 
+#include <linux/module.h>
+
 #include <linux/pci.h>
 #include <linux/delay.h>
 
@@ -522,3 +524,29 @@ static void ring_debug(struct vgt_device *vgt, int ring_id)
 		VGT_MMIO_READ(vgt->pdev, RB_CTL(ring_id)));
 }
 #endif
+
+uint32_t *vgt_get_vmmio_base(int domid)
+{
+	struct vgt_device *vgt = vmid_2_vgt_device(domid);
+
+	if (!vgt) {
+		printk("vGT: invalid domain ID (%d)\n", domid);
+		return NULL;
+	}
+	/* TODO: need refcount to avoid race on VM destroy */
+	return (uint32_t *)vgt->state.vReg;
+}
+EXPORT_SYMBOL_GPL(vgt_get_vmmio_base);
+
+uint32_t *vgt_get_vgtt_base(int domid)
+{
+	struct vgt_device *vgt = vmid_2_vgt_device(domid);
+
+	if (!vgt) {
+		printk("vGT: invalid domain ID (%d)\n", domid);
+		return NULL;
+	}
+	/* TODO: need refcount to avoid race on VM destroy */
+	return (uint32_t *)vgt->vgtt;
+}
+EXPORT_SYMBOL_GPL(vgt_get_vgtt_base);
