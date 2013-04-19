@@ -107,14 +107,14 @@ void show_mode_settings(struct pgt_device *pdev)
 	SHOW_MODE(_REG_VCS_MI_MODE);
 	SHOW_MODE(_REG_BCS_MI_MODE);
 
-	if (pdev->is_ivybridge || pdev->is_haswell) {
+	if (IS_IVB(pdev) || IS_HSW(pdev)) {
 		SHOW_MODE(_REG_RCS_GFX_MODE_IVB);
 		SHOW_MODE(_REG_BCS_BLT_MODE_IVB);
 		SHOW_MODE(_REG_VCS_MFX_MODE_IVB);
 		SHOW_MODE(_REG_CACHE_MODE_0_IVB);
 		SHOW_MODE(_REG_CACHE_MODE_1_IVB);
 		SHOW_MODE(_REG_GT_MODE_IVB);
-	} else if (pdev->is_sandybridge) {
+	} else if (IS_SNB(pdev)) {
 		SHOW_MODE(_REG_GFX_MODE);
 		SHOW_MODE(_REG_ARB_MODE);
 		SHOW_MODE(_REG_GT_MODE);
@@ -321,7 +321,7 @@ u32 __inline dma_addr_to_pte_uc(struct pgt_device *pdev, dma_addr_t addr)
 {
 	u32 pte;
 
-	if (pdev->is_haswell) {
+	if (IS_HSW(pdev)) {
 		/* Haswell has new cache control bits */
 		pte = addr & ~0xfff;
 		pte |= (addr >> 28) & 0x7f0;

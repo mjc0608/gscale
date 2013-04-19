@@ -767,9 +767,9 @@ static void vgt_toggle_emulated_bits(struct vgt_device *vgt,
 	vgt_dbg("vGT: toggle event emulations at imr/ier emulation for reg (%s) bits (%x)\n",
 		ops->get_reg_name(pdev, reg), bits);
 	if (((reg == _REG_DEIER) || (reg == _REG_DEIMR))) {
-		if (pdev->is_sandybridge)
+		if (IS_SNB(pdev))
 			bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
-		else if (pdev->is_ivybridge || pdev->is_haswell)
+		else if (IS_IVB(pdev) || IS_HSW(pdev))
 			bits &= ~(_REGBIT_PCH_GEN7 | _REGBIT_MASTER_INTERRUPT);
 	}
 
@@ -798,11 +798,11 @@ static uint32_t vgt_keep_owner_bits(struct vgt_device *vgt,
 		if (bits & _REGBIT_MASTER_INTERRUPT)
 			val |= _REGBIT_MASTER_INTERRUPT;
 
-		if (pdev->is_sandybridge) {
+		if (IS_SNB(pdev)) {
 			if (bits & _REGBIT_PCH)
 				val |= _REGBIT_PCH;
 			bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
-		} else if (pdev->is_ivybridge || pdev->is_haswell) {
+		} else if (IS_IVB(pdev) || IS_HSW(pdev)) {
 			if (bits & _REGBIT_PCH_GEN7)
 				val |= _REGBIT_PCH_GEN7;
 			bits &= ~(_REGBIT_PCH_GEN7 | _REGBIT_MASTER_INTERRUPT);
@@ -879,9 +879,9 @@ bool vgt_reg_imr_handler(struct vgt_device *state,
 
 	vgt_check_pending_events(state);
 
-	if (pdev->is_sandybridge)
+	if (IS_SNB(pdev))
 		pch_irq_mask = _REGBIT_PCH;
-	else if (pdev->is_ivybridge || pdev->is_haswell)
+	else if (IS_IVB(pdev) || IS_HSW(pdev))
 		pch_irq_mask = _REGBIT_PCH_GEN7;
 
 	/* merge pch bits */
@@ -990,9 +990,9 @@ bool vgt_reg_ier_handler(struct vgt_device *state,
 
 	vgt_check_pending_events(state);
 
-	if (pdev->is_sandybridge)
+	if (IS_SNB(pdev))
 		pch_irq_mask = _REGBIT_PCH;
-	else if (pdev->is_ivybridge || pdev->is_haswell)
+	else if (IS_IVB(pdev) || IS_HSW(pdev))
 		pch_irq_mask = _REGBIT_PCH_GEN7;
 
 	/* merge pch bits */
@@ -1735,7 +1735,7 @@ int vgt_irq_init(struct pgt_device *dev)
 	dev->irq_hstate = irq_hstate;
 
 	/* FIXME IVB: check any difference */
-	if (dev->is_sandybridge || dev->is_ivybridge || dev->is_haswell)
+	if (IS_SNB(dev) || IS_IVB(dev) || IS_HSW(dev))
 		dev->irq_hstate->ops = &snb_irq_ops;
 	else {
 		vgt_dbg("vGT: no irq ops found!\n");

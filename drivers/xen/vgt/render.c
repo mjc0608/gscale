@@ -700,9 +700,9 @@ void vgt_rendering_save_mmio(struct vgt_device *vgt)
 	 * enough to track only save part
 	 */
 	pdev->in_ctx_switch = 1;
-	if (pdev->is_sandybridge)
+	if (IS_SNB(pdev))
 		__vgt_rendering_save(vgt, ARRAY_NUM(vgt_render_regs), &vgt_render_regs[0]);
-	else if (pdev->is_ivybridge || pdev->is_haswell)
+	else if (IS_IVB(pdev) || IS_HSW(pdev))
 		__vgt_rendering_save(vgt, ARRAY_NUM(vgt_gen7_render_regs), &vgt_gen7_render_regs[0]);
 	pdev->in_ctx_switch = 0;
 }
@@ -757,9 +757,9 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
 
-	if (pdev->is_sandybridge)
+	if (IS_SNB(pdev))
 		__vgt_rendering_restore(vgt, ARRAY_NUM(vgt_render_regs), &vgt_render_regs[0]);
-	else if (pdev->is_ivybridge || pdev->is_haswell)
+	else if (IS_IVB(pdev) || IS_HSW(pdev))
 		__vgt_rendering_restore(vgt, ARRAY_NUM(vgt_gen7_render_regs), &vgt_gen7_render_regs[0]);
 }
 

@@ -464,7 +464,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 				gva = vgt_vmem_gpa_2_va(vgt, gpa);
 				// On the SNB laptop, writing tmp to gva can
 				//cause bug 119. So let's do the writing only on HSW for now.
-				if (gva != NULL && vgt->pdev->is_haswell)
+				if (gva != NULL && IS_HSW(vgt->pdev))
 					memcpy(gva, &tmp, req->size);
 				else
 					vgt_dbg("vGT: can not write gpa = 0x%lx!!!\n", gpa);

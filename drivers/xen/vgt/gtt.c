@@ -45,9 +45,9 @@ unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
 {
 	u64 addr = 0;
 
-	if (pdev->is_sandybridge || pdev->is_ivybridge)
+	if (IS_SNB(pdev) || IS_IVB(pdev))
 		addr = (((u64)pte & 0xff0) << 28) | (u64)(pte & 0xfffff000);
-	else if (pdev->is_haswell)
+	else if (IS_HSW(pdev))
 		addr = (((u64)pte & 0x7f0) << 28) | (u64)(pte & 0xfffff000);
 
 	return (addr >> GTT_PAGE_SHIFT);
@@ -58,10 +58,10 @@ static u32 gtt_pte_update(struct pgt_device *pdev, unsigned long pfn, u32 old_pt
 	u64 addr = pfn << GTT_PAGE_SHIFT;
 	u32 pte, addr_mask = 0, ctl_mask = 0;
 
-	if (pdev->is_sandybridge || pdev->is_ivybridge) {
+	if (IS_SNB(pdev) || IS_IVB(pdev)) {
 		addr_mask = 0xff0;
 		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7;
-	} else if (pdev->is_haswell) {
+	} else if (IS_HSW(pdev)) {
 		addr_mask = 0x7f0;
 		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7_5;
 	}
@@ -551,7 +551,7 @@ static void vgt_init_ppgtt_hw(struct vgt_device *vgt, u32 base)
 	VGT_MMIO_WRITE(vgt->pdev, _REG_VCS_PP_DCLV, 0xffffffff);
 	VGT_MMIO_WRITE(vgt->pdev, _REG_VCS_PP_DIR_BASE, base);
 
-	if (vgt->pdev->is_haswell && vgt->vebox_support) {
+	if (IS_HSW(vgt->pdev) && vgt->vebox_support) {
 		VGT_MMIO_WRITE(vgt->pdev, _REG_VECS_PP_DCLV, 0xffffffff);
 		VGT_MMIO_WRITE(vgt->pdev, _REG_VECS_PP_DIR_BASE, base);
 	}

@@ -169,7 +169,7 @@ bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 
 	vgt_dbg("VM%d write register FORCE_WAKE with %x\n", vgt->vm_id, data);
 
-	if (vgt->pdev->is_haswell) {
+	if (IS_HSW(vgt->pdev)) {
 		__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = data;
 	} else {
 		__vreg(vgt, _REG_FORCEWAKE_ACK) = data;
@@ -226,7 +226,7 @@ bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	new_wake = (old_wake & ~mask) + (wake & mask);
 	__vreg(vgt, _REG_MUL_FORCEWAKE) = (data & 0xFFFF0000) + new_wake;
 
-	if (vgt->pdev->is_haswell) {
+	if (IS_HSW(vgt->pdev)) {
 		__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = new_wake;
 	} else {
 		/* IVB */
@@ -2545,7 +2545,7 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 		reg_update_handlers(pdev, _REG_VCS_MFX_MODE_IVB, 4,
 				vcs_mfx_mode_read, vcs_mfx_mode_write);
 
-		if (pdev->is_haswell) {
+		if (IS_HSW(pdev)) {
 			reg_update_handlers(pdev, _REG_VECS_PP_DIR_BASE, 4,
 					vecs_pp_dir_base_read,
 					vecs_pp_dir_base_write);

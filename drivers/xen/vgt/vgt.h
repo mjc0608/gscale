@@ -752,9 +752,7 @@ struct pgt_device {
 	struct workqueue_struct *pgt_wq;
 
 	u8 gen_dev_type;
-	u8 is_sandybridge : 1;
-	u8 is_ivybridge : 1;
-	u8 is_haswell : 1;
+
 	u8 enable_ppgtt : 1;
 	u8 in_ctx_switch : 1;
 	u8 probe_ports : 1;
@@ -967,6 +965,10 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 	return false;
 }
 
+#define IS_SNB(pdev)	((pdev)->gen_dev_type == XEN_IGD_SNB)
+#define IS_IVB(pdev)	((pdev)->gen_dev_type == XEN_IGD_IVB)
+#define IS_HSW(pdev)	((pdev)->gen_dev_type == XEN_IGD_HSW)
+
 #define D_SNB	(1 << 0)
 #define D_IVB	(1 << 1)
 #define D_HSW	(1 << 2)
@@ -988,12 +990,13 @@ typedef struct {
 
 static inline unsigned int vgt_gen_dev_type(struct pgt_device *pdev)
 {
-	if (pdev->is_sandybridge)
+	if (IS_SNB(pdev))
 		return D_SNB;
-	if (pdev->is_ivybridge)
+	if (IS_IVB(pdev))
 		return D_IVB;
-	if (pdev->is_haswell)
+	if (IS_HSW(pdev))
 		return D_HSW;
+	WARN_ONCE(1, KERN_ERR "vGT: unknown GEN type!\n");
 	return 0;
 }
 

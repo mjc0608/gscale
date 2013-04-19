@@ -243,21 +243,18 @@ bool initial_phys_states(struct pgt_device *pdev)
 static bool vgt_set_device_type(struct pgt_device *pdev)
 {
 	if (_is_sandybridge(pdev->pdev->device)) {
-		pdev->is_sandybridge = 1;
 		pdev->gen_dev_type = XEN_IGD_SNB;
 		vgt_info("Detected Sandybridge\n");
 		return true;
 	}
 
 	if (_is_ivybridge(pdev->pdev->device)) {
-		pdev->is_ivybridge = 1;
 		pdev->gen_dev_type = XEN_IGD_IVB;
 		vgt_info("Detected Ivybridge\n");
 		return true;
 	}
 
 	if (_is_haswell(pdev->pdev->device)) {
-		pdev->is_haswell = 1;
 		pdev->gen_dev_type = XEN_IGD_HSW;
 		vgt_info("Detected Haswell\n");
 		return true;
@@ -276,7 +273,7 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 		return false;
 
 	/* check PPGTT enabling. */
-	if (pdev->is_ivybridge || pdev->is_haswell)
+	if (IS_IVB(pdev) || IS_HSW(pdev))
 		pdev->enable_ppgtt = 1;
 
 	INIT_LIST_HEAD(&pdev->rendering_runq_head);
