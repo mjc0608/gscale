@@ -2208,7 +2208,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_SDEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
 {_REG_SDEISR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
-{_REG_DE_RRMR, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_DE_RRMR, 4, F_WA, 0, D_ALL, NULL, NULL},
 
 {_REG_PIPEACONF, 4, F_DPY, 0, D_ALL, NULL, pipe_conf_mmio_write},
 {_REG_PIPEADSL, 4, F_DPY, 0, D_ALL, pipe_dsl_mmio_read, NULL},
