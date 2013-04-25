@@ -1231,6 +1231,24 @@ bool dpy_plane_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+bool dpy_modeset_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
+
+	if (!reg_hw_access(vgt, offset)) {
+		vgt_info("mmio[0x%x] write with 0x%x.\n", offset,
+						*(vgt_reg_t *)p_data);
+		vgt_warn("modeset emulation is not supported. MMIO write is ignored!\n");
+	}
+
+	return true;
+}
+
 bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
@@ -2303,24 +2321,24 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_LGC_PALETTE_A, 4*256, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_LGC_PALETTE_B, 4*256, F_DPY, 0, D_ALL, NULL, NULL},
 
-{_REG_HTOTAL_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_HBLANK_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_HSYNC_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_VTOTAL_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_VBLANK_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_VSYNC_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_HTOTAL_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_HBLANK_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_HSYNC_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_VTOTAL_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_VBLANK_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_VSYNC_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 {_REG_PIPEASRC, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_BCLRPAT_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_VSYNCSHIFT_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_HTOTAL_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_HBLANK_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_HSYNC_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_VTOTAL_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_VBLANK_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_VSYNC_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_VSYNCSHIFT_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_HTOTAL_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_HBLANK_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_HSYNC_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_VTOTAL_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_VBLANK_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_VSYNC_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 {_REG_PIPEBSRC, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_BCLRPAT_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_VSYNCSHIFT_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_VSYNCSHIFT_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 
 {_REG_PIPEA_DATA_M1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PIPEA_DATA_N1, 4, F_DPY, 0, D_ALL, NULL, NULL},
@@ -2392,20 +2410,20 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_FDI_RXA_IMR, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_RXB_IMR, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 
-{_REG_TRANS_HTOTAL_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_HBLANK_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_HSYNC_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_VTOTAL_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_VBLANK_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_VSYNC_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_VSYNCSHIFT_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_HTOTAL_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_HBLANK_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_HSYNC_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_VTOTAL_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_VBLANK_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_VSYNC_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_TRANS_VSYNCSHIFT_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_TRANS_HTOTAL_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_HBLANK_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_HSYNC_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_VTOTAL_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_VBLANK_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_VSYNC_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_VSYNCSHIFT_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_HTOTAL_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_HBLANK_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_HSYNC_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_VTOTAL_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_VBLANK_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_VSYNC_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{_REG_TRANS_VSYNCSHIFT_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 
 {_REG_TRANSA_DATA_M1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_TRANSA_DATA_N1, 4, F_DPY, 0, D_ALL, NULL, NULL},
