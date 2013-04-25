@@ -834,7 +834,7 @@ static void vgt_initialize_reg_attr(struct pgt_device *pdev,
 
 		cnt++;
 		if (track)
-			printk("reg(%x): size(%x), device(%d), flags(%x), mask(%x), read(%llx), write(%llx)\n",
+			vgt_info("reg(%x): size(%x), device(%d), flags(%x), mask(%x), read(%llx), write(%llx)\n",
 				attr->reg, attr->size, attr->device,
 				attr->flags,
 				attr->addr_mask,
