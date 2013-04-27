@@ -48,6 +48,9 @@
 
 #include "vgt.h"
 
+#define CREATE_TRACE_POINTS
+#include "vgt_trace.h"
+
 DEFINE_HASHTABLE(vgt_mmio_table, VGT_HASH_BITS);
 
 void vgt_add_mmio_entry(struct vgt_mmio_entry *e)
@@ -334,6 +337,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
 	reg_set_accessed(pdev, offset);
 
 	spin_unlock_irqrestore(&pdev->lock, flags);
+	trace_vgt_mmio_rw(VGT_TRACE_READ, vgt->vm_id, offset, p_data, bytes);
 	return true;
 }
 
@@ -433,6 +437,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 
 	reg_set_accessed(pdev, offset);
 	spin_unlock_irqrestore(&pdev->lock, flags);
+	trace_vgt_mmio_rw(VGT_TRACE_WRITE, vgt->vm_id, offset, p_data, bytes);
 	return true;
 }
 

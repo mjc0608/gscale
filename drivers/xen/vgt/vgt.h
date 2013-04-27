@@ -684,6 +684,11 @@ struct vgt_uevent_info {
 
 void vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent);
 
+enum vgt_trace_type {
+	VGT_TRACE_READ,
+	VGT_TRACE_WRITE
+};
+
 typedef union {
 	uint32_t cmd;
 	struct {
