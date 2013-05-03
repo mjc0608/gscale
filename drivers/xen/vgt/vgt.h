@@ -1869,6 +1869,7 @@ void vgt_init_reserved_aperture(struct pgt_device *pdev);
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp);
 void vgt_release_instance(struct vgt_device *vgt);
 int vgt_init_sysfs(struct pgt_device *pdev);
+void vgt_destroy_sysfs(void);
 extern void vgt_set_display_pointer(int vm_id);
 extern ssize_t vgt_get_display_pointer(char *buf);
 extern void vgt_probe_edid(struct pgt_device *pdev, int index);

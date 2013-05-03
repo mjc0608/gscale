@@ -568,31 +568,49 @@ static int vgt_del_state_sysfs(vgt_params_t vp)
 	return 0;
 }
 
-
-//TODO: add the Remove logic and check the return value...
 int vgt_init_sysfs(struct pgt_device *pdev)
 {
-	int retval;
+	int ret;
 
 	vgt_kset = kset_create_and_add("vgt", NULL, kernel_kobj);
-	if (!vgt_kset)
-		return -ENOMEM;
+	if (!vgt_kset) {
+		ret = -ENOMEM;
+		goto kset_fail;
+	}
 
 	vgt_ctrl_kobj = kzalloc(sizeof(struct kobject), GFP_KERNEL);
-	if (!vgt_ctrl_kobj)
-		return -ENOMEM;
+	if (!vgt_ctrl_kobj) {
+		ret = -ENOMEM;
+		goto ctrl_fail;
+	}
 
 	vgt_ctrl_kobj->kset = vgt_kset;
 
-	retval = kobject_init_and_add(vgt_ctrl_kobj, &vgt_ctrl_ktype, NULL, "control");
-	if (retval) {
-		kobject_put(vgt_ctrl_kobj);
-		return -EINVAL;
+	ret = kobject_init_and_add(vgt_ctrl_kobj, &vgt_ctrl_ktype, NULL, "control");
+	if (ret) {
+		ret = -EINVAL;
+		goto kobj_fail;
 	}
 
-	retval = sysfs_create_bin_file(vgt_ctrl_kobj, &igd_mmio_attr);
-	if (retval < 0)
-		return retval;
+	ret = sysfs_create_bin_file(vgt_ctrl_kobj, &igd_mmio_attr);
+	if (ret < 0) {
+		ret = -EINVAL;
+		goto kobj_fail;
+	}
 
 	return 0;
+
+kobj_fail:
+	kobject_put(vgt_ctrl_kobj);
+ctrl_fail:
+	kset_unregister(vgt_kset);
+kset_fail:
+	return ret;
+}
+
+void vgt_destroy_sysfs(void)
+{
+	sysfs_remove_bin_file(vgt_ctrl_kobj, &igd_mmio_attr);
+	kobject_put(vgt_ctrl_kobj);
+	kset_unregister(vgt_kset);
 }

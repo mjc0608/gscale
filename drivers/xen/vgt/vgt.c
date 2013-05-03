@@ -469,6 +469,8 @@ void vgt_destroy(void)
 	/* Destruct all vgt_debugfs */
 	vgt_release_debugfs();
 
+	vgt_destroy_sysfs();
+
 	free_gtt(pdev);
 
 	if (pdev->gmadr_va)
