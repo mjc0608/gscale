@@ -101,6 +101,7 @@ extern int dom0_aperture_sz;
 extern int dom0_gm_sz;
 extern int dom0_fence_sz;
 extern bool bypass_scan;
+extern bool bypass_dom0_addr_check;
 
 #define vgt_info(fmt, s...)	\
 	do { printk(KERN_INFO "vGT info:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
@@ -537,6 +538,8 @@ struct vgt_device {
 	uint64_t	hidden_gm_offset;	/* address fix for invisible GM */
 	int			fence_base;
 	int			fence_sz;
+
+	bool		bypass_addr_check;
 
 #define VMEM_BUCK_SHIFT		20
 #define VMEM_BUCK_SIZE		(1<<VMEM_BUCK_SHIFT)
@@ -1218,6 +1221,8 @@ extern void state_sreg_init(struct vgt_device *vgt);
 #define vgt_guest_hidden_gm_end(vgt)	\
 	(vgt_guest_hidden_gm_base(vgt) + vgt_hidden_gm_sz(vgt) - 1)
 
+#if 0
+/* These unused functions are for non-ballooning case. */
 /* translate a guest aperture address to host aperture address */
 static inline uint64_t g2h_aperture(struct vgt_device *vgt, uint64_t g_addr)
 {
@@ -1241,10 +1246,14 @@ static inline uint64_t h2g_aperture(struct vgt_device *vgt, uint64_t h_addr)
 	offset = h_addr - vgt_aperture_base(vgt);
 	return vgt_guest_aperture_base(vgt) + offset;
 }
+#endif
 
 /* check whether a guest GM address is within the CPU visible range */
 static inline bool g_gm_is_visible(struct vgt_device *vgt, uint64_t g_addr)
 {
+	if (vgt->bypass_addr_check)
+		return true;
+
 	return (g_addr >= vgt_guest_visible_gm_base(vgt)) &&
 		(g_addr <= vgt_guest_visible_gm_end(vgt));
 }
@@ -1252,6 +1261,9 @@ static inline bool g_gm_is_visible(struct vgt_device *vgt, uint64_t g_addr)
 /* check whether a guest GM address is out of the CPU visible range */
 static inline bool g_gm_is_hidden(struct vgt_device *vgt, uint64_t g_addr)
 {
+	if (vgt->bypass_addr_check)
+		return true;
+
 	return (g_addr >= vgt_guest_hidden_gm_base(vgt)) &&
 		(g_addr <= vgt_guest_hidden_gm_end(vgt));
 }
@@ -1264,6 +1276,9 @@ static inline bool g_gm_is_valid(struct vgt_device *vgt, uint64_t g_addr)
 /* check whether a host GM address is within the CPU visible range */
 static inline bool h_gm_is_visible(struct vgt_device *vgt, uint64_t h_addr)
 {
+	if (vgt->bypass_addr_check)
+		return true;
+
 	return (h_addr >= vgt_visible_gm_base(vgt)) &&
 		(h_addr <= vgt_visible_gm_end(vgt));
 }
@@ -1271,6 +1286,9 @@ static inline bool h_gm_is_visible(struct vgt_device *vgt, uint64_t h_addr)
 /* check whether a host GM address is out of the CPU visible range */
 static inline bool h_gm_is_hidden(struct vgt_device *vgt, uint64_t h_addr)
 {
+	if (vgt->bypass_addr_check)
+		return true;
+
 	return (h_addr >= vgt_hidden_gm_base(vgt)) &&
 		(h_addr <= vgt_hidden_gm_end(vgt));
 }
@@ -1309,6 +1327,9 @@ static inline uint64_t g2h_gm(struct vgt_device *vgt, uint64_t g_addr)
 {
 	uint64_t h_addr;
 
+	if (vgt->bypass_addr_check)
+		return g_addr;
+
 	ASSERT_NUM(g_gm_is_valid(vgt, g_addr), g_addr);
 
 	if (g_gm_is_visible(vgt, g_addr))	/* aperture */
@@ -1325,6 +1346,9 @@ static inline uint64_t g2h_gm(struct vgt_device *vgt, uint64_t g_addr)
 static inline uint64_t h2g_gm(struct vgt_device *vgt, uint64_t h_addr)
 {
 	uint64_t g_addr;
+
+	if (vgt->bypass_addr_check)
+		return h_addr;
 
 	ASSERT_NUM(h_gm_is_valid(vgt, h_addr), h_addr);
 
@@ -1343,6 +1367,8 @@ extern unsigned long rsvd_aperture_alloc(struct pgt_device *pdev,
 extern void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start,
 		unsigned long size);
 
+#if 0
+/* This unused function is for non-ballooning case. */
 /*
  * check whether a structure pointed by MMIO, or an instruction filled in
  * the command buffer, may cross the visible and invisible boundary. That
@@ -1357,6 +1383,7 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 	return g_gm_is_visible(vgt, g_start) &&
 		g_gm_is_hidden(vgt, g_start + size - 1);
 }
+#endif
 
 #define GTT_SIZE				(2* SIZE_1MB)
 #define reg_is_mmio(pdev, reg)	\

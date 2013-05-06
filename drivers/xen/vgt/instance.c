@@ -258,6 +258,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 			vgt->fence_base, vgt->fence_sz);
 	}
 
+	vgt->bypass_addr_check = bypass_dom0_addr_check && (vgt->vm_id == 0);
+
 	pdev->device[vgt->vgt_id] = vgt;
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
 

@@ -117,6 +117,9 @@ module_param_named(dom0_fence_sz, dom0_fence_sz, int, 0600);
 bool bypass_scan = false;
 module_param_named(bypass_scan, bypass_scan, bool, 0600);
 
+bool bypass_dom0_addr_check = false;
+module_param_named(bypass_dom0_addr_check, bypass_dom0_addr_check, bool, 0600);
+
 static vgt_ops_t vgt_xops = {
 	.mem_read = vgt_emulate_read,
 	.mem_write = vgt_emulate_write,
