@@ -333,6 +333,7 @@ static const struct file_operations preg_fops = {
 static int vgt_show_irqinfo(struct seq_file *m, void *data)
 {
 	struct pgt_device *pdev = (struct pgt_device *)m->private;
+	struct vgt_device *vgt;
 	struct pgt_statistics *pstat = &pdev->stat;
 	struct vgt_statistics *vstat;
 	int i, j;
@@ -342,18 +343,44 @@ static int vgt_show_irqinfo(struct seq_file *m, void *data)
 		return 0;
 	}
 	seq_printf(m, "--------------------------\n");
+	seq_printf(m, "Interrupt control status:\n");
+	seq_printf(m, "vGT: DEISR is %x, DEIIR is %x, DEIMR is %x, DEIER is %x\n",
+		VGT_MMIO_READ(pdev, _REG_DEISR),
+		VGT_MMIO_READ(pdev, _REG_DEIIR),
+		VGT_MMIO_READ(pdev, _REG_DEIMR),
+		VGT_MMIO_READ(pdev, _REG_DEIER));
+	seq_printf(m, "vGT: SDEISR is %x, SDEIIR is %x, SDEIMR is %x, SDEIER is %x\n",
+		VGT_MMIO_READ(pdev, _REG_SDEISR),
+		VGT_MMIO_READ(pdev, _REG_SDEIIR),
+		VGT_MMIO_READ(pdev, _REG_SDEIMR),
+		VGT_MMIO_READ(pdev, _REG_SDEIER));
+	seq_printf(m, "vGT: GTISR is %x, GTIIR is %x, GTIMR is %x, GTIER is %x\n",
+		VGT_MMIO_READ(pdev, _REG_GTISR),
+		VGT_MMIO_READ(pdev, _REG_GTIIR),
+		VGT_MMIO_READ(pdev, _REG_GTIMR),
+		VGT_MMIO_READ(pdev, _REG_GTIER));
+	seq_printf(m, "vGT: PMISR is %x, PMIIR is %x, PMIMR is %x, PMIER is %x\n",
+		VGT_MMIO_READ(pdev, _REG_PMISR),
+		VGT_MMIO_READ(pdev, _REG_PMIIR),
+		VGT_MMIO_READ(pdev, _REG_PMIMR),
+		VGT_MMIO_READ(pdev, _REG_PMIER));
+	seq_printf(m, "vGT: RCS_IMR is %x, VCS_IMR is %x, BCS_IMR is %x\n",
+		VGT_MMIO_READ(pdev, _REG_RCS_IMR),
+		VGT_MMIO_READ(pdev, _REG_VCS_IMR),
+		VGT_MMIO_READ(pdev, _REG_BCS_IMR));
 	seq_printf(m, "Total %lld interrupts logged:\n", pstat->irq_num);
 	seq_printf(m, "#	WARNING: precisely this is the number of vGT \n"
 			"#	physical interrupt handler be called,\n"
 			"#	each calling several events can be\n"
 			"#	been handled, so usually this number\n"
 			"#	is less than the total events number.\n");
-	for (i = 0; i < IRQ_MAX; i++) {
+	for (i = 0; i < EVENT_MAX; i++) {
 		if (!pstat->events[i])
 			continue;
 		seq_printf(m, "\t%16lld: %s\n", pstat->events[i],
 				vgt_irq_name[i]);
 	}
+
 	seq_printf(m, "%16lld: Last pirq\n", pstat->last_pirq);
 	seq_printf(m, "%16lld: Last virq\n", pstat->last_virq);
 	seq_printf(m, "%16lld: Average pirq cycles\n",
@@ -368,12 +395,33 @@ static int vgt_show_irqinfo(struct seq_file *m, void *data)
 			continue;
 
 		seq_printf(m, "\n-->vgt-%d:\n", pdev->device[i]->vgt_id);
-		vstat = &pdev->device[i]->stat;
+		vgt = pdev->device[i];
+		vstat = &vgt->stat;
 
-		seq_printf(m, "%16lld: Last virq propagation\n",
-			vstat->last_propagation);
-		seq_printf(m, "%16lld: Last blocked virq propagation\n",
-			vstat->last_blocked_propagation);
+		seq_printf(m, "....vreg (deier: %x, deiir: %x, deimr: %x, deisr: %x)\n",
+				__vreg(vgt, _REG_DEIER),
+				__vreg(vgt, _REG_DEIIR),
+				__vreg(vgt, _REG_DEIMR),
+				__vreg(vgt, _REG_DEISR));
+		seq_printf(m, "....vreg (gtier: %x, gtiir: %x, gtimr: %x, gtisr: %x)\n",
+				__vreg(vgt, _REG_GTIER),
+				__vreg(vgt, _REG_GTIIR),
+				__vreg(vgt, _REG_GTIMR),
+				__vreg(vgt, _REG_GTISR));
+		seq_printf(m, "....vreg (sdeier: %x, sdeiir: %x, sdeimr: %x, sdeisr: %x)\n",
+				__vreg(vgt, _REG_SDEIER),
+				__vreg(vgt, _REG_SDEIIR),
+				__vreg(vgt, _REG_SDEIMR),
+				__vreg(vgt, _REG_SDEISR));
+		seq_printf(m, "....vreg (pmier: %x, pmiir: %x, pmimr: %x, pmisr: %x)\n",
+				__vreg(vgt, _REG_PMIER),
+				__vreg(vgt, _REG_PMIIR),
+				__vreg(vgt, _REG_PMIMR),
+				__vreg(vgt, _REG_PMISR));
+		seq_printf(m, "....vreg (rcs_imr: %x, vcs_imr: %x, bcs_imr: %x\n",
+				__vreg(vgt, _REG_RCS_IMR),
+				__vreg(vgt, _REG_VCS_IMR),
+				__vreg(vgt, _REG_BCS_IMR));
 		seq_printf(m, "%16lld: Last injection\n",
 			vstat->last_injection);
 
@@ -382,7 +430,7 @@ static int vgt_show_irqinfo(struct seq_file *m, void *data)
 
 		seq_printf(m, "Total %lld virtual irq injection:\n",
 			vstat->irq_num);
-		for (j = 0; j < IRQ_MAX; j++) {
+		for (j = 0; j < EVENT_MAX; j++) {
 			if (!vstat->events[j])
 				continue;
 			seq_printf(m, "\t%16lld: %s\n", vstat->events[j],

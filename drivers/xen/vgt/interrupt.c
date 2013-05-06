@@ -39,7 +39,12 @@
  * SOFTWARE.
  */
 
+#include <linux/linkage.h>
 #include <linux/module.h>
+#include <linux/types.h>
+#include <linux/bitops.h>
+#include <linux/slab.h>
+#include <linux/list.h>
 #include <linux/pci.h>
 #include <xen/events.h>
 #include <xen/vgt.h>
@@ -47,638 +52,267 @@
 #include "vgt.h"
 
 /*
- * Major tasks of this file:
- *   - handle physical GEN interrupt
- *   - interrupt virtualization to dom0 and other GT VMs
- *     o forward events carried in a physical interrupt, if it's
- *       programmed by a VM
- *     o emulate events if a given VM is not allowed to program them
- *     o interrupt register virtualization
- *   - track the permission of which events can be programmed by which VM
- *
- * Micellaneous tasks:
- *   - initialization of interrupt control registers
- *   - statistics
- */
-
-/*
  * TODO:
  *   - IIR could store two pending interrupts. need emulate the behavior
- *   - pipe control
- *   - error handling (related registers)
- *	page fault (GFX_ARB_ERROR_RPT, PP_PFIR)
- *	cmd error (IPEHR)
- *   - reserved bit checking in vREG?
- *   - watchdog timer control (write 1 to reset, and write 0 to start)
- *	PR_CTR_CTL, BCS_CTR_THRSH, VCS_CNTR
- *	interresting that blitter has no such interrupt
+ *   - GT has 2nd level IMR registers (render/blitter/video)
+ *   - Handle more events (like hdmi/dp hotplug, pipe-c, watchdog, etc.)
  */
 
-/* simply forward interrupt to dom0 i915, for testing the hook mechanism */
-//#define VGT_IRQ_FORWARD_MODE
+static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
+	enum vgt_irq_type type);
 
-/* only handle IIR/IMR/IER, with all events handled by default handler */
-//#define VGT_IRQ_DEFAULT_HANDLER
+static int vgt_irq_warn_once[VGT_MAX_VMS+1][EVENT_MAX];
 
-/* for debug purpose */
-uint8_t vgt_irq_warn_once[IRQ_MAX] = {0};
-char *vgt_irq_name[IRQ_MAX] = {
+char *vgt_irq_name[EVENT_MAX] = {
 	// GT
-	[IRQ_RCS_MI_USER_INTERRUPT] = "Render Command Streamer MI USER INTERRUPT",
-	[IRQ_RCS_DEBUG] = "Render EU debug from SVG",
-	[IRQ_RCS_MMIO_SYNC_FLUSH] = "Render MMIO sync flush status",
-	[IRQ_RCS_CMD_STREAMER_ERR] = "Render Command Streamer error interrupt",
-	[IRQ_RCS_PIPE_CONTROL] = "ender PIPE CONTROL notify",
-	[IRQ_RCS_WATCHDOG_EXCEEDED] = "Render Command Streamer Watchdog counter exceeded",
-	[IRQ_RCS_PAGE_DIRECTORY_FAULT] = "Render page directory faults",
-	[IRQ_RCS_AS_CONTEXT_SWITCH] = "Render AS Context Switch Interrupt",
+	[RCS_MI_USER_INTERRUPT] = "Render Command Streamer MI USER INTERRUPT",
+	[RCS_DEBUG] = "Render EU debug from SVG",
+	[RCS_MMIO_SYNC_FLUSH] = "Render MMIO sync flush status",
+	[RCS_CMD_STREAMER_ERR] = "Render Command Streamer error interrupt",
+	[RCS_PIPE_CONTROL] = "ender PIPE CONTROL notify",
+	[RCS_WATCHDOG_EXCEEDED] = "Render Command Streamer Watchdog counter exceeded",
+	[RCS_PAGE_DIRECTORY_FAULT] = "Render page directory faults",
+	[RCS_AS_CONTEXT_SWITCH] = "Render AS Context Switch Interrupt",
 
-	[IRQ_VCS_MI_USER_INTERRUPT] = "Video Command Streamer MI USER INTERRUPT",
-	[IRQ_VCS_MMIO_SYNC_FLUSH] = "Video MMIO sync flush status",
-	[IRQ_VCS_CMD_STREAMER_ERR] = "Video Command Streamer error interrupt",
-	[IRQ_VCS_MI_FLUSH_DW] = "Video MI FLUSH DW notify",
-	[IRQ_VCS_WATCHDOG_EXCEEDED] = "Video Command Streamer Watchdog counter exceeded",
-	[IRQ_VCS_PAGE_DIRECTORY_FAULT] = "Video page directory faults",
-	[IRQ_VCS_AS_CONTEXT_SWITCH] = "Video AS Context Switch Interrupt",
+	[VCS_MI_USER_INTERRUPT] = "Video Command Streamer MI USER INTERRUPT",
+	[VCS_MMIO_SYNC_FLUSH] = "Video MMIO sync flush status",
+	[VCS_CMD_STREAMER_ERR] = "Video Command Streamer error interrupt",
+	[VCS_MI_FLUSH_DW] = "Video MI FLUSH DW notify",
+	[VCS_WATCHDOG_EXCEEDED] = "Video Command Streamer Watchdog counter exceeded",
+	[VCS_PAGE_DIRECTORY_FAULT] = "Video page directory faults",
+	[VCS_AS_CONTEXT_SWITCH] = "Video AS Context Switch Interrupt",
 
-	[IRQ_BCS_MI_USER_INTERRUPT] = "Blitter Command Streamer MI USER INTERRUPT",
-	[IRQ_BCS_MMIO_SYNC_FLUSH] = "Billter MMIO sync flush status",
-	[IRQ_BCS_CMD_STREAMER_ERR] = "Blitter Command Streamer error interrupt",
-	[IRQ_BCS_MI_FLUSH_DW] = "Blitter MI FLUSH DW notify",
-	[IRQ_BCS_PAGE_DIRECTORY_FAULT] = "Blitter page directory faults",
-	[IRQ_BCS_AS_CONTEXT_SWITCH] = "Blitter AS Context Switch Interrupt",
+	[BCS_MI_USER_INTERRUPT] = "Blitter Command Streamer MI USER INTERRUPT",
+	[BCS_MMIO_SYNC_FLUSH] = "Billter MMIO sync flush status",
+	[BCS_CMD_STREAMER_ERR] = "Blitter Command Streamer error interrupt",
+	[BCS_MI_FLUSH_DW] = "Blitter MI FLUSH DW notify",
+	[BCS_PAGE_DIRECTORY_FAULT] = "Blitter page directory faults",
+	[BCS_AS_CONTEXT_SWITCH] = "Blitter AS Context Switch Interrupt",
 
 	// DISPLAY
-	[IRQ_PIPE_A_FIFO_UNDERRUN] = "Pipe A FIFO underrun",
-	[IRQ_PIPE_A_CRC_ERR] = "Pipe A CRC error",
-	[IRQ_PIPE_A_CRC_DONE] = "Pipe A CRC done",
-	[IRQ_PIPE_A_VSYNC] = "Pipe A vsync",
-	[IRQ_PIPE_A_LINE_COMPARE] = "Pipe A line compare",
-	[IRQ_PIPE_A_ODD_FIELD] = "Pipe A odd field",
-	[IRQ_PIPE_A_EVEN_FIELD] = "Pipe A even field",
-	[IRQ_PIPE_A_VBLANK] = "Pipe A vblank",
-	[IRQ_PIPE_B_FIFO_UNDERRUN] = "Pipe B FIFO underrun",
-	[IRQ_PIPE_B_CRC_ERR] = "Pipe B CRC error",
-	[IRQ_PIPE_B_CRC_DONE] = "Pipe B CRC done",
-	[IRQ_PIPE_B_VSYNC] = "Pipe B vsync",
-	[IRQ_PIPE_B_LINE_COMPARE] = "Pipe B line compare",
-	[IRQ_PIPE_B_ODD_FIELD] = "Pipe B odd field",
-	[IRQ_PIPE_B_EVEN_FIELD] = "Pipe B even field",
-	[IRQ_PIPE_B_VBLANK] = "Pipe B vblank",
-	[IRQ_DPST_PHASE_IN] = "DPST phase in event",
-	[IRQ_DPST_HISTOGRAM] = "DPST histogram event",
-	[IRQ_GSE] = "GSE",
-	[IRQ_DP_A_HOTPLUG] = "DP A Hotplug",
-	[IRQ_AUX_CHANNEL_A] = "AUX Channel A",
-	[IRQ_PCH_IRQ] = "PCH Display interrupt event",
-	[IRQ_PERF_COUNTER] = "Performance counter",
-	[IRQ_POISON] = "Poison",
-	[IRQ_GTT_FAULT] = "GTT fault",
-	[IRQ_PRIMARY_A_FLIP_DONE] = "Primary Plane A flip done",
-	[IRQ_PRIMARY_B_FLIP_DONE] = "Primary Plane B flip done",
-	[IRQ_SPRITE_A_FLIP_DONE] = "Sprite Plane A flip done",
-	[IRQ_SPRITE_B_FLIP_DONE] = "Sprite Plane B flip done",
+	[PIPE_A_FIFO_UNDERRUN] = "Pipe A FIFO underrun",
+	[PIPE_A_CRC_ERR] = "Pipe A CRC error",
+	[PIPE_A_CRC_DONE] = "Pipe A CRC done",
+	[PIPE_A_VSYNC] = "Pipe A vsync",
+	[PIPE_A_LINE_COMPARE] = "Pipe A line compare",
+	[PIPE_A_ODD_FIELD] = "Pipe A odd field",
+	[PIPE_A_EVEN_FIELD] = "Pipe A even field",
+	[PIPE_A_VBLANK] = "Pipe A vblank",
+	[PIPE_B_FIFO_UNDERRUN] = "Pipe B FIFO underrun",
+	[PIPE_B_CRC_ERR] = "Pipe B CRC error",
+	[PIPE_B_CRC_DONE] = "Pipe B CRC done",
+	[PIPE_B_VSYNC] = "Pipe B vsync",
+	[PIPE_B_LINE_COMPARE] = "Pipe B line compare",
+	[PIPE_B_ODD_FIELD] = "Pipe B odd field",
+	[PIPE_B_EVEN_FIELD] = "Pipe B even field",
+	[PIPE_B_VBLANK] = "Pipe B vblank",
+	[DPST_PHASE_IN] = "DPST phase in event",
+	[DPST_HISTOGRAM] = "DPST histogram event",
+	[GSE] = "GSE",
+	[DP_A_HOTPLUG] = "DP A Hotplug",
+	[AUX_CHANNEL_A] = "AUX Channel A",
+	[PCH_IRQ] = "PCH Display interrupt event",
+	[PERF_COUNTER] = "Performance counter",
+	[POISON] = "Poison",
+	[GTT_FAULT] = "GTT fault",
+	[PRIMARY_A_FLIP_DONE] = "Primary Plane A flip done",
+	[PRIMARY_B_FLIP_DONE] = "Primary Plane B flip done",
+	[SPRITE_A_FLIP_DONE] = "Sprite Plane A flip done",
+	[SPRITE_B_FLIP_DONE] = "Sprite Plane B flip done",
 
 	// PM
-	[IRQ_GV_DOWN_INTERVAL] = "Render geyserville Down evaluation interval interrupt",
-	[IRQ_GV_UP_INTERVAL] = "Render geyserville UP evaluation interval interrupt",
-	[IRQ_RP_DOWN_THRESHOLD] = "RP DOWN threshold interrupt",
-	[IRQ_RP_UP_THRESHOLD] = "RP UP threshold interrupt",
-	[IRQ_FREQ_DOWNWARD_TIMEOUT_RC6] = "Render Frequency Downward Timeout During RC6 interrupt",
-	[IRQ_PCU_THERMAL] = "PCU Thermal Event",
-	[IRQ_PCU_PCODE2DRIVER_MAILBOX] = "PCU pcode2driver mailbox event",
+	[GV_DOWN_INTERVAL] = "Render geyserville Down evaluation interval interrupt",
+	[GV_UP_INTERVAL] = "Render geyserville UP evaluation interval interrupt",
+	[RP_DOWN_THRESHOLD] = "RP DOWN threshold interrupt",
+	[RP_UP_THRESHOLD] = "RP UP threshold interrupt",
+	[FREQ_DOWNWARD_TIMEOUT_RC6] = "Render Frequency Downward Timeout During RC6 interrupt",
+	[PCU_THERMAL] = "PCU Thermal Event",
+	[PCU_PCODE2DRIVER_MAILBOX] = "PCU pcode2driver mailbox event",
 
 	// PCH
-	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_A] = "FDI RX Interrupts Combined A",
-	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_A] = "Audio CP Change Transcoder A",
-	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_A] = "Audio CP Request Transcoder A",
-	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_B] = "FDI RX Interrupts Combined B",
-	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_B] = "Audio CP Change Transcoder B",
-	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_B] = "Audio CP Request Transcoder B",
-	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_C] = "FDI RX Interrupts Combined C",
-	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_C] = "Audio CP Change Transcoder C",
-	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_C] = "Audio CP Request Transcoder C",
-	[IRQ_ERR_AND_DBG] = "South Error and Debug Interupts Combined",
-	[IRQ_GMBUS] = "Gmbus",
-	[IRQ_SDVO_B_HOTPLUG] = "SDVO B hotplug",
-	[IRQ_CRT_HOTPLUG] = "CRT Hotplug",
-	[IRQ_DP_B_HOTPLUG] = "DisplayPort/HDMI/DVI B Hotplug",
-	[IRQ_DP_C_HOTPLUG] = "DisplayPort/HDMI/DVI C Hotplug",
-	[IRQ_DP_D_HOTPLUG] = "DisplayPort/HDMI/DVI D Hotplug",
-	[IRQ_AUX_CHENNEL_B] = "AUX Channel B",
-	[IRQ_AUX_CHENNEL_C] = "AUX Channel C",
-	[IRQ_AUX_CHENNEL_D] = "AUX Channel D",
-	[IRQ_AUDIO_POWER_STATE_CHANGE_B] = "Audio Power State change Port B",
-	[IRQ_AUDIO_POWER_STATE_CHANGE_C] = "Audio Power State change Port C",
-	[IRQ_AUDIO_POWER_STATE_CHANGE_D] = "Audio Power State change Port D",
+	[FDI_RX_INTERRUPTS_TRANSCODER_A] = "FDI RX Interrupts Combined A",
+	[AUDIO_CP_CHANGE_TRANSCODER_A] = "Audio CP Change Transcoder A",
+	[AUDIO_CP_REQUEST_TRANSCODER_A] = "Audio CP Request Transcoder A",
+	[FDI_RX_INTERRUPTS_TRANSCODER_B] = "FDI RX Interrupts Combined B",
+	[AUDIO_CP_CHANGE_TRANSCODER_B] = "Audio CP Change Transcoder B",
+	[AUDIO_CP_REQUEST_TRANSCODER_B] = "Audio CP Request Transcoder B",
+	[FDI_RX_INTERRUPTS_TRANSCODER_C] = "FDI RX Interrupts Combined C",
+	[AUDIO_CP_CHANGE_TRANSCODER_C] = "Audio CP Change Transcoder C",
+	[AUDIO_CP_REQUEST_TRANSCODER_C] = "Audio CP Request Transcoder C",
+	[ERR_AND_DBG] = "South Error and Debug Interupts Combined",
+	[GMBUS] = "Gmbus",
+	[SDVO_B_HOTPLUG] = "SDVO B hotplug",
+	[CRT_HOTPLUG] = "CRT Hotplug",
+	[DP_B_HOTPLUG] = "DisplayPort/HDMI/DVI B Hotplug",
+	[DP_C_HOTPLUG] = "DisplayPort/HDMI/DVI C Hotplug",
+	[DP_D_HOTPLUG] = "DisplayPort/HDMI/DVI D Hotplug",
+	[AUX_CHENNEL_B] = "AUX Channel B",
+	[AUX_CHENNEL_C] = "AUX Channel C",
+	[AUX_CHENNEL_D] = "AUX Channel D",
+	[AUDIO_POWER_STATE_CHANGE_B] = "Audio Power State change Port B",
+	[AUDIO_POWER_STATE_CHANGE_C] = "Audio Power State change Port C",
+	[AUDIO_POWER_STATE_CHANGE_D] = "Audio Power State change Port D",
 
-	[IRQ_RESERVED] = "RESERVED EVENTS!!!",
+	[EVENT_RESERVED] = "RESERVED EVENTS!!!",
 };
 
-/* default event owner mapping table. may be changed dynamically */
-enum vgt_owner_type vgt_default_event_owner_table[IRQ_MAX] = {
-	// GT
-	[IRQ_RCS_MI_USER_INTERRUPT] = VGT_OT_RENDER,
-	[IRQ_RCS_DEBUG] = VGT_OT_RENDER,
-	[IRQ_RCS_MMIO_SYNC_FLUSH] = VGT_OT_RENDER,
-	[IRQ_RCS_CMD_STREAMER_ERR] = VGT_OT_RENDER,
-	[IRQ_RCS_PIPE_CONTROL] = VGT_OT_RENDER,
-	[IRQ_RCS_L3_PARITY_ERR] = VGT_OT_RENDER,
-	[IRQ_RCS_WATCHDOG_EXCEEDED] = VGT_OT_RENDER,
-	[IRQ_RCS_PAGE_DIRECTORY_FAULT] = VGT_OT_RENDER,
-	[IRQ_RCS_AS_CONTEXT_SWITCH] = VGT_OT_RENDER,
-	[IRQ_RCS_MONITOR_BUFF_HALF_FULL] = VGT_OT_RENDER,
+/* =======================IRR/IMR/IER handlers===================== */
 
-	[IRQ_VCS_MI_USER_INTERRUPT] = VGT_OT_RENDER,
-	[IRQ_VCS_MMIO_SYNC_FLUSH] = VGT_OT_RENDER,
-	[IRQ_VCS_CMD_STREAMER_ERR] = VGT_OT_RENDER,
-	[IRQ_VCS_MI_FLUSH_DW] = VGT_OT_RENDER,
-	[IRQ_VCS_WATCHDOG_EXCEEDED] = VGT_OT_RENDER,
-	[IRQ_VCS_PAGE_DIRECTORY_FAULT] = VGT_OT_RENDER,
-	[IRQ_VCS_AS_CONTEXT_SWITCH] = VGT_OT_RENDER,
-
-	[IRQ_BCS_MI_USER_INTERRUPT] = VGT_OT_RENDER,
-	[IRQ_BCS_MMIO_SYNC_FLUSH] = VGT_OT_RENDER,
-	[IRQ_BCS_CMD_STREAMER_ERR] = VGT_OT_RENDER,
-	[IRQ_BCS_MI_FLUSH_DW] = VGT_OT_RENDER,
-	[IRQ_BCS_PAGE_DIRECTORY_FAULT] = VGT_OT_RENDER,
-	[IRQ_BCS_AS_CONTEXT_SWITCH] = VGT_OT_RENDER,
-
-	// DISPLAY
-	[IRQ_PIPE_A_FIFO_UNDERRUN] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_A_CRC_ERR] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_A_CRC_DONE] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_A_VSYNC] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_A_LINE_COMPARE] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_A_ODD_FIELD] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_A_EVEN_FIELD] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_A_VBLANK] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_B_FIFO_UNDERRUN] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_B_CRC_ERR] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_B_CRC_DONE] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_B_VSYNC] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_B_LINE_COMPARE] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_B_ODD_FIELD] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_B_EVEN_FIELD] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_B_VBLANK] = VGT_OT_DISPLAY,
-	[IRQ_DPST_PHASE_IN] = VGT_OT_DISPLAY,	// ???
-	[IRQ_DPST_HISTOGRAM] = VGT_OT_DISPLAY,	// ???
-	[IRQ_GSE] = VGT_OT_MGMT,
-	[IRQ_DP_A_HOTPLUG] = VGT_OT_DISPLAY,
-	[IRQ_AUX_CHANNEL_A] = VGT_OT_MGMT,
-	[IRQ_PCH_IRQ] = VGT_OT_NONE,		// 2nd level events
-	[IRQ_PERF_COUNTER] = VGT_OT_DISPLAY,
-	[IRQ_POISON] = VGT_OT_DISPLAY,		// ???
-	[IRQ_GTT_FAULT] = VGT_OT_DISPLAY,	// ???
-	[IRQ_PRIMARY_A_FLIP_DONE] = VGT_OT_DISPLAY,
-	[IRQ_PRIMARY_B_FLIP_DONE] = VGT_OT_DISPLAY,
-	[IRQ_SPRITE_A_FLIP_DONE] = VGT_OT_DISPLAY,
-	[IRQ_SPRITE_B_FLIP_DONE] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_C_VBLANK] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_C_VSYNC] = VGT_OT_DISPLAY,
-	[IRQ_PIPE_C_LINE_COMPARE] = VGT_OT_DISPLAY,
-	[IRQ_PRIMARY_C_FLIP_DONE] = VGT_OT_DISPLAY,
-	[IRQ_SPRITE_C_FLIP_DONE] = VGT_OT_DISPLAY,
-	[IRQ_ERROR_INTERRUPT_COMBINED] = VGT_OT_MGMT,
-
-	// PM
-	[IRQ_GV_DOWN_INTERVAL] = VGT_OT_PM,
-	[IRQ_GV_UP_INTERVAL] = VGT_OT_PM,
-	[IRQ_RP_DOWN_THRESHOLD] = VGT_OT_PM,
-	[IRQ_RP_UP_THRESHOLD] = VGT_OT_PM,
-	[IRQ_FREQ_DOWNWARD_TIMEOUT_RC6] = VGT_OT_PM,
-	[IRQ_PCU_THERMAL] = VGT_OT_PM,
-	[IRQ_PCU_PCODE2DRIVER_MAILBOX] = VGT_OT_PM,
-
-	// PCH
-	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_A] = VGT_OT_DISPLAY,	// ???
-	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_A] = VGT_OT_DISPLAY,
-	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_A] = VGT_OT_DISPLAY,
-	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_B] = VGT_OT_DISPLAY,
-	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_B] = VGT_OT_DISPLAY,
-	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_B] = VGT_OT_DISPLAY,
-	[IRQ_FDI_RX_INTERRUPTS_TRANSCODER_C] = VGT_OT_DISPLAY,
-	[IRQ_AUDIO_CP_CHANGE_TRANSCODER_C] = VGT_OT_DISPLAY,
-	[IRQ_AUDIO_CP_REQUEST_TRANSCODER_C] = VGT_OT_DISPLAY,
-	[IRQ_ERR_AND_DBG] = VGT_OT_DISPLAY,	// ???
-	[IRQ_GMBUS] = VGT_OT_MGMT,
-	[IRQ_SDVO_B_HOTPLUG] = VGT_OT_DISPLAY,
-	[IRQ_CRT_HOTPLUG] = VGT_OT_DISPLAY,
-	[IRQ_DP_B_HOTPLUG] = VGT_OT_DISPLAY,
-	[IRQ_DP_C_HOTPLUG] = VGT_OT_DISPLAY,
-	[IRQ_DP_D_HOTPLUG] = VGT_OT_DISPLAY,
-	[IRQ_AUX_CHENNEL_B] = VGT_OT_MGMT,
-	[IRQ_AUX_CHENNEL_C] = VGT_OT_MGMT,
-	[IRQ_AUX_CHENNEL_D] = VGT_OT_MGMT,
-	[IRQ_AUDIO_POWER_STATE_CHANGE_B] = VGT_OT_DISPLAY,
-	[IRQ_AUDIO_POWER_STATE_CHANGE_C] = VGT_OT_DISPLAY,
-	[IRQ_AUDIO_POWER_STATE_CHANGE_D] = VGT_OT_DISPLAY,
-
-	[IRQ_RESERVED] = VGT_OT_NONE,
-};
-
-DECLARE_BITMAP(vgt_uevents_bitmap, UEVENT_MAX);
-extern struct kobject *vgt_ctrl_kobj;
-
-bool vgt_default_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev)
+/* Now we have physical mask bits generated by ANDing virtual
+ * mask bits from all VMs. That means, the event is physically unmasked
+ * as long as a VM wants it. This is safe because we still use a single
+ * big lock for all critical paths, but not efficient.
+ */
+static u32 vgt_recalculate_imr(struct pgt_device *pdev, unsigned int reg)
 {
-	int retval;
-	retval = kobject_uevent_env(vgt_ctrl_kobj, uevent_entry->action, uevent_entry->env_var_table);
-	if (retval == 0)
-		return true;
-	else
-		return false;
-}
+	int i;
+	u32 imr = 0xffffffff;
 
-bool vgt_hotplug_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev)
-{
-	vgt_probe_edid(dev, -1);
-	vgt_probe_dpcd(dev, -1);
-	return vgt_default_uevent_handler(uevent_entry, dev);
-}
+	ASSERT(spin_is_locked(&pdev->lock));
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		if (pdev->device[i])
+			imr &= __vreg(pdev->device[i], reg);
+	}
 
-bool vgt_vga_stat_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev)
-{
-	/* Add vmid */
-	int retval;
-	char vmid_str[20];
-	retval = snprintf(vmid_str, 20, "VMID=%d", uevent_entry->vm_id);
-	uevent_entry->env_var_table[1] = vmid_str;
-	return vgt_default_uevent_handler(uevent_entry, dev);
+	return imr;
 }
 
 /*
- When you add new uevents or add new environmental variable,
- you should following rules:
- Now you can at most define VGT_MAX_UEVENT_VARS environmental
- variables with the form like "VAR=VALUE", all the
- pointer of string are stored in env_var_table (below).
-struct vgt_uevent_info {
-	...
-	char *env_var_table[VGT_MAX_UEVENT_VARS];
-	...
-};
- You should place a NULL as the termination of variable
- definition, or function add_uevent_var() in line 219
- of lib/kobject_uevent.c will fail.
-*/
-
-static struct vgt_uevent_info vgt_default_uevent_info_table[UEVENT_MAX] = {
-	{"CRT insert", -1, KOBJ_ADD, {"CRT_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
-	{"CRT remove", -1, KOBJ_REMOVE, {"CRT_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
-	{"DP A insert", -1, KOBJ_ADD, {"DP_A_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
-	{"DP A remove", -1,KOBJ_REMOVE, {"DP_A_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
-	{"SDVO B insert", -1, KOBJ_ADD, {"SDVO_B_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
-	{"SDVO B remove", -1, KOBJ_REMOVE, {"SDVO_B_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
-	{"DP B insert", -1, KOBJ_ADD, {"DP_B_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
-	{"DP B remove", -1, KOBJ_REMOVE, {"DP_B_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
-	{"DP C insert", -1, KOBJ_ADD, {"DP_C_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
-	{"DP C remove", -1, KOBJ_REMOVE, {"DP_C_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
-	{"DP D insert", -1, KOBJ_ADD, {"DP_D_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
-	{"DP D remove", -1, KOBJ_REMOVE, {"DP_D_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
-	{"HDMI B insert", -1, KOBJ_ADD, {"HDMI_B_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
-	{"HDMI B remove", -1, KOBJ_REMOVE, {"HDMI_B_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
-	{"HDMI C insert", -1, KOBJ_ADD, {"HDMI_C_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
-	{"HDMI C remove", -1, KOBJ_REMOVE, {"HDMI_C_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
-	{"HDMI D insert", -1, KOBJ_ADD, {"HDMI_D_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
-	{"HDMI D remove", -1, KOBJ_REMOVE, {"HDMI_D_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
-	{"VGT enable VGA mode", -1, KOBJ_ADD, {"VGT_ENABLE_VGA=1", NULL, NULL}, vgt_vga_stat_uevent_handler},
-	{"VGT disable VGA mode", -1, KOBJ_ADD, {"VGT_ENABLE_VGA=0", NULL, NULL}, vgt_vga_stat_uevent_handler},
-};
-
-void inline vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent)
+ * Now we have physical enabling bits generated by ORing virtual
+ * enabling bits from all VMs. That means, the event is physically enabled
+ * as long as a VM wants it. This is safe because we still use a single
+ * big lock for all critical paths, but not efficient.
+ */
+static u32 vgt_recalculate_ier(struct pgt_device *pdev, unsigned int reg)
 {
-	struct vgt_uevent_info *entry;
+	int i;
+	u32 ier = 0;
 
-	ASSERT(uevent < UEVENT_MAX);
-
-	entry = &vgt_default_uevent_info_table[uevent];
-	entry->vm_id = vgt->vm_id;
-
-	set_bit(uevent, vgt_uevents_bitmap);
-}
-
-void vgt_signal_uevent(struct pgt_device *dev)
-{
-	struct vgt_uevent_info *info_entry;
-	bool rc;
-	int bit;
-
-	for_each_set_bit(bit, vgt_uevents_bitmap, UEVENT_MAX) {
-		clear_bit(bit, vgt_uevents_bitmap);
-
-		info_entry = &vgt_default_uevent_info_table[bit];
-
-		ASSERT(info_entry);
-		ASSERT(info_entry->vgt_uevent_handler);
-
-		rc = info_entry->vgt_uevent_handler(info_entry, dev);
-		if (rc == false)
-			printk("%s: %d: vGT: failed to send uevent [%s]!\n",
-					__func__, __LINE__, info_entry->uevent_name);
+	ASSERT(spin_is_locked(&pdev->lock));
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		if (pdev->device[i])
+			ier |= __vreg(pdev->device[i], reg);
 	}
+
+	return ier;
 }
 
-static void vgt_run_emul(struct vgt_device *vstate,
-		enum vgt_event_type event, int bit, bool enable);
-
-void vgt_show_irq_state(struct vgt_device *vgt)
+/* general write handler for all level-1 imr registers */
+bool vgt_reg_imr_handler(struct vgt_device *vgt,
+	unsigned int reg, void *p_data, unsigned int bytes)
 {
+	uint32_t changed, masked, unmasked;
+	uint32_t imr = *(u32 *)p_data, new_imr;
 	struct pgt_device *pdev = vgt->pdev;
-
-	printk("--------------------\n");
-
-	printk("....vreg (deier: %x, deiir: %x, deimr: %x, deisr: %x)\n",
-			__vreg(vgt, _REG_DEIER),
-			__vreg(vgt, _REG_DEIIR),
-			__vreg(vgt, _REG_DEIMR),
-			__vreg(vgt, _REG_DEISR));
-	printk("....physical (deier: %x, deiir: %x, deimr: %x, deisr: %x)\n",
-			VGT_MMIO_READ(pdev, _REG_DEIER),
-			VGT_MMIO_READ(pdev, _REG_DEIIR),
-			VGT_MMIO_READ(pdev, _REG_DEIMR),
-			VGT_MMIO_READ(pdev, _REG_DEISR));
-	printk("....vreg (gtier: %x, gtiir: %x, gtimr: %x, gtisr: %x)\n",
-			__vreg(vgt, _REG_GTIER),
-			__vreg(vgt, _REG_GTIIR),
-			__vreg(vgt, _REG_GTIMR),
-			__vreg(vgt, _REG_GTISR));
-	printk("....physical (gtier: %x, gtiir: %x, gtimr: %x, gtisr: %x)\n",
-			VGT_MMIO_READ(pdev, _REG_GTIER),
-			VGT_MMIO_READ(pdev, _REG_GTIIR),
-			VGT_MMIO_READ(pdev, _REG_GTIMR),
-			VGT_MMIO_READ(pdev, _REG_GTISR));
-	printk("....pch unmask(%llx)\n", vgt_pch_unmask(pdev));
-	printk("....pch enable(%llx)\n", vgt_pch_enable(pdev));
-	printk("....master enable(%llx)\n", vgt_master_enable(pdev));
-}
-
-/* =============Configurations (statc/dynamic)================ */
-
-#if 0
-/*
- * force enabling a hw event regardless of the owner setting
- * not optimal for multiple bits change
- */
-static void vgt_enable_hw_event(struct pgt_device *dev,
-	enum vgt_event_type event, int bit)
-{
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
-
-	ops->toggle_hw_event(dev, event, bit, true);
-}
-
-/* force disabling a hw event regardless of the owner setting */
-static void vgt_disable_hw_event(struct pgt_device *dev,
-	enum vgt_event_type event, int bit)
-{
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
-
-	ops->toggle_hw_event(dev, event, bit, false);
-}
-
-/*
- * register an event handler for vGT core itself
- *
- * TODO: Currently no lock protection here. It's assumed that registered
- * handler should prepare for handling spurious interrupt even after
- * unregisteration, since it's possible for a vGT-core-caused event coming
- * after the unregistration.
- */
-static int vgt_core_register_event(struct vgt_device *dev,
-	enum vgt_event_type event, vgt_core_handler_t core_handler)
-{
-	/* initialize core handlers info at the 1st registration */
-	if (!vgt_core_event_handlers(dev)) {
-		void *handlers;
-
-		handlers = kzalloc(IRQ_MAX * sizeof(vgt_core_handler_t), GFP_KERNEL);
-		if (!handlers) {
-			vgt_dbg("vGT: no enough memory for core handler table\n");
-			return -ENOMEM;
-		}
-		vgt_core_event_handlers(dev) = handlers;
-	}
-
-	if (vgt_core_event_handler(dev, event)) {
-		vgt_dbg("vGT: existing handler for event (%s)\n", vgt_irq_name[event]);
-		return -EBUSY;
-	}
-
-	vgt_core_event_handler(dev, event) = core_handler;
-	vgt_enable_hw_event(dev, event, VGT_IRQ_BITWIDTH);
-}
-
-static int vgt_core_register_event(struct vgt_device *dev, enum vgt_event_type event)
-{
-	ASSERT(vgt_core_event_handlers(dev));
-	ASSERT(vgt_core_event_handler(dev, event));
-
-	vgt_disable_hw_event(dev, event, VGT_IRQ_BITWIDTH);
-	vgt_core_event_handler(dev, event) = NULL;
-}
-#endif
-
-void vgt_irq_toggle_emulations(struct vgt_device *vstate,
-		enum vgt_owner_type owner, bool enable)
-{
-	int event,bit;
-	struct pgt_device *dev = vstate->pdev;
-	struct vgt_irq_info *info;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
-
-	printk("vGT: toggle event emulations at context switch\n");
-	info = ops->get_irq_info_from_owner(dev, owner);
-	for (bit = 0; bit < info->table_size; bit++) {
-		if (info->table[bit].emul_handler) {
-			event = info->table[bit].event;
-			if (test_bit(event, vgt_always_emulated_events(dev)))
-				continue;
-
-			if (enable &&
-				!test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
-				test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base)))) {
-				vgt_run_emul(vstate, event, bit, true);
-			} else {
-				if (test_bit(event, vgt_state_emulated_events(vstate)))
-					vgt_run_emul(vstate, event, bit, false);
-			}
-		}
-	}
-}
-
-/*
- * Invoked from vGT core when the ownership gets changed
- * INPUT:
- * 	vstate: instance context to be poked
- * 	type: ownership type
- */
-void vgt_irq_save_context(struct vgt_device *vstate, enum vgt_owner_type owner)
-{
-	struct pgt_device *pdev = vstate->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
-	if (owner != VGT_OT_RENDER && owner != VGT_OT_DISPLAY) {
-		vgt_dbg("Dynamic ownership update for type (%d) is prohibited\n", owner);
-		return;
+	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
+
+	vgt_dbg("IRQ: capture IMR write on reg (%x) with val (%x)\n",
+		reg, imr);
+
+	vgt_dbg("IRQ: old vIMR(%x), pIMR(%x)\n",
+		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
+
+	/* figure out newly masked/unmasked bits */
+	changed = __vreg(vgt, reg) ^ imr;
+	changed &= ~_REGBIT_MASTER_INTERRUPT;
+	masked = (__vreg(vgt, reg) & changed) ^ changed;
+	unmasked = masked ^ changed;
+
+	vgt_dbg("IRQ: changed (%x), masked(%x), unmasked (%x)\n",
+		changed, masked, unmasked);
+
+	__vreg(vgt, reg) = imr;
+
+	if (changed) {
+		new_imr = vgt_recalculate_imr(pdev, reg);
+		/*
+		 * may optimize by caching the old imr, and then only update
+		 * pReg when AND-ed value changes. but that requires link to
+		 * device specific irq info. So avoid the complexity here
+		 */
+		VGT_MMIO_WRITE(pdev, reg, new_imr);
+		VGT_POST_READ(pdev, reg);
 	}
 
-	if (ops->save)
-		ops->save(vstate, owner);
-
-	/* start emulation for prev owner */
-	if (owner == VGT_OT_DISPLAY)
-		vgt_irq_toggle_emulations(vstate, owner, true);
+	ops->check_pending_irq(vgt);
+	vgt_dbg("IRQ: new vIMR(%x), pIMR(%x)\n",
+		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
+	return true;
 }
 
-/*
- * Invoked from vGT core when the ownership gets changed
- * INPUT:
- * 	vstate: instance context to be poked
- * 	owner: ownership type
- */
-void vgt_irq_restore_context(struct vgt_device *vstate, enum vgt_owner_type owner)
+/* general write handler for all level-1 ier registers */
+bool vgt_reg_ier_handler(struct vgt_device *vgt,
+	unsigned int reg, void *p_data, unsigned int bytes)
 {
-	struct pgt_device *dev = vstate->pdev;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+	uint32_t changed, enabled, disabled;
+	uint32_t ier = *(u32 *)p_data, new_ier;
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
-	if (owner != VGT_OT_RENDER && owner != VGT_OT_DISPLAY) {
-		vgt_dbg("Dynamic ownership update for type (%d) is prohibited\n", owner);
-		return;
+	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
+
+	vgt_dbg("IRQ: capture IER write on reg (%x) with val (%x)\n",
+		reg, ier);
+
+	vgt_dbg("IRQ: old vIER(%x), pIER(%x)\n",
+		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
+
+	/* figure out newly enabled/disable bits */
+	changed = __vreg(vgt, reg) ^ ier;
+	enabled = (__vreg(vgt, reg) & changed) ^ changed;
+	disabled = enabled ^ changed;
+
+	vgt_dbg("vGT_IRQ: changed (%x), enabled(%x), disabled(%x)\n",
+		changed, enabled, disabled);
+	__vreg(vgt, reg) = ier;
+
+	if (changed) {
+		new_ier = vgt_recalculate_ier(pdev, reg);
+		/*
+		 * may optimize by caching the old ier, and then only update
+		 * pReg when OR-ed value changes. but that requires link to
+		 * device specific irq info. So avoid the complexity here
+		 */
+		VGT_MMIO_WRITE(pdev, reg, new_ier);
+		VGT_POST_READ(pdev, reg);
 	}
 
-	/* disable emulation for the new owner */
-	if (owner == VGT_OT_DISPLAY)
-		vgt_irq_toggle_emulations(vstate, owner, false);
-
-	if (ops->restore)
-		ops->restore(vstate, owner);
+	ops->check_pending_irq(vgt);
+	vgt_dbg("IRQ: new vIER(%x), pIER(%x)\n",
+		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
+	return true;
 }
 
-#if 0
-/*
- * There may have requirements to update event<->owner relationship
- * in different scenarios, e.g. pass through a display hotplug control
- * to a primary VM. In such case an interface is required to allow
- * updating the mapping table dynamically.
- *
- * Since a rare case, leave it empty now
- */
-int vgt_irq_update_event_ownership(struct vgt_device *dev,
-	enum vgt_event_type event, enum vgt_owner_type owner)
+bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
+	void *p_data, unsigned int bytes)
 {
-	vgt_dbg("Event ownership mapping change is not supported now\n");
-	return -EINVAL;
-}
-#endif
+	vgt_reg_t iir = *(vgt_reg_t *)p_data;
 
-/* ========================virq injection===================== */
+	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
 
-/*
- * assumptions:
- *   - rising edge to trigger an event to next level
- *   - only cache one instance for IIR now
- */
-void vgt_propagate_virtual_event(struct vgt_device *vstate,
-	int bit, struct vgt_irq_info *info)
-{
-	vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
-		__vreg(vstate, vgt_isr(info->reg_base)),
-		__vreg(vstate, vgt_imr(info->reg_base)),
-		__vreg(vstate, vgt_iir(info->reg_base)),
-		__vreg(vstate, vgt_ier(info->reg_base)),
-		__vreg(vstate, _REG_DEIER));
-	/* Rising edge ISR triggers IIR. so no need to touch ISR */
-//	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
-	if (!test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
-		!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
-		test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base))) &&
-		test_bit(_REGSHIFT_MASTER_INTERRUPT, (void*)vgt_vreg(vstate, _REG_DEIER))) {
-		if (vstate->vm_id)
-			vgt_dbg("vGT: set bit (%d) for (%s) for VM (%d)\n",
-				bit, info->name, vstate->vm_id);
-		vgt_set_irq_pending(vstate);
-		vstate->stat.last_propagation = get_cycles();
-		vstate->stat.events[info->table[bit].event]++;
-	} else {
-		if (vstate->vm_id) {
-			vgt_dbg("vGT: propagate bit (%d) for (%s) for VM (%d) w/o injection\n",
-				bit, info->name, vstate->vm_id);
-			vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x), deier(%x)\n",
-				__vreg(vstate, vgt_isr(info->reg_base)),
-				__vreg(vstate, vgt_imr(info->reg_base)),
-				__vreg(vstate, vgt_iir(info->reg_base)),
-				__vreg(vstate, vgt_ier(info->reg_base)),
-				__vreg(vstate, _REG_DEIER));
-		}
-		vstate->stat.last_blocked_propagation = get_cycles();
-	}
+	vgt_dbg("IRQ: capture IIR write on reg (%x) with val (%x)\n",
+		reg, iir);
 
-#if 0
-	if (test_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))))
-		clear_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base)));
-#endif
+	/* TODO: need use an atomic operation. Now it's safe due to big lock */
+	__vreg(vgt, reg) &= ~iir;
+	return true;
 }
 
-/*
- * propagate PCH specific event, which will be chained to level-1 ISR later
- * similarly need consider IIR which can store two pending instances
- */
-void vgt_propagate_pch_virtual_event(struct vgt_device *vstate,
-	int bit, struct vgt_irq_info *info)
-{
-	/* Rising edge ISR triggers IIR. so no need to touch ISR */
-//	if (!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base))) &&
-	if (!test_bit(bit, (void*)vgt_vreg(vstate, vgt_imr(info->reg_base))) &&
-		!test_and_set_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))) &&
-		test_bit(bit, (void*)vgt_vreg(vstate, vgt_ier(info->reg_base)))) {
-		vgt_dbg("vGT: set pch bit (%d) for VM (%d)\n", bit, vstate->vm_id);
-		vgt_set_pch_irq_pending(vstate);
-	} else {
-		vgt_dbg("vGT: propagate pch bit (%d) for VM (%d) w/o injection\n", bit, vstate->vm_id);
-		vgt_dbg("vGT: visr(%x), vimr(%x), viir(%x), vier(%x)i\n",
-			__vreg(vstate, vgt_isr(info->reg_base)),
-			__vreg(vstate, vgt_imr(info->reg_base)),
-			__vreg(vstate, vgt_iir(info->reg_base)),
-			__vreg(vstate, vgt_ier(info->reg_base)));
-	}
-
-#if 0
-	if (test_bit(bit, (void*)vgt_vreg(vstate, vgt_iir(info->reg_base))))
-		clear_bit(bit, (void*)vgt_vreg(vstate, vgt_isr(info->reg_base)));
-#endif
-}
-
-/*
- * FIXME: need to handle PCH propagation. Also it'd be good to share
- * same handler as in physical interrupt path, since this can only
- * handle IIR-only events.
- */
-void vgt_propagate_emulated_event(struct vgt_device *vstate,
-	enum vgt_event_type event)
-{
-	int bit;
-	struct pgt_device *dev = vstate->pdev;
-	struct vgt_irq_info *info;
-	struct vgt_irq_info_entry *entry;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
-
-	info = ops->get_irq_info_from_event(dev, event);
-	bit = ops->get_bit_from_event(dev, event, info);
-	entry = info->table + bit;
-	ASSERT(entry->event == event);
-	vgt_propagate_virtual_event(vstate, bit, info);
-}
+/* =======================vEvent injection===================== */
 
 extern int resend_irq_on_evtchn(unsigned int i915_irq);
 
 void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
 {
 	unsigned long flags;
+	int i915_irq = vgt->pdev->irq_hstate->i915_irq;
+
 	vgt_dbg("vGT: resend irq for dom0\n");
 	/* resend irq may unmask events which requires irq disabled */
 	local_irq_save(flags);
-	resend_irq_on_evtchn(vgt_i915_irq(vgt->pdev));
+	resend_irq_on_evtchn(i915_irq);
 	local_irq_restore(flags);
 }
 
@@ -697,904 +331,458 @@ void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 	info.dom = vgt->vm_id;
 	info.address = *(uint32_t *)(cfg_space + MSI_CAP_ADDRESS);
 	info.data = *(uint16_t *)(cfg_space + MSI_CAP_DATA);
-	vgt_dbg("vGT: VM(%d): hvm injections. address (%x) data(%x)!\n",
-		vgt->vm_id, info.address, info.data);
+	vgt_dbg("vGT(%d): hvm injections. address (%x) data(%x)!\n",
+		vgt->vgt_id, info.address, info.data);
 
 	if (HYPERVISOR_vcpu_op(VCPUOP_inject_raw_msi,
 						smp_processor_id(), &info) < 0)
-		printk("vGT: VM(%d): failed to inject vmsi\n", vgt->vm_id);
+		printk("vGT(%d): failed to inject vmsi\n", vgt->vgt_id);
 }
 
-static int vgt_inject_virtual_interrupt(struct vgt_device *vstate)
+static int vgt_inject_virtual_interrupt(struct vgt_device *vgt)
 {
-	if (vstate->vm_id)
-		inject_hvm_virtual_interrupt(vstate);
+	if (vgt->vm_id)
+		inject_hvm_virtual_interrupt(vgt);
 	else
-		inject_dom0_virtual_interrupt(vstate);
+		inject_dom0_virtual_interrupt(vgt);
 
-#ifndef VGT_IRQ_FORWARD_MODE
-	vgt_clear_irq_pending(vstate);
-#endif
-
-	vstate->stat.irq_num++;
-	vstate->stat.last_injection = get_cycles();
+	vgt->stat.irq_num++;
+	vgt->stat.last_injection = get_cycles();
 	return 0;
 }
 
-/* ========================Emulations========================= */
-
-static void vgt_run_emul(struct vgt_device *vstate,
-		enum vgt_event_type event, int bit, bool enable)
+static void vgt_propagate_event(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event, struct vgt_device *vgt)
 {
+	int bit;
 	struct vgt_irq_info *info;
-	struct vgt_irq_info_entry *entry;
-	struct pgt_device *dev = vstate->pdev;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+	unsigned int reg_base;
 
-	info = ops->get_irq_info_from_event(dev, event);
-	ASSERT(info);
-
-	entry = info->table + bit;
-	if (entry->emul_handler) {
-		vgt_dbg("vGT-IRQ(%d): %s emul handler for event %s\n", vstate->vgt_id,
-				enable ? "enable" : "disable", vgt_irq_name[event]);
-		if (!enable)
-			clear_bit(event, vgt_state_emulated_events(vstate));
-
-		entry->emul_handler(vstate, event, enable);
-
-		if (enable)
-			set_bit(event, vgt_state_emulated_events(vstate));
-	}
-}
-
-#if 0
-static void vgt_toggle_reg_event(struct vgt_device *vstate,
-	enum vgt_event_type event, int bit, bool enable)
-{
-	struct pgt_device *dev = vstate->pdev;
-
-	if (enable &&
-		!test_and_set_bit(event, vgt_state_enabled_events(vstate))) {
-		if (vgt_get_event_owner(dev, event) == vstate)
-			vgt_enable_hw_event(dev, event, bit);
-		else
-			vgt_run_emul(vstate, event, bit, true);
-	}
-
-	if (!enable &&
-		test_and_clear_bit(event, vgt_state_enabled_events(vstate))) {
-		if (vgt_get_event_owner(dev, event) == vstate)
-			vgt_disable_hw_event(dev, event, bit);
-		else
-			vgt_run_emul(vstate, event, bit, false);
-	}
-}
-#endif
-
-/* given a reg bits, toggle emulated handlers */
-static void vgt_toggle_emulated_bits(struct vgt_device *vgt,
-	unsigned int reg, uint32_t bits, bool enable)
-{
-	int bit;
-	enum vgt_event_type event;
-	struct pgt_device *pdev = vgt->pdev;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
-
-	vgt_dbg("vGT: toggle event emulations at imr/ier emulation for reg (%s) bits (%x)\n",
-		ops->get_reg_name(pdev, reg), bits);
-	if (((reg == _REG_DEIER) || (reg == _REG_DEIMR))) {
-		if (IS_SNB(pdev))
-			bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
-		else if (IS_IVB(pdev) || IS_HSW(pdev))
-			bits &= ~(_REGBIT_PCH_GEN7 | _REGBIT_MASTER_INTERRUPT);
-	}
-
-	for_each_set_bit(bit, (void *)&bits, VGT_IRQ_BITWIDTH) {
-		event = ops->get_event_type_from_bit(pdev, reg, bit);
-		if (event == IRQ_RESERVED)
-			continue;
-
-		vgt_run_emul(vgt, event, bit, enable);
-	}
-}
-
-/* given a reg bits, only keep bits relevant to the owners */
-static uint32_t vgt_keep_owner_bits(struct vgt_device *vgt,
-	unsigned int reg, uint32_t bits)
-{
-	int bit;
-	enum vgt_event_type event;
-	struct pgt_device *pdev = vgt->pdev;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
-	uint32_t val;
-
-	val = 0;
-	/* PCH and maste interrupt are shared */
-	if (((reg == _REG_DEIER) || (reg == _REG_DEIMR))) {
-		if (bits & _REGBIT_MASTER_INTERRUPT)
-			val |= _REGBIT_MASTER_INTERRUPT;
-
-		if (IS_SNB(pdev)) {
-			if (bits & _REGBIT_PCH)
-				val |= _REGBIT_PCH;
-			bits &= ~(_REGBIT_PCH | _REGBIT_MASTER_INTERRUPT);
-		} else if (IS_IVB(pdev) || IS_HSW(pdev)) {
-			if (bits & _REGBIT_PCH_GEN7)
-				val |= _REGBIT_PCH_GEN7;
-			bits &= ~(_REGBIT_PCH_GEN7 | _REGBIT_MASTER_INTERRUPT);
-		}
-	}
-
-	for_each_set_bit(bit, (void *)&bits, VGT_IRQ_BITWIDTH) {
-		event = ops->get_event_type_from_bit(pdev, reg, bit);
-
-		/* TODO: reserved events should be always masked/disabled */
-		if ((event == IRQ_RESERVED) ||
-			vgt_get_event_owner(pdev, event) == vgt)
-			val |= 1U << bit;
-	}
-
-	return val;
-}
-
-static void vgt_check_pending_events(struct vgt_device *vgt)
-{
-	if (!(__vreg(vgt, _REG_DEIER) & _REGBIT_MASTER_INTERRUPT))
+	info = vgt_get_irq_info(hstate, event);
+	if (!info) {
+		vgt_err("IRQ(%d): virt-inject: no irq reg info!!!\n",
+			vgt->vm_id);
 		return;
+	}
+
+	reg_base = info->reg_base;
+	bit = hstate->events[event].bit;
 
 	/*
-	 * Here we only check IIR/IER. IMR/ISR is not checked
-	 * because only rising-edge of ISR is captured as an event,
-	 * so that current value of vISR doesn't matter.
-	 */
-	if ((__vreg(vgt, _REG_DEIIR) & __vreg(vgt, _REG_DEIER)) ||
-		(__vreg(vgt, _REG_GTIIR) & __vreg(vgt, _REG_GTIER)) ||
-		(__vreg(vgt, _REG_PMIIR) & __vreg(vgt, _REG_PMIER))) {
-		vgt_dbg("vGT-IRQ: catch pending iir\n");
-		vgt_set_irq_pending(vgt);
-		vgt->stat.pending_events++;
-		vgt_inject_virtual_interrupt(vgt);
+         * this function call is equivalent to a rising edge ISR
+         * TODO: need check 2nd level IMR for render events
+         */
+	if (!test_bit(bit, (void*)vgt_vreg(vgt, regbase_to_imr(reg_base)))) {
+		vgt_dbg("IRQ: set bit (%d) for (%s) for VM (%d)\n",
+			bit, vgt_irq_name[event], vgt->vm_id);
+		set_bit(bit, (void*)vgt_vreg(vgt, regbase_to_iir(reg_base)));
+
+		/* enabled PCH events needs queue in level-1 display */
+		if (info == hstate->info[IRQ_INFO_PCH] &&
+			test_bit(bit, (void*)vgt_vreg(vgt, regbase_to_ier(reg_base))))
+			vgt_propagate_event(hstate, PCH_IRQ, vgt);
 	}
 }
 
-/* write handler for imr */
-bool vgt_reg_imr_handler(struct vgt_device *state,
-	unsigned int reg, void *p_data, unsigned int bytes)
+/* =======================vEvent Handlers===================== */
+
+void vgt_handle_default_event_virt(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event, struct vgt_device *vgt)
 {
-	uint32_t changed, masked, unmasked;
-	uint32_t enabled, disabled, ier, val;
-	unsigned long imr = *(unsigned long *)p_data;
-	struct pgt_device *pdev = state->pdev;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
-	u32 pch_irq_mask = 0;
-
-	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
-
-	vgt_dbg("vGT-IRQ: capture IMR write on reg (%s) with val (%lx)\n",
-		ops->get_reg_name(pdev, reg), imr);
-
-	vgt_dbg("vGT-IRQ: old vIER(%x), vIMR(%x)\n",
-		__vreg(state, reg + 8), __vreg(state, reg));
-	vgt_dbg("vGT-IRQ: old IER(%x), IMR(%x)\n",
-		VGT_MMIO_READ(pdev, reg + 8), VGT_MMIO_READ(pdev, reg));
-
-	/* figure out newly masked/unmasked bits */
-	changed = __vreg(state, reg) ^ imr;
-	changed &= ~_REGBIT_MASTER_INTERRUPT;
-	masked = (__vreg(state, reg) & changed) ^ changed;
-	unmasked = masked ^ changed;
-
-	/* figure out newly enabled/disabled bits */
-	ier = vgt_imr_to_ier(state, reg);
-	enabled = ier & unmasked;
-	disabled = ier & masked;
-
-	vgt_dbg("vGT-IRQ: changed (%x), masked(%x), unmasked (%x), enabled(%x), disabled (%x)\n",
-		changed, masked, unmasked, enabled, disabled);
-	__vreg(state, reg) = imr;
-
-	vgt_check_pending_events(state);
-
-	if (IS_SNB(pdev))
-		pch_irq_mask = _REGBIT_PCH;
-	else if (IS_IVB(pdev) || IS_HSW(pdev))
-		pch_irq_mask = _REGBIT_PCH_GEN7;
-
-	/* merge pch bits */
-	if (reg == _REG_DEIMR) {
-		if (masked & pch_irq_mask) {
-			printk("vGT-IRQ(%d): newly mask PCH\n", state->vgt_id);
-			clear_bit(state->vgt_id, (void *)&vgt_pch_unmask(pdev));
-			/* only mask when all VMs mask */
-			if (vgt_pch_unmask(pdev))
-				masked &= ~pch_irq_mask;
-		}
-
-		if (unmasked & pch_irq_mask) {
-			printk("vGT-IRQ(%d): newly unmask PCH\n", state->vgt_id);
-			set_bit(state->vgt_id, (void *)&vgt_pch_unmask(pdev));
-		}
-
+	if (!vgt_irq_warn_once[vgt->vgt_id][event]) {
+		vgt_info("IRQ: VM(%d) receive event (%s)\n",
+			vgt->vm_id, vgt_irq_name[event]);
+		vgt_irq_warn_once[vgt->vgt_id][event] = 1;
 	}
-
-	/*
-	 * handle changed bits if it's the owner
-	 *
-	 * FIXME: we happen to observe that IER/IMR changes may not take effect
-	 * when master bit in DEIER is enabled on SNB. This may be a hardware
-	 * issue to be verified in the future. Now to make it forward progress,
-	 * we manually disable master bit when IER/IMR bits are poked by the
-	 * owner, and re-enable master bit at the end of the emulation.
-	 *
-	 * Even this workaround is required, no need to always touch master bit
-	 * if the current VM only touches emulated events
-	 */
-	masked = vgt_keep_owner_bits(state, reg, masked);
-	unmasked = vgt_keep_owner_bits(state, reg, unmasked);
-	if (masked || unmasked) {
-		val = VGT_MMIO_READ(pdev, reg);
-		if (masked)
-			val |= masked;
-		if (unmasked)
-			val &= ~unmasked;
-
-		if (reg == _REG_DEIMR) {
-			if (masked & 0x88)
-				vgt_dbg("XXX: mask vblank/vsync (%x)\n", masked);
-			if (unmasked & 0x88)
-				vgt_dbg("XXX: unmask vblank/vsync (%x)\n", unmasked);
-		}
-		VGT_MMIO_WRITE(pdev, reg, val);
-		VGT_POST_READ(pdev, reg);
-	}
-
-	/* Then handle emulated events */
-	enabled &= ~(unmasked | pch_irq_mask | _REGBIT_MASTER_INTERRUPT);
-	disabled &= ~(masked | pch_irq_mask | _REGBIT_MASTER_INTERRUPT);
-	if (enabled)
-		vgt_toggle_emulated_bits(state, reg, enabled, true);
-	if (disabled)
-		vgt_toggle_emulated_bits(state, reg, disabled, false);
-
-	vgt_dbg("vGT-IRQ: new vIER(%x), vIMR(%x)\n",
-		__vreg(state, reg + 8), __vreg(state, reg));
-	vgt_dbg("vGT-IRQ: new IER(%x), IMR(%x)\n",
-		VGT_MMIO_READ(pdev, reg + 8), VGT_MMIO_READ(pdev, reg));
-	/* TODO: throw out an early warning if no handlers for enabled events */
-	return true;
+	vgt_propagate_event(hstate, event, vgt);
+	vgt->stat.events[event]++;
 }
 
-/*
- * we only handle the cases which cause an physically enabled event
- * to be disabled, or vice versa. This means under the scope of
- * currently unmasked IMR bits.
- */
-bool vgt_reg_ier_handler(struct vgt_device *state,
-	unsigned int reg, void *p_data, unsigned int bytes)
+void vgt_handle_phase_in_virt(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event, struct vgt_device *vgt)
 {
-	uint32_t changed, imr;
-	uint32_t enabled, disabled, ier_enabled, ier_disabled;
-	unsigned long ier = *(unsigned long *)p_data;
-	struct pgt_device *pdev = state->pdev;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
-	vgt_reg_t val;
-	u32 pch_irq_mask = 0;
-
-	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
-
-	vgt_dbg("vGT-IRQ: capture IER write on reg (%s) with val (%lx)\n",
-		ops->get_reg_name(pdev, reg), ier);
-
-	vgt_dbg("vGT-IRQ: old vIER(%x), vIMR(%x)\n",
-		__vreg(state, reg), __vreg(state, reg - 8));
-	vgt_dbg("vGT-IRQ: old IER(%x), IMR(%x)\n",
-		VGT_MMIO_READ(pdev, reg), VGT_MMIO_READ(pdev, reg - 8));
-
-	/* figure out newly enabled/disable bits */
-	changed = __vreg(state, reg) ^ ier;
-	ier_enabled = (__vreg(state, reg) & changed) ^ changed;
-	ier_disabled = ier_enabled ^ changed;
-
-	/* figure out really enabled/disabled bits */
-	imr = vgt_ier_to_imr(state, reg);
-	enabled = ier_enabled & ~imr;
-	disabled = ier_disabled & ~imr;
-
-	vgt_dbg("vGT_IRQ: changed (%x), i-enabled(%x), i-disabled (%x), enabled(%x), disabled(%x)\n",
-		changed, ier_enabled, ier_disabled, enabled, disabled);
-	__vreg(state, reg) = ier;
-
-	vgt_check_pending_events(state);
-
-	if (IS_SNB(pdev))
-		pch_irq_mask = _REGBIT_PCH;
-	else if (IS_IVB(pdev) || IS_HSW(pdev))
-		pch_irq_mask = _REGBIT_PCH_GEN7;
-
-	/* merge pch bits */
-	if (reg == _REG_DEIER) {
-		if (ier_enabled & pch_irq_mask) {
-			printk("vGT-IRQ(%d): newly enable PCH\n", state->vgt_id);
-			set_bit(state->vgt_id, (void *)&vgt_pch_enable(pdev));
-		}
-
-		if (ier_disabled & pch_irq_mask) {
-			printk("vGT-IRQ(%d): newly disable PCH\n", state->vgt_id);
-			clear_bit(state->vgt_id, (void *)&vgt_pch_enable(pdev));
-			if (vgt_pch_enable(pdev))
-				ier_disabled &= ~pch_irq_mask;
-		}
-	}
-
-	/*
-	 * handle changed bits if it's the owner
-	 *
-	 * Same trick as in imr handler
-	 */
-	ier_enabled = vgt_keep_owner_bits(state, reg, ier_enabled);
-	ier_disabled = vgt_keep_owner_bits(state, reg, ier_disabled);
-	if (ier_enabled || ier_disabled) {
-		if (reg == _REG_DEIER) {
-			if (ier_enabled & _REGBIT_MASTER_INTERRUPT) {
-				vgt_dbg("vGT-IRQ(%d): newly enable MASTER\n", state->vgt_id);
-				set_bit(state->vgt_id, (void *)&vgt_master_enable(pdev));
-				/* leave to vgt_enable_master_interrupt */
-				ier_enabled &= ~_REGBIT_MASTER_INTERRUPT;
-			}
-
-			if (ier_disabled & _REGBIT_MASTER_INTERRUPT) {
-				vgt_dbg("vGT-IRQ(%d): newly disable MASTER\n", state->vgt_id);
-				clear_bit(state->vgt_id, (void *)&vgt_master_enable(pdev));
-				ier_disabled &= ~_REGBIT_MASTER_INTERRUPT;
-			}
-
-		}
-
-		val = VGT_MMIO_READ(pdev, reg);
-		if (ier_enabled)
-			val |= ier_enabled;
-		if (ier_disabled)
-			val &= ~ier_disabled;
-		if (reg == _REG_DEIER) {
-			if (ier_disabled & 0x88)
-				vgt_dbg("XXX: disable vblank/vsync (%x)\n", ier_disabled);
-			if (ier_enabled & 0x88)
-				vgt_dbg("XXX: enable vblank/vsync (%x)\n", ier_enabled);
-		}
-		if (vgt_master_enable(pdev))
-			val |= _REGBIT_MASTER_INTERRUPT;
-		else
-			val &= ~_REGBIT_MASTER_INTERRUPT;
-		VGT_MMIO_WRITE(pdev, reg, val);
-		VGT_POST_READ(pdev, reg);
-	}
-
-	/* Then handle emulated events */
-	enabled &= ~(ier_enabled | pch_irq_mask | _REGBIT_MASTER_INTERRUPT);
-	disabled &= ~(ier_disabled | pch_irq_mask | _REGBIT_MASTER_INTERRUPT);
-	if (enabled)
-		vgt_toggle_emulated_bits(state, reg, enabled, true);
-	if (disabled)
-		vgt_toggle_emulated_bits(state, reg, disabled, false);
-
-	vgt_dbg("vGT-IRQ: new vIER(%x), vIMR(%x)\n",
-		__vreg(state, reg), __vreg(state, reg - 8));
-	vgt_dbg("vGT-IRQ: new IER(%x), IMR(%x)\n",
-		VGT_MMIO_READ(pdev, reg), VGT_MMIO_READ(pdev, reg - 8));
-	/* TODO: throw out an early warning if no handlers for enabled events */
-	return true;
+	__vreg(vgt, _REG_BLC_PWM_CTL2) |= _REGBIT_PHASE_IN_IRQ_STATUS;
+	vgt_handle_default_event_virt(hstate, event, vgt);
 }
 
-/*
- * write handler for IIR.
- *
- * TODO: IIR can cache two pending events
- */
-bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
-	void *p_data, unsigned int bytes)
+void vgt_handle_histogram_virt(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event, struct vgt_device *vgt)
 {
-	vgt_reg_t iir = *(vgt_reg_t *)p_data;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(vgt->pdev);
-
-	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
-
-	vgt_dbg("vGT-IRQ: capture IIR write on reg (%s) with val (%x)\n",
-		ops->get_reg_name(vgt->pdev, reg), iir);
-
-
-	vgt_dbg("vGT: update %s: %x -> %x\n", ops->get_reg_name(vgt->pdev, reg),
-		__vreg(vgt, reg), __vreg(vgt, reg) & (~iir));
-	/* write to clear IIR */
-	__vreg(vgt, reg) &= ~iir;
-	return true;
+	__vreg(vgt, _REG_HISTOGRAM_THRSH) |= _REGBIT_HISTOGRAM_IRQ_STATUS;
+	vgt_handle_default_event_virt(hstate, event, vgt);
 }
 
-void vgt_reg_watchdog_handler(struct vgt_device *state,
-	uint32_t reg, uint32_t val, bool write, ...)
+void vgt_handle_crt_hotplug_virt(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event, struct vgt_device *vgt)
 {
-	printk("!!!vGT: capture watchdog operations (%s on reg %x). Not emulated yet!\n",
-			write ? "write" : "read", reg);
-}
-
-static enum hrtimer_restart vgt_dpy_timer_fn(struct hrtimer *data)
-{
-	struct vgt_emul_timer *dpy_timer = container_of(data, struct vgt_emul_timer, timer);
-	struct vgt_irq_virt_state *virq = container_of(dpy_timer, struct vgt_irq_virt_state, dpy_timer);
-	struct vgt_device *vstate = virq->vgt;
-	struct pgt_device *pdev = vstate->pdev;
-
-	set_bit(vstate->vgt_id, pdev->dpy_emul_request);
-	vgt_raise_request(pdev, VGT_REQUEST_EMUL_DPY_IRQ);
-
-	hrtimer_add_expires_ns(&dpy_timer->timer, dpy_timer->period);
-	return HRTIMER_RESTART;
-}
-
-static void vgt_emul_dpy_virq(struct vgt_device *vstate)
-{
-/* carry all display status events in one timer */
-	if (test_bit(IRQ_PIPE_A_VSYNC, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PIPE_A_VSYNC);
-	if (test_bit(IRQ_PIPE_A_LINE_COMPARE, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PIPE_A_LINE_COMPARE);
-	if (test_bit(IRQ_PIPE_A_ODD_FIELD, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PIPE_A_ODD_FIELD);
-	if (test_bit(IRQ_PIPE_A_EVEN_FIELD, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PIPE_A_EVEN_FIELD);
-	if (test_bit(IRQ_PIPE_A_VBLANK, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PIPE_A_VBLANK);
-#if 0
-	if (test_bit(IRQ_PIPE_B_VSYNC, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PIPE_B_VSYNC);
-	if (test_bit(IRQ_PIPE_B_LINE_COMPARE, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PIPE_B_LINE_COMPARE);
-	if (test_bit(IRQ_PIPE_B_ODD_FIELD, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PIPE_B_ODD_FIELD);
-	if (test_bit(IRQ_PIPE_B_EVEN_FIELD, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PIPE_B_EVEN_FIELD);
-	if (test_bit(IRQ_PIPE_B_VBLANK, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PIPE_B_VBLANK);
-#endif
-	if (test_bit(IRQ_PRIMARY_A_FLIP_DONE, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PRIMARY_A_FLIP_DONE);
-	if (test_bit(IRQ_PRIMARY_B_FLIP_DONE, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_PRIMARY_B_FLIP_DONE);
-	if (test_bit(IRQ_SPRITE_A_FLIP_DONE, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_SPRITE_A_FLIP_DONE);
-	if (test_bit(IRQ_SPRITE_B_FLIP_DONE, vgt_state_emulated_events(vstate)))
-		vgt_propagate_emulated_event(vstate, IRQ_SPRITE_B_FLIP_DONE);
-
-}
-
-void vgt_emul_and_inject_dpy_virq(struct pgt_device *pdev)
-{
-	struct vgt_device *vgt;
-	int i;
-	for (i = 0; i < VGT_MAX_VMS; i++) {
-		vgt = pdev->device[i];
-		if (vgt && test_and_clear_bit(vgt->vgt_id, pdev->dpy_emul_request)) {
-			vgt_emul_dpy_virq(vgt);
-			if (vgt_has_irq_pending(vgt))
-				vgt_inject_virtual_interrupt(vgt);
-		}
-
-	}
-}
-
-/*
- * TODO: currently we use a single timer to emulate all timer-based events.
- * Need further study case-by-case in the future
- */
-void vgt_emulate_dpy_status(struct vgt_device *vstate, enum vgt_event_type event, bool enable)
-{
-	if (!enable)
-		clear_bit(event, vgt_dpy_timer(vstate).events);
-
-	if (bitmap_empty(vgt_dpy_timer(vstate).events, IRQ_MAX)) {
-		/* TODO: use range timer */
-		if (enable)
-			/* FIXME : check interface */
-			hrtimer_start(&vgt_dpy_timer(vstate).timer,
-					ktime_add_ns(ktime_get(), vgt_dpy_timer(vstate).period),
-					HRTIMER_MODE_ABS);
-		else
-			hrtimer_cancel(&vgt_dpy_timer(vstate).timer);
-	}
-
-	if (enable)
-		set_bit(event, vgt_dpy_timer(vstate).events);
-}
-
-void vgt_emulate_watchdog(struct vgt_device *vstate, enum vgt_event_type event, bool enable)
-{
-	vgt_dbg("vGT: watch dog emulation is not supported yet\n");
+	/* update channel status */
+	__vreg(vgt, _REG_PCH_ADPA) &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+	__vreg(vgt, _REG_PCH_ADPA) |= vgt_get_event_val(hstate, event) &
+					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+	vgt_handle_default_event_virt(hstate, event, vgt);
 }
 
 /* =======================pEvent Handlers===================== */
 
-/*
- * the default handler for most events, w/o extra physical housekeeping
- * required except IIR clearing
- */
-void vgt_default_event_handler(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt)
+void vgt_handle_default_event_phys(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event)
 {
-	/* no action for physical handler */
-	if (physical)
-		return;
-
-	/* propagate to the owner */
-	info->propagate_virtual_event(vgt, bit, info);
-}
-
-/* not assumed to be invoked, e.g. 'sync flush' expected to be polled! */
-void vgt_handle_unexpected_event(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt)
-{
-	VGT_IRQ_WARN_ONCE(info, entry->event, "not assumed to happen!!!\n");
-	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
-}
-
-/* events we don't expect programmed by VM, such as watchdog timer */
-void vgt_handle_host_only_event(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt)
-{
-	VGT_IRQ_WARN_ONCE(info, entry->event, "host-only event!!!\n");
-}
-
-/*
- * unlike NULL handler which we know won't handle for now, weak handlers
- * are for those which may be triggered but the detail is not very clear
- * at this stage.
- */
-void vgt_handle_weak_event(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt)
-{
-	VGT_IRQ_WARN_ONCE(info, entry->event, "more consideration required on this handler~~\n");
-	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
-}
-
-/*
- * Erros is now injected into the current owner.
- *
- * need to consider whether recovery of vGT driver is required
- *
- * there's further error information in some debug registers. no forward now
- */
-void vgt_handle_cmd_stream_error(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt)
-{
-	uint32_t reg, val;
-	union vgt_event_state state = vgt_event_state(dev, entry->event);
-
-	/* always warn for errors */
-	VGT_IRQ_WARN(info, entry->event, "ERROR ERROR!!!\n");
-
-	/* check error status */
-	switch (entry->event) {
-		case IRQ_RCS_CMD_STREAMER_ERR:
-			reg = _REG_RCS_EIR;
-		case IRQ_BCS_CMD_STREAMER_ERR:
-			reg = _REG_BCS_EIR;
-		default:
-			printk("no reg info to propagate\n");
-			reg = _REG_INVALID;
-	};
-	ASSERT(reg != _REG_INVALID);
-
-	if (physical) {
-		/* clear EIR bits */
-		val = VGT_MMIO_READ(dev, reg);
-		VGT_MMIO_WRITE(dev, reg, val);
-
-		/* save error states */
-		state.cmd_err.eir_reg = reg;
-		state.cmd_err.eir_val = val;
-		return;
+	if (!vgt_irq_warn_once[VGT_MAX_VMS][event]) {
+		vgt_info("IRQ: receive event (%s)\n",
+				vgt_irq_name[event]);
+		vgt_irq_warn_once[VGT_MAX_VMS][event] = 1;
 	}
-
-	/*
-	 * This update should be safe, even when there's another instance of
-	 * the same event comes. The current pending bit of the event has been
-	 * cleared before invoking this handler. So either this update gets
-	 * the old version, or even get the new version, it doesn't matter.
-	 */
-	__vreg(vgt, state.cmd_err.eir_reg) = state.cmd_err.eir_val;
-
-	/*
-	 * FIXME:
-	 * there're several conditions contributing to the error condition
-	 * such as command error, page table error, etc. However next level
-	 * error information for the condition is only for debug-only
-	 * purpose. I didn't find consistent information cross manual, and
-	 * thus leave them unhandled for now.
-	 */
-
-	info->propagate_virtual_event(vgt, bit, info);
 }
 
-void vgt_handle_phase_in(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt)
+void vgt_handle_phase_in_phys(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event)
 {
 	uint32_t val;
+	struct pgt_device *pdev = hstate->pdev;
 
-	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured Phase-In event!!!\n");
+	val = VGT_MMIO_READ(pdev, _REG_BLC_PWM_CTL2);
+	val &= ~_REGBIT_PHASE_IN_IRQ_STATUS;
+	VGT_MMIO_WRITE(pdev, _REG_BLC_PWM_CTL2, val);
 
-	if (physical) {
-		val = VGT_MMIO_READ(dev, _REG_BLC_PWM_CTL2);
-		val &= ~_REGBIT_PHASE_IN_IRQ_STATUS;
-		VGT_MMIO_WRITE(dev, _REG_BLC_PWM_CTL2, val);
-		return;
-	}
-
-	__vreg(vgt, _REG_BLC_PWM_CTL2) |= _REGBIT_PHASE_IN_IRQ_STATUS;
-	info->propagate_virtual_event(vgt, bit, info);
+	vgt_handle_default_event_phys(hstate, event);
 }
 
-void vgt_handle_histogram(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt)
+void vgt_handle_histogram_phys(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event)
 {
 	uint32_t val;
+	struct pgt_device *pdev = hstate->pdev;
 
-	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured Histogram event!!!\n")
+	val = VGT_MMIO_READ(pdev, _REG_HISTOGRAM_THRSH);
+	val &= ~_REGBIT_HISTOGRAM_IRQ_STATUS;
+	VGT_MMIO_WRITE(pdev, _REG_HISTOGRAM_THRSH, val);
 
-	if (physical) {
-		val = VGT_MMIO_READ(dev, _REG_HISTOGRAM_THRSH);
-		val &= ~_REGBIT_HISTOGRAM_IRQ_STATUS;
-		VGT_MMIO_WRITE(dev, _REG_HISTOGRAM_THRSH, val);
-		return;
-	}
-
-	__vreg(vgt, _REG_HISTOGRAM_THRSH) |= _REGBIT_HISTOGRAM_IRQ_STATUS;
-	info->propagate_virtual_event(vgt, bit, info);
-}
-
-void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int value, unsigned int offset)
-{
-	struct vgt_device *vgt;
-	vgt_reg_t vreg_data;
-	unsigned int i;
-
-	ASSERT(!(offset & 0x3));
-
-	for (i = 0; i < VGT_MAX_VMS; i++) {
-		vgt = pdev->device[i];
-		if (vgt) {
-			vreg_data = __vreg(vgt, offset) & (~value);
-			__vreg(vgt, offset) = vreg_data;
-		}
-	}
-}
-
-void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int value, unsigned int offset)
-{
-	struct vgt_device *vgt;
-	vgt_reg_t vreg_data;
-	unsigned int i;
-
-	ASSERT(!(offset & 0x3));
-
-	for (i = 0; i < VGT_MAX_VMS; i++) {
-		vgt = pdev->device[i];
-		if (vgt) {
-			vreg_data = __vreg(vgt, offset) | value;
-			__vreg(vgt, offset) = vreg_data;
-		}
-	}
+	vgt_handle_default_event_phys(hstate, event);
 }
 
 /*
- * TODO: It's said that CRT hotplug detection through below method does not
+ * It's said that CRT hotplug detection through below method does not
  * always work. For example in Linux i915 not hotplug handler is installed
  * for CRT (likely through some other polling method). But let's use this
  * as the example for how hotplug event is generally handled here.
  */
-void vgt_handle_crt_hotplug(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt)
+void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event)
 {
 	vgt_reg_t adpa_ctrl;
-	struct pgt_device *pdev = vgt->pdev;
+	struct pgt_device *pdev = hstate->pdev;
 
-	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured CRT hotplug event!!!\n")
+	pdev->probe_ports = true;
 
-	if (physical) {
-		pdev->probe_ports = true;
+	adpa_ctrl = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
+	if (!(adpa_ctrl & _REGBIT_ADPA_DAC_ENABLE))
+		vgt_warn("IRQ: captured CRT hotplug event when CRT is disabled\n");
 
-		adpa_ctrl = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
-		if (!(adpa_ctrl & _REGBIT_ADPA_DAC_ENABLE))
-			printk("vGT: captured CRT hotplug event when CRT is disabled\n");
+	/* write back value to clear channel status */
+	VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, adpa_ctrl);
 
-		/* write back value to clear channel status */
-		VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, adpa_ctrl);
+	/* check blue/green channel status for attachment status */
+	if (adpa_ctrl & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) {
+		vgt_info("IRQ: detect crt insert event!\n");
 
-		/* check blue/green channel status for attachment status */
-		if (adpa_ctrl & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) {
-			printk("%s: %d: vGT: detect crt insert event!\n", __func__, __LINE__);
+		if (test_and_set_bit(VGT_CRT, pdev->port_detect_status))
+			vgt_info("IRQ: capture CRT hot-plug when it's attached!\n");
+		vgt_set_uevent(vgt_dom0, CRT_HOTPLUG_IN);
+	} else {
+		vgt_info("IRQ: detect crt removal event!\n");
 
-			if (test_and_set_bit(VGT_CRT, dev->port_detect_status))
-				printk("vGT: capture CRT hot-plug when it's attached!\n");
-			vgt_set_uevent(vgt, CRT_HOTPLUG_IN);
-		} else {
-			printk("%s: %d: vGT: detect crt removal event!\n", __func__, __LINE__);
+		if (!test_and_clear_bit(VGT_CRT, pdev->port_detect_status))
+			vgt_info("IRQ: capture CRT hot-removal when it's disattached!\n");
+		vgt_set_uevent(vgt_dom0, CRT_HOTPLUG_OUT);
+	}
 
-			if (!test_and_clear_bit(VGT_CRT, dev->port_detect_status))
-				printk("vGT: capture CRT hot-removal when it's disattached!\n");
-			vgt_set_uevent(vgt, CRT_HOTPLUG_OUT);
-		}
+	vgt_set_event_val(hstate, event, adpa_ctrl);
+	/* send out udev events when handling physical interruts */
+	vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
 
-		vgt_event_state(pdev, entry->event).val = adpa_ctrl;
-		/* send out udev events when handling physical interruts */
-		vgt_raise_request(dev, VGT_REQUEST_UEVENT);
+	vgt_handle_default_event_phys(hstate, event);
+}
+
+/* =====================GEN specific logic======================= */
+
+/*
+ * Here we only check IIR/IER. IMR/ISR is not checked
+ * because only rising-edge of ISR is captured as an event,
+ * so that current value of vISR doesn't matter.
+ */
+static void vgt_base_check_pending_irq(struct vgt_device *vgt)
+{
+	struct vgt_irq_host_state *hstate = vgt->pdev->irq_hstate;
+
+	if (!(__vreg(vgt, _REG_DEIER) & _REGBIT_MASTER_INTERRUPT))
 		return;
-	}
 
-	/* update channel status */
-	__vreg(vgt, _REG_PCH_ADPA) &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-	__vreg(vgt, _REG_PCH_ADPA) |= vgt_event_state(pdev, entry->event).val &
-					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-	info->propagate_virtual_event(vgt, bit, info);
-}
+	/* first try 2nd level PCH pending events */
+	if ((__vreg(vgt, _REG_SDEIIR) & __vreg(vgt, _REG_SDEIER)))
+		vgt_propagate_event(hstate, PCH_IRQ, vgt);
 
-void vgt_handle_aux_channel(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt)
-{
-	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured aux channel event (no handler)!!!\n")
-	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
-}
-
-void vgt_handle_gmbus(struct pgt_device *dev,
-	int bit, struct vgt_irq_info_entry *entry, struct vgt_irq_info *info,
-	bool physical, struct vgt_device *vgt)
-{
-	VGT_IRQ_WARN_ONCE(info, entry->event, "Captured gmbus event (no handler)!!!\n")
-	vgt_default_event_handler(dev, bit, entry, info, physical, vgt);
-}
-
-/* core event handling loop for a given IIR */
-void vgt_irq_handle_event(struct pgt_device *dev, void *iir,
-	struct vgt_irq_info *info, bool physical,
-	enum vgt_owner_type o_type)
-{
-	int bit;
-	struct vgt_irq_info_entry *entry;
-
-	ASSERT(spin_is_locked(&dev->lock));
-
-	for_each_set_bit(bit, iir, info->table_size) {
-		/* clear cached pending bits */
-		if (!physical)
-			clear_bit(bit, iir);
-
-		entry = info->table + bit;
-		//vgt_trace_irq_event(info, entry->event);
-
-		if (entry->event == IRQ_RESERVED ||
-			entry->event >= IRQ_MAX) {
-			VGT_IRQ_WARN(info, entry->event, "UNKNOWN!!!\n");
-			return;
-		}
-
-		if (physical) {
-			dev->stat.events[entry->event]++;
-		}
-
-#ifndef VGT_IRQ_DEFAULT_HANDLER
-		if (unlikely(!entry->event_handler)) {
-			VGT_IRQ_WARN(info, entry->event, "No handler!!!\n");
-			return;
-		}
-
-		/*
-		 * the event comes when the owner is in switch.
-		 * need to inject into both the prev and curr owner
-		 */
-		if (!physical &&
-			vgt_get_event_owner_type(dev, entry->event) == o_type &&
-			vgt_get_previous_owner(dev, o_type) != NULL) {
-			vgt_dbg("vGT: inject event (%s) to previous owner (%d)\n",
-				vgt_irq_name[entry->event],
-				vgt_get_previous_owner(dev, o_type)->vgt_id);
-			entry->event_handler(dev, bit, entry, info, physical,
-				vgt_get_previous_owner(dev, o_type));
-		}
-
-		/* inject to the current owner */
-		entry->event_handler(dev, bit, entry, info, physical,
-			vgt_get_event_owner(dev, entry->event));
-#else
-		if (entry->event == IRQ_PCH_IRQ)
-			printk("!!!vGT-IRQ: PCH interrupt is caught\n");
-		vgt_default_event_handler(dev, bit, entry, info, physical,
-			vgt_get_event_owner(dev, entry->event));
-#endif
+	/* then check 1st level pending events */
+	if ((__vreg(vgt, _REG_DEIIR) & __vreg(vgt, _REG_DEIER)) ||
+	    (__vreg(vgt, _REG_GTIIR) & __vreg(vgt, _REG_GTIER)) ||
+	    (__vreg(vgt, _REG_PMIIR) & __vreg(vgt, _REG_PMIER))) {
+		vgt_inject_virtual_interrupt(vgt);
 	}
 }
+
+/* base interrupt handler, for snb/ivb/hsw */
+static irqreturn_t vgt_base_irq_handler(struct vgt_irq_host_state *hstate)
+{
+	u32 gt_iir, pm_iir, de_iir, pch_iir, de_iir_tmp;
+	int pch_bit;
+	struct pgt_device *pdev = hstate->pdev;
+
+	/* read physical IIRs */
+	gt_iir = VGT_MMIO_READ(pdev, _REG_GTIIR);
+	de_iir = VGT_MMIO_READ(pdev, _REG_DEIIR);
+	pm_iir = VGT_MMIO_READ(pdev, _REG_PMIIR);
+	pch_iir = VGT_MMIO_READ(pdev, _REG_SDEIIR);
+
+	if (!gt_iir && !de_iir && !pm_iir)
+		return IRQ_NONE;
+
+	vgt_handle_events(hstate, &gt_iir, IRQ_INFO_GT);
+
+	pch_bit = hstate->events[PCH_IRQ].bit;
+	ASSERT(hstate->events[PCH_IRQ].info);
+	de_iir_tmp = de_iir & (~(1 << pch_bit));
+	vgt_handle_events(hstate, &de_iir_tmp, IRQ_INFO_DPY);
+
+	vgt_handle_events(hstate, &pm_iir, IRQ_INFO_PM);
+
+	if (de_iir & (1 << pch_bit)) {
+		vgt_handle_events(hstate, &pch_iir, IRQ_INFO_PCH);
+		VGT_MMIO_WRITE(pdev, _REG_SDEIIR, pch_iir);
+	}
+
+	VGT_MMIO_WRITE(pdev, _REG_GTIIR, gt_iir);
+	VGT_MMIO_WRITE(pdev, _REG_PMIIR, pm_iir);
+	VGT_MMIO_WRITE(pdev, _REG_DEIIR, de_iir);
+
+	return IRQ_HANDLED;
+}
+
+/* SNB/IVB/HSW share the similar interrupt register scheme */
+static struct vgt_irq_info vgt_base_gt_info = {
+	.name = "GT-IRQ",
+	.reg_base = _REG_GTISR,
+	.bit_to_event = {[0 ... VGT_IRQ_BITWIDTH-1] = EVENT_RESERVED},
+};
+
+static struct vgt_irq_info vgt_base_dpy_info = {
+	.name = "DPY-IRQ",
+	.reg_base = _REG_DEISR,
+	.bit_to_event = {[0 ... VGT_IRQ_BITWIDTH-1] = EVENT_RESERVED},
+};
+
+static struct vgt_irq_info vgt_base_pch_info = {
+	.name = "PCH-IRQ",
+	.reg_base = _REG_SDEISR,
+	.bit_to_event = {[0 ... VGT_IRQ_BITWIDTH-1] = EVENT_RESERVED},
+};
+
+static struct vgt_irq_info vgt_base_pm_info = {
+	.name = "PM-IRQ",
+	.reg_base = _REG_PMISR,
+	.bit_to_event = {[0 ... VGT_IRQ_BITWIDTH-1] = EVENT_RESERVED},
+};
+
+/* associate gen specific register bits to general events */
+/* TODO: add all hardware bit definitions */
+static void vgt_base_init_irq(
+	struct vgt_irq_host_state *hstate)
+{
+	struct pgt_device *pdev = hstate->pdev;
+
+#define SET_BIT_INFO(s, b, e, i)		\
+	do {					\
+		s->events[e].bit = b;		\
+		s->events[e].info = s->info[i];	\
+		s->info[i]->bit_to_event[b] = e;\
+	} while (0);
+
+	hstate->info[IRQ_INFO_GT] = &vgt_base_gt_info;
+	hstate->info[IRQ_INFO_DPY] = &vgt_base_dpy_info;
+	hstate->info[IRQ_INFO_PCH] = &vgt_base_pch_info;
+	hstate->info[IRQ_INFO_PM] = &vgt_base_pm_info;
+
+	/* Render events */
+	SET_BIT_INFO(hstate, 0, RCS_MI_USER_INTERRUPT, IRQ_INFO_GT);
+	SET_BIT_INFO(hstate, 4, RCS_PIPE_CONTROL, IRQ_INFO_GT);
+	SET_BIT_INFO(hstate, 12, VCS_MI_USER_INTERRUPT, IRQ_INFO_GT);
+	SET_BIT_INFO(hstate, 16, VCS_MI_FLUSH_DW, IRQ_INFO_GT);
+	SET_BIT_INFO(hstate, 22, BCS_MI_USER_INTERRUPT, IRQ_INFO_GT);
+	SET_BIT_INFO(hstate, 26, BCS_MI_FLUSH_DW, IRQ_INFO_GT);
+
+	/* Display events */
+	if (IS_IVB(pdev) || IS_HSW(pdev)) {
+		SET_BIT_INFO(hstate, 0, PIPE_A_VBLANK, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 3, PRIMARY_A_FLIP_DONE, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 4, SPRITE_A_FLIP_DONE, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 5, PIPE_B_VBLANK, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 8, PRIMARY_B_FLIP_DONE, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 9, SPRITE_B_FLIP_DONE, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 10, PIPE_C_VBLANK, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 13, PRIMARY_C_FLIP_DONE, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 14, SPRITE_C_FLIP_DONE, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 24, DPST_PHASE_IN, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 25, DPST_HISTOGRAM, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 26, AUX_CHANNEL_A, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 27, DP_A_HOTPLUG, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 28, PCH_IRQ, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 29, GSE, IRQ_INFO_DPY);
+	} else if (IS_SNB(pdev)) {
+		SET_BIT_INFO(hstate, 7, PIPE_A_VBLANK, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 15, PIPE_B_VBLANK, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 16, DPST_PHASE_IN, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 17, DPST_HISTOGRAM, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 18, GSE, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 19, DP_A_HOTPLUG, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 20, AUX_CHANNEL_A, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 21, PCH_IRQ, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 26, PRIMARY_A_FLIP_DONE, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 27, PRIMARY_B_FLIP_DONE, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 28, SPRITE_A_FLIP_DONE, IRQ_INFO_DPY);
+		SET_BIT_INFO(hstate, 29, SPRITE_B_FLIP_DONE, IRQ_INFO_DPY);
+	}
+
+	/* PM events */
+	SET_BIT_INFO(hstate, 1, GV_DOWN_INTERVAL, IRQ_INFO_PM);
+	SET_BIT_INFO(hstate, 2, GV_UP_INTERVAL, IRQ_INFO_PM);
+	SET_BIT_INFO(hstate, 4, RP_DOWN_THRESHOLD, IRQ_INFO_PM);
+	SET_BIT_INFO(hstate, 5, RP_UP_THRESHOLD, IRQ_INFO_PM);
+	SET_BIT_INFO(hstate, 6, FREQ_DOWNWARD_TIMEOUT_RC6, IRQ_INFO_PM);
+	SET_BIT_INFO(hstate, 24, PCU_THERMAL, IRQ_INFO_PM);
+	SET_BIT_INFO(hstate, 25, PCU_PCODE2DRIVER_MAILBOX, IRQ_INFO_PM);
+
+	/* PCH events */
+	SET_BIT_INFO(hstate, 17, GMBUS, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 19, CRT_HOTPLUG, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 25, AUX_CHENNEL_B, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 26, AUX_CHENNEL_C, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 27, AUX_CHENNEL_D, IRQ_INFO_PCH);
+}
+
+struct vgt_irq_ops vgt_base_irq_ops = {
+	.irq_handler = vgt_base_irq_handler,
+	.init_irq = vgt_base_init_irq,
+	.check_pending_irq = vgt_base_check_pending_irq,
+};
+
+/* ======================common event logic====================== */
 
 /*
  * Trigger a virtual event which comes from other requests like hotplug agent
  * instead of from pirq.
  */
 void vgt_trigger_virtual_event(struct vgt_device *vgt,
-	enum vgt_event_type event, bool check)
+	enum vgt_event_type event)
 {
 	struct pgt_device *pdev = vgt->pdev;
-	struct vgt_irq_info *info;
-	struct vgt_irq_info_entry *entry;
+	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
+	vgt_event_virt_handler_t handler;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
-	int bit;
 
 	ASSERT(spin_is_locked(&pdev->lock));
 
-	info = ops->get_irq_info_from_event(pdev, event);
-	ASSERT(info);
-	bit = ops->get_bit_from_event(pdev, event, info);
-	entry = info->table + bit;
+	handler = vgt_get_event_virt_handler(hstate, event);
+	ASSERT(handler);
 
-	/* invoke the event handler indicating a virtual event */
-	if (entry->event_handler)
-		entry->event_handler(pdev, bit, entry, info, false, vgt);
-	else {
-		printk("vGT: trigger a virtual event w/o handler. Use default\n");
+	handler(hstate, event, vgt);
 
-		vgt_default_event_handler(pdev, bit, entry, info, false, vgt);
-	}
-
-	/* forward to DE if any PCH event pending */
-	if (VGT_PCH_EVENT(event) &&
-		vgt_has_pch_irq_pending(vgt)) {
-		int bit_de;
-		struct vgt_irq_info *info_de;
-
-		vgt_clear_pch_irq_pending(vgt);
-		info_de = ops->get_irq_info_from_event(pdev, IRQ_PCH_IRQ);
-		ASSERT(info_de);
-		bit_de = ops->get_bit_from_event(pdev, IRQ_PCH_IRQ, info_de);
-		vgt_propagate_virtual_event(vgt, bit_de, info_de);
-	}
-
-	if (check && vgt_has_irq_pending(vgt))
-		vgt_inject_virtual_interrupt(vgt);
+	ops->check_pending_irq(vgt);
 }
 
 /*
- * VGT_OT_NONE indicates normal injection, and other valid types indicate injections
- * to both prev/next owners
+ * Forward cached physical events to VMs, invoked from kernel thread
  */
-void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type type)
+void vgt_forward_events(struct pgt_device *pdev)
 {
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
-	int i;
+	int i, event;
 	cycles_t delay;
+	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
+	vgt_event_virt_handler_t handler;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
 	/* WARING: this should be under lock protection */
 	//raise_ctx_sched(vgt_dom0);
 
 	pdev->stat.last_virq = get_cycles();
 	delay = pdev->stat.last_virq - pdev->stat.last_pirq;
+
 	/*
 	 * it's possible a new pirq coming before last request is handled.
 	 * or the irq may come before kthread is ready. So skip the 1st 5.
 	 */
 	if (delay > 0 && pdev->stat.irq_num > 5)
 		pdev->stat.irq_delay_cycles += delay;
-	ops->handle_virtual_interrupt(pdev, type);
 
-	/* check pending virtual interrupt for active VMs. */
-	for (i = 0; i < VGT_MAX_VMS; i++) {
-		if (pdev->device[i] && vgt_has_irq_pending(pdev->device[i]))
-			vgt_inject_virtual_interrupt(pdev->device[i]);
+	ASSERT(spin_is_locked(&pdev->lock));
+	for_each_set_bit(event, hstate->pending_events, EVENT_MAX) {
+		clear_bit(event, hstate->pending_events);
+
+		handler = vgt_get_event_virt_handler(hstate, event);
+		ASSERT(handler);
+
+		switch (vgt_get_event_policy(hstate, event)) {
+		case EVENT_FW_ALL:
+			for (i = 0; i < VGT_MAX_VMS; i++) {
+				if (pdev->device[i])
+					handler(hstate, event, pdev->device[i]);
+			}
+			break;
+		case EVENT_FW_DOM0:
+			handler(hstate, event, vgt_dom0);
+			break;
+		case EVENT_FW_NONE:
+		default:
+			break;
+		}
 	}
+
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		if (pdev->device[i])
+			ops->check_pending_irq(pdev->device[i]);
+	}
+
 	pdev->stat.virq_cycles += get_cycles() - pdev->stat.last_virq;
+}
+
+/*
+ * Scan all pending events in the specified category, and then invoke
+ * registered handler accordingly
+ */
+static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
+	enum vgt_irq_type type)
+{
+	int bit;
+	enum vgt_event_type event;
+	struct vgt_irq_info *info = hstate->info[type];
+	vgt_event_phys_handler_t handler;
+	struct pgt_device *pdev = hstate->pdev;
+
+	ASSERT(spin_is_locked(&pdev->lock));
+
+	for_each_set_bit(bit, iir, VGT_IRQ_BITWIDTH) {
+		event = info->bit_to_event[bit];
+		pdev->stat.events[event]++;
+
+		if (unlikely(event == EVENT_RESERVED)) {
+			vgt_err("IRQ: abandon non-registered [%s, bit-%d] event (%s)\n",
+				info->name, bit, vgt_irq_name[event]);
+			continue;
+		}
+
+		handler = vgt_get_event_phys_handler(hstate, event);
+		ASSERT(handler);
+
+		handler(hstate, event);
+		set_bit(event, hstate->pending_events);
+	}
 }
 
 /*
@@ -1604,240 +792,162 @@ void vgt_handle_virtual_interrupt(struct pgt_device *pdev, enum vgt_owner_type t
  */
 static irqreturn_t vgt_interrupt(int irq, void *data)
 {
-	struct pgt_device *dev = (struct pgt_device *)data;
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
-	irqreturn_t ret;
+	struct pgt_device *pdev = (struct pgt_device *)data;
+	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
 	u32 de_ier;
+	irqreturn_t ret;
 
-	spin_lock(&dev->lock);
-	dev->stat.irq_num++;
-	dev->stat.last_pirq = get_cycles();
-	vgt_dbg("vGT: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
-		VGT_MMIO_READ(dev, _REG_DEIIR),
-		VGT_MMIO_READ(dev, _REG_GTIIR),
-		VGT_MMIO_READ(dev, _REG_SDEIIR),
-		VGT_MMIO_READ(dev, _REG_PMIIR));
+	pdev->stat.irq_num++;
+	pdev->stat.last_pirq = get_cycles();
 
-#ifndef VGT_IRQ_FORWARD_MODE
+	spin_lock(&pdev->lock);
+	vgt_dbg("IRQ: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
+		VGT_MMIO_READ(pdev, _REG_DEIIR),
+		VGT_MMIO_READ(pdev, _REG_GTIIR),
+		VGT_MMIO_READ(pdev, _REG_SDEIIR),
+		VGT_MMIO_READ(pdev, _REG_PMIIR));
+
 	/* avoid nested handling by disabling master interrupt */
-	de_ier = VGT_MMIO_READ(dev, _REG_DEIER);
-	VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier & ~_REGBIT_MASTER_INTERRUPT);
+	de_ier = VGT_MMIO_READ(pdev, _REG_DEIER);
+	VGT_MMIO_WRITE(pdev, _REG_DEIER, de_ier & ~_REGBIT_MASTER_INTERRUPT);
 
-	ret = ops->interrupt(dev);
+	ret = hstate->ops->irq_handler(hstate);
 	if (ret == IRQ_NONE) {
-		vgt_dbg("Spurious interrupt received (or shared vector)\n");
-		VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);
-		spin_unlock(&dev->lock);
-		return IRQ_HANDLED;
+		vgt_info("Spurious interrupt received (or shared vector)\n");
+		goto out;
 	}
 
-	vgt_raise_request(dev, VGT_REQUEST_IRQ);
+	vgt_raise_request(pdev, VGT_REQUEST_IRQ);
 
+out:
 	/* re-enable master interrupt */
-	VGT_MMIO_WRITE(dev, _REG_DEIER, de_ier);
-#else
-	if (dev->device[0])
-		vgt_inject_virtual_interrupt(dev->device[0]);
-	else
-		printk("vGT: no owner for this interrupt \n");
-#endif
+	VGT_MMIO_WRITE(pdev, _REG_DEIER, de_ier);
+	spin_unlock(&pdev->lock);
 
-	dev->stat.pirq_cycles += get_cycles() - dev->stat.last_pirq;
-	spin_unlock(&dev->lock);
+	pdev->stat.pirq_cycles += get_cycles() - pdev->stat.last_pirq;
 	return IRQ_HANDLED;
 }
 
-
-static inline int get_event_and_edid_info(vgt_hotplug_cmd_t cmd,
-				enum vgt_event_type *pevent,
-				edid_index_t *pedid_idx)
-{
-	int ret = 0;
-	switch(cmd.port_sel) {
-	case 0:
-		*pedid_idx = EDID_VGA;
-		*pevent = IRQ_CRT_HOTPLUG;
-		break;
-	case 1:
-		*pedid_idx = EDID_MAX;
-		*pevent = IRQ_MAX;
-		printk("vGT: No support for hot plug type: DP_A!\n");
-		ret = -EINVAL;
-		break;
-	case 2:
-		*pedid_idx = EDID_DPB;
-		*pevent = IRQ_DP_B_HOTPLUG;
-		break;
-	case 3:
-		*pedid_idx = EDID_DPC;
-		*pevent = IRQ_DP_C_HOTPLUG;
-		break;
-	case 4:
-		*pedid_idx = EDID_DPD;
-		*pevent = IRQ_DP_D_HOTPLUG;
-		break;
-	default:
-		*pedid_idx = EDID_MAX;
-		*pevent = IRQ_MAX;
-		printk("vGT: Not supported hot plug type: 0x%x!\n",
-			cmd.port_sel);
-		ret = -EINVAL;
-		break;
-	}
-	return ret;
-}
-
-void vgt_trigger_display_hot_plug(struct pgt_device *dev,
-		vgt_hotplug_cmd_t  hotplug_cmd)
+/* default handler will be invoked, if not explicitly specified here */
+static void vgt_init_events(
+	struct vgt_irq_host_state *hstate)
 {
 	int i;
-	enum vgt_event_type event = IRQ_MAX;
-	edid_index_t edid_idx = EDID_MAX;
-	enum dpcd_index dpcd_idx;
 
-	if (get_event_and_edid_info(hotplug_cmd, &event, &edid_idx) < 0)
-		return;
+#define SET_POLICY_ALL(h, e)	\
+	((h)->events[e].policy = EVENT_FW_ALL)
+#define SET_POLICY_DOM0(h, e)	\
+	((h)->events[e].policy = EVENT_FW_DOM0)
+#define SET_POLICY_NONE(h, e)	\
+	((h)->events[e].policy = EVENT_FW_NONE)
+#define SET_P_HANDLER(s, e, h)	\
+	((s)->events[e].p_handler = h)
+#define SET_V_HANDLER(s, e, h)	\
+	((s)->events[e].v_handler = h)
 
-	dpcd_idx = edid_idx - EDID_DPB;
-
-	/* Default: send hotplug virtual interrupts to all VMs currently.
-	 * Since 'vmid' has no concern with vgt_id, e.g.  if you have a HVM
-	 * with vmid = 1 and after destroy & recreate it, its vmid become 2
-	 * we need to use vmid_2_vgt_device() to map vmid to vgt_device if
-	 * we need to send these hotplug virtual interrupts to a specific vm
-	 */
-	spin_lock_irq(&dev->lock);
-	for (i = 0; i < VGT_MAX_VMS; ++ i) {
-		struct vgt_device *vgt = dev->device[i];
-
-		if (!vgt)
-			continue;
-
-		if (hotplug_cmd.action == 0x1) {
-			/* plug in */
-			vgt_propagate_edid(vgt, edid_idx);
-			if (dpcd_idx >= DPCD_DPB)
-				vgt_propagate_dpcd(vgt, dpcd_idx);
-		} else {
-			/* pull out */
-			vgt_clear_edid(vgt, edid_idx);
-			if (dpcd_idx >= DPCD_DPB)
-				vgt_clear_dpcd(vgt, dpcd_idx);
-		}
-
-		vgt_trigger_virtual_event(vgt, event, true);
+	for (i = 0; i < EVENT_MAX; i++) {
+		hstate->events[i].info = NULL;
+		/* Default forwarding to all VMs (render and most display events) */
+		SET_POLICY_ALL(hstate, i);
+		hstate->events[i].p_handler = vgt_handle_default_event_phys;
+		hstate->events[i].v_handler = vgt_handle_default_event_virt;;
 	}
 
-	spin_unlock_irq(&dev->lock);
-	return;
-}
+	SET_P_HANDLER(hstate, DPST_PHASE_IN, vgt_handle_phase_in_phys);
+	SET_P_HANDLER(hstate, DPST_HISTOGRAM, vgt_handle_histogram_phys);
+	SET_P_HANDLER(hstate, CRT_HOTPLUG, vgt_handle_crt_hotplug_phys);
 
-/* =====================Initializations======================= */
+	SET_V_HANDLER(hstate, DPST_PHASE_IN, vgt_handle_phase_in_virt);
+	SET_V_HANDLER(hstate, DPST_HISTOGRAM, vgt_handle_histogram_virt);
+	SET_V_HANDLER(hstate, CRT_HOTPLUG, vgt_handle_crt_hotplug_virt);
 
-static void vgt_initialize_always_emulated_events(struct pgt_device *dev)
-{
-	/* timers are always emulated */
-	set_bit(IRQ_RCS_WATCHDOG_EXCEEDED, vgt_always_emulated_events(dev));
-	set_bit(IRQ_VCS_WATCHDOG_EXCEEDED, vgt_always_emulated_events(dev));
-	vgt_get_event_owner_type(dev, IRQ_RCS_WATCHDOG_EXCEEDED) = VGT_OT_NONE;
-	vgt_get_event_owner_type(dev, IRQ_VCS_WATCHDOG_EXCEEDED) = VGT_OT_NONE;
+	/* for engine specific reset */
+	SET_POLICY_DOM0(hstate, RCS_WATCHDOG_EXCEEDED);
+	SET_POLICY_DOM0(hstate, VCS_WATCHDOG_EXCEEDED);
+
+	/* ACPI OpRegion belongs to dom0 */
+	SET_POLICY_DOM0(hstate, GSE);
+
+	/* render-p/c fully owned by Dom0 */
+	SET_POLICY_DOM0(hstate, GV_DOWN_INTERVAL);
+	SET_POLICY_DOM0(hstate, GV_UP_INTERVAL);
+	SET_POLICY_DOM0(hstate, RP_DOWN_THRESHOLD);
+	SET_POLICY_DOM0(hstate, RP_UP_THRESHOLD);
+	SET_POLICY_DOM0(hstate, FREQ_DOWNWARD_TIMEOUT_RC6);
+	SET_POLICY_DOM0(hstate, PCU_THERMAL);
+	SET_POLICY_DOM0(hstate, PCU_PCODE2DRIVER_MAILBOX);
+
+	/* Audio owned by Dom0 */
+	SET_POLICY_DOM0(hstate, AUDIO_CP_CHANGE_TRANSCODER_A);
+	SET_POLICY_DOM0(hstate, AUDIO_CP_REQUEST_TRANSCODER_A);
+	SET_POLICY_DOM0(hstate, AUDIO_CP_CHANGE_TRANSCODER_B);
+	SET_POLICY_DOM0(hstate, AUDIO_CP_REQUEST_TRANSCODER_B);
+	SET_POLICY_DOM0(hstate, AUDIO_CP_CHANGE_TRANSCODER_C);
+	SET_POLICY_DOM0(hstate, AUDIO_CP_REQUEST_TRANSCODER_C);
+
+	/* Monitor interfaces are controlled by XenGT driver */
+	SET_POLICY_NONE(hstate, DP_A_HOTPLUG);
+	SET_POLICY_NONE(hstate, DP_B_HOTPLUG);
+	SET_POLICY_NONE(hstate, DP_C_HOTPLUG);
+	SET_POLICY_NONE(hstate, DP_D_HOTPLUG);
+	SET_POLICY_NONE(hstate, SDVO_B_HOTPLUG);
+	SET_POLICY_NONE(hstate, CRT_HOTPLUG);
+	SET_POLICY_NONE(hstate, AUX_CHANNEL_A);
+	SET_POLICY_NONE(hstate, AUX_CHENNEL_B);
+	SET_POLICY_NONE(hstate, AUX_CHENNEL_C);
+	SET_POLICY_NONE(hstate, AUX_CHENNEL_D);
+	SET_POLICY_NONE(hstate, GMBUS);
 }
 
 /*
  * Do interrupt initialization for vGT driver
  */
-int vgt_irq_init(struct pgt_device *dev)
+int vgt_irq_init(struct pgt_device *pdev)
 {
-	enum vgt_owner_type *o_table;
-	struct vgt_irq_ops *ops;
-	struct vgt_irq_host_state *irq_hstate;
+	struct vgt_irq_host_state *hstate;
 
-	irq_hstate = kzalloc(sizeof(struct vgt_irq_host_state), GFP_KERNEL);
-	if (irq_hstate == NULL)
+	hstate = kzalloc(sizeof(struct vgt_irq_host_state), GFP_KERNEL);
+	if (hstate == NULL)
 		return -ENOMEM;
 
-	dev->irq_hstate = irq_hstate;
-
-	/* FIXME IVB: check any difference */
-	if (IS_SNB(dev) || IS_IVB(dev) || IS_HSW(dev))
-		dev->irq_hstate->ops = &snb_irq_ops;
+	if (IS_SNB(pdev) || IS_IVB(pdev) || IS_HSW(pdev))
+		hstate->ops = &vgt_base_irq_ops;
 	else {
-		vgt_dbg("vGT: no irq ops found!\n");
+		vgt_err("Unsupported device\n");
+		kfree(hstate);
 		return -EINVAL;
 	}
 
-	/* Initialize ownership table, based on a default policy table */
-	o_table = kmalloc(IRQ_MAX * sizeof(enum vgt_owner_type), GFP_KERNEL);
-	if (!o_table) {
-		kfree(dev->irq_hstate);
-		dev->irq_hstate = NULL;
-		vgt_dbg("vGT: no enough memory for owner table\n");
-		return -ENOMEM;
-	}
-	memcpy((void *)o_table, (void *)vgt_default_event_owner_table,
-		IRQ_MAX * sizeof(enum vgt_owner_type));
-	vgt_event_owner_table(dev) = o_table;
+	hstate->pdev = pdev;
+	//hstate.i915_irq = IRQ_INVALID;
+	//hstate.pirq = IRQ_INVALID;
 
-	ops = vgt_get_irq_ops(dev);
-#ifndef VGT_IRQ_FORWARD_MODE
-	ops->init(dev);
-#endif
+	/* common event initialization */
+	vgt_init_events(hstate);
 
-	vgt_initialize_always_emulated_events(dev);
+	/* gen specific initialization */
+	hstate->ops->init_irq(hstate);
 
-	vgt_master_enable(dev) = 0;
-	vgt_pch_enable(dev) = 0;
-	vgt_pch_unmask(dev) = 0;
-	printk("vGT: interrupt initialization completes\n");
+	pdev->irq_hstate = hstate;
+	vgt_dbg("Interrupt initialization completes\n");
 	return 0;
 }
 
-void vgt_irq_exit(struct pgt_device *dev)
+void vgt_irq_exit(struct pgt_device *pdev)
 {
-	struct vgt_irq_ops *ops = vgt_get_irq_ops(dev);
+	free_irq(pdev->irq_hstate->pirq, pdev);
 
-	free_irq(vgt_pirq(dev), dev);
 	/* TODO: recover i915 handler? */
-	//unbind_from_irq(vgt_i915_irq(dev));
-	ops->exit(dev);
-	if (dev->irq_hstate != NULL) {
-		kfree(vgt_event_owner_table(dev));
-		kfree(dev->irq_hstate);
-	}
-}
+	//unbind_from_irq(vgt_i915_irq(pdev));
 
-int vgt_vstate_irq_init(struct vgt_device *vgt)
-{
-	struct vgt_emul_timer *dpy_timer;
-	struct vgt_irq_virt_state *irq_vstate;
-
-	irq_vstate = kzalloc(sizeof(struct vgt_irq_virt_state), GFP_KERNEL);
-	if(irq_vstate == NULL)
-		return -ENOMEM;
-
-	dpy_timer = &irq_vstate->dpy_timer;
-
-	hrtimer_init(&dpy_timer->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
-	dpy_timer->timer.function = vgt_dpy_timer_fn;
-	dpy_timer->period = VGT_DPY_EMUL_PERIOD;
-
-	irq_vstate->vgt = vgt;
-	vgt->irq_vstate = irq_vstate;
-	/* Assume basic domain information has been retrieved already */
-	printk("vGT: interrupt initialization for domain (%d) completes\n", vgt->vm_id);
-	return 0;
-}
-
-void vgt_vstate_irq_exit(struct vgt_device *vgt)
-{
-	hrtimer_cancel(&vgt_dpy_timer(vgt).timer);
-	kfree(vgt->irq_vstate);
+	kfree(pdev->irq_hstate);
 }
 
 void vgt_install_irq(struct pci_dev *pdev)
 {
 	struct pgt_device *node, *pgt = NULL;
 	int irq, ret;
+	struct vgt_irq_host_state *hstate;
 
 	if (!xen_initial_domain() || !vgt_enabled)
 		return;
@@ -1874,11 +984,12 @@ void vgt_install_irq(struct pci_dev *pdev)
 		return;
 	}
 
-	vgt_pirq(pgt) = pdev->irq;
-	vgt_i915_irq(pgt) = irq;
+	hstate = pgt->irq_hstate;
+	hstate->pirq = pdev->irq;
+	hstate->i915_irq = irq;
 	pdev->irq = irq;
 
 	printk("vGT: allocate virq (%d) for i915, while keep original irq (%d) for vgt\n",
-		vgt_i915_irq(pgt), vgt_pirq(pgt));
+		hstate->i915_irq, hstate->pirq);
 }
 EXPORT_SYMBOL(vgt_install_irq);

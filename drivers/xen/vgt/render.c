@@ -274,19 +274,9 @@ int vgt_thread(void *priv)
 		/* Handle virtual interrupt injection to current owner */
 		if (test_and_clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request)) {
 			spin_lock_irq(&pdev->lock);
-			vgt_handle_virtual_interrupt(pdev, VGT_OT_NONE);
+			vgt_forward_events(pdev);
 			spin_unlock_irq(&pdev->lock);
 		}
-
-		/* Emulate & inject virq to VMs which are not display owner.
-		 * This must be handled after "VGT_REQUEST_IRQ"
-		 */
-		if (test_and_clear_bit(VGT_REQUEST_EMUL_DPY_IRQ, (void *)&pdev->request)) {
-			spin_lock_irq(&pdev->lock);
-			vgt_emul_and_inject_dpy_virq(pdev);
-			spin_unlock_irq(&pdev->lock);
-		}
-
 
 		/* Send uevent to userspace */
 		if (test_and_clear_bit(VGT_REQUEST_UEVENT, (void *)&pdev->request)) {
@@ -369,8 +359,6 @@ int vgt_thread(void *priv)
 					break;
 				}
 
-				vgt_irq_save_context(prev, VGT_OT_RENDER);
-
 				if (!vgt_restore_context(next)) {
 					vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
 						vgt_ctx_check(pdev),
@@ -385,7 +373,6 @@ int vgt_thread(void *priv)
 
 				previous_render_owner(pdev) = current_render_owner(pdev);
 				current_render_owner(pdev) = next;
-				vgt_irq_restore_context(next, VGT_OT_RENDER);
 				//show_seqno(pdev);
 
 				if (pdev->enable_ppgtt && next->ppgtt_initialized)
@@ -429,14 +416,6 @@ int vgt_thread(void *priv)
 
 		spin_unlock_irq(&pdev->lock);
 
-		/* Virtual interrupts pending right after render switch */
-		if (check_irq && test_bit(VGT_REQUEST_IRQ, (void*)&pdev->request)) {
-			vgt_dbg("vGT: handle pending interrupt in the render context switch time\n");
-			spin_lock_irq(&pdev->lock);
-			clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
-			vgt_handle_virtual_interrupt(pdev, VGT_OT_RENDER);
-			spin_unlock_irq(&pdev->lock);
-		}
 		t3 = vgt_get_cycles();
 		context_switch_cost += (t3-t0);
 	}

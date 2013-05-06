@@ -60,15 +60,6 @@
 void show_debug(struct pgt_device *pdev, int ring_id)
 {
 	vgt_reg_t reg;
-	struct vgt_device *vgt_dom1 = default_device.device[1];
-
-	if (vgt_dom1) {
-		vgt_show_irq_state(vgt_dom0);
-		vgt_show_irq_state(vgt_dom1);
-		printk("DERRMR: %x\n", VGT_MMIO_READ(pdev, 0x44050));
-		printk("VBLANK_A: %x\n", VGT_MMIO_READ(pdev, _REG_VBLANK_A));
-		printk("VBLANK_B: %x\n", VGT_MMIO_READ(pdev, _REG_VBLANK_B));
-	}
 
 	printk("debug registers(ring-%d),reg maked with <*> may not apply to every ring):\n", ring_id);
 	printk("....EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_EIR));

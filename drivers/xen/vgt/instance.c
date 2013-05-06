@@ -232,9 +232,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	state_sreg_init (vgt);
 	state_vreg_init(vgt);
 
-	if ((rc = vgt_vstate_irq_init(vgt)) < 0)
-		goto err;
-
 	/* setup the ballooning information */
 	if (vgt->ballooning) {
 		__vreg64(vgt, vgt_info_off(magic)) = VGT_MAGIC;
@@ -318,7 +315,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	return 0;
 err:
-	kfree(vgt->irq_vstate);
 	if ( vgt->aperture_base > 0)
 		free_vm_aperture_gm_and_fence(vgt);
 	vfree(vgt->vgtt);
@@ -395,7 +391,6 @@ void vgt_release_instance(struct vgt_device *vgt)
 	vgt_hvm_info_deinit(vgt);
 	vgt->pdev->device[vgt->vgt_id] = NULL;
 
-	vgt_vstate_irq_exit(vgt);
 	/* already idle */
 	list_del(&vgt->list);
 
