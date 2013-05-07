@@ -1701,51 +1701,51 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		}
 		switch (i) {
 		case EDID_VGA:
-			printk("EDID_PROBE: VGA.\n");
+			vgt_info("EDID_PROBE: VGA.\n");
 			gmbus_port = 2;
 			break;
 		case EDID_LVDS:
-			printk("EDID_PROBE: LVDS.\n");
+			vgt_info("EDID_PROBE: LVDS.\n");
 			gmbus_port = 3;
 			break;
 		case EDID_HDMIC:
-			printk("EDID_PROBE: HDMI C.\n");
+			vgt_info("EDID_PROBE: HDMI C.\n");
 			gmbus_port = 4;
 			break;
 		case EDID_HDMIB:
-			printk("EDID_PROBE: HDMI B.\n");
+			vgt_info("EDID_PROBE: HDMI B.\n");
 			// no gmbus corresponding interface. Do not handle it.
 			break;
 		case EDID_HDMID:
-			printk("EDID_PROBE: HDMI D.\n");
+			vgt_info("EDID_PROBE: HDMI D.\n");
 			gmbus_port = 6;
 			break;
 		case EDID_DPB:
 			if (VGT_MMIO_READ(pdev, _REG_PCH_DPB_AUX_CH_CTL) | _DP_DETECTED) {
-				printk("EDID_PROBE: DP B Detected.\n");
+				vgt_info("EDID_PROBE: DP B Detected.\n");
 				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
 			} else {
-				printk("EDID_PROBE: DP B is not detected.\n");
+				vgt_info("EDID_PROBE: DP B is not detected.\n");
 			}
 			break;
 		case EDID_DPC:
 			if (VGT_MMIO_READ(pdev, _REG_PCH_DPC_AUX_CH_CTL) | _DP_DETECTED) {
-				printk("EDID_PROBE: DP C Detected.\n");
+				vgt_info("EDID_PROBE: DP C Detected.\n");
 				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
 			} else {
-				printk("EDID_PROBE: DP C is not detected.\n");
+				vgt_info("EDID_PROBE: DP C is not detected.\n");
 			}
 			break;
 		case EDID_DPD:
 			if (VGT_MMIO_READ(pdev, _REG_PCH_DPD_AUX_CH_CTL) | _DP_DETECTED) {
-				printk("EDID_PROBE: DP D Detected.\n");
+				vgt_info("EDID_PROBE: DP D Detected.\n");
 				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
 			} else {
-				printk("EDID_PROBE: DP D is not detected.\n");
+				vgt_info("EDID_PROBE: DP D is not detected.\n");
 			}
 			break;
 		default:
-			printk("EDID_PROBE: Others?\n");
+			vgt_info("EDID_PROBE: Others?\n");
 			break;
 		}
 
@@ -1759,14 +1759,14 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				*pedid = kmalloc(sizeof(vgt_edid_data_t), GFP_KERNEL);
 
 				if (*pedid == NULL) {
-					printk("ERROR: Insufficient memory in %s\n",
+					vgt_err("ERROR: Insufficient memory in %s\n",
 							__FUNCTION__);
 					BUG();
 				}
 			}
 		} else {
 			if (*pedid) {
-				printk("EDID_PROBE: Free edid memory.\n");
+				vgt_info("EDID_PROBE: Free edid memory.\n");
 				kfree(*pedid);
 				*pedid = NULL;
 			}
@@ -1821,7 +1821,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		if (*pedid) {
 			int i;
 			unsigned char *block = (*pedid)->edid_block;
-					printk("EDID_PROBE: EDID is:\n");
+					vgt_info("EDID_PROBE: EDID is:\n");
 					for (i = 0; i < EDID_SIZE; ++ i) {
 							if ((block[i] >= 'a' && block[i] <= 'z') ||
 								(block[i] >= 'A' && block[i] <= 'Z')) {
