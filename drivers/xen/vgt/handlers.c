@@ -1240,10 +1240,14 @@ bool dpy_modeset_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
 
-	if (!reg_hw_access(vgt, offset)) {
-		vgt_info("mmio[0x%x] write with 0x%x.\n", offset,
+	if (!reg_hw_access(vgt, offset) &&
+		(*(vgt_reg_t *)p_data != __vreg(vgt, offset))) {
+
+		vgt_warn("modeset mmio[0x%x] change value from 0x%x to 0x%x\n"
+			 "\twhich is not supported. MMIO write is ignored!\n",
+						offset,
+						__vreg(vgt, offset),
 						*(vgt_reg_t *)p_data);
-		vgt_warn("modeset emulation is not supported. MMIO write is ignored!\n");
 	}
 
 	return true;
