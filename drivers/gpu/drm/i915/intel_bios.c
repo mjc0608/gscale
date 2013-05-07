@@ -44,8 +44,6 @@ find_section(struct bdb_header *bdb, int section_id)
 	u16 total, current_size;
 	u8 current_id;
 
-	printk("i915: id(%d), header(%x), size(%x)\n",
-		section_id, bdb->header_size, bdb->bdb_size);
 	/* skip to first section */
 	index += bdb->header_size;
 	total = bdb->bdb_size;
@@ -61,10 +59,8 @@ find_section(struct bdb_header *bdb, int section_id)
 		if (index + current_size > total)
 			return NULL;
 
-		if (current_id == section_id) {
-			printk("i915: find section at %x\n", index);
+		if (current_id == section_id)
 			return base + index;
-		}
 
 		index += current_size;
 	}
