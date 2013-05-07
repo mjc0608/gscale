@@ -49,7 +49,7 @@
 #include "vgt.h"
 
 #define CREATE_TRACE_POINTS
-#include "vgt_trace.h"
+#include "trace.h"
 
 DEFINE_HASHTABLE(vgt_mmio_table, VGT_HASH_BITS);
 

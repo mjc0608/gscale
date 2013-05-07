@@ -17,7 +17,6 @@
  * Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-/* TODO: tracing read/write per VM */
 #if !defined(_VGT_TRACE_H_) || defined(TRACE_HEADER_MULTI_READ)
 #define _VGT_TRACE_H_
 
@@ -67,5 +66,5 @@ TRACE_EVENT(vgt_mmio_rw,
 #undef TRACE_INCLUDE_PATH
 #define TRACE_INCLUDE_PATH .
 #undef TRACE_INCLUDE_FILE
-#define TRACE_INCLUDE_FILE vgt_trace
+#define TRACE_INCLUDE_FILE trace
 #include <trace/define_trace.h>
