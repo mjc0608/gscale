@@ -273,7 +273,7 @@ void check_gtt(struct pgt_device *pdev)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(addr); i++)
-		printk("GMADR: 0x08%x, GTT INDEX: %x, GTT VALUE: %x\n",
+		vgt_dbg("GMADR: 0x08%x, GTT INDEX: %x, GTT VALUE: %x\n",
 			addr[i], GTT_INDEX(pdev, addr[i]),
 			vgt_read_gtt(pdev, GTT_INDEX(pdev, addr[i])));
 }
@@ -400,7 +400,7 @@ int setup_gtt(struct pgt_device *pdev)
 		vgt_write_gtt(pdev, index + i, pte);
 
 		if (!(i % 1024))
-			printk("vGT: write GTT-%x phys: %llx, dma: %llx\n",
+			vgt_dbg("vGT: write GTT-%x phys: %llx, dma: %llx\n",
 				index + i, page_to_phys(page), dma_addr);
 	}
 

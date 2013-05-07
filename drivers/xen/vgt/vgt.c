@@ -399,7 +399,7 @@ int vgt_initialize(struct pci_dev *dev)
 	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
 	vgt_dbg("create dom0 instance succeeds\n");
 
-	show_mode_settings(pdev);
+	//show_mode_settings(pdev);
 
 	if (setup_gtt(pdev))
 		goto err;
@@ -427,7 +427,7 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 	}
 	pdev->p_thread = p_thread;
-	show_debug(pdev, 0);
+	//show_debug(pdev, 0);
 
 	vgt_initialize_ctx_scheduler(pdev);
 

@@ -1310,7 +1310,7 @@ static int cmd_hash_init(struct pgt_device *pdev)
 
 		INIT_HLIST_NODE(&e->hlist);
 		vgt_add_cmd_entry(e);
-		vgt_info("CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] registered\n",
+		vgt_dbg("CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] registered\n",
 				e->info->name,e->info->opcode, e->info->flag, e->info->devices,
 				e->info->rings);
 	}
