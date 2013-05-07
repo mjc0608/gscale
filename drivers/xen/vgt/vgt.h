@@ -557,7 +557,6 @@ struct vgt_device {
 	struct vgt_statistics	stat;		/* statistics info */
 
 	bool		ballooning;		/* VM supports ballooning */
-	struct work_struct fb_debugfs_work;
 
 	/* PPGTT info: currently not per-ring but assume three rings share same
 	* table.
@@ -809,12 +808,6 @@ struct pgt_device {
 	DECLARE_BITMAP(port_detect_status, VGT_PORT_MAX);
 
 	DECLARE_BITMAP(dpy_emul_request, VGT_MAX_VMS);
-	/* Add workqueue to handle non-critical tasks
-	 * vgt_thread may be dedicated used for rendering context
-	 * switch. When subimit task that require access vreg/sreg/hwreg
-	 * , you need firstly get the lock (locks may be fine-grained later)
-	 * */
-	struct workqueue_struct *pgt_wq;
 
 	u8 gen_dev_type;
 
@@ -1932,11 +1925,6 @@ extern int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mod
 
 extern struct dentry *vgt_init_debugfs(struct pgt_device *pdev);
 extern int vgt_create_debugfs(struct vgt_device *vgt);
-/* Debugfs: if you want to enable dumping framebuffer,
- * you should define VGT_DEBUGFS_DUMP_FB, since Windows
- * can update surface base frequently, for performance
- * concern by default we disable dumping framebuffer.
- */
 
 /* command parser interface */
 extern int vgt_cmd_parser_init(struct pgt_device *pdev);
@@ -1947,7 +1935,6 @@ extern int vgt_scan_vring(struct vgt_device *vgt, int ring_id);
 extern int vgt_klog_init(void);
 extern void vgt_klog_cleanup(void);
 extern void klog_printk(const char *fmt, ...);
-#undef VGT_DEBUGFS_DUMP_FB
 
 typedef struct {
 	char *node_name;

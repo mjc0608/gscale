@@ -498,69 +498,6 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 	return d_vgt_debug;
 }
 
-#ifdef VGT_DEBUGFS_DUMP_FB
-/* When surface A/B base address or size changed use this function
- * to update fb debugfs, and since the update for surface base
- * indicate the completion of fb update so only reconstruct debugfs
- * when detect such changes. NOTE: only support surface A right now
- */
-#define _REG_SURF_BASE(p)	((p) == PIPE_A ? _REG_DSPASURF : _REG_DSPBSURF)
-#define _REG_SURF_SZ(p)	((p) == PIPE_A ? _REG_DSPASIZE : _REG_DSPBSIZE)
-#define _VGT_DEBUGFS_FB(p) ((p) == PIPE_A ? VGT_DEBUGFS_SURFA_FB : VGT_DEBUGFS_SURFB_FB)
-#define vgt_fb_name(p)	((p) == PIPE_A ? "surfA_fb" : "surfB_fb")
-static void fb_debugfs_work_func(struct work_struct *work)
-{
-	vgt_reg_t surf_sz;
-	void *surf_base;
-	struct array_data *p;
-	struct vgt_device *vgt = container_of(work, struct vgt_device, fb_debugfs_work);
-	struct pgt_device *pdev = vgt->pdev;
-	int vgt_id = vgt->vgt_id;
-	enum vgt_pipe pipe = surf_used_pipe;
-
-	ASSERT(pipe != PIPE_C);
-
-	surf_base = phys_aperture_vbase(pdev) + ((__sreg(vgt, _REG_SURF_BASE(pipe))) & PAGE_MASK);
-	surf_sz = __sreg(vgt, _REG_SURF_SZ(pipe));
-
-	if (!surf_base)
-		return;
-
-	/* NOTE: Not sure why i915 just does not use _REG_DSPASIZE or
-	 * _REG_DSPBSIZE to store the fb size, defualt in fb console
-	 * mode, the size is 5763072 (4096 * 1407) */
-	if (surf_sz == 0) {
-		surf_sz = 4 * 1024 * 1024;
-		vgt_dbg("vGT(%d): debugfs read 0 from _REG_DSPASIZE, use default surface size(0x%x)\n", vgt_id, surf_sz);
-	}
-
-	if (surf_base != dsp_surf_base[vgt_id][pipe]) {
-
-		/* destroy current debugfs node */
-		debugfs_remove(d_debugfs_entry[vgt_id][_VGT_DEBUGFS_FB(pipe)]);
-
-		dsp_surf_base[vgt_id][pipe] = surf_base;
-		/* The urgly side of debugfs is, each debugfs file
-		 * node need a exclusive struct array_data, vgt_debugfs_
-		 * data is used for this purpose; When destroy & recreate debugfs
-		 * file, this global array can be reused and no memory leak.
-		 */
-		p = &vgt_debugfs_data[vgt_id][_VGT_DEBUGFS_FB(pipe)];
-		p->array = (u32*)dsp_surf_base[vgt_id][pipe];
-		p->elements = surf_sz/sizeof(u32);
-		d_debugfs_entry[vgt_id][_VGT_DEBUGFS_FB(pipe)] = vgt_debugfs_create_blob(vgt_fb_name(pipe),
-				0444,
-				d_per_vgt[vgt_id],
-				p);
-		vgt_dbg("vGT(%d): create debugfs file: %s [base(%p), size(%d)]\n",
-				vgt_id,
-				vgt_fb_name(pipe),
-				surf_base,
-				surf_sz);
-	}
-}
-#endif
-
 static void vgt_create_cmdstat_per_ring(struct vgt_device *vgt, int ring_id, struct dentry *parent)
 {
 	char *ring_name;
@@ -597,10 +534,6 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	int vgt_id = vgt->vgt_id;
 	struct pgt_device *pdev = vgt->pdev;
 	struct dentry *perf_dir_entry, *cmdstat_dir_entry;
-
-#ifdef VGT_DEBUGFS_DUMP_FB
-	INIT_WORK(&vgt->fb_debugfs_work, fb_debugfs_work_func);
-#endif
 
 	dsp_surf_size[vgt_id][PIPE_A] = __sreg(vgt, _REG_DSPASIZE);
 	dsp_surf_size[vgt_id][PIPE_B] = __sreg(vgt, _REG_DSPBSIZE);
@@ -668,16 +601,6 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		printk(KERN_ERR "vGT(%d): failed to create debugfs node: fb of surface B\n", vgt_id);
 	else
 		printk("vGT(%d): create debugfs node: fb of surface B\n", vgt_id);
-#endif
-
-#ifdef VGT_DEBUGFS_DUMP_FB
-	p = &vgt_debugfs_data[vgt_id][VGT_DEBUGFS_SURFA_FB];
-	p->array = (u32*)dsp_surf_base[vgt_id][PIPE_A];
-	p->elements = 1024*1024/4;
-	d_debugfs_entry[vgt_id][VGT_DEBUGFS_SURFA_FB] = vgt_debugfs_create_blob("surfA_fb",
-			0444,
-			d_per_vgt[vgt_id],
-			p);
 #endif
 
 	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_SURFA_FB])
