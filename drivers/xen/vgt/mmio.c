@@ -817,8 +817,6 @@ static void vgt_set_reg_attr(struct pgt_device *pdev,
 		reg_set_virt(pdev, reg);
 	if (attr->flags & VGT_REG_HW_STATUS)
 		reg_set_hw_status(pdev, reg);
-	if (attr->flags & VGT_REG_BOOTTIME)
-		reg_set_boottime(pdev, reg);
 
 	/* last mark the reg as tracked */
 	if (track)

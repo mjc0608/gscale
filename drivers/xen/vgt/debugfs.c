@@ -230,11 +230,8 @@ static inline char *reg_show_reg_owner(struct pgt_device *pdev, int i)
 		case VGT_OT_DISPLAY:
 			str = "Display";
 			break;
-		case VGT_OT_PM:
-			str = "PM";
-			break;
-		case VGT_OT_MGMT:
-			str = "MGMT";
+		case VGT_OT_CONFIG:
+			str = "Config";
 			break;
 		default:
 			str = "";
@@ -247,8 +244,6 @@ static inline char *reg_show_reg_type(struct pgt_device *pdev, int i)
 {
 	if (reg_get_owner(pdev, i) != VGT_OT_NONE)
 		return "MPT";
-	else if (reg_boottime(pdev, i))
-		return "Boot";
 	else if (reg_workaround(pdev, i))
 		return "WA";
 	else if (reg_virt(pdev, i))

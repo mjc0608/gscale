@@ -592,13 +592,9 @@ struct vgt_device {
 extern struct vgt_device *vgt_dom0;
 enum vgt_owner_type {
 	VGT_OT_NONE = 0,		// No owner type
-	VGT_OT_RCS,			// the owner directly operating render command buffers
-	VGT_OT_BCS,			// the owner directly operating blitter command buffers
-	VGT_OT_VCS,			// the owner directly operating video command buffers
 	VGT_OT_RENDER,			// the owner directly operating all render buffers (render/blit/video)
 	VGT_OT_DISPLAY,			// the owner having its content directly shown on one or several displays
-	VGT_OT_PM,			// the owner handling GEN power management activities
-	VGT_OT_MGMT,			// the owner managing display/monitor resources
+	VGT_OT_CONFIG,			// the owner is always dom0 (PM, workarounds, etc.)
 	VGT_OT_MAX,
 };
 
@@ -627,10 +623,8 @@ enum vgt_owner_type {
 #define VGT_REG_TRACKED		(1 << 10)
 /* This reg has been accessed by a VM */
 #define VGT_REG_ACCESSED	(1 << 11)
-/* Virtualized, but accessible by dom0 at boot time */
-#define VGT_REG_BOOTTIME	(1 << 12)
 /* This reg is saved/restored at context switch time */
-#define VGT_REG_SAVED		(1 << 13)
+#define VGT_REG_SAVED		(1 << 12)
 /* index into another auxillary table. Maximum 256 entries now */
 #define VGT_REG_INDEX_SHIFT	16
 #define VGT_REG_INDEX_MASK	(0xFFFF << VGT_REG_INDEX_SHIFT)
@@ -847,16 +841,13 @@ extern struct pgt_device default_device;
 #define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_RENDER))
 #define current_display_owner(d)	(vgt_get_owner(d, VGT_OT_DISPLAY))
 #define current_foreground_vm(d)	(d->foreground_vm)
-#define current_pm_owner(d)		(vgt_get_owner(d, VGT_OT_PM))
-#define current_mgmt_owner(d)		(vgt_get_owner(d, VGT_OT_MGMT))
+#define current_config_owner(d)		(vgt_get_owner(d, VGT_OT_CONFIG))
 #define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
 #define is_current_display_owner(vgt)	(vgt && vgt == current_display_owner(vgt->pdev))
-#define is_current_pm_owner(vgt)	(vgt && vgt == current_pm_owner(vgt->pdev))
-#define is_current_mgmt_owner(vgt)	(vgt && vgt == current_mgmt_owner(vgt->pdev))
+#define is_current_config_owner(vgt)	(vgt && vgt == current_config_owner(vgt->pdev))
 #define previous_render_owner(d)	(vgt_get_previous_owner(d, VGT_OT_RENDER))
 #define previous_display_owner(d)	(vgt_get_previous_owner(d, VGT_OT_DISPLAY))
-#define previous_pm_owner(d)		(vgt_get_previous_owner(d, VGT_OT_PM))
-#define previous_mgmt_owner(d)		(vgt_get_previous_owner(d, VGT_OT_MGMT))
+#define previous_config_owner(d)	(vgt_get_previous_owner(d, VGT_OT_CONFIG))
 #define vgt_ctx_check(d)		(d->ctx_check)
 #define vgt_ctx_switch(d)		(d->ctx_switch)
 extern void do_vgt_fast_display_switch(struct vgt_device *pdev);
@@ -869,7 +860,6 @@ extern void do_vgt_fast_display_switch(struct vgt_device *pdev);
 #define reg_need_switch(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_NEED_SWITCH)
 #define reg_is_tracked(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_TRACKED)
 #define reg_is_accessed(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ACCESSED)
-#define reg_boottime(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_BOOTTIME)
 #define reg_is_saved(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_SAVED)
 #define reg_get_owner(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_OWNER)
 #define reg_invalid(pdev, reg)		(!pdev->reg_info[REG_INDEX(reg)])
@@ -891,12 +881,6 @@ static inline void reg_set_virt(struct pgt_device *pdev, vgt_reg_t reg)
 {
 	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_VIRT;
-}
-
-static inline void reg_set_boottime(struct pgt_device *pdev, vgt_reg_t reg)
-{
-	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
-	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_BOOTTIME;
 }
 
 /* mask bits for addr fix */
@@ -998,10 +982,6 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 {
 	struct pgt_device *pdev = vgt->pdev;
 
-	/* regs accessible by dom0 at boot time */
-	if (vgt_ops->boot_time && reg_boottime(pdev, reg))
-		return true;
-
 	/* filter out PVINFO PAGE to avoid clobbered by hvm_super_owner */
 	if (reg >= VGT_PVINFO_PAGE && reg < VGT_PVINFO_PAGE + VGT_PVINFO_SIZE)
 		return false;
@@ -1068,8 +1048,15 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
  */
 /* virtualized */
 #define F_VIRT			VGT_OT_NONE | VGT_REG_VIRT
-/* virtualized, but allow hw access from dom0 at boot time */
-#define F_BOOTTIME		F_VIRT | VGT_REG_BOOTTIME
+
+/*
+ * config context (global setting, pm, workaround, etc.)
+ * 	- config owner access pReg
+ *      - non-config owner access vReg
+ * (dom0 is the unique config owner)
+ */
+#define F_DOM0			VGT_OT_CONFIG
+
 /*
  * render context
  *	- render owner access pReg
@@ -1092,12 +1079,7 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 #define F_DPY_ADRFIX		F_DPY | VGT_REG_ADDR_FIX
 /* display context, require address fix, status updated by hw */
 #define F_DPY_HWSTS_ADRFIX	F_DPY_ADRFIX | VGT_REG_HW_STATUS
-/*
- * pm context
- *	- pm owner access pReg
- *	- non-pm owner access vReg
- */
-#define F_PM			VGT_OT_PM
+
 /*
  * workaround reg
  *	- any VM directly access pReg
@@ -1105,11 +1087,6 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
  *	- dangerous as a workaround only
  */
 #define F_WA			VGT_OT_NONE | VGT_REG_WORKAROUND
-/*
- * suppose owned by management domain (e.g. dom0) only
- * (consider whether it's necessary)
- */
-#define F_MGMT			VGT_OT_MGMT
 
 extern int vgt_ctx_switch;
 extern bool vgt_validate_ctx_switch;
