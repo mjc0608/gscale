@@ -59,6 +59,31 @@
  *   - Handle more events (like hdmi/dp hotplug, pipe-c, watchdog, etc.)
  */
 
+/*
+ * Below are necessary steps to add a new event handling:
+ *   a) (device specific) add bit<->event mapping information in
+ *      vgt_base_init_irq
+ *
+ *   b) (event specific) add event forwarding policy in vgt_init_events
+ *
+ *      Normally those are the only steps required, if the event is only
+ *      associated to the 1st leve interrupt control registers (iir/ier
+ *      imr/isr). The default handler will take care automatically
+ *
+ *      In the case where the event is associated with status/control
+ *      bits in other registers (e.g. monitor hotplug), you'll provide
+ *      specific handler for both physical event and virtual event
+ *
+ *   c) create a vgt_handle_XXX_phys handler, which deals with any required
+ *      housekeeping, and may optionally cache some state to be forwarded
+ *      to a VM
+ *
+ *   d) create a vgt_handle_XXX_virt handler, which emulates a virtual
+ *      event generation with any required state emulated accordingly, may
+ *      optionally use cached state from p_handler
+ *
+ *   e) setup virt/phys handler in vgt_init_events
+ */
 static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
 	enum vgt_irq_type type);
 
