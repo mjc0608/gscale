@@ -49,6 +49,7 @@
 #include <xen/events.h>
 #include <xen/vgt.h>
 #include <xen/interface/vcpu.h>
+#include <xen/interface/hvm/hvm_op.h>
 #include "vgt.h"
 
 /*
@@ -322,21 +323,21 @@ void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
 #define MSI_CAP_DATA	(MSI_CAP_OFFSET + 8)
 void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 {
-	struct vcpu_raw_msi_info info;
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint16_t control = *(uint16_t *)(cfg_space + MSI_CAP_CONTROL);
+	struct xen_hvm_inject_msi info;
+	int r;
 
 	/* FIXME: now only handle one MSI format */
 	ASSERT_NUM(!(control & 0xfffe), control);
-	info.dom = vgt->vm_id;
-	info.address = *(uint32_t *)(cfg_space + MSI_CAP_ADDRESS);
+	info.domid = vgt->vm_id;
+	info.addr = *(uint32_t *)(cfg_space + MSI_CAP_ADDRESS);
 	info.data = *(uint16_t *)(cfg_space + MSI_CAP_DATA);
-	vgt_dbg("vGT(%d): hvm injections. address (%x) data(%x)!\n",
-		vgt->vgt_id, info.address, info.data);
-
-	if (HYPERVISOR_vcpu_op(VCPUOP_inject_raw_msi,
-						smp_processor_id(), &info) < 0)
-		printk("vGT(%d): failed to inject vmsi\n", vgt->vgt_id);
+	vgt_dbg("vGT: VM(%d): hvm injections. address (%llx) data(%x)!\n",
+		vgt->vm_id, info.addr, info.data);
+	r = HYPERVISOR_hvm_op(HVMOP_inject_msi, &info);
+	if (r < 0)
+		vgt_err("vGT(%d): failed to inject vmsi\n", vgt->vgt_id);
 }
 
 static int vgt_inject_virtual_interrupt(struct vgt_device *vgt)

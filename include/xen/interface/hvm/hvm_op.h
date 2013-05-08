@@ -43,6 +43,19 @@ struct xen_hvm_pagetable_dying {
 typedef struct xen_hvm_pagetable_dying xen_hvm_pagetable_dying_t;
 DEFINE_GUEST_HANDLE_STRUCT(xen_hvm_pagetable_dying_t);
 
+/* MSI injection for emulated devices */
+#define HVMOP_inject_msi         16
+struct xen_hvm_inject_msi {
+    /* Domain to be injected */
+    domid_t   domid;
+    /* Data -- lower 32 bits */
+    uint32_t  data;
+    /* Address (0xfeexxxxx) */
+    uint64_t  addr;
+};
+typedef struct xen_hvm_inject_msi xen_hvm_inject_msi_t;
+DEFINE_GUEST_HANDLE_STRUCT(xen_hvm_inject_msi_t);
+
 #include <xen/interface/vcpu.h>
 #define HVMOP_vgt_set_trap_io       17
 struct xen_hvm_vgt_set_trap_io {
@@ -98,5 +111,4 @@ struct xen_hvm_vgt_wp_pages {
 	unsigned long  wp_pages[MAX_WP_BATCH_PAGES];
 };
 typedef struct xen_hvm_vgt_wp_pages xen_hvm_vgt_wp_pages_t;
-
 #endif /* __XEN_PUBLIC_HVM_HVM_OP_H__ */
