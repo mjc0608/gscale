@@ -1230,19 +1230,6 @@ enum vgt_pipe {
 	I915_MAX_PIPES
 };
 
-enum vgt_plane {
-	PLANE_A = 0,
-	PLANE_B,
-	PLANE_C,
-	I915_MAX_PLANES
-};
-
-enum vgt_pch {
-	PCH_IBX = 0,	/* Ibexpeak PCH */
-	PCH_CPT			/* Cougarpoint PCH */
-};
-
-#define VGT_PLANE_NAME(p)	((p) == PLANE_A ? "Plane A" : ((p) == PLANE_B ? "Plane B" : "Plane C"))
 #define VGT_PIPE_NAME(p)	((p) == PIPE_A ? "Pipe A" : ((p) == PIPE_B ? "Pipe B" : "Pipe C"))
 
 typedef enum {
