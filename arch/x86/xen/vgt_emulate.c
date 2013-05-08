@@ -264,7 +264,7 @@ int vgt_cfg_write_emul(
         unsigned long val,
         struct x86_emulate_ctxt *ctxt)
 {
-	unsigned int cf8 = per_cpu(vgt_cf8, smp_processor_id());
+	unsigned int *ptr_cf8 = &per_cpu(vgt_cf8, smp_processor_id());
 	int rc = X86EMUL_OKAY;
 
     dprintk("VGT: vgt_cfg_write_emul %x %x %lx at %llx\n",
@@ -274,12 +274,12 @@ int vgt_cfg_write_emul(
         ASSERT (bytes == 4);
         ASSERT ((port & 3) == 0);
 
-        cf8 = val;
-	dprintk("vgt_cf8 write w/ %x\n", cf8);
+        *ptr_cf8 = val;
+	dprintk("vgt_cf8 write w/ %x\n", *ptr_cf8);
     }
     else {	// port 0xCFC */
 	dprintk("cfg_write_emul port %x %d %lx\n",port, bytes, val);
-        ASSERT ( (cf8 & 3) == 0);
+        ASSERT ( (*ptr_cf8 & 3) == 0);
         ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
             ((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
 
@@ -290,7 +290,7 @@ int vgt_cfg_write_emul(
 	 */
 	if (vgt_ops && !vgt_ops->boot_time) {
 		if (!vgt_ops->cfg_write(dom0_vgt,
-			(cf8 & 0xfc) + (port & 3),
+			(*ptr_cf8 & 0xfc) + (port & 3),
 			&val, bytes)) {
 			rc = X86EMUL_UNHANDLEABLE;
 			goto out;
