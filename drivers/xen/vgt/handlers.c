@@ -1222,7 +1222,7 @@ bool dpy_plane_mmio_read(struct vgt_device *vgt, unsigned int offset,
 bool dpy_plane_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	ASSERT (bytes == 4);
+	ASSERT(bytes == 4);
 	memcpy ((char *)vgt->state.vReg + offset, p_data, bytes);
 	memcpy ((char *)vgt->state.sReg + offset, p_data, bytes);
 	if (current_foreground_vm(vgt->pdev) == vgt) {
@@ -1253,29 +1253,106 @@ bool dpy_modeset_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
-		void *p_data, unsigned int bytes)
+inline bool surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes, enum vgt_plane_type plane)
 {
-	enum vgt_pipe pipe = VGT_SURFPIPE(offset);
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+
 	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
 	vgt_dbg("%s: =======: write vReg(%x), sReg(%x)\n", __func__,
 			__vreg(vgt, offset),
 			__sreg(vgt, offset));
+
+	/* update virtual SURFLIVE registers to tell vm that the surface
+	 * write has succeeded. It is only needed when vgt is not current
+	 * foreground vm. Otherwise, the SURFLIVE will be updated by
+	 * hardware automatically.
+	 */
 	if (current_foreground_vm(vgt->pdev) != vgt) {
-		/* update SURFLIVE registers to tell driver that the
-		   surface write has succeeded.
-		 */
-		__vreg(vgt, VGT_DSPSURFLIVE(pipe)) = __vreg(vgt, offset);
-		__sreg(vgt, VGT_DSPSURFLIVE(pipe)) = __sreg(vgt, offset);
+		unsigned int surflive = 0;
+		enum vgt_pipe pipe;
+
+		if (plane == PRIMARY_PLANE) {
+			pipe = VGT_DSPSURFPIPE(offset);
+			surflive = VGT_DSPSURFLIVE(pipe);
+		} else if (plane == CURSOR_PLANE) {
+			pipe = VGT_CURSURFPIPE(offset);
+			surflive = VGT_CURSURFLIVE(pipe);
+		} else if (plane == SPRITE_PLANE) {
+			pipe = VGT_SPRSURFPIPE(offset);
+			surflive = VGT_SPRSURFLIVE(pipe);
+		} else {
+			BUG();
+		}
+
+		if (surflive) {
+			__vreg(vgt, surflive) = __vreg(vgt, offset);
+			__sreg(vgt, surflive) = __sreg(vgt, offset);
+		}
 	}
 
 	return true;
 }
 
-bool dspsurflive_mmio_write (struct vgt_device *vgt, unsigned int offset,
+bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	bool rc;
+
+	rc = surf_mmio_write(vgt, offset, p_data, bytes, PRIMARY_PLANE);
+
+#ifdef VGT_DEBUGFS_DUMP_FB
+	struct pgt_device *pdev = vgt->pdev;
+
+	struct work_struct *work = &vgt->fb_debugfs_work;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0)
+
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
+	if (rc == false)
+		return rc;
+
+	ASSERT(work);
+	surf_used_pipe = pipe;
+
+	if (0 == queue_work(pdev->pgt_wq, &vgt->fb_debugfs_work))
+		vgt_dbg("vGT: failed to submit aready attached work!\n");
+#endif
+
+	return rc;
+}
+
+bool surflive_mmio_write (struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	/* surflive is readonly registers. ignore the write from driver*/
+	return true;
+}
+
+static bool cur_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	return surf_mmio_write(vgt, offset, p_data, bytes, CURSOR_PLANE);
+}
+
+static bool spr_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	return surf_mmio_write(vgt, offset, p_data, bytes, CURSOR_PLANE);
+}
+
+static bool snb_cur_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	ASSERT(bytes == 4 && (offset == _REG_CURBBASE_SNB));
+
+	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
+
+	if (current_foreground_vm(vgt->pdev) != vgt) {
+		__vreg(vgt, _REG_CURBSURFLIVE_SNB) = __vreg(vgt, offset);
+		__sreg(vgt, _REG_CURBSURFLIVE_SNB) = __sreg(vgt, offset);
+	}
+
 	return true;
 }
 
@@ -2229,38 +2306,45 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIPEC_FRMCOUNT, 4, F_DPY, 0, D_HSW, pipe_frmcount_mmio_read, NULL},
 
 {_REG_CURABASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
-						dpy_plane_mmio_write},
-{0x700AC, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
+						cur_surf_mmio_write},
 {_REG_CURACNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read, dpy_plane_mmio_write},
 {_REG_CURAPOS, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read, dpy_plane_mmio_write},
+{_REG_CURASURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
+					surflive_mmio_write},
 
 {_REG_CURAPALET_0, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_CURAPALET_1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_CURAPALET_2, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_CURAPALET_3, 4, F_DPY, 0, D_ALL, NULL, NULL},
-/* FIXME: it contains physical address */
-{0x7008C, 4, F_DPY, 0, D_ALL, NULL, vgt_error_handler},
+
 {_REG_CURBBASE_SNB, 4, F_DPY_ADRFIX, 0xFFFFF000, D_SNB, dpy_plane_mmio_read,
-						dpy_plane_mmio_write},
-{0x700EC, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
+						snb_cur_surf_mmio_write},
 {_REG_CURBCNTR_SNB, 4, F_DPY, 0, D_SNB, dpy_plane_mmio_read,
 						dpy_plane_mmio_write},
 {_REG_CURBPOS_SNB, 4, F_DPY, 0, D_SNB, dpy_plane_mmio_read,
 						dpy_plane_mmio_write},
+{_REG_CURBSURFLIVE_SNB, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_SNB, dpy_plane_mmio_read,
+					surflive_mmio_write},
 
-{_REG_CURBBASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_HSW, dpy_plane_mmio_read,
-						dpy_plane_mmio_write},
+{_REG_CURBBASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_GEN7PLUS, dpy_plane_mmio_read,
+						cur_surf_mmio_write},
 {_REG_CURBCNTR, 4, F_DPY, 0, D_GEN7PLUS, dpy_plane_mmio_read,
 						dpy_plane_mmio_write},
 {_REG_CURBPOS, 4, F_DPY, 0, D_GEN7PLUS, dpy_plane_mmio_read,
 						dpy_plane_mmio_write},
+{_REG_CURBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_GEN7PLUS, dpy_plane_mmio_read,
+					surflive_mmio_write},
 
 {_REG_CURCBASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_GEN7PLUS, dpy_plane_mmio_read,
-						dpy_plane_mmio_write},
+						cur_surf_mmio_write},
 {_REG_CURCCNTR, 4, F_DPY, 0, D_GEN7PLUS, dpy_plane_mmio_read,
 						dpy_plane_mmio_write},
 {_REG_CURCPOS, 4, F_DPY, 0, D_GEN7PLUS, dpy_plane_mmio_read,
 						dpy_plane_mmio_write},
+{_REG_CURCSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_GEN7PLUS, dpy_plane_mmio_read,
+					surflive_mmio_write},
+
+{0x7008C, 4, F_DPY, 0, D_ALL, NULL, vgt_error_handler},
 
 {0x700D0, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {0x700D4, 4, F_DPY, 0, D_ALL, NULL, NULL},
@@ -2272,7 +2356,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DSPASURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
 							dspsurf_mmio_write},
 {_REG_DSPASURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
-							dpy_plane_mmio_write},
+							surflive_mmio_write},
 {_REG_DSPALINOFF, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
 							dpy_plane_mmio_write},
 {_REG_DSPASTRIDE, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
@@ -2289,7 +2373,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DSPBSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
 							dspsurf_mmio_write},
 {_REG_DSPBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
-							dspsurflive_mmio_write},
+							surflive_mmio_write},
 {_REG_DSPBLINOFF, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
 							dpy_plane_mmio_write},
 {_REG_DSPBSTRIDE, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
@@ -2306,7 +2390,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DSPCSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_HSW, dpy_plane_mmio_read,
 							dspsurf_mmio_write},
 {_REG_DSPCSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_HSW, dpy_plane_mmio_read,
-							dspsurflive_mmio_write},
+							surflive_mmio_write},
 {_REG_DSPCLINOFF, 4, F_DPY, 0, D_HSW, dpy_plane_mmio_read,
 							dpy_plane_mmio_write},
 {_REG_DSPCSTRIDE, 4, F_DPY, 0, D_HSW, dpy_plane_mmio_read,
@@ -2873,10 +2957,20 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_TRANS_MSA_MISC_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_TRANS_MSA_MISC_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
+{_REG_SPRASURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_HSW,
+			dpy_plane_mmio_read, spr_surf_mmio_write},
+{_REG_SPRASURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_HSW,
+			dpy_plane_mmio_read, surflive_mmio_write},
 
-{0x7029C, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{0x7129C, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{0x7229c, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SPRBSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_HSW,
+			dpy_plane_mmio_read, spr_surf_mmio_write},
+{_REG_SPRBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_HSW,
+			dpy_plane_mmio_read, surflive_mmio_write},
+
+{_REG_SPRCSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_HSW,
+			dpy_plane_mmio_read, spr_surf_mmio_write},
+{_REG_SPRCSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_HSW,
+			dpy_plane_mmio_read, surflive_mmio_write},
 
 {_REG_SPRA_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_SPRA_SCALE, 4, F_DPY, 0, D_HSW, NULL, NULL},
