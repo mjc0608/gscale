@@ -129,7 +129,6 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 
 	pdev = next_vgt->pdev;
 	if (current_foreground_vm(pdev) == next_vgt) {
-		ret = -EINVAL;
 		goto out;
 	}
 
