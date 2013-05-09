@@ -44,6 +44,7 @@ struct vgt_primary_plane_format {
 	u8	enabled;	/* plane is enabled */
 	u8	tiled;		/* X-tiled */
 	u8	bpp;		/* bits per pixel */
+	u32	hw_format;	/* format field in the PRI_CTL register */
 	u32	drm_format;	/* format in DRM definition */
 	u32	base;		/* framebuffer base in graphics memory */
 	u32	x_offset;	/* in pixels */
@@ -52,16 +53,33 @@ struct vgt_primary_plane_format {
 	u32	height;		/* in lines */
 };
 
-/* to be defined */
-struct vgt_sprite_plane_format{
-	u8	enabled;
-	u32	padding[6];
+struct vgt_sprite_plane_format {
+	u8	enabled;	/* plane is enabled */
+	u8	tiled;		/* X-tiled */
+	u8	bpp;		/* bits per pixel */
+	u32	hw_format;	/* format field in the SPR_CTL register */
+	u32	drm_format;	/* format in DRM definition */
+	u32	base;		/* sprite base in graphics memory */
+	u32	x_pos;		/* in pixels */
+	u32	y_pos;		/* in lines */
+	u32	x_offset;	/* in pixels */
+	u32	y_offset;	/* in lines */
+	u32	width;		/* in pixels */
+	u32	height;		/* in lines */
 };
 
-/* to be defined */
-struct vgt_cursor_plane_format{
+struct vgt_cursor_plane_format {
 	u8	enabled;
-	u32	padding[6];
+	u8	mode;		/* cursor mode select */
+	u8	bpp;		/* bits per pixel */
+	u32	drm_format;	/* format in DRM definition */
+	u32	base;		/* cursor base in graphics memory */
+	u32	x_pos;		/* in pixels */
+	u32	y_pos ;		/* in lines */
+	u8	x_sign;		/* X Position Sign */
+	u8	y_sign;		/* Y Position Sign */
+	u32	width;		/* in pixels */
+	u32	height;		/* in lines */
 };
 
 struct vgt_pipe_format{
