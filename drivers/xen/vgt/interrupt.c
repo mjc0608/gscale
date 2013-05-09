@@ -45,9 +45,7 @@
 #include <linux/bitops.h>
 #include <linux/slab.h>
 #include <linux/list.h>
-#include <linux/pci.h>
 #include <xen/events.h>
-#include <xen/vgt.h>
 #include <xen/interface/vcpu.h>
 #include <xen/interface/hvm/hvm_op.h>
 #include "vgt.h"

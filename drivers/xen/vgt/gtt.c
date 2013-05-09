@@ -40,14 +40,11 @@
  */
 
 #include <linux/highmem.h>
-#include <linux/pci.h>
 
 #include <xen/page.h>
 #include <xen/events.h>
 #include <xen/xen-ops.h>
 #include <xen/interface/hvm/hvm_op.h>
-
-#include <xen/vgt.h>
 
 #include "vgt.h"
 

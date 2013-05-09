@@ -39,10 +39,6 @@
  * SOFTWARE.
  */
 
-#include <linux/pci.h>
-
-#include <xen/vgt.h>
-
 #include "vgt.h"
 
 /*

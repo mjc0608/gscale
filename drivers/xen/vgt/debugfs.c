@@ -24,7 +24,6 @@
 #include <linux/pci.h>
 #include <linux/debugfs.h>
 
-#include <xen/vgt.h>
 #include "vgt.h"
 
 /* Maximum lenth of stringlized integer is 10 */

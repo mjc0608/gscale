@@ -41,13 +41,10 @@
 
 #include <linux/module.h>
 #include <linux/kthread.h>
-#include <linux/pci.h>
 #include <asm/xen/hypercall.h>
 #include <xen/interface/vcpu.h>
-#include <xen/vgt.h>
 
 #include "vgt.h"
-#include "devtable.h"
 
 MODULE_AUTHOR("Intel Corporation");
 MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");

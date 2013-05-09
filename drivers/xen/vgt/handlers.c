@@ -43,7 +43,6 @@
 #include <linux/acpi.h>
 
 #include <xen/interface/hvm/hvm_op.h>
-#include <xen/vgt.h>
 
 #include "vgt.h"
 

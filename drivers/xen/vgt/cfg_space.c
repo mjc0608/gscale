@@ -41,7 +41,6 @@
 
 #include <asm/xen/hypercall.h>
 
-#include <xen/vgt.h>
 #include "vgt.h"
 
 typedef union _SCI_REG_DATA{

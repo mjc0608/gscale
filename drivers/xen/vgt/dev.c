@@ -23,7 +23,6 @@
 #include <linux/device.h>
 #include <linux/mm.h>
 #include <linux/fs.h>
-#include <xen/vgt.h>
 #include "vgt.h"
 
 static int vgt_mmio_dev_pgfault(struct vm_area_struct *vma, struct vm_fault *vmf)

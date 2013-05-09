@@ -40,11 +40,9 @@
  */
 
 #include <linux/acpi.h>
-#include <linux/pci.h>
 
 #include <xen/events.h>
 #include <xen/xen-ops.h>
-#include <xen/vgt.h>
 
 #include "vgt.h"
 

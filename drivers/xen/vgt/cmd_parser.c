@@ -40,9 +40,8 @@
  */
 
 #include <linux/slab.h>
-#include <xen/vgt.h>
-#include <xen/vgt_cmd_parser.h>
 #include "vgt.h"
+#include <xen/vgt_cmd_parser.h>
 
 /*
  * new cmd parser

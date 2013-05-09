@@ -42,8 +42,6 @@
 #include <linux/module.h>
 #include <linux/kthread.h>
 #include <linux/delay.h>
-#include <xen/vgt.h>
-#include "devtable.h"
 #include "vgt.h"
 
 /*

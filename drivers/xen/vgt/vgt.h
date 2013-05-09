@@ -49,14 +49,17 @@
 #include <linux/semaphore.h>
 #include <linux/cdev.h>
 #include <linux/hashtable.h>
+#include <linux/pci.h>
 
 #include <xen/interface/hvm/ioreq.h>
 #include <xen/interface/platform.h>
 #include <xen/vgt-if.h>
+#include <xen/vgt.h>
 
 #include "edid.h"
 #include "reg.h"
 #include "ringbuffer.h"
+#include "devtable.h"
 
 struct pgt_device;
 extern struct vgt_device *dom0_vgt;

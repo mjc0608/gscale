@@ -40,8 +40,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/pci.h>
-#include <xen/vgt.h>
 #include "vgt.h"
 #include <xen/fb_decoder.h>
 #include <uapi/drm/drm_fourcc.h>

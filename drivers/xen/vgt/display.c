@@ -43,7 +43,6 @@
 
 #include <linux/slab.h>
 #include <linux/delay.h>
-#include <xen/vgt.h>
 #include "vgt.h"
 
 #define vgt_restore_sreg(reg)	\

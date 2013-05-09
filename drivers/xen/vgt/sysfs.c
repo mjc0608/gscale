@@ -18,7 +18,6 @@
  */
 
 #include <linux/slab.h>
-#include <xen/vgt.h>
 #include <asm/xen/x86_emulate.h> /* only for X86EMUL_OKAY */
 #include "vgt.h"
 

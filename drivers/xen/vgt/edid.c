@@ -41,11 +41,7 @@
 
 #include <linux/slab.h>
 
-#include <xen/vgt.h>
-
-#include "reg.h"
 #include "vgt.h"
-#include "edid.h"
 
 #define DEBUG_VGT_EDID
 

@@ -40,7 +40,6 @@
  */
 
 #include <linux/highmem.h>
-#include <xen/vgt.h>
 #include "vgt.h"
 
 /*

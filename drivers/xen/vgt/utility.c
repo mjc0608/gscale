@@ -41,15 +41,11 @@
 
 #include <linux/module.h>
 
-#include <linux/pci.h>
 #include <linux/delay.h>
 
+#include "vgt.h"
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
-
-#include <xen/vgt.h>
-
-#include "vgt.h"
 
 /*
  * Print debug registers for CP

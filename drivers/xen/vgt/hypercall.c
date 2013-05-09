@@ -17,12 +17,9 @@
  * Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include <linux/pci.h>
-
 #include <asm/xen/hypercall.h>
 #include <asm/xen/page.h>
 
-#include <xen/vgt.h>
 #include <xen/xen-ops.h>
 #include <xen/interface/memory.h>
 #include <xen/interface/hvm/params.h>

@@ -39,8 +39,6 @@
  * SOFTWARE.
  */
 
-#include <linux/pci.h>
-#include <xen/vgt.h>
 #include "vgt.h"
 
 /* Lets move context scheduler specific parameters here */
