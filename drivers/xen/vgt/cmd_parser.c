@@ -416,6 +416,135 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
 	return rc;
 }
 
+/* TODO
+ *
+ * The mi_display_flip handler below is just a workaround. The completed
+ * handling is under discussion. The current approach is to NOOP the
+ * MI_DISPLAY_FLIP command and then do pre-emulation. The pre-emulation
+ * cannot exactly emulate command's behavior since it happens before
+ * the command is issued. It is not possible to take the inter-command
+ * dependence into account.
+ *
+ * The interrupt is another consideration. mi_display_flip can trigger
+ * interrupt for completion. VM's gfx driver may rely on that. Whether
+ * we should inject virtual interrupt and when is the right time.
+ */
+#define PLANE_SELECT_OFFSET	19
+#define PLANE_SELECT_SIZE	3
+#define SURF_MASK		0xFFFFF000
+#define STRIDE_MASK		0x0000FFC0
+#define TILE_PARA_OFFSET	0x0
+#define TILE_PARA_MASK		0x1
+#define CTRL_TILE_OFFSET	10
+#define CTRL_TILE_MASK		0x00000400
+#define FLIP_TYPE_MASK		0x3
+
+static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
+{
+	uint32_t surf_reg, stride_reg, ctrl_reg, surf_val, stride_val;
+	uint32_t tile_para, tile_in_ctrl;
+	uint32_t opcode, plane;
+	bool async_flip;
+	int i, length = cmd_length(s);
+
+	if (s->vgt == current_foreground_vm(s->vgt->pdev)) {
+		return 0;
+	}
+
+	opcode = *(cmd_ptr(s, 0));
+	stride_val = *(cmd_ptr(s, 1));
+	surf_val = *(cmd_ptr(s, 2));
+
+	plane = (opcode >> PLANE_SELECT_OFFSET) &
+			((1U << PLANE_SELECT_SIZE) - 1);
+
+	switch (plane) {
+		case 0:
+			ctrl_reg = _REG_DSPACNTR;
+			surf_reg = _REG_DSPASURF;
+			stride_reg = _REG_DSPASTRIDE;
+			break;
+		case 1:
+			ctrl_reg = _REG_DSPBCNTR;
+			surf_reg = _REG_DSPBSURF;
+			stride_reg = _REG_DSPBSTRIDE;
+			break;
+		case 2:
+			ctrl_reg = _REG_SPRA_CTL;
+			stride_reg = _REG_SPRA_STRIDE;
+			surf_reg = _REG_SPRASURF;
+			break;
+		case 3:
+			ctrl_reg = _REG_SPRB_CTL;
+			stride_reg = _REG_SPRB_STRIDE;
+			surf_reg = _REG_SPRBSURF;
+			break;
+		case 4:
+			ctrl_reg = _REG_DSPCCNTR;
+			surf_reg = _REG_DSPCSURF;
+			stride_reg = _REG_DSPCSTRIDE;
+			break;
+		case 5:
+			ctrl_reg = _REG_SPRC_CTL;
+			surf_reg = _REG_SPRCSURF;
+			stride_reg = _REG_SPRC_STRIDE;
+			break;
+		default:
+			goto wrong_command;
+	}
+
+	if (length < 3)
+		goto wrong_command;
+
+	async_flip = ((surf_val & FLIP_TYPE_MASK) == 0x1);
+	tile_para = ((stride_val & TILE_PARA_MASK) >> TILE_PARA_OFFSET);
+	tile_in_ctrl = (__vreg(s->vgt, ctrl_reg) & CTRL_TILE_MASK)
+				>> CTRL_TILE_OFFSET;
+
+	if ((__vreg(s->vgt, stride_reg) & STRIDE_MASK)
+		!= (stride_val & STRIDE_MASK)) {
+
+		if (async_flip) {
+			vgt_warn("Cannot change stride in async flip!\n");
+			goto wrong_command;
+		}
+		__vreg(s->vgt, stride_reg) = (__vreg(s->vgt, stride_reg) &
+							(~STRIDE_MASK)) |
+					(stride_val & STRIDE_MASK);
+		__sreg(s->vgt, stride_reg) = __vreg(s->vgt, stride_reg);
+	}
+
+	if (tile_para != tile_in_ctrl) {
+
+		if (async_flip) {
+			vgt_warn("Cannot change tiling in async flip!\n");
+			goto wrong_command;
+		}
+		__vreg(s->vgt, ctrl_reg) =
+			(__vreg(s->vgt, ctrl_reg) & (~CTRL_TILE_MASK)) |
+					(tile_para << CTRL_TILE_OFFSET);
+		__sreg(s->vgt, ctrl_reg) = __vreg(s->vgt, ctrl_reg);
+	}
+
+	__vreg(s->vgt, surf_reg) = (__vreg(s->vgt, surf_reg) & (~SURF_MASK)) |
+					(surf_val & SURF_MASK);
+	__sreg(s->vgt, surf_reg) = __vreg(s->vgt, surf_reg);
+
+command_noop:
+	vgt_warn("VM %d: mi_display_flip to be ignored\n",
+		s->vgt->vm_id);
+
+	for (i = 0; i < length; i ++) {
+		*(cmd_ptr(s, i)) = 0;
+	}
+
+	return 0;
+
+wrong_command:
+	vgt_warn("VM %d: wrong mi_display_flip command!\n", s->vgt->vm_id);
+	goto command_noop;
+}
+
 #define USE_GLOBAL_GTT_MASK (1U << 22)
 static int vgt_cmd_handler_mi_update_gtt(struct parser_exec_state *s)
 {
@@ -718,7 +847,7 @@ static struct cmd_info cmd_info[] = {
 	{"MI_RS_CONTEXT", OP_MI_RS_CONTEXT, F_LEN_CONST, R_RCS, D_HSW_PLUS, 0, 1, NULL},
 
 	{"MI_DISPLAY_FLIP", OP_MI_DISPLAY_FLIP, F_LEN_VAR, R_ALL, D_ALL,
-		ADDR_FIX_1(2), 8, NULL},
+		ADDR_FIX_1(2), 8, vgt_cmd_handler_mi_display_flip},
 
 	{"MI_SEMAPHORE_MBOX", OP_MI_SEMAPHORE_MBOX, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL },
 
