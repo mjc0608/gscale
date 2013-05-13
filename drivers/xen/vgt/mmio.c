@@ -802,8 +802,8 @@ static void vgt_set_reg_attr(struct pgt_device *pdev,
 	}
 
 	reg_set_owner(pdev, reg, attr->flags & VGT_REG_OWNER);
-	if (attr->flags & VGT_REG_WORKAROUND)
-		reg_set_workaround(pdev, reg);
+	if (attr->flags & VGT_REG_PASSTHROUGH)
+		reg_set_passthrough(pdev, reg);
 	if (attr->flags & VGT_REG_ADDR_FIX ) {
 		if (!attr->addr_mask)
 			printk("vGT: ZERO addr fix mask for %x\n", reg);

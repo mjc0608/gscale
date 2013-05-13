@@ -1459,7 +1459,7 @@ static bool vga_control_w (struct vgt_device *vgt, unsigned int offset,
 	default_mmio_write(vgt, offset, p_data, bytes);
 
 	/* no notification at dom0 boot time */
-	if (pdev->boot_time)
+	if (vgt_ops->boot_time)
 		return true;
 
 	if ( __vreg(vgt, offset) & _REGBIT_VGA_DISPLAY_DISABLE ) {
@@ -1551,8 +1551,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_CCID, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {0x12198, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 
-{_REG_CXT_SIZE, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_GEN7_CXT_SIZE, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_CXT_SIZE, 4, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_GEN7_CXT_SIZE, 4, F_PT, 0, D_ALL, NULL, NULL},
 
 {_REG_RCS_FBC_RT_BASE_ADDR, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_RCS_TAIL, 4, F_RDR, 0, D_ALL, ring_mmio_read, ring_mmio_write},
@@ -1622,7 +1622,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_SDEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
 {_REG_SDEISR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
-{_REG_DE_RRMR, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_DE_RRMR, 4, F_PT, 0, D_ALL, NULL, NULL},
 
 {_REG_PIPEADSL, 4, F_DPY, 0, D_ALL, pipe_dsl_mmio_read, NULL},
 {_REG_PIPEACONF, 4, F_DPY, 0, D_ALL, NULL, pipe_conf_mmio_write},
@@ -2018,7 +2018,7 @@ reg_attr_t vgt_base_reg_info[] = {
 	/* -------non-audited regs--------- */
 	/*
 	 * below registers require next step audit:
-	 *   - some are workaround registers which we allow
+	 *   - some are passthrough registers which we allow
 	 *	 for pReg access from any VM
 	 *   - some are marked as virtualized for now, if they
 	 *	 don't fall into coarse-grained ranges, to avoid
@@ -2033,9 +2033,9 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DISP_ARB_CTL, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_DISP_ARB_CTL2, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
-{0x2050, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x12050, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x22050, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x2050, 4, F_PT, 0, D_ALL, NULL, NULL},
+{0x12050, 4, F_PT, 0, D_ALL, NULL, NULL},
+{0x22050, 4, F_PT, 0, D_ALL, NULL, NULL},
 
 {_REG_DISPLAY_CHICKEN_BITS_1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_DISPLAY_CHICKEN_BITS_2, 4, F_DPY, 0, D_ALL, NULL, NULL},
@@ -2054,23 +2054,23 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_UCG_CTL2, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 
 {0x860, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_RC_PWRCTX_MAXCNT, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_3D_CHICKEN1, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_3D_CHICKEN2, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_3D_CHICKEN3, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x20d4, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x2088, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x20e4, 4, F_WA, 0, D_GEN7PLUS, NULL, NULL},
+{_REG_RC_PWRCTX_MAXCNT, 4, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_3D_CHICKEN1, 4, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_3D_CHICKEN2, 4, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_3D_CHICKEN3, 4, F_PT, 0, D_ALL, NULL, NULL},
+{0x20d4, 4, F_PT, 0, D_ALL, NULL, NULL},
+{0x2088, 4, F_PT, 0, D_ALL, NULL, NULL},
+{0x20e4, 4, F_PT, 0, D_GEN7PLUS, NULL, NULL},
 /* no definition on this. from Linux */
-{_REG_GEN3_MI_ARB_STATE, 4, F_WA, 0, D_SNB, NULL, NULL},
-{_REG_RCS_ECOSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x121d0, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_BCS_ECOSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
+{_REG_GEN3_MI_ARB_STATE, 4, F_PT, 0, D_SNB, NULL, NULL},
+{_REG_RCS_ECOSKPD, 4, F_PT, 0, D_ALL, NULL, NULL},
+{0x121d0, 4, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_BCS_ECOSKPD, 4, F_PT, 0, D_ALL, NULL, NULL},
 {0x41d0, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{0x22ac, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_VFSKPD, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x2700, 4, F_WA, 0, D_SNB, NULL, NULL},
-{_REG_ECOCHK, 4, F_WA, 0, D_ALL, NULL, NULL},
+{0x22ac, 4, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_VFSKPD, 4, F_PT, 0, D_ALL, NULL, NULL},
+{0x2700, 4, F_PT, 0, D_SNB, NULL, NULL},
+{_REG_ECOCHK, 4, F_PT, 0, D_ALL, NULL, NULL},
 {_REG_GAC_ECOCHK, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_2D_CG_DIS, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_3D_CG_DIS, 4, F_VIRT, 0, D_ALL, NULL, NULL},
@@ -2170,46 +2170,46 @@ reg_attr_t vgt_base_reg_info[] = {
 {0xfd018, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0xfd024, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0xfd034, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_GTDRIVER_MAILBOX_INTERFACE, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_GTDRIVER_MAILBOX_DATA0, 4, F_WA, 0, D_ALL, NULL, NULL},
-{0x13812c, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_GTT_FAULT_STATUS, 4, F_WA, 0, D_ALL, err_int_r, err_int_w},
+{_REG_GTDRIVER_MAILBOX_INTERFACE, 4, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_GTDRIVER_MAILBOX_DATA0, 4, F_PT, 0, D_ALL, NULL, NULL},
+{0x13812c, 4, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_GTT_FAULT_STATUS, 4, F_PT, 0, D_ALL, err_int_r, err_int_w},
 /* HSW */
-{0x120010, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x9008, 4, F_WA, 0, D_HSW, NULL, NULL},
+{0x120010, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x9008, 4, F_PT, 0, D_HSW, NULL, NULL},
 {_REG_DP_A_HOTPLUG_CNTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_VECS_TAIL, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_VECS_HEAD, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_VECS_START, 4, F_WA, 0xFFFFF000, D_HSW, NULL, NULL},
-{_REG_VECS_CTL, 4, F_WA, 0, D_HSW, NULL, NULL},//for TLB
-{_REG_GFX_FLSH_CNT, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_GEN7_COMMON_SLICE_CHICKEN1, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_GEN7_L3CNTLREG1, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_GEN7_L3_CHICKEN_MODE_REGISTER, 4, F_WA, 0, D_HSW, NULL, NULL},
-{_REG_GEN7_SQ_CHICKEN_MBCUNIT_CONFIG, 4, F_WA, 0, D_HSW, NULL, NULL},
+{_REG_VECS_TAIL, 4, F_PT, 0, D_HSW, NULL, NULL},
+{_REG_VECS_HEAD, 4, F_PT, 0, D_HSW, NULL, NULL},
+{_REG_VECS_START, 4, F_PT, 0xFFFFF000, D_HSW, NULL, NULL},
+{_REG_VECS_CTL, 4, F_PT, 0, D_HSW, NULL, NULL},//for TLB
+{_REG_GFX_FLSH_CNT, 4, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_GEN7_COMMON_SLICE_CHICKEN1, 4, F_PT, 0, D_HSW, NULL, NULL},
+{_REG_GEN7_L3CNTLREG1, 4, F_PT, 0, D_HSW, NULL, NULL},
+{_REG_GEN7_L3_CHICKEN_MODE_REGISTER, 4, F_PT, 0, D_HSW, NULL, NULL},
+{_REG_GEN7_SQ_CHICKEN_MBCUNIT_CONFIG, 4, F_PT, 0, D_HSW, NULL, NULL},
 {_REG_WM_DBG, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
-{0x2020, 4, F_WA, 0, D_ALL, NULL, NULL},
-{_REG_IER, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x20e8, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x2214, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x2358, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x8000, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x8008, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0xb008, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0xb208, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x1a028, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x1a048, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x1a09c, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x1a0a8, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x1a0c0, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x1a134, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x320f0, 8, F_WA, 0, D_HSW, NULL, NULL},
-{0x320fc, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x32230, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x44084, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x4408c, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x45260, 4, F_WA, 0, D_HSW, NULL, NULL},
+{0x2020, 4, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_IER, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x20e8, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x2214, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x2358, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x8000, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x8008, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0xb008, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0xb208, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x1a028, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x1a048, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x1a09c, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x1a0a8, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x1a0c0, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x1a134, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x320f0, 8, F_PT, 0, D_HSW, NULL, NULL},
+{0x320fc, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x32230, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x44084, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x4408c, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x45260, 4, F_PT, 0, D_HSW, NULL, NULL},
 {_REG_PIPE_WM_LINETIME_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_PIPE_WM_LINETIME_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_PIPE_WM_LINETIME_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
@@ -2246,8 +2246,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_SBI_CTL_STAT, 4, F_DPY, 0, D_HSW, NULL, sbi_mmio_write},
 {_REG_PIXCLK_GATE, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {0xF200C, 4, F_DPY, 0, D_SNB, NULL, NULL},
-{0x1082c0, 4, F_WA, 0, D_HSW, NULL, NULL},
-{0x13005c, 4, F_WA, 0, D_HSW, NULL, NULL},
+{0x1082c0, 4, F_PT, 0, D_HSW, NULL, NULL},
+{0x13005c, 4, F_PT, 0, D_HSW, NULL, NULL},
 
 {_REG_DPA_AUX_CH_CTL, 8, F_DPY, 0, D_HSW, dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
 

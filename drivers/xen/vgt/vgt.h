@@ -611,7 +611,7 @@ enum vgt_owner_type {
  * regs marked with this flag should be cleared before final
  * release, since this way is unsafe.
  */
-#define VGT_REG_WORKAROUND	(1 << 4)
+#define VGT_REG_PASSTHROUGH	(1 << 4)
 /* reg contains address, requiring fix */
 #define VGT_REG_ADDR_FIX	(1 << 5)
 /* Status bit updated from HW */
@@ -859,7 +859,7 @@ extern void do_vgt_fast_display_switch(struct vgt_device *pdev);
 #define reg_hw_status(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_STATUS)
 #define reg_virt(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_VIRT)
 #define reg_mode_ctl(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_MODE_CTL)
-#define reg_workaround(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_WORKAROUND)
+#define reg_passthrough(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_PASSTHROUGH)
 #define reg_need_switch(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_NEED_SWITCH)
 #define reg_is_tracked(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_TRACKED)
 #define reg_is_accessed(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ACCESSED)
@@ -929,11 +929,11 @@ static inline void reg_set_owner(struct pgt_device *pdev,
 	pdev->reg_info[REG_INDEX(reg)] |= type & VGT_REG_OWNER;
 }
 
-static inline void reg_set_workaround(struct pgt_device *pdev,
+static inline void reg_set_passthrough(struct pgt_device *pdev,
 	vgt_reg_t reg)
 {
 	ASSERT_NUM(!reg_is_tracked(pdev, reg), reg);
-	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_WORKAROUND;
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_PASSTHROUGH;
 }
 
 static inline void reg_set_tracked(struct pgt_device *pdev,
@@ -994,7 +994,7 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 		return true;
 
 	/* allows access from any VM. dangerous!!! */
-	if (reg_workaround(pdev, reg))
+	if (reg_passthrough(pdev, reg))
 		return true;
 
 	/* normal phase of passthrough registers if vgt is the owner */
@@ -1084,12 +1084,12 @@ static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *at
 #define F_DPY_HWSTS_ADRFIX	F_DPY_ADRFIX | VGT_REG_HW_STATUS
 
 /*
- * workaround reg
+ * passthrough reg (DANGEROUS!)
  *	- any VM directly access pReg
  *	- no save/restore
  *	- dangerous as a workaround only
  */
-#define F_WA			VGT_OT_NONE | VGT_REG_WORKAROUND
+#define F_PT			VGT_OT_NONE | VGT_REG_PASSTHROUGH
 
 extern int vgt_ctx_switch;
 extern bool vgt_validate_ctx_switch;

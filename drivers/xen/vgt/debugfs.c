@@ -243,8 +243,8 @@ static inline char *reg_show_reg_type(struct pgt_device *pdev, int i)
 {
 	if (reg_get_owner(pdev, i) != VGT_OT_NONE)
 		return "MPT";
-	else if (reg_workaround(pdev, i))
-		return "WA";
+	else if (reg_passthrough(pdev, i))
+		return "PT";
 	else if (reg_virt(pdev, i))
 		return "Virt";
 	else
@@ -260,7 +260,7 @@ static int vgt_show_regs(struct seq_file *m, void *data)
 	seq_printf(m, "------------------------------------------\n");
 	seq_printf(m, "MGMT - Management context\n");
 	seq_printf(m, "MPT - Mediated Pass-Through based on owner type\n");
-	seq_printf(m, "WA - workaround regs with special risk\n");
+	seq_printf(m, "PT - passthrough regs with special risk\n");
 	seq_printf(m, "%8s: %8s (%-8s %-4s)\n",
 			"Reg", "Flags", "Owner", "Type");
 	for (i = 0; i < pdev->mmio_size; i +=  REG_SIZE) {
