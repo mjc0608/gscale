@@ -39,6 +39,7 @@
  * SOFTWARE.
  */
 
+#include <linux/delay.h>
 #include <linux/slab.h>
 
 #include "vgt.h"
@@ -101,6 +102,514 @@ static int vgt_edid_log_level = 2;
 	EDID_MSG(log, 0x12345678, fmt, ##args)
 
 #endif /* DEBUG_VGT_EDID */
+
+#define EDID_REPEAT_UNTIL(cond, repeat_num, interval, time_out)		\
+do {									\
+	int i;								\
+	time_out = 1;							\
+	for(i = 0; i < (repeat_num); ++ i) {				\
+		if(cond) {						\
+			time_out = 0;					\
+			break;						\
+		} else {						\
+			msleep(interval);				\
+		}							\
+	}								\
+} while(0);
+
+
+/**************************************************************************
+ *
+ * Physical EDID management
+ *
+ *************************************************************************/
+int vgt_get_phys_edid_from_gmbus(struct pgt_device *pdev,
+		char *buf, u8 slave_addr,
+		u8 nr_bytes, u8 gmbus_port)
+{
+
+	int length;
+	int val;
+	int timeout;
+
+	ASSERT(nr_bytes < _GMBUS_TRANS_MAX_BYTES);
+
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, gmbus_port);
+	// write addr and offset
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS3, 0);
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1,
+			_GMBUS_SW_RDY |
+			_GMBUS_CYCLE_WAIT |
+			(1 << _GMBUS_BYTE_COUNT_SHIFT) |
+			(EDID_ADDR << _GMBUS_SLAVE_ADDR_SHIFT) |
+			_GMBUS_SLAVE_WRITE);
+	(void)VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
+
+	EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+				& (_GMBUS_NAK | _GMBUS_HW_WAIT)), 5, 10, timeout);
+
+	if (timeout || (val & _GMBUS_NAK)) {
+		VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
+		VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
+		return -EIO;
+	}
+
+	/* start read */
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1,
+			_GMBUS_SW_RDY |
+			_GMBUS_CYCLE_STOP | _GMBUS_CYCLE_WAIT |
+			(nr_bytes << _GMBUS_BYTE_COUNT_SHIFT) |
+			(slave_addr << _GMBUS_SLAVE_ADDR_SHIFT) |
+			_GMBUS_SLAVE_READ);
+	(void)VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2);
+
+	length = 0;
+	do {
+		int j = 0;
+		EDID_REPEAT_UNTIL(((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+					& (_GMBUS_NAK | _GMBUS_HW_RDY)), 5, 10, timeout);
+		if (timeout || (val & _GMBUS_NAK)) {
+			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, _GMBUS_SW_CLR_INT);
+			VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS1, 0);
+			return -EIO;
+			break;
+		}
+
+		val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS3);
+		for (j = 0; j < 4; ++ j) {
+			buf[length] = (val) & 0xff;
+			length ++;
+			val >>= 8;
+		}
+	} while (length < nr_bytes);
+
+	/* finish reading. Check the hw state and disable gmbus. */
+	EDID_REPEAT_UNTIL((((val = VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2))
+					& _GMBUS_ACTIVE) == 0), 5, 10, timeout);
+	if (timeout) {
+		printk("vGT: timeout while waiting for gmbus to be inactive. Will force close.\n");
+		return -EIO;
+	}
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
+
+	return 0;
+
+}
+
+/* vgt_aux_ch_transaction()
+ *
+ * msg_size will not be larger than 4.
+ */
+static unsigned int vgt_aux_ch_transaction(struct pgt_device *pdev,
+				unsigned int aux_ctrl_addr,
+				unsigned int msg, int msg_size)
+{
+	/* TODO: DATA from the i915 driver. Need more handling.
+	 */
+	int aux_clock_divider = 62;
+	int precharge = 3;		//GEN6
+	unsigned int status;
+
+	while (VGT_MMIO_READ(pdev, aux_ctrl_addr) &
+				_REGBIT_DP_AUX_CH_CTL_SEND_BUSY);
+
+	VGT_MMIO_WRITE(pdev, aux_ctrl_addr + 4, msg);
+	VGT_MMIO_WRITE(pdev, aux_ctrl_addr,
+				_REGBIT_DP_AUX_CH_CTL_SEND_BUSY	|
+				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_400us |
+				msg_size << _DP_AUX_CH_CTL_MESSAGE_SIZE_SHIFT |
+				precharge << _DP_AUX_CH_CTL_PRECHARGE_2US_SHIFT	|
+				aux_clock_divider << _DP_AUX_CH_CTL_BIT_CLOCK_2X_SHIFT |
+				_REGBIT_DP_AUX_CH_CTL_DONE |
+				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR |
+				_REGBIT_DP_AUX_CH_CTL_RECV_ERR);
+
+	while((status = VGT_MMIO_READ(pdev, aux_ctrl_addr)) &
+		_REGBIT_DP_AUX_CH_CTL_SEND_BUSY);
+
+	VGT_MMIO_WRITE(pdev, aux_ctrl_addr,
+				status |
+				_REGBIT_DP_AUX_CH_CTL_DONE |
+				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR |
+				_REGBIT_DP_AUX_CH_CTL_RECV_ERR);
+
+	return VGT_MMIO_READ(pdev, aux_ctrl_addr + 4);
+}
+
+
+void vgt_probe_edid(struct pgt_device *pdev, int index)
+{
+	int i, ret;
+
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
+
+	for (i = 0; i < EDID_MAX; ++ i) {
+		int gmbus_port = 0;
+		unsigned int aux_ch_addr = 0;
+		vgt_edid_data_t **pedid = &(pdev->pdev_edids[i]);
+
+		if ((i != index) && (index != -1)) {
+			continue;
+		}
+		switch (i) {
+		case EDID_VGA:
+			vgt_info("EDID_PROBE: VGA.\n");
+			gmbus_port = 2;
+			break;
+		case EDID_LVDS:
+			vgt_info("EDID_PROBE: LVDS.\n");
+			gmbus_port = 3;
+			break;
+		case EDID_HDMIC:
+			vgt_info("EDID_PROBE: HDMI C.\n");
+			gmbus_port = 4;
+			break;
+		case EDID_HDMIB:
+			vgt_info("EDID_PROBE: HDMI B.\n");
+			// no gmbus corresponding interface. Do not handle it.
+			break;
+		case EDID_HDMID:
+			vgt_info("EDID_PROBE: HDMI D.\n");
+			gmbus_port = 6;
+			break;
+		case EDID_DPB:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPB_AUX_CH_CTL) | _DP_DETECTED) {
+				vgt_info("EDID_PROBE: DP B Detected.\n");
+				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
+			} else {
+				vgt_info("EDID_PROBE: DP B is not detected.\n");
+			}
+			break;
+		case EDID_DPC:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPC_AUX_CH_CTL) | _DP_DETECTED) {
+				vgt_info("EDID_PROBE: DP C Detected.\n");
+				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
+			} else {
+				vgt_info("EDID_PROBE: DP C is not detected.\n");
+			}
+			break;
+		case EDID_DPD:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPD_AUX_CH_CTL) | _DP_DETECTED) {
+				vgt_info("EDID_PROBE: DP D Detected.\n");
+				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
+			} else {
+				vgt_info("EDID_PROBE: DP D is not detected.\n");
+			}
+			break;
+		default:
+			vgt_info("EDID_PROBE: Others?\n");
+			break;
+		}
+
+		if (gmbus_port || aux_ch_addr) {
+			if (!*pedid) {
+				/* Do not use GFP_KERNEL in any interrupt or
+				 * atomic context (e.g. Do not hold a spin_lock
+				 * ,this should be guaranteed by the caller).
+				 */
+				BUG_ON(in_interrupt());
+				*pedid = kmalloc(sizeof(vgt_edid_data_t), GFP_KERNEL);
+
+				if (*pedid == NULL) {
+					vgt_err("ERROR: Insufficient memory in %s\n",
+							__FUNCTION__);
+					BUG();
+				}
+			}
+		} else {
+			if (*pedid) {
+				vgt_info("EDID_PROBE: Free edid memory.\n");
+				kfree(*pedid);
+				*pedid = NULL;
+			}
+		}
+
+		if (gmbus_port) {
+			ret = vgt_get_phys_edid_from_gmbus(pdev,
+					(*pedid)->edid_block, EDID_ADDR,
+					EDID_SIZE, gmbus_port);
+			if (ret) {
+				vgt_warn("Failed to probe EDID from pin(%d)\n",
+						gmbus_port);
+				kfree(*pedid);
+				*pedid = NULL;
+				continue;
+			}
+			/* Check the extension */
+			if ((*pedid)->edid_block[0x7e]) {
+				/* Disable the extension whilst
+				 * keep the checksum
+				 */
+				u8 *block = (*pedid)->edid_block;
+				block[0x7f] += block[0x7e];
+				block[0x7e] = 0;
+			}
+		}
+
+		if (aux_ch_addr) {
+			unsigned int msg;
+			unsigned int value;
+			int length;
+
+			msg = ((VGT_AUX_I2C_MOT << 4) << 24) |
+				(0 << 16) |
+				(EDID_ADDR << 8) |
+				0;
+			/* start */
+			vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 3);
+
+			/* read */
+			msg = (((VGT_AUX_I2C_MOT | VGT_AUX_I2C_READ) << 4) << 24) |
+				(0 << 16) |
+				(EDID_ADDR << 8) |
+				0;
+
+			for (length = 0; length < EDID_SIZE; length ++) {
+				value = vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 4);
+				(*pedid)->edid_block[length] = ((value) & 0xff0000) >> 16;
+			}
+		}
+
+		if (*pedid) {
+			int i;
+			unsigned char *block = (*pedid)->edid_block;
+					vgt_info("EDID_PROBE: EDID is:\n");
+					for (i = 0; i < EDID_SIZE; ++ i) {
+							if ((block[i] >= 'a' && block[i] <= 'z') ||
+								(block[i] >= 'A' && block[i] <= 'Z')) {
+									printk ("%c ", block[i]);
+							} else {
+									printk ("0x%x ", block[i]);
+							}
+							if (((i + 1) & 0xf) == 0) {
+									printk ("\n");
+							}
+					}
+		}
+	}
+}
+
+/*
+ * Get physical DPCD data from DP. DP is specified by index parameter.
+ */
+void vgt_probe_dpcd(struct pgt_device *pdev, int index)
+{
+	int i;
+
+	for (i = 0; i < DPCD_MAX; i++) {
+		unsigned int aux_ch_addr = 0;
+		struct vgt_dpcd_data **dpcd = &(pdev->pdev_dpcds[i]);
+
+		if ((i != index) && (index != -1))
+			continue;
+
+		switch (i) {
+		case DPCD_DPB:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPB_AUX_CH_CTL) | _DP_DETECTED) {
+				vgt_info("DPCD_PROBE: DP B Detected.\n");
+				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
+			} else {
+				vgt_info("DPCD_PROBE: DP B is not detected.\n");
+			}
+			break;
+		case DPCD_DPC:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPC_AUX_CH_CTL) | _DP_DETECTED) {
+				vgt_info("DPCD_PROBE: DP C Detected.\n");
+				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
+			} else {
+				vgt_info("DPCD_PROBE: DP C is not detected.\n");
+			}
+			break;
+		case DPCD_DPD:
+			if (VGT_MMIO_READ(pdev, _REG_PCH_DPD_AUX_CH_CTL) | _DP_DETECTED) {
+				vgt_info("DPCD_PROBE: DP D Detected.\n");
+				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
+			} else {
+				vgt_info("DPCD_PROBE: DP D is not detected.\n");
+			}
+			break;
+		default:
+			vgt_err("DPCD_PROBE: invalid DP number.\n");
+			break;
+
+		}
+
+		if (aux_ch_addr) {
+			unsigned int msg = 0;
+			unsigned int value;
+			uint16_t dpcd_addr;
+
+			if (!*dpcd) {
+				*dpcd = kmalloc(sizeof(struct vgt_dpcd_data), GFP_KERNEL);
+				if (*dpcd == NULL) {
+					vgt_err("Insufficient memory\n");
+					BUG();
+				}
+			}
+
+			for (dpcd_addr = 0; dpcd_addr < DPCD_SIZE; dpcd_addr++) {
+				uint8_t low = dpcd_addr & 0x00ff;
+				uint8_t high = (dpcd_addr & 0xff00) >> 8;
+
+				/* Read one byte at a time, so set len to 0 */
+				msg = ((VGT_AUX_NATIVE_READ << 4) << 24) |
+					(high << 16) |
+					(low << 8);
+
+				value = vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 4);
+				/*
+				 * The MSB of value is the trascation status,
+				 *i the second MSB is the returned data.
+				 */
+				(*dpcd)->data[dpcd_addr] = ((value) & 0xff0000) >> 16;
+			}
+		}
+
+		if (*dpcd && vgt_debug) {
+			vgt_info("DPCD_PROBE: DPCD is:\n");
+			vgt_print_dpcd(*dpcd);
+		}
+
+	}
+}
+
+/**************************************************************************
+ *
+ * EDID propagation to vgt instance
+ *
+ *************************************************************************/
+/* vgt_propagate_edid
+ *
+ * Propagate the EDID information stored in pdev to vgt device.
+ * Right now the vgt uses the same EDID. In future, there could be
+ * policy to change the EDID that is used by vgt instances.
+ */
+void vgt_propagate_edid(struct vgt_device *vgt, int index)
+{
+	int i;
+
+	for (i = 0; i < EDID_MAX; ++ i) {
+		vgt_edid_data_t	*edid = vgt->pdev->pdev_edids[i];
+
+		if ((i != index) && (index != -1)) {
+			continue;
+		}
+
+		if (!edid) {
+			printk ("EDID_PROPAGATE: Clear EDID %d\n", i);
+			if (vgt->vgt_edids[i]) {
+				kfree(vgt->vgt_edids[i]);
+				vgt->vgt_edids[i] = NULL;
+			}
+		} else {
+			printk ("EDID_PROPAGATE: Propagate EDID %d\n", i);
+			if (!vgt->vgt_edids[i]) {
+				BUG_ON(in_interrupt());
+				vgt->vgt_edids[i] = kmalloc(
+						sizeof(vgt_edid_data_t), GFP_KERNEL);
+				if (vgt->vgt_edids[i] == NULL) {
+					printk("ERROR: Insufficient memory in %s\n",
+							__FUNCTION__);
+					BUG();
+					return;
+				}
+			}
+			memcpy(vgt->vgt_edids[i], edid,
+				sizeof(vgt_edid_data_t));
+
+			{
+			int j;
+			unsigned char *block = vgt->vgt_edids[i]->edid_block;
+			printk("EDID_PROPAGATE: EDID[%d] is:\n", i);
+			for (j = 0; j < EDID_SIZE; ++ j) {
+				if ((block[j] >= 'a' && block[j] <= 'z') ||
+					(block[j] >= 'A' && block[j] <= 'Z')) {
+					printk ("%c ", block[j]);
+				} else {
+					printk ("0x%x ", block[j]);
+				}
+				if (((j + 1) & 0xf) == 0) {
+					printk ("\n");
+				}
+			}
+			}
+		}
+	}
+}
+
+void vgt_clear_edid(struct vgt_device *vgt, int index)
+{
+	int i;
+
+	for (i = 0; i < EDID_MAX; ++ i) {
+		if ((i == index) || (index == -1)) {
+			if (vgt->vgt_edids[i]) {
+				printk("EDID_CLEAR: Clear EDID[0x%x] of VM%d\n",
+					i, vgt->vm_id);
+				kfree(vgt->vgt_edids[i]);
+				vgt->vgt_edids[i] = NULL;
+			}
+		}
+	}
+}
+
+void vgt_propagate_dpcd(struct vgt_device *vgt, int index)
+{
+	int i;
+
+	for (i = 0; i < DPCD_MAX; ++i) {
+		struct vgt_dpcd_data *dpcd = vgt->pdev->pdev_dpcds[i];
+
+		if ((i != index) && (index != -1))
+			continue;
+
+		if (!dpcd) {
+			vgt_info("DPCD_PROPAGATE: Clear DPCD %d\n", i);
+			if (vgt->vgt_dpcds[i]) {
+				kfree(vgt->vgt_dpcds[i]);
+				vgt->vgt_dpcds[i] = NULL;
+			}
+		} else {
+			vgt_info("DPCD_PROPAGATE: Propagate DPCD %d\n", i);
+			if (!vgt->vgt_dpcds[i]) {
+				vgt->vgt_dpcds[i] = kmalloc(
+					sizeof(struct vgt_dpcd_data), GFP_KERNEL);
+				if (vgt->vgt_dpcds[i] == NULL) {
+					vgt_err("Insufficient memory\n");
+					BUG();
+					return;
+				}
+			}
+			memcpy(vgt->vgt_dpcds[i], dpcd,
+				sizeof(struct vgt_dpcd_data));
+
+			/* mask off CP */
+			vgt->vgt_dpcds[i]->data[DPCD_SINK_COUNT] &=
+				~DPCD_CP_READY_MASK;
+
+			if (vgt_debug) {
+				vgt_info("DPCD_PROPAGATE: DPCD[%d] is:\n", i);
+				vgt_print_dpcd(vgt->vgt_dpcds[i]);
+			}
+		}
+	}
+}
+
+void vgt_clear_dpcd(struct vgt_device *vgt, int index)
+{
+	int i;
+
+	for (i = 0; i < DPCD_MAX; ++i) {
+		if ((i == index) || (index == -1)) {
+			if (vgt->vgt_dpcds[i]) {
+				vgt_dbg("DPCD clear: Clear DPCD[0x%x] of VM%d\n",
+					i, vgt->vm_id);
+				kfree(vgt->vgt_dpcds[i]);
+				vgt->vgt_dpcds[i] = NULL;
+			}
+		}
+	}
+}
 
 /**************************************************************************
  *
