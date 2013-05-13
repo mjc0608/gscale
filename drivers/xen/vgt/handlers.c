@@ -1458,6 +1458,10 @@ static bool vga_control_w (struct vgt_device *vgt, unsigned int offset,
 
 	default_mmio_write(vgt, offset, p_data, bytes);
 
+	/* no notification at dom0 boot time */
+	if (pdev->boot_time)
+		return true;
+
 	if ( __vreg(vgt, offset) & _REGBIT_VGA_DISPLAY_DISABLE ) {
 		/* Disable VGA */
 		printk("VGT(%d): Disable VGA mode %x\n", vgt->vgt_id,
