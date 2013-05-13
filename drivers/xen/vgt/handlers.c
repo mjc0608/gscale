@@ -1145,24 +1145,6 @@ bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 	rc = surf_mmio_write(vgt, offset, p_data, bytes, PRIMARY_PLANE);
 
-#ifdef VGT_DEBUGFS_DUMP_FB
-	struct pgt_device *pdev = vgt->pdev;
-
-	struct work_struct *work = &vgt->fb_debugfs_work;
-
-	ASSERT(bytes == 4 && (offset & 0x3) == 0)
-
-	rc = default_mmio_write(vgt, offset, p_data, bytes);
-	if (rc == false)
-		return rc;
-
-	ASSERT(work);
-	surf_used_pipe = pipe;
-
-	if (0 == queue_work(pdev->pgt_wq, &vgt->fb_debugfs_work))
-		vgt_dbg("vGT: failed to submit aready attached work!\n");
-#endif
-
 	return rc;
 }
 
