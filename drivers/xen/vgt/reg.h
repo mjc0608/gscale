@@ -733,6 +733,7 @@
 /* FDI_RX, FDI_X is hard-wired to Transcoder_X */
 #define _REG_FDI_RXA_CTL			0xf000c
 #define _REG_FDI_RXB_CTL			0xf100c
+#define _REG_FDI_RXC_CTL			0xf200c
 
 #define _REGBIT_FDI_RX_ENABLE			(1 << 31)
 #define _REGBIT_FDI_RX_PLL_ENABLE		(1 << 13)
@@ -765,6 +766,7 @@
 
 
 #define VGT_FDI_RX_CTL_BPC_MASK		(0x7 << 16)
+#define VGT_FDIRXCTL_PIPE(ctrl) _VGT_GET_PIPE(ctrl, _REG_FDI_RXA_CTL, _REG_FDI_RXB_CTL)
 #define VGT_FDI_RX_CTL(pipe) _VGT_PIPE(pipe, _REG_FDI_RXA_CTL, _REG_FDI_RXB_CTL)
 
 #define _REG_FDI_RXA_MISC			0xf0010
@@ -779,6 +781,7 @@
 /* CPU: FDI_TX */
 #define _REG_FDI_TXA_CTL		0x60100
 #define _REG_FDI_TXB_CTL		0x61100
+#define _REG_FDI_TXC_CTL		0x62100
 
 #define _REGBIT_FDI_TX_ENABLE				(1 << 31)
 #define _REGBIT_FDI_LINK_TRAIN_PATTERN_1		(0 << 28)

@@ -780,48 +780,41 @@ bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 #define FDI_LINK_TRAIN_PATTERN_1	0
 #define FDI_LINK_TRAIN_PATTERN_2	1
+
 /* FIXME: this function is highly platform-dependent (SNB + CPT) */
-static bool check_fdi_rx_train_status(struct vgt_device *vgt, enum vgt_pipe pipe, unsigned int train_pattern)
+static bool check_fdi_rx_train_status(struct vgt_device *vgt,
+		enum vgt_pipe pipe, unsigned int train_pattern)
 {
 	unsigned int fdi_rx_imr, fdi_tx_ctl, fdi_rx_ctl;
-	unsigned int fdi_rx_check_bits, fdi_tx_check_bits, fdi_rx_train_bits, fdi_tx_train_bits, fdi_iir_check_bits;
-	switch (pipe) {
-		case PIPE_A:
-			fdi_rx_imr = _REG_FDI_RXA_IMR;
-			fdi_tx_ctl = _REG_FDI_TXA_CTL;
-			fdi_rx_ctl = _REG_FDI_RXA_CTL;
-			break;
-		case PIPE_B:
-			fdi_rx_imr = _REG_FDI_RXB_IMR;
-			fdi_tx_ctl = _REG_FDI_TXB_CTL;
-			fdi_rx_ctl = _REG_FDI_RXB_CTL;
-			break;
-		default: BUG();
-	};
+	unsigned int fdi_rx_check_bits, fdi_tx_check_bits;
+	unsigned int fdi_rx_train_bits, fdi_tx_train_bits;
+	unsigned int fdi_iir_check_bits;
 
-	switch (train_pattern) {
-		case FDI_LINK_TRAIN_PATTERN_1:
-			fdi_rx_train_bits =_REGBIT_FDI_LINK_TRAIN_PATTERN_1_CPT;
-			fdi_tx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_1;
-			fdi_iir_check_bits = _REGBIT_FDI_RX_BIT_LOCK;
-			break;
-		case FDI_LINK_TRAIN_PATTERN_2:
-			fdi_rx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_2_CPT;
-			fdi_tx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_2;
-			fdi_iir_check_bits = _REGBIT_FDI_RX_SYMBOL_LOCK;
-			break;
-		default: BUG();
+	fdi_rx_imr = VGT_FDI_RX_IMR(pipe);
+	fdi_tx_ctl = VGT_FDI_TX_CTL(pipe);
+	fdi_rx_ctl = VGT_FDI_RX_CTL(pipe);
+
+	if (train_pattern == FDI_LINK_TRAIN_PATTERN_1) {
+		fdi_rx_train_bits =_REGBIT_FDI_LINK_TRAIN_PATTERN_1_CPT;
+		fdi_tx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_1;
+		fdi_iir_check_bits = _REGBIT_FDI_RX_BIT_LOCK;
+	} else if (train_pattern == FDI_LINK_TRAIN_PATTERN_2) {
+		fdi_rx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_2_CPT;
+		fdi_tx_train_bits = _REGBIT_FDI_LINK_TRAIN_PATTERN_2;
+		fdi_iir_check_bits = _REGBIT_FDI_RX_SYMBOL_LOCK;
+	} else {
+		BUG();
 	}
 
-	fdi_rx_check_bits = _REGBIT_FDI_RX_ENABLE
-		| fdi_rx_train_bits;
-	fdi_tx_check_bits = _REGBIT_FDI_TX_ENABLE
-		| fdi_tx_train_bits;
+	fdi_rx_check_bits = _REGBIT_FDI_RX_ENABLE | fdi_rx_train_bits;
+	fdi_tx_check_bits = _REGBIT_FDI_TX_ENABLE | fdi_tx_train_bits;
 
 	/* If imr bit not been masked */
-	if (((__vreg(vgt, fdi_rx_imr) & fdi_iir_check_bits) == 0 )
-			&& ((__vreg(vgt, fdi_tx_ctl) & fdi_tx_check_bits) == fdi_tx_check_bits)
-			&& ((__vreg(vgt, fdi_rx_ctl) & fdi_rx_check_bits) == fdi_rx_check_bits))
+	if (((__vreg(vgt, fdi_rx_imr) & fdi_iir_check_bits) == 0)
+		&& ((__vreg(vgt, fdi_tx_ctl)
+			& fdi_tx_check_bits) == fdi_tx_check_bits)
+		&& ((__vreg(vgt, fdi_rx_ctl)
+			& fdi_rx_check_bits) == fdi_rx_check_bits))
 		return true;
 	else
 		return false;
@@ -837,32 +830,8 @@ bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset,
 	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 
 	reg = offset & ~(bytes - 1);
-
-	switch (offset) {
-		case _REG_FDI_RXA_CTL:
-		case _REG_FDI_TXA_CTL:
-		case _REG_FDI_RXA_IMR:
-			pipe = PIPE_A;
-			break;
-		case _REG_FDI_RXB_CTL:
-		case _REG_FDI_TXB_CTL:
-		case _REG_FDI_RXB_IMR:
-			pipe = PIPE_B;
-			break;
-		default:
-			BUG();
-	}
-
-	switch (pipe) {
-		case PIPE_A:
-			fdi_rx_iir = _REG_FDI_RXA_IIR;
-			break;
-		case PIPE_B:
-			fdi_rx_iir = _REG_FDI_RXB_IIR;
-			break;
-		default:
-			BUG();
-	}
+	pipe = VGT_FDIRXCTL_PIPE(offset);
+	fdi_rx_iir = VGT_FDI_RX_IIR(pipe);
 
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
 	if (!reg_hw_access(vgt, reg)) {
@@ -2539,8 +2508,10 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_FDI_RXB_IIR, 4, F_DPY, 0, D_ALL, NULL, fdi_rx_iir_mmio_write},
 {_REG_FDI_RXA_CTL, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_RXB_CTL, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
+{_REG_FDI_RXC_CTL, 4, F_DPY, 0, D_GEN7PLUS, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_TXA_CTL, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_TXB_CTL, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
+{_REG_FDI_TXC_CTL, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_RXA_IMR, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_RXB_IMR, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 
