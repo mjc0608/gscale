@@ -439,10 +439,57 @@ bool dpy_reg_mmio_read_3(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-static int ring_pp_dir_base_write(struct vgt_device *vgt, int ring_id, u32 off, u32 base)
+static int pp_dir_base_to_ring_id(unsigned int reg)
 {
+	int ring_id;
+
+	switch (reg) {
+	case _REG_RCS_PP_DIR_BASE_IVB:
+		ring_id = RING_BUFFER_RCS;
+		break;
+	case _REG_BCS_PP_DIR_BASE:
+		ring_id = RING_BUFFER_BCS;
+		break;
+	case _REG_VCS_PP_DIR_BASE:
+		ring_id = RING_BUFFER_VCS;
+		break;
+	case _REG_VECS_PP_DIR_BASE:
+		ring_id = RING_BUFFER_VECS;
+		break;
+	default:
+		ring_id = -1;
+		break;
+	}
+
+	ASSERT(ring_id != -1);
+	return ring_id;
+}
+
+static bool pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
+			void *p_data, unsigned int bytes)
+{
+	int ring_id = pp_dir_base_to_ring_id(off);
+	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
+
+	ASSERT(bytes == 4);
+
+	*(u32 *)p_data = v_info->base;
+
+	vgt_dbg("<ring-%d>PP_DIR_BASE read: 0x%x\n", ring_id, v_info->base);
+	return true;
+}
+
+static bool pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
+			void *p_data, unsigned int bytes)
+{
+	u32 base = *(u32 *)p_data;
+	int ring_id = pp_dir_base_to_ring_id(off);
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 	vgt_ring_ppgtt_t *s_info = &vgt->rb[ring_id].sring_ppgtt_info;
+
+	ASSERT(bytes == 4);
+
+	vgt_dbg("<ring-%d> PP_DIR_BASE write: 0x%x\n", ring_id, base);
 
 	/* convert base which is in form of bit 31-16 in 64bytes cachelines,
 	 * it turns out to be ((((base >> 16) * 64) >> 2) << PAGE_SHIFT), which
@@ -455,111 +502,10 @@ static int ring_pp_dir_base_write(struct vgt_device *vgt, int ring_id, u32 off, 
 	vgt->rb[ring_id].has_ppgtt_base_set = 1;
 
 	vgt_try_setup_ppgtt(vgt);
-
-	return 0;
-}
-
-bool rcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_RCS].vring_ppgtt_info;
-
-	ASSERT(bytes == 4);
-
-	*(u32 *)p_data = v_info->base;
-
-	vgt_dbg("RCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
-
 	return true;
 }
 
-bool rcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	u32 base = *(u32 *)p_data;
-
-	ASSERT(bytes == 4);
-
-	vgt_dbg("RCS_PP_DIR_BASE write: 0x%x\n", base);
-	ring_pp_dir_base_write(vgt, RING_BUFFER_RCS, off, base);
-	return true;
-}
-
-bool bcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_BCS].vring_ppgtt_info;
-
-	ASSERT(bytes == 4);
-
-	*(u32 *)p_data = v_info->base;
-	vgt_dbg("BCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
-	return true;
-}
-
-bool bcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	u32 base = *(u32 *)p_data;
-
-	ASSERT(bytes == 4);
-
-	vgt_dbg("BCS_PP_DIR_BASE write: 0x%x\n", base);
-	ring_pp_dir_base_write(vgt, RING_BUFFER_BCS, off, base);
-	return true;
-}
-
-bool vcs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VCS].vring_ppgtt_info;
-
-	ASSERT(bytes == 4);
-
-	*(u32 *)p_data = v_info->base;
-	vgt_dbg("VCS_PP_DIR_BASE read: 0x%x\n", v_info->base);
-	return true;
-}
-
-bool vcs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	u32 base = *(u32 *)p_data;
-
-	ASSERT(bytes == 4);
-
-	vgt_dbg("VCS_PP_DIR_BASE write: 0x%x\n", base);
-	ring_pp_dir_base_write(vgt, RING_BUFFER_VCS, off, base);
-	return true;
-}
-
-bool vecs_pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VECS].vring_ppgtt_info;
-
-	ASSERT(bytes == 4);
-
-	*(u32 *)p_data = v_info->base;
-	vgt_dbg("VECS_PP_DIR_BASE read: 0x%x\n", v_info->base);
-	return true;
-}
-
-bool vecs_pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	u32 base = *(u32 *)p_data;
-
-	ASSERT(bytes == 4);
-
-	vgt->vebox_support = true;
-
-	vgt_dbg("VECS_PP_DIR_BASE write: 0x%x\n", base);
-	ring_pp_dir_base_write(vgt, RING_BUFFER_VECS, off, base);
-	return true;
-}
-
-bool pp_dclv_read(struct vgt_device *vgt, unsigned int off,
+static bool pp_dclv_read(struct vgt_device *vgt, unsigned int off,
 			void *p_data, unsigned int bytes)
 {
 	ASSERT(bytes == 4);
@@ -568,7 +514,7 @@ bool pp_dclv_read(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
-bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
+static bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
 			void *p_data, unsigned int bytes)
 {
 	u32 dclv = *(u32 *)p_data;
@@ -577,109 +523,39 @@ bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
 	__vreg(vgt, off) = dclv;
 	__sreg(vgt, off) = dclv;
 
+	/* TODO: forward to pReg? */
 	vgt_dbg("PP_DCLV write: 0x%x\n", dclv);
 	return true;
 }
 
-bool rcs_gfx_mode_read(struct vgt_device *vgt, unsigned int off,
+/* TODO: there are other mode control bits in the registers */
+static bool ring_pp_mode_read(struct vgt_device *vgt, unsigned int off,
 			void *p_data, unsigned int bytes)
 {
-	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_RCS].vring_ppgtt_info;
+	int ring_id = pp_dir_base_to_ring_id(off);
+	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 
 	ASSERT(bytes == 4);
 
 	*(u32 *)p_data = v_info->mode;
-	vgt_dbg("RCS_GFX_MODE read: 0x%x\n", v_info->mode);
+	vgt_dbg("<ring-%d>GFX_MODE read: 0x%x\n", ring_id, v_info->mode);
 	return true;
 }
 
-bool bcs_blt_mode_read(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_BCS].vring_ppgtt_info;
-
-	ASSERT(bytes == 4);
-
-	*(u32 *)p_data = v_info->mode;
-	vgt_dbg("BCS_BLT_MODE read: 0x%x\n", v_info->mode);
-	return true;
-}
-
-bool vcs_mfx_mode_read(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VCS].vring_ppgtt_info;
-
-	ASSERT(bytes == 4);
-
-	*(u32 *)p_data = v_info->mode;
-	vgt_dbg("VCS_MFX_MODE read: 0x%x\n", v_info->mode);
-	return true;
-}
-
-bool vecs_mfx_mode_read(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	vgt_ring_ppgtt_t *v_info = &vgt->rb[RING_BUFFER_VECS].vring_ppgtt_info;
-
-	ASSERT(bytes == 4);
-
-	*(u32 *)p_data = v_info->mode;
-	vgt_dbg("VECS_MFX_MODE read: 0x%x\n", v_info->mode);
-	return true;
-}
-
-bool rcs_gfx_mode_write(struct vgt_device *vgt, unsigned int off,
+static bool ring_pp_mode_write(struct vgt_device *vgt, unsigned int off,
 			void *p_data, unsigned int bytes)
 {
 	u32 mode = *(u32 *)p_data;
+	int ring_id = pp_dir_base_to_ring_id(off);
 
 	ASSERT(bytes == 4);
 
-	vgt_dbg("RCS_GFX_MODE write: 0x%x\n", mode);
-	ring_ppgtt_mode(vgt, RING_BUFFER_RCS, off, mode);
+	vgt_dbg("<ring-%d>GFX_MODE write: 0x%x\n", ring_id, mode);
 
-	return true;
-}
+	if (ring_id == RING_BUFFER_VECS)
+		vgt->vebox_support = true;
 
-bool bcs_blt_mode_write(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	u32 mode = *(u32 *)p_data;
-
-	ASSERT(bytes == 4);
-
-	vgt_dbg("BCS_BLT_MODE write: 0x%x\n", mode);
-	ring_ppgtt_mode(vgt, RING_BUFFER_BCS, off, mode);
-
-	return true;
-}
-
-bool vcs_mfx_mode_write(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	u32 mode = *(u32 *)p_data;
-
-	ASSERT(bytes == 4);
-
-	vgt_dbg("VCS_MFX_MODE write: 0x%x\n", mode);
-	ring_ppgtt_mode(vgt, RING_BUFFER_VCS, off, mode);
-
-	return true;
-}
-
-bool vecs_mfx_mode_write(struct vgt_device *vgt, unsigned int off,
-			void *p_data, unsigned int bytes)
-{
-	u32 mode = *(u32 *)p_data;
-
-	ASSERT(bytes == 4);
-
-	vgt->vebox_support = true;
-
-	vgt_dbg("VECS_MFX_MODE write: 0x%x\n", mode);
-	ring_ppgtt_mode(vgt, RING_BUFFER_VECS, off, mode);
-
+	ring_ppgtt_mode(vgt, ring_id, off, mode);
 	return true;
 }
 
@@ -2960,11 +2836,11 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 		vgt_dbg("Hook up PPGTT register handlers\n");
 		/* trap PPGTT base register */
 		reg_update_handlers(pdev, _REG_RCS_PP_DIR_BASE_IVB, 4,
-				rcs_pp_dir_base_read, rcs_pp_dir_base_write);
+				pp_dir_base_read, pp_dir_base_write);
 		reg_update_handlers(pdev, _REG_BCS_PP_DIR_BASE, 4,
-				bcs_pp_dir_base_read, bcs_pp_dir_base_write);
+				pp_dir_base_read, pp_dir_base_write);
 		reg_update_handlers(pdev, _REG_VCS_PP_DIR_BASE, 4,
-				vcs_pp_dir_base_read, vcs_pp_dir_base_write);
+				pp_dir_base_read, pp_dir_base_write);
 
 		reg_update_handlers(pdev, _REG_RCS_PP_DCLV, 4,
 				pp_dclv_read, pp_dclv_write);
@@ -2976,21 +2852,21 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 		/* XXX cache register? */
 		/* PPGTT enable register */
 		reg_update_handlers(pdev, _REG_RCS_GFX_MODE_IVB, 4,
-				rcs_gfx_mode_read, rcs_gfx_mode_write);
+				ring_pp_mode_read, ring_pp_mode_write);
 		reg_update_handlers(pdev, _REG_BCS_BLT_MODE_IVB, 4,
-				bcs_blt_mode_read, bcs_blt_mode_write);
+				ring_pp_mode_read, ring_pp_mode_write);
 		reg_update_handlers(pdev, _REG_VCS_MFX_MODE_IVB, 4,
-				vcs_mfx_mode_read, vcs_mfx_mode_write);
+				ring_pp_mode_read, ring_pp_mode_write);
 
 		if (IS_HSW(pdev)) {
 			reg_update_handlers(pdev, _REG_VECS_PP_DIR_BASE, 4,
-					vecs_pp_dir_base_read,
-					vecs_pp_dir_base_write);
+					pp_dir_base_read,
+					pp_dir_base_write);
 			reg_update_handlers(pdev, _REG_VECS_PP_DCLV, 4,
 					pp_dclv_read, pp_dclv_write);
 			reg_update_handlers(pdev, _REG_VEBOX_MODE, 4,
-					vecs_mfx_mode_read,
-					vecs_mfx_mode_write);
+					ring_pp_mode_read,
+					ring_pp_mode_write);
 		}
 	}
 
