@@ -71,7 +71,7 @@ static int vgt_decode_primary_plane_format(struct vgt_device *vgt,
 	if (!plane->enabled)
 		return 0;
 
-	plane->tiled = !!(val & _PRI_PLANE_TILED);
+	plane->tiled = !!(val & _PRI_PLANE_TILE_MASK);
 
 	fmt = (val & _PRI_PLANE_FMT_MASK) >> _PRI_PLANE_FMT_SHIFT;
 	if (!hsw_pixel_formats[fmt].bpp) {

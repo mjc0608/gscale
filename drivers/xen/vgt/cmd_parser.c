@@ -41,6 +41,7 @@
 
 #include <linux/slab.h>
 #include "vgt.h"
+#include "reg.h"
 #include <xen/vgt_cmd_parser.h>
 
 /*
@@ -370,7 +371,7 @@ static inline int cmd_length(struct parser_exec_state *s)
 static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
 {
 	if (cmd_val(s,0) & VGT_NOOP_ID_MASK){
-		vgt_err("WANRING: Guest reuse cmd buffer! Need ");
+		vgt_err("VM %d: Guest reuse cmd buffer! Need ", s->vgt->vm_id);
 		parser_exec_state_dump(s);
 		return -EFAULT;
 	}
@@ -421,28 +422,36 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
  * handling is under discussion. The current approach is to NOOP the
  * MI_DISPLAY_FLIP command and then do pre-emulation. The pre-emulation
  * cannot exactly emulate command's behavior since it happens before
- * the command is issued. It is not possible to take the inter-command
- * dependence into account.
+ * the command is issued. Consider the following two cases: one is that
+ * right after the command-scan, display switch happens. Another case
+ * is that commands inside ring buffer has some dependences.
  *
  * The interrupt is another consideration. mi_display_flip can trigger
  * interrupt for completion. VM's gfx driver may rely on that. Whether
  * we should inject virtual interrupt and when is the right time.
+ *
+ * And we did not update HW state for the display flip.
+ *
  */
-#define PLANE_SELECT_OFFSET	19
-#define PLANE_SELECT_SIZE	3
+#define PLANE_SELECT_SHIFT	19
+#define PLANE_SELECT_MASK	(0x7 << PLANE_SELECT_SHIFT)
 #define SURF_MASK		0xFFFFF000
-#define STRIDE_MASK		0x0000FFC0
-#define TILE_PARA_OFFSET	0x0
+#define PITCH_MASK		0x0000FFC0
+#define TILE_PARA_SHIFT		0x0
 #define TILE_PARA_MASK		0x1
-#define CTRL_TILE_OFFSET	10
-#define CTRL_TILE_MASK		0x00000400
+/* Primary plane and sprite plane has the same tile shift in control reg */
+#define PLANE_TILE_SHIFT	_PRI_PLANE_TILE_SHIFT
+#define PLANE_TILE_MASK		(0x1 << PLANE_TILE_SHIFT)
 #define FLIP_TYPE_MASK		0x3
 
 static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 {
-	uint32_t surf_reg, stride_reg, ctrl_reg, surf_val, stride_val;
+	uint32_t surf_reg, surf_val, surflive_reg, ctrl_reg;
+	uint32_t stride_reg, stride_val, stride_mask;
 	uint32_t tile_para, tile_in_ctrl;
-	uint32_t opcode, plane;
+	uint32_t opcode, plane_code;
+	enum vgt_pipe pipe;
+	enum vgt_plane_type plane;
 	bool async_flip;
 	int i, length = cmd_length(s);
 
@@ -454,62 +463,62 @@ static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 	stride_val = *(cmd_ptr(s, 1));
 	surf_val = *(cmd_ptr(s, 2));
 
-	plane = (opcode >> PLANE_SELECT_OFFSET) &
-			((1U << PLANE_SELECT_SIZE) - 1);
+	plane_code = (opcode >> PLANE_SELECT_SHIFT) & PLANE_SELECT_MASK;
 
-	switch (plane) {
+	switch (plane_code) {
 		case 0:
-			ctrl_reg = _REG_DSPACNTR;
-			surf_reg = _REG_DSPASURF;
-			stride_reg = _REG_DSPASTRIDE;
-			break;
+			pipe = PIPE_A; plane = PRIMARY_PLANE; break;
 		case 1:
-			ctrl_reg = _REG_DSPBCNTR;
-			surf_reg = _REG_DSPBSURF;
-			stride_reg = _REG_DSPBSTRIDE;
-			break;
+			pipe = PIPE_B; plane = PRIMARY_PLANE; break;
 		case 2:
-			ctrl_reg = _REG_SPRA_CTL;
-			stride_reg = _REG_SPRA_STRIDE;
-			surf_reg = _REG_SPRASURF;
-			break;
+			pipe = PIPE_A; plane = SPRITE_PLANE; break;
 		case 3:
-			ctrl_reg = _REG_SPRB_CTL;
-			stride_reg = _REG_SPRB_STRIDE;
-			surf_reg = _REG_SPRBSURF;
-			break;
+			pipe = PIPE_B; plane = SPRITE_PLANE; break;
 		case 4:
-			ctrl_reg = _REG_DSPCCNTR;
-			surf_reg = _REG_DSPCSURF;
-			stride_reg = _REG_DSPCSTRIDE;
-			break;
+			pipe = PIPE_C; plane = PRIMARY_PLANE; break;
 		case 5:
-			ctrl_reg = _REG_SPRC_CTL;
-			surf_reg = _REG_SPRCSURF;
-			stride_reg = _REG_SPRC_STRIDE;
-			break;
+			pipe = PIPE_C; plane = SPRITE_PLANE; break;
 		default:
 			goto wrong_command;
 	}
 
-	if (length < 3)
+	if (plane == PRIMARY_PLANE) {
+		ctrl_reg = VGT_DSPCNTR(pipe);
+		surf_reg = VGT_DSPSURF(pipe);
+		surflive_reg = VGT_DSPSURFLIVE(pipe);
+		stride_reg = VGT_DSPSTRIDE(pipe);
+		stride_mask = _PRI_PLANE_STRIDE_MASK;
+	} else {
+		ASSERT (plane == SPRITE_PLANE);
+		ctrl_reg = VGT_SPRCTL(pipe);
+		surf_reg = VGT_SPRSURF(pipe);
+		surflive_reg = VGT_SPRSURFLIVE(pipe);
+		stride_reg = VGT_SPRSTRIDE(pipe);
+		stride_mask = _SPRITE_STRIDE_MASK;
+	}
+
+	if (length == 4) {
+		vgt_warn("Page flip of Stereo 3D is not supported!\n");
 		goto wrong_command;
+	} else if (length != 3) {
+		goto wrong_command;
+	}
 
 	async_flip = ((surf_val & FLIP_TYPE_MASK) == 0x1);
-	tile_para = ((stride_val & TILE_PARA_MASK) >> TILE_PARA_OFFSET);
-	tile_in_ctrl = (__vreg(s->vgt, ctrl_reg) & CTRL_TILE_MASK)
-				>> CTRL_TILE_OFFSET;
+	tile_para = ((stride_val & TILE_PARA_MASK) >> TILE_PARA_SHIFT);
+	tile_in_ctrl = (__vreg(s->vgt, ctrl_reg) & PLANE_TILE_MASK)
+				>> PLANE_TILE_SHIFT;
 
-	if ((__vreg(s->vgt, stride_reg) & STRIDE_MASK)
-		!= (stride_val & STRIDE_MASK)) {
+	if ((__vreg(s->vgt, stride_reg) & stride_mask)
+		!= (stride_val & PITCH_MASK)) {
 
 		if (async_flip) {
 			vgt_warn("Cannot change stride in async flip!\n");
 			goto wrong_command;
 		}
 		__vreg(s->vgt, stride_reg) = (__vreg(s->vgt, stride_reg) &
-							(~STRIDE_MASK)) |
-					(stride_val & STRIDE_MASK);
+							(~stride_mask)) |
+					(stride_val & stride_mask);
 		__sreg(s->vgt, stride_reg) = __vreg(s->vgt, stride_reg);
 	}
 
@@ -520,21 +529,23 @@ static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 			goto wrong_command;
 		}
 		__vreg(s->vgt, ctrl_reg) =
-			(__vreg(s->vgt, ctrl_reg) & (~CTRL_TILE_MASK)) |
-					(tile_para << CTRL_TILE_OFFSET);
+			(__vreg(s->vgt, ctrl_reg) & (~PLANE_TILE_MASK)) |
+					(tile_para << PLANE_TILE_SHIFT);
 		__sreg(s->vgt, ctrl_reg) = __vreg(s->vgt, ctrl_reg);
 	}
 
 	__vreg(s->vgt, surf_reg) = (__vreg(s->vgt, surf_reg) & (~SURF_MASK)) |
 					(surf_val & SURF_MASK);
 	__sreg(s->vgt, surf_reg) = __vreg(s->vgt, surf_reg);
+	__vreg(s->vgt, surflive_reg) = __vreg(s->vgt, surf_reg);
+	__sreg(s->vgt, surflive_reg) = __sreg(s->vgt, surf_reg);
 
 command_noop:
 	vgt_warn("VM %d: mi_display_flip to be ignored\n",
 		s->vgt->vm_id);
 
 	for (i = 0; i < length; i ++) {
-		*(cmd_ptr(s, i)) = 0;
+		*(cmd_ptr(s, i)) = MI_NOOP | VGT_NOOP_ID_MASK;
 	}
 
 	return 0;
