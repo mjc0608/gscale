@@ -857,9 +857,18 @@ static void vgt_initialize_reg_attr(struct pgt_device *pdev,
 
 void vgt_setup_reg_info(struct pgt_device *pdev)
 {
+	int i, reg;
+
 	printk("vGT: setup tracked reg info\n");
 	vgt_initialize_reg_attr(pdev, vgt_base_reg_info,
 		vgt_get_base_reg_num(), true);
+
+	for (i = 0; i < vgt_get_sticky_reg_num(); i++) {
+		for (reg = vgt_sticky_regs[i].reg;
+		     reg < vgt_sticky_regs[i].reg + vgt_sticky_regs[i].size;
+		     reg += REG_SIZE)
+			reg_set_sticky(pdev, reg);
+	}
 }
 
 static void __vgt_initial_mmio_space (struct pgt_device *pdev,

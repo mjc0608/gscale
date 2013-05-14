@@ -628,6 +628,8 @@ enum vgt_owner_type {
 #define VGT_REG_ACCESSED	(1 << 11)
 /* This reg is saved/restored at context switch time */
 #define VGT_REG_SAVED		(1 << 12)
+/* Policies not impacted by the superowner mode */
+#define VGT_REG_STICKY		(1 << 13)
 /* index into another auxillary table. Maximum 256 entries now */
 #define VGT_REG_INDEX_SHIFT	16
 #define VGT_REG_INDEX_MASK	(0xFFFF << VGT_REG_INDEX_SHIFT)
@@ -857,13 +859,14 @@ extern void do_vgt_fast_display_switch(struct vgt_device *pdev);
 
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
 #define reg_hw_status(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_STATUS)
-#define reg_virt(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_VIRT)
+#define reg_virt(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_VIRT)
 #define reg_mode_ctl(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_MODE_CTL)
 #define reg_passthrough(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_PASSTHROUGH)
 #define reg_need_switch(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_NEED_SWITCH)
 #define reg_is_tracked(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_TRACKED)
 #define reg_is_accessed(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ACCESSED)
 #define reg_is_saved(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_SAVED)
+#define reg_is_sticky(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_STICKY)
 #define reg_get_owner(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_OWNER)
 #define reg_invalid(pdev, reg)		(!pdev->reg_info[REG_INDEX(reg)])
 #define reg_aux_index(pdev, reg)	\
@@ -955,6 +958,12 @@ static inline void reg_set_saved(struct pgt_device *pdev,
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_SAVED;
 }
 
+static inline void reg_set_sticky(struct pgt_device *pdev,
+	vgt_reg_t reg)
+{
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_STICKY;
+}
+
 static inline void reg_update_handlers(struct pgt_device *pdev,
 	vgt_reg_t reg, int size, vgt_mmio_read read, vgt_mmio_write write)
 {
@@ -985,13 +994,17 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 {
 	struct pgt_device *pdev = vgt->pdev;
 
-	/* filter out PVINFO PAGE to avoid clobbered by hvm_super_owner */
-	if (reg >= VGT_PVINFO_PAGE && reg < VGT_PVINFO_PAGE + VGT_PVINFO_SIZE)
-		return false;
-
-	/* super owner give full access to HVM instead of dom0 */
-	if (hvm_super_owner && vgt->vgt_id)
-		return true;
+	/*
+	 * In superowner mode, all registers, except those explicitly marked
+	 * as sticky, are virtualized to Dom0 while passthrough to the 1st
+	 * HVM.
+	 */
+	if (hvm_super_owner && !reg_is_sticky(pdev, reg)) {
+		if (vgt->vgt_id)
+			return true;
+		else
+			return false;
+	}
 
 	/* allows access from any VM. dangerous!!! */
 	if (reg_passthrough(pdev, reg))
@@ -1027,6 +1040,11 @@ typedef struct {
 	vgt_mmio_read		read;
 	vgt_mmio_write		write;
 } reg_attr_t;
+
+typedef struct {
+	u32			reg;
+	int			size;
+} reg_list_t;
 
 static inline unsigned int vgt_gen_dev_type(struct pgt_device *pdev)
 {
@@ -1994,7 +2012,9 @@ static __inline__ bool drm_can_sleep(void)
 #define wait_for_atomic(COND, MS) _wait_for(COND, MS, 0)
 
 extern reg_attr_t vgt_base_reg_info[];
+extern reg_list_t vgt_sticky_regs[];
 extern int vgt_get_base_reg_num(void);
+extern int vgt_get_sticky_reg_num(void);
 
 void vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
 	unsigned int port, unsigned int bytes, unsigned long val);

@@ -59,12 +59,9 @@ bool hvm_dpy_owner = false;
 module_param_named(hvm_dpy_owner, hvm_dpy_owner, bool, 0600);
 MODULE_PARM_DESC(hvm_dpy_owner, "Make HVM to be display owner after create (default: false)");
 
-bool hvm_owner = false;
-module_param_named(hvm_owner, hvm_owner, bool, 0600);
-MODULE_PARM_DESC(hvm_owner, "Make HVM to be GPU owner after create (default: false)");
-
 bool hvm_super_owner = false;
 module_param_named(hvm_super_owner, hvm_super_owner, bool, 0600);
+MODULE_PARM_DESC(hvm_super_owner, "Make HVM to be GPU owner after create (default: false)");
 
 bool vgt_primary = false;
 module_param_named(vgt_primary, vgt_primary, bool, 0600);
@@ -88,6 +85,7 @@ MODULE_PARM_DESC(event_based_qos, "Use event based QoS scheduler (default: false
 bool shadow_tail_based_qos = false;
 module_param_named(shadow_tail_based_qos, shadow_tail_based_qos, bool, 0600);
 MODULE_PARM_DESC(shadow_tail_based_qos, "Use Shadow tail based QoS scheduler (default: false)");
+
 /*
  * FIXME: now video ring switch has weird issue. The cmd
  * parser may enter endless loop even when head/tail is
@@ -403,14 +401,19 @@ int vgt_initialize(struct pci_dev *dev)
 
 	xen_vgt_dom0_ready(vgt_dom0);
 
-	/* "hvm_owner" is a special mode where we give all the ownerships to the hvm guest */
 	if (!hvm_render_owner)
 		current_render_owner(pdev) = vgt_dom0;
 	else
 		vgt_ctx_switch = 0;
-	current_display_owner(pdev) = vgt_dom0;
-	current_foreground_vm(pdev) = vgt_dom0;
-	current_config_owner(pdev) = vgt_dom0;
+
+	if (!hvm_dpy_owner) {
+		current_display_owner(pdev) = vgt_dom0;
+		current_foreground_vm(pdev) = vgt_dom0;
+	}
+
+	if (!hvm_super_owner)
+		current_config_owner(pdev) = vgt_dom0;
+
 	pdev->ctx_check = 0;
 	pdev->ctx_switch = 0;
 	pdev->magic = 0;
@@ -515,7 +518,8 @@ EXPORT_SYMBOL(xen_start_vgt);
 
 static void vgt_param_check(void)
 {
-	if (hvm_owner || hvm_super_owner) {
+	/* TODO: hvm_dpy/render_owner are broken */
+	if (hvm_super_owner) {
 		hvm_dpy_owner = true;
 		hvm_render_owner = true;
 	}

@@ -277,12 +277,18 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	if (vgt->vm_id) {
 		vgt_ops->boot_time = 0;
 
-		/* a special debug mode to give full access to hvm guest */
 		if (hvm_render_owner)
 			current_render_owner(pdev) = vgt;
 
 		if (hvm_dpy_owner)
 			current_foreground_vm(pdev) = vgt;
+
+		if (hvm_super_owner) {
+			current_render_owner(pdev) = vgt;
+			current_foreground_vm(pdev) = vgt;
+			current_display_owner(pdev) = vgt;
+			current_config_owner(pdev) = vgt;
+		}
 	}
 	bitmap_zero(vgt->enabled_rings, MAX_ENGINES);
 	bitmap_zero(vgt->started_rings, MAX_ENGINES);
@@ -346,12 +352,12 @@ void vgt_release_instance(struct vgt_device *vgt)
 	spin_lock_irq(&pdev->lock);
 	printk("check display ownership...\n");
 
-	if (current_display_owner(pdev) == vgt) {
+	if (!hvm_super_owner && (current_display_owner(pdev) == vgt)) {
 		vgt_dbg("switch display ownership back to dom0\n");
 		current_display_owner(pdev) = vgt_dom0;
 	}
 
-	if (current_foreground_vm(pdev) == vgt) {
+	if (!hvm_super_owner && (current_foreground_vm(pdev) == vgt)) {
 		vgt_dbg("switch foreground vm back to dom0\n");
 		do_vgt_fast_display_switch(vgt_dom0);
 	}

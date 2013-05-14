@@ -2450,3 +2450,75 @@ int vgt_get_base_reg_num()
 {
 	return ARRAY_NUM(vgt_base_reg_info);
 }
+
+/*
+ * This array lists registers which stick to original policy, as
+ * specified in vgt_base_reg_info, and not impacted by the super
+ * owner mode (which has most registers owned by HVM instead of
+ * dom0).
+ *
+ * Currently the registers in this list are those, which must be
+ * virtualized, with XenGT driver itself as the exclusive owner.
+ * Some features like monitor hotplug may be broken, due to the
+ * whole handling flow already fixed (first to dom0). But that
+ * should be fine, since super owner mode is used for analyze
+ * basic stability issues.
+ */
+reg_list_t vgt_sticky_regs[] = {
+	/* interrupt control registers */
+	{_REG_GTIMR, 4},
+	{_REG_GTIER, 4},
+	{_REG_GTIIR, 4},
+	{_REG_GTISR, 4},
+	{_REG_RCS_IMR, 4},
+	{_REG_BCS_IMR, 4},
+	{_REG_VCS_IMR, 4},
+	{_REG_DEIMR, 4},
+	{_REG_DEIER, 4},
+	{_REG_DEIIR, 4},
+	{_REG_DEISR, 4},
+	{_REG_SDEIMR, 4},
+	{_REG_SDEIER, 4},
+	{_REG_SDEIIR, 4},
+	{_REG_SDEISR, 4},
+	{_REG_PMIMR, 4},
+	{_REG_PMIER, 4},
+	{_REG_PMIIR, 4},
+	{_REG_PMISR, 4},
+
+	/* PPGTT related registers */
+	{_REG_RCS_GFX_MODE_IVB, 4},
+	{_REG_VCS_MFX_MODE_IVB, 4},
+	{_REG_BCS_BLT_MODE_IVB, 4},
+	{_REG_VEBOX_MODE, 4},
+	{_REG_RCS_PP_DIR_BASE_IVB, 4},
+	{_REG_VCS_PP_DIR_BASE, 4},
+	{_REG_BCS_PP_DIR_BASE, 4},
+	{_REG_VECS_PP_DIR_BASE, 4},
+	{_REG_RCS_PP_DCLV, 4},
+	{_REG_VCS_PP_DCLV, 4},
+	{_REG_BCS_PP_DCLV, 4},
+	{_REG_VECS_PP_DCLV, 4},
+
+	/* forcewake */
+	{_REG_FORCEWAKE, 4},
+	{_REG_FORCEWAKE_ACK, 4},
+	{_REG_GT_CORE_STATUS, 4},
+	{_REG_GT_THREAD_STATUS, 4},
+	{_REG_GTFIFODBG, 4},
+	{_REG_GTFIFO_FREE_ENTRIES, 4},
+	{_REG_MUL_FORCEWAKE, 4},
+	{_REG_MUL_FORCEWAKE_ACK, 4},
+	{_REG_FORCEWAKE_ACK_HSW, 4},
+
+	/* misc */
+	{_REG_GEN6_GDRST, 4},
+	{_REG_FENCE_0_LOW, 0x80},
+	{VGT_PVINFO_PAGE, VGT_PVINFO_SIZE},
+	{_REG_CPU_VGACNTRL, 4},
+};
+
+int vgt_get_sticky_reg_num()
+{
+	return ARRAY_NUM(vgt_sticky_regs);
+}
