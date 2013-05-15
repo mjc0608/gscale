@@ -81,6 +81,34 @@ int vgt_hvm_enable (struct vgt_device *vgt)
 	return rc;
 }
 
+int vgt_pause_domain(struct vgt_device *vgt)
+{
+	int rc;
+	struct xen_domctl domctl;
+
+	domctl.domain = (domid_t)vgt->vm_id;
+	domctl.cmd = XEN_DOMCTL_pausedomain;
+	domctl.interface_version = XEN_DOMCTL_INTERFACE_VERSION;
+
+	rc = HYPERVISOR_domctl(&domctl);
+	if (rc != 0)
+		vgt_err("HYPERVISOR_domctl pausedomain fail with %d!\n", rc);
+
+	return rc;
+}
+
+void vgt_crash_domain(struct vgt_device *vgt)
+{
+	int rc;
+	struct sched_remote_shutdown r;
+
+	r.reason = SHUTDOWN_crash;
+	r.domain_id = vgt->vm_id;
+	rc = HYPERVISOR_sched_op(SCHEDOP_remote_shutdown, &r);
+	if (rc != 0)
+		vgt_err("failed to HYPERVISOR_sched_op\n");
+}
+
 int vgt_hvm_opregion_map(struct vgt_device *vgt, int map)
 {
 	void *opregion;

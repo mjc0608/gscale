@@ -412,6 +412,8 @@ extern int vgt_hvm_info_init(struct vgt_device *vgt);
 extern int vgt_hvm_opregion_init(struct vgt_device *vgt, uint32_t gpa);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
 extern int vgt_hvm_enable(struct vgt_device *vgt);
+extern int vgt_pause_domain(struct vgt_device *vgt);
+extern void vgt_crash_domain(struct vgt_device *vgt);
 extern void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs);
 
 struct vgt_irq_virt_state;
@@ -590,6 +592,8 @@ struct vgt_device {
 	struct vgt_tailq rb_tailq[MAX_ENGINES];
 
 	bool has_context;
+
+	atomic_t crashing;
 };
 
 extern struct vgt_device *vgt_dom0;
@@ -2034,5 +2038,18 @@ void vgt_vmem_destroy(struct vgt_device *vgt);
 void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 struct vgt_device *vmid_2_vgt_device(int vmid);
 extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);
+
+#define ASSERT_VM(x, vgt)						\
+	do {								\
+		if (!(x)) {						\
+			printk("Assert at %s line %d\n",		\
+				__FILE__, __LINE__);			\
+			if (atomic_cmpxchg(&vgt->crashing, 0, 1))	\
+				break;					\
+			vgt_warn("Killing VM%d\n", vgt->vm_id);		\
+			if (!vgt_pause_domain(vgt))			\
+				vgt_crash_domain(vgt);			\
+		}							\
+	} while (0)
 
 #endif	/* _VGT_DRV_H_ */

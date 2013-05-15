@@ -792,6 +792,7 @@ struct xen_domctl_getdomaininfo {
 DEFINE_GUEST_HANDLE_STRUCT(xen_domctl_getdomaininfo);
 
 #define XEN_DOMCTL_INTERFACE_VERSION 0x00000008
+#define XEN_DOMCTL_pausedomain                    3
 #define XEN_DOMCTL_getdomaininfo                  5
 struct xen_domctl {
 	uint32_t cmd;

@@ -133,6 +133,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		return rc;
 	}
 
+	atomic_set(&vgt->crashing, 0);
+
 	if ((rc = vgt->vgt_id = allocate_vgt_id()) < 0 )
 		goto err;
 
