@@ -439,21 +439,25 @@ bool dpy_reg_mmio_read_3(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-static int pp_dir_base_to_ring_id(unsigned int reg)
+static int pp_mmio_to_ring_id(unsigned int reg)
 {
 	int ring_id;
 
 	switch (reg) {
 	case _REG_RCS_PP_DIR_BASE_IVB:
+	case _REG_RCS_GFX_MODE_IVB:
 		ring_id = RING_BUFFER_RCS;
 		break;
 	case _REG_BCS_PP_DIR_BASE:
+	case _REG_BCS_BLT_MODE_IVB:
 		ring_id = RING_BUFFER_BCS;
 		break;
 	case _REG_VCS_PP_DIR_BASE:
+	case _REG_VCS_MFX_MODE_IVB:
 		ring_id = RING_BUFFER_VCS;
 		break;
 	case _REG_VECS_PP_DIR_BASE:
+	case _REG_VEBOX_MODE:
 		ring_id = RING_BUFFER_VECS;
 		break;
 	default:
@@ -468,7 +472,7 @@ static int pp_dir_base_to_ring_id(unsigned int reg)
 static bool pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 			void *p_data, unsigned int bytes)
 {
-	int ring_id = pp_dir_base_to_ring_id(off);
+	int ring_id = pp_mmio_to_ring_id(off);
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 
 	ASSERT(bytes == 4);
@@ -483,7 +487,7 @@ static bool pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 			void *p_data, unsigned int bytes)
 {
 	u32 base = *(u32 *)p_data;
-	int ring_id = pp_dir_base_to_ring_id(off);
+	int ring_id = pp_mmio_to_ring_id(off);
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 	vgt_ring_ppgtt_t *s_info = &vgt->rb[ring_id].sring_ppgtt_info;
 
@@ -532,7 +536,7 @@ static bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
 static bool ring_pp_mode_read(struct vgt_device *vgt, unsigned int off,
 			void *p_data, unsigned int bytes)
 {
-	int ring_id = pp_dir_base_to_ring_id(off);
+	int ring_id = pp_mmio_to_ring_id(off);
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 
 	ASSERT(bytes == 4);
@@ -546,7 +550,7 @@ static bool ring_pp_mode_write(struct vgt_device *vgt, unsigned int off,
 			void *p_data, unsigned int bytes)
 {
 	u32 mode = *(u32 *)p_data;
-	int ring_id = pp_dir_base_to_ring_id(off);
+	int ring_id = pp_mmio_to_ring_id(off);
 
 	ASSERT(bytes == 4);
 
