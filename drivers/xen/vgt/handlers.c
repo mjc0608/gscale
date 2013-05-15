@@ -54,19 +54,19 @@ static bool vgt_error_handler(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool gmbus_mmio_read(struct vgt_device *vgt, unsigned int offset,
+static bool gmbus_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	return vgt_i2c_handle_gmbus_read(vgt, offset, p_data, bytes);
 }
 
-bool gmbus_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool gmbus_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	return vgt_i2c_handle_gmbus_write(vgt, offset, p_data, bytes);
 }
 
-bool fence_mmio_read(struct vgt_device *vgt, unsigned int off,
+static bool fence_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int id;
@@ -82,7 +82,7 @@ bool fence_mmio_read(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
-bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
+static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int id;
@@ -168,7 +168,7 @@ static void v_force_wake_put(struct vgt_device *vgt)
 	spin_unlock_irqrestore(&vgt->pdev->v_force_wake_lock, flags);
 }
 
-bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
+static bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t data;
@@ -201,14 +201,14 @@ bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool mul_force_wake_ack_read(struct vgt_device *vgt, unsigned int offset,
+static bool mul_force_wake_ack_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	*(u32 *)p_data = __vreg(vgt, offset);
 	return true;
 }
 
-bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
+static bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t data, mask, wake, old_wake, new_wake;
@@ -257,7 +257,7 @@ bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool rc_state_ctrl_1_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool rc_state_ctrl_1_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t data;
@@ -277,30 +277,7 @@ bool rc_state_ctrl_1_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 }
 
-bool rc_state_ctrl_2_mmio_write(struct vgt_device *vgt, unsigned int offset,
-	void *p_data, unsigned int bytes)
-{
-	uint32_t data;
-
-	ASSERT(bytes == 4);
-
-	data = *(uint32_t*)p_data;
-	printk("VM%d write register RC_STATE_CTRL_2 with 0x%x\n", vgt->vm_id, data);
-
-	__vreg(vgt, offset) = data;
-
-	/* bits 16:18 */
-	data = (data >> 16) & 7;
-
-	if ( data >= 4)
-		set_vRC_to_C6(vgt);
-	else
-		set_vRC_to_C0(vgt);
-
-	return true;
-}
-
-bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	uint32_t data;
@@ -336,7 +313,7 @@ bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool pch_pp_control_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool pch_pp_control_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t data;
@@ -373,7 +350,7 @@ bool pch_pp_control_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool transaconf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool transaconf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t reg;
@@ -396,20 +373,20 @@ bool transaconf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 }
 
 /* Pipe Frame Count */
-bool pipe_frmcount_mmio_read(struct vgt_device *vgt, unsigned int offset,
+static bool pipe_frmcount_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	return default_passthrough_mmio_read(vgt, offset, p_data, bytes);
 }
 
 /* Pipe Display Scan Line*/
-bool pipe_dsl_mmio_read(struct vgt_device *vgt, unsigned int offset,
+static bool pipe_dsl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	return default_passthrough_mmio_read(vgt, offset, p_data, bytes);
 }
 
-bool dpy_reg_mmio_read(struct vgt_device *vgt, unsigned int offset,
+static bool dpy_reg_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	ASSERT(bytes == 4);
@@ -419,7 +396,7 @@ bool dpy_reg_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool dpy_reg_mmio_read_2(struct vgt_device *vgt, unsigned int offset,
+static bool dpy_reg_mmio_read_2(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	ASSERT(bytes == 4);
@@ -429,7 +406,7 @@ bool dpy_reg_mmio_read_2(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool dpy_reg_mmio_read_3(struct vgt_device *vgt, unsigned int offset,
+static bool dpy_reg_mmio_read_3(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	ASSERT(bytes == 4);
@@ -565,7 +542,7 @@ static bool ring_pp_mode_write(struct vgt_device *vgt, unsigned int off,
 
 /* FIXME: add EDID virtualization in the future
  */
-bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
+static bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	bool rc = true;
@@ -606,7 +583,7 @@ bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
-bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
@@ -632,7 +609,7 @@ bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return default_mmio_write(vgt, offset, &wr_data, bytes);
 }
 
-bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
@@ -700,7 +677,7 @@ static bool check_fdi_rx_train_status(struct vgt_device *vgt,
 		return false;
 }
 
-bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset,
+static bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	enum vgt_pipe pipe;
@@ -736,7 +713,7 @@ bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset,
  * Let's take this as one example how this category may be abstracted
  * in the future
  */
-bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
+static bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
@@ -780,7 +757,7 @@ bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
@@ -853,7 +830,7 @@ bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 }
 
 
-bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
+static bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
@@ -909,7 +886,7 @@ bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
-bool dp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool dp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
@@ -958,7 +935,7 @@ bool dp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
-bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
+static bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
@@ -1008,7 +985,7 @@ bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
-bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
@@ -1051,7 +1028,7 @@ bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
-bool dpy_plane_mmio_read(struct vgt_device *vgt, unsigned int offset,
+static bool dpy_plane_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes)
 {
 	ASSERT (bytes == 4);
@@ -1067,7 +1044,7 @@ bool dpy_plane_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool dpy_plane_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool dpy_plane_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	ASSERT(bytes == 4);
@@ -1079,7 +1056,7 @@ bool dpy_plane_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool dpy_modeset_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool dpy_modeset_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	bool rc;
@@ -1142,7 +1119,7 @@ inline bool surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	bool rc;
@@ -1152,7 +1129,7 @@ bool dspsurf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
-bool surflive_mmio_write (struct vgt_device *vgt, unsigned int offset,
+static bool surflive_mmio_write (struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	/* surflive is readonly registers. ignore the write from driver*/
@@ -1236,7 +1213,7 @@ static void dp_aux_ch_ctl_link_training(struct vgt_dpcd_data *dpcd, uint8_t t)
 
 }
 
-bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	unsigned int reg = 0;
