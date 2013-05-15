@@ -144,11 +144,31 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint32_t *cfg_reg, new, size;
+	u8 old_cmd, cmd_changed; /* we don't care the high 8 bits */
 	bool rc = true;
 
 	ASSERT ((off + bytes) <= VGT_CFG_SPACE_SZ);
 	cfg_reg = (uint32_t*)(cfg_space + (off & ~3));
 	switch (off & ~3) {
+		case VGT_REG_CFG_COMMAND:
+			old_cmd = vgt->state.cfg_space[off];
+			cmd_changed = old_cmd ^ (*(u8*)p_data);
+			memcpy (&vgt->state.cfg_space[off], p_data, bytes);
+			if (cmd_changed & _REGBIT_CFG_COMMAND_MEMORY) {
+				if (old_cmd & _REGBIT_CFG_COMMAND_MEMORY) {
+					 vgt_hvm_map_apperture(vgt, 0);
+					/* need unset trap area? */
+				} else {
+
+					vgt_hvm_map_apperture(vgt, 1);
+					vgt_hvm_set_trap_area(vgt);
+				}
+			} else {
+				vgt_dbg("need to trap the PIO BAR? "
+					"old_cmd=0x%x, cmd_changed=%0x",
+					old_cmd, cmd_changed);
+			}
+			break;
 		case VGT_REG_CFG_SPACE_BAR0:	/* GTTMMIO */
 		case VGT_REG_CFG_SPACE_BAR1:	/* GMADR */
 		case VGT_REG_CFG_SPACE_BAR2:	/* IO */

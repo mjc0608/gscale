@@ -1656,6 +1656,12 @@ static inline void vgt_pci_bar_write_32(struct vgt_device *vgt, uint32_t bar_off
 	*cfg_reg = (val & 0xFFFFFFF0) | (*cfg_reg & 0xF);
 }
 
+static inline int vgt_pci_mmio_is_enabled(struct vgt_device *vgt)
+{
+	return vgt->state.cfg_space[VGT_REG_CFG_COMMAND] &
+		_REGBIT_CFG_COMMAND_MEMORY;
+}
+
 struct vgt_irq_host_state;
 typedef void (*vgt_event_phys_handler_t)(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event);

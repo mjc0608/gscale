@@ -1438,6 +1438,10 @@ enum vgt_port_type {
 #define VGT_PCI_CLASS_VGA			0x03
 #define VGT_PCI_CLASS_VGA_OTHER			0x80
 
+#define VGT_REG_CFG_COMMAND			0x04
+#define _REGBIT_CFG_COMMAND_IO			(1 << 0)
+#define _REGBIT_CFG_COMMAND_MEMORY		(1 << 1)
+#define _REGBIT_CFG_COMMAND_MASTER		(1 << 2)
 #define VGT_REG_CFG_CLASS_PROG_IF		0x09
 #define VGT_REG_CFG_SUB_CLASS_CODE		0x0A
 #define VGT_REG_CFG_CLASS_CODE			0x0B

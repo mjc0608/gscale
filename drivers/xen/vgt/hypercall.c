@@ -116,6 +116,9 @@ int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 	struct xen_hvm_vgt_map_mmio memmap;
 	int r;
 
+	if (!vgt_pci_mmio_is_enabled(vgt))
+		return 0;
+
 	/* guarantee the sequence of map -> unmap -> map -> unmap */
 	if (map == vgt->state.bar_mapped[1])
 		return 0;
@@ -161,6 +164,9 @@ int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 	struct xen_hvm_vgt_set_trap_io trap;
 	uint64_t bar_s, bar_e;
 	int r;
+
+	if (!vgt_pci_mmio_is_enabled(vgt))
+		return 0;
 
 	trap.domid = vgt->vm_id;
 	trap.nr_pio_frags = 0;

@@ -194,6 +194,13 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	cfg_space[_REG_GMCH_CONTRL] &= ~(_REGBIT_GMCH_GMS_MASK << _REGBIT_GMCH_GMS_SHIFT);
 	vgt_pci_bar_write_32(vgt, VGT_REG_CFG_SPACE_BAR1, phys_aperture_base(pdev) );
 
+	/* mark HVM's GEN device's IO as Disabled. hvmloader will enable it */
+	if (vgt->vm_id != 0) {
+		cfg_space[VGT_REG_CFG_COMMAND] &= ~(_REGBIT_CFG_COMMAND_IO |
+						_REGBIT_CFG_COMMAND_MEMORY |
+						_REGBIT_CFG_COMMAND_MASTER);
+	}
+
 	vgt_info("aperture: [0x%llx, 0x%llx] guest [0x%llx, 0x%llx] "
 		"va(0x%llx)\n",
 		vgt_aperture_base(vgt),
