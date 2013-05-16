@@ -687,7 +687,30 @@ static bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset
 	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 
 	reg = offset & ~(bytes - 1);
-	pipe = VGT_FDIRXCTL_PIPE(offset);
+
+	switch (offset) {
+		case _REG_FDI_RXA_CTL:
+		case _REG_FDI_TXA_CTL:
+		case _REG_FDI_RXA_IMR:
+			pipe = PIPE_A;
+			break;
+
+		case _REG_FDI_RXB_CTL:
+		case _REG_FDI_TXB_CTL:
+		case _REG_FDI_RXB_IMR:
+			pipe = PIPE_B;
+			break;
+
+		case _REG_FDI_RXC_CTL:
+		case _REG_FDI_TXC_CTL:
+		case _REG_FDI_RXC_IMR:
+			pipe = PIPE_C;
+			break;
+
+		default:
+			BUG();
+	}
+
 	fdi_rx_iir = VGT_FDI_RX_IIR(pipe);
 
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
@@ -1915,14 +1938,16 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_TRANSBCONF, 4, F_DPY, 0, D_ALL, NULL, transaconf_mmio_write},
 {_REG_FDI_RXA_IIR, 4, F_DPY, 0, D_ALL, NULL, fdi_rx_iir_mmio_write},
 {_REG_FDI_RXB_IIR, 4, F_DPY, 0, D_ALL, NULL, fdi_rx_iir_mmio_write},
+{_REG_FDI_RXC_IIR, 4, F_DPY, 0, D_GEN7PLUS, NULL, fdi_rx_iir_mmio_write},
 {_REG_FDI_RXA_CTL, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_RXB_CTL, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_RXC_CTL, 4, F_DPY, 0, D_GEN7PLUS, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_TXA_CTL, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_TXB_CTL, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
-{_REG_FDI_TXC_CTL, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
+{_REG_FDI_TXC_CTL, 4, F_DPY, 0, D_GEN7PLUS, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_RXA_IMR, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
 {_REG_FDI_RXB_IMR, 4, F_DPY, 0, D_ALL, NULL, update_fdi_rx_iir_status},
+{_REG_FDI_RXC_IMR, 4, F_DPY, 0, D_GEN7PLUS, NULL, update_fdi_rx_iir_status},
 
 {_REG_TRANS_HTOTAL_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 {_REG_TRANS_HBLANK_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},

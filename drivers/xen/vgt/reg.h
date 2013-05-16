@@ -747,8 +747,10 @@
 
 #define _REG_FDI_RXA_IIR			0xf0014
 #define _REG_FDI_RXB_IIR			0xf1014
+#define _REG_FDI_RXC_IIR			0xf2014
 #define _REG_FDI_RXA_IMR			0xf0018
 #define _REG_FDI_RXB_IMR			0xf1018
+#define _REG_FDI_RXC_IMR			0xf2018
 #define VGT_FDI_RX_IIR(pipe) _VGT_PIPE(pipe, _REG_FDI_RXA_IIR, _REG_FDI_RXB_IIR)
 #define VGT_FDI_RX_IMR(pipe) _VGT_PIPE(pipe, _REG_FDI_RXA_IMR, _REG_FDI_RXB_IMR)
 
@@ -766,7 +768,6 @@
 
 
 #define VGT_FDI_RX_CTL_BPC_MASK		(0x7 << 16)
-#define VGT_FDIRXCTL_PIPE(ctrl) _VGT_GET_PIPE(ctrl, _REG_FDI_RXA_CTL, _REG_FDI_RXB_CTL)
 #define VGT_FDI_RX_CTL(pipe) _VGT_PIPE(pipe, _REG_FDI_RXA_CTL, _REG_FDI_RXB_CTL)
 
 #define _REG_FDI_RXA_MISC			0xf0010
