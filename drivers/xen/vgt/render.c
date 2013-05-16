@@ -291,7 +291,7 @@ int vgt_thread(void *priv)
 		check_irq = false;
 
 		if (!(vgt_ctx_check(pdev) % threshold))
-			vgt_info("vGT: %lldth checks, %lld switches\n",
+			vgt_dbg("vGT: %lldth checks, %lld switches\n",
 				vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
 		vgt_ctx_check(pdev)++;
 
@@ -722,7 +722,7 @@ static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs
 		 */
 		//if (!reg_hw_status(vgt->pdev, reg))
 		if (__sreg(vgt, _REG_RCS_UHPTR) & 1) {
-			vgt_info("!!!!!UHPTR is valid after resuming. Clear the valid bit\n");
+			vgt_dbg("!!!!!UHPTR is valid after resuming. Clear the valid bit\n");
 			__sreg(vgt, _REG_RCS_UHPTR) &= ~1;
 			__vreg(vgt, _REG_RCS_UHPTR) &= ~1;
 		}

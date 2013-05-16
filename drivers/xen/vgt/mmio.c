@@ -431,7 +431,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
 	}
 
 	if (offset == _REG_RCS_UHPTR)
-		vgt_info("vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
+		vgt_dbg("vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
 
 	reg_set_accessed(pdev, offset);
 	spin_unlock_irqrestore(&pdev->lock, flags);
