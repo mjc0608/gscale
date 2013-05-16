@@ -395,7 +395,13 @@ static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
 
 static int vgt_cmd_advance_default(struct parser_exec_state *s)
 {
-	return ip_gma_advance(s, cmd_length(s));
+	int rc;
+	if (unlikely(s->ip_advance_update)) {
+		rc = ip_gma_advance(s, s->ip_advance_update);
+		s->ip_advance_update = 0;
+		return rc;
+	} else
+		return ip_gma_advance(s, cmd_length(s));
 }
 
 
@@ -502,6 +508,7 @@ static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 		vgt_warn("Page flip of Stereo 3D is not supported!\n");
 		goto wrong_command;
 	} else if (length != 3) {
+		vgt_warn("Flip length not equal to 3, ignore handling flipping");
 		goto wrong_command;
 	}
 
@@ -548,6 +555,7 @@ command_noop:
 	for (i = 0; i < length; i ++) {
 		*(cmd_ptr(s, i)) = MI_NOOP | VGT_NOOP_ID_MASK;
 	}
+	s->ip_advance_update = length;
 
 	return 0;
 
@@ -1555,6 +1563,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	s.ring_size = size;
 	s.ring_head = gma_head;
 	s.ring_tail = gma_tail;
+	s.ip_advance_update = 0;
 
 	rc = ip_gma_set(&s, base + head);
 	if (rc < 0){
