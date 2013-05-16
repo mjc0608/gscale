@@ -1584,6 +1584,10 @@ enum vgt_port_type {
 #define _REG_HSW_AUD_CONFIG_A			0x65000
 
 #define _REG_SFUSE_STRAP			0xC2014
+#define  _REGBIT_SFUSE_STRAP_B_PRESENTED	(1 << 2)
+#define  _REGBIT_SFUSE_STRAP_C_PRESENTED	(1 << 1)
+#define  _REGBIT_SFUSE_STRAP_D_PRESENTED	(1 << 0)
+
 #define _REG_PIXCLK_GATE			0xC6020
 
 #endif	/* _VGT_REG_H_ */

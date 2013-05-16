@@ -273,7 +273,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			gmbus_port = 6;
 			break;
 		case EDID_DPB:
-			if (VGT_MMIO_READ(pdev, _REG_PCH_DPB_AUX_CH_CTL) | _DP_DETECTED) {
+			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_B_PRESENTED) {
 				vgt_info("EDID_PROBE: DP B Detected.\n");
 				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
 			} else {
@@ -281,7 +281,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			}
 			break;
 		case EDID_DPC:
-			if (VGT_MMIO_READ(pdev, _REG_PCH_DPC_AUX_CH_CTL) | _DP_DETECTED) {
+			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_C_PRESENTED) {
 				vgt_info("EDID_PROBE: DP C Detected.\n");
 				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
 			} else {
@@ -289,7 +289,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			}
 			break;
 		case EDID_DPD:
-			if (VGT_MMIO_READ(pdev, _REG_PCH_DPD_AUX_CH_CTL) | _DP_DETECTED) {
+			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_D_PRESENTED) {
 				vgt_info("EDID_PROBE: DP D Detected.\n");
 				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
 			} else {
@@ -405,7 +405,7 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 
 		switch (i) {
 		case DPCD_DPB:
-			if (VGT_MMIO_READ(pdev, _REG_PCH_DPB_AUX_CH_CTL) | _DP_DETECTED) {
+			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_B_PRESENTED) {
 				vgt_info("DPCD_PROBE: DP B Detected.\n");
 				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
 			} else {
@@ -413,7 +413,7 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 			}
 			break;
 		case DPCD_DPC:
-			if (VGT_MMIO_READ(pdev, _REG_PCH_DPC_AUX_CH_CTL) | _DP_DETECTED) {
+			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_C_PRESENTED) {
 				vgt_info("DPCD_PROBE: DP C Detected.\n");
 				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
 			} else {
@@ -421,7 +421,7 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 			}
 			break;
 		case DPCD_DPD:
-			if (VGT_MMIO_READ(pdev, _REG_PCH_DPD_AUX_CH_CTL) | _DP_DETECTED) {
+			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_D_PRESENTED) {
 				vgt_info("DPCD_PROBE: DP D Detected.\n");
 				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
 			} else {
