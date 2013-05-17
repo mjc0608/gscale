@@ -609,6 +609,25 @@ static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return default_mmio_write(vgt, offset, &wr_data, bytes);
 }
 
+static bool ddi_buf_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	bool rc;
+	vgt_reg_t reg_val;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+
+	reg_val = *(vgt_reg_t *)p_data;
+
+	// set the RO bit with its original value
+	reg_val = (reg_val & ~_DDI_BUFCTL_DETECT_MASK)
+		| (__sreg(vgt, offset) & _DDI_BUFCTL_DETECT_MASK);
+
+	rc = default_mmio_write(vgt, offset, &reg_val, bytes);
+
+	return rc;
+}
+
 static bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -2161,18 +2180,11 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_DPA_AUX_CH_CTL, 8, F_DPY, 0, D_HSW, dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
 
-#if 0
-{0x64100, 4, F_DPY, 0, D_HSW, dp_ctl_mmio_read, dp_ctl_mmio_write},
-{0x64200, 4, F_DPY, 0, D_HSW, dp_ctl_mmio_read, dp_ctl_mmio_write},
-{0x64300, 4, F_DPY, 0, D_HSW, dp_ctl_mmio_read, dp_ctl_mmio_write},
-{0x64400, 4, F_DPY, 0, D_HSW, dp_ctl_mmio_read, dp_ctl_mmio_write},
-#else
-{_REG_DP_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_DP_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_DP_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_DP_D, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{0x64400, 4, F_DPY, 0, D_HSW, NULL, NULL},
-#endif
+{_REG_DDI_BUF_CTL_A, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
+{_REG_DDI_BUF_CTL_B, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
+{_REG_DDI_BUF_CTL_C, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
+{_REG_DDI_BUF_CTL_D, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
+{0x64400, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
 
 {_REG_DP_TP_CTL_A, 4, F_DPY, 0, D_HSW, NULL, dp_tp_ctl_mmio_write},
 {_REG_DP_TP_CTL_B, 4, F_DPY, 0, D_HSW, NULL, dp_tp_ctl_mmio_write},
