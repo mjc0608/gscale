@@ -925,9 +925,6 @@ static bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 		reg_data = *(vgt_reg_t *)p_data;
 		if (reg_data & _REGBIT_DP_PORT_DETECTED) {
 			switch (reg) {
-				case _REG_DP_A_CTL:
-					set_bit(VGT_DP_A, pdev->port_detect_status);
-					break;
 				case _REG_DP_B_CTL:
 					set_bit(VGT_DP_B, pdev->port_detect_status);
 					break;
@@ -943,9 +940,6 @@ static bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			vgt_set_all_vreg_bit(pdev, _REGBIT_DP_PORT_DETECTED, reg);
 		} else {
 			switch (reg) {
-				case _REG_DP_A_CTL:
-					clear_bit(VGT_DP_A, pdev->port_detect_status);
-					break;
 				case _REG_DP_B_CTL:
 					clear_bit(VGT_DP_B, pdev->port_detect_status);
 					break;
@@ -981,12 +975,6 @@ static bool dp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
 	/* Read only bit should be keeped coherent with intended hardware status */
 	switch (reg) {
-		case _REG_DP_A_CTL:
-			if (test_bit(VGT_DP_A, pdev->port_detect_status))
-				vreg_data |= _REGBIT_DP_PORT_DETECTED;
-			else
-				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
-			break;
 		case _REG_DP_B_CTL:
 			if (test_bit(VGT_DP_B, pdev->port_detect_status))
 				vreg_data |= _REGBIT_DP_PORT_DETECTED;
@@ -1985,7 +1973,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PCH_DPD_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL,
 	dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
 {_REG_PCH_ADPA, 4, F_DPY, 0, D_ALL, pch_adpa_mmio_read, pch_adpa_mmio_write},
-{_REG_DP_A_CTL, 4, F_DPY, 0, D_ALL, dp_ctl_mmio_read, dp_ctl_mmio_write},
 {_REG_DP_B_CTL, 4, F_DPY, 0, D_ALL, dp_ctl_mmio_read, dp_ctl_mmio_write},
 {_REG_DP_C_CTL, 4, F_DPY, 0, D_ALL, dp_ctl_mmio_read, dp_ctl_mmio_write},
 {_REG_DP_D_CTL, 4, F_DPY, 0, D_ALL, dp_ctl_mmio_read, dp_ctl_mmio_write},
@@ -2180,6 +2167,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x64300, 4, F_DPY, 0, D_HSW, dp_ctl_mmio_read, dp_ctl_mmio_write},
 {0x64400, 4, F_DPY, 0, D_HSW, dp_ctl_mmio_read, dp_ctl_mmio_write},
 #else
+{_REG_DP_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_DP_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_DP_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_DP_D, 4, F_DPY, 0, D_HSW, NULL, NULL},

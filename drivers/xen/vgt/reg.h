@@ -864,7 +864,6 @@
 
 
 /* Digital display A (DP_A, embedded) */
-#define _REG_DP_A_CTL	0x64000
 #define _REGBIT_DP_PORT_A_DETECTED	(1 << 2)
 
 /* HDMI/DVI/SDVO port */
@@ -1120,12 +1119,14 @@ union _TRANS_CONFIG
 
 /* Display Port */
 #define _REG_DP_TP_CTL_A		0x64040
-#define _REG_DP_B			0x64100
 #define _REG_DP_TP_CTL_B		0x64140
-#define _REG_DP_C			0x64200
 #define _REG_DP_TP_CTL_C		0x64240
-#define _REG_DP_D			0x64300
 #define _REG_DP_TP_CTL_D		0x64340
+
+#define _REG_DP_A			0x64000
+#define _REG_DP_B			0x64100
+#define _REG_DP_C			0x64200
+#define _REG_DP_D			0x64300
 
 #define _REG_DDI_BUF_CTL_A		0x64000
 #define  _DDI_BUFCTL_DETECT_MASK	0x1
