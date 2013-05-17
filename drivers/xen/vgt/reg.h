@@ -1124,7 +1124,7 @@ union _TRANS_CONFIG
 #define _REG_DP_TP_CTL_D		0x64340
 
 #define _REG_DDI_BUF_CTL_A		0x64000
-#define     _DDI_BUFCTL_DETECT_MASK	0x1
+#define  _DDI_BUFCTL_DETECT_MASK	0x1
 #define _REG_DDI_BUF_CTL_B		0x64100
 #define _REG_DDI_BUF_CTL_C		0x64200
 #define _REG_DDI_BUF_CTL_D		0x64300
@@ -1372,6 +1372,7 @@ typedef enum {
 	EDID_HDMIC,
 	EDID_HDMIB,
 	EDID_HDMID,
+	EDID_DPA,
 	EDID_DPB,
 	EDID_DPC,
 	EDID_DPD,
@@ -1534,6 +1535,7 @@ enum vgt_port_type {
 #define _REG_WRPLL_CTL1		0x46040
 #define _REG_WRPLL_CTL2		0x46060
 
+#define _REG_PORT_CLK_SEL_DDIA	0x46100
 #define _REG_PORT_CLK_SEL_DDIB	0x46104
 #define _REG_PORT_CLK_SEL_DDIC	0x46108
 #define _REG_PORT_CLK_SEL_DDID	0x4610C
@@ -1579,6 +1581,7 @@ enum vgt_port_type {
 #define _REG_HSW_VIDEO_DIP_CTL_C		0x62200
 
 #define _REG_DPA_AUX_CH_CTL			0x64010
+#define _REG_DPA_AUX_CH_DATA1			0x64014
 
 #define _REG_DDI_BUF_TRANS_A			0x64E00
 #define _REG_HSW_AUD_CONFIG_A			0x65000

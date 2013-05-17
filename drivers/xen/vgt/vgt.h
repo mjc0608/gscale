@@ -56,10 +56,12 @@
 #include <xen/vgt-if.h>
 #include <xen/vgt.h>
 
-#include "edid.h"
+typedef uint32_t vgt_reg_t;
+
 #include "reg.h"
 #include "ringbuffer.h"
 #include "devtable.h"
+#include "edid.h"
 
 struct pgt_device;
 extern struct vgt_device *dom0_vgt;
@@ -219,8 +221,6 @@ enum vgt_event_type {
 
 #define vgt_dbg(fmt, s...)	\
 	do { if (vgt_debug) printk(KERN_DEBUG "vGT debug:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
-
-typedef uint32_t vgt_reg_t;
 
 /*
  * Define registers of a ring buffer per hardware register layout.
@@ -486,7 +486,8 @@ struct vgt_dpcd_data {
 };
 
 enum dpcd_index {
-	DPCD_DPB = 0,
+	DPCD_DPA = 0,
+	DPCD_DPB,
 	DPCD_DPC,
 	DPCD_DPD,
 	DPCD_MAX

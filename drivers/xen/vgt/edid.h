@@ -135,17 +135,37 @@ typedef struct {
  */
 typedef unsigned int vgt_register_t;
 
-#define VGT_DP_NUM 3
+#define VGT_DP_NUM 4
 typedef enum {
 	VGT_DP_NA = -1,
-	VGT_DPB_IDX = 0,
+	VGT_DPA_IDX = 0,
+	VGT_DPB_IDX,
 	VGT_DPC_IDX,
 	VGT_DPD_IDX
 }VGT_DP_PORTS_IDX;
 
+#define AUX_REGISTER_NUM 6
+typedef enum {
+	AUX_CH_INV = -1,
+	AUX_CH_CTL = 0,
+	AUX_CH_DATA1,
+	AUX_CH_DATA2,
+	AUX_CH_DATA3,
+	AUX_CH_DATA4,
+	AUX_CH_DATA5
+}AUX_CH_REGISTERS;
+
+typedef unsigned int aux_reg_t;
+
 static inline VGT_DP_PORTS_IDX vgt_get_dp_port_idx(unsigned int offset)
 {
 	VGT_DP_PORTS_IDX port_idx;
+
+	if (offset >= _REG_DPA_AUX_CH_CTL
+		&& offset <= _REG_DPA_AUX_CH_CTL + AUX_REGISTER_NUM * sizeof(vgt_reg_t)) {
+		return VGT_DPA_IDX;
+	}
+
 	switch (((offset & 0xff00) >> 8) - 0x41) {
 	case 0:
 		port_idx = VGT_DPB_IDX;
@@ -162,20 +182,6 @@ static inline VGT_DP_PORTS_IDX vgt_get_dp_port_idx(unsigned int offset)
 	}
 	return port_idx;
 }
-/* ^^^ move above definitions to common header file. */
-
-#define AUX_REGISTER_NUM 6
-typedef enum {
-	AUX_CH_INV = -1,
-	AUX_CH_CTL = 0,
-	AUX_CH_DATA1,
-	AUX_CH_DATA2,
-	AUX_CH_DATA3,
-	AUX_CH_DATA4,
-	AUX_CH_DATA5
-}AUX_CH_REGISTERS;
-
-typedef unsigned int aux_reg_t;
 
 /* AUX_CH has multiple sets of registers including ctl, data etc,
  * each of which is for a DP port, like DP_B, DP_C or DP_D.

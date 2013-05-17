@@ -272,6 +272,14 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			vgt_info("EDID_PROBE: HDMI D.\n");
 			gmbus_port = 6;
 			break;
+		case EDID_DPA:
+			if (VGT_MMIO_READ(pdev, _REG_DDI_BUF_CTL_A) | _DDI_BUFCTL_DETECT_MASK) {
+				vgt_info("EDID_PROBE: DP A Detected.\n");
+				aux_ch_addr = _REG_DPA_AUX_CH_CTL;
+			} else {
+				vgt_info("EDID_PROBE: DP A is not detected.\n");
+			}
+			break;
 		case EDID_DPB:
 			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_B_PRESENTED) {
 				vgt_info("EDID_PROBE: DP B Detected.\n");
@@ -404,6 +412,14 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 			continue;
 
 		switch (i) {
+		case DPCD_DPA:
+			if (VGT_MMIO_READ(pdev, _REG_DDI_BUF_CTL_A) | _DDI_BUFCTL_DETECT_MASK) {
+				vgt_info("DPCD_PROBE: DP A Detected.\n");
+				aux_ch_addr = _REG_DPA_AUX_CH_CTL;
+			} else {
+				vgt_info("DPCD_PROBE: DP A is not detected.\n");
+			}
+			break;
 		case DPCD_DPB:
 			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_B_PRESENTED) {
 				vgt_info("DPCD_PROBE: DP B Detected.\n");

@@ -554,13 +554,11 @@ static bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 
 	rc = default_mmio_read(vgt, offset, p_data, bytes);
 
-	/* workaround for eDP which we do not support currently */
-	if (offset == 0x64010 || offset == 0x64014) {
-		return rc;
-	}
-
 	port_idx = vgt_get_dp_port_idx(offset);
 	switch (port_idx) {
+	case VGT_DPA_IDX:
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPA];
+		break;
 	case VGT_DPB_IDX:
 		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPB];
 		break;
@@ -1320,16 +1318,8 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 	if (reg_hw_access(vgt, reg))
 		return true;
 
-	if (reg == 0x64010) {
-		/* workaround for eDP which currently we do not support */
-		/* ACK the write */
-		__vreg(vgt, reg + 4) = 0;
-
-		dp_aux_ch_ctl_trans_done(vgt, value, reg, 0);
-		return true;
-	}
-
-	if (reg != _REG_PCH_DPB_AUX_CH_CTL &&
+	if (reg != _REG_DPA_AUX_CH_CTL &&
+	    reg != _REG_PCH_DPB_AUX_CH_CTL &&
 	    reg != _REG_PCH_DPC_AUX_CH_CTL &&
 	    reg != _REG_PCH_DPD_AUX_CH_CTL) {
 		/* write to the data registers */
@@ -1343,6 +1333,10 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 	}
 
 	switch (port_idx) {
+	case VGT_DPA_IDX:
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPA];
+		dpcd = vgt->vgt_dpcds[DPCD_DPA];
+		break;
 	case VGT_DPB_IDX:
 		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPB];
 		dpcd = vgt->vgt_dpcds[DPCD_DPB];
@@ -1499,6 +1493,9 @@ static inline void vgt_aux_register_assign(aux_reg_t *dst[AUX_REGISTER_NUM],
 
 void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs)
 {
+	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DPA_IDX],
+		(vgt_reg_t *)((char *)vregs + _REG_DPA_AUX_CH_CTL));
+
 	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DPB_IDX],
 		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPB_AUX_CH_CTL));
 
@@ -1924,6 +1921,18 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_BCLRPAT_C, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_VSYNCSHIFT_C, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 
+{0x6F000, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{0x6F004, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{0x6F008, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{0x6F00C, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{0x6F010, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{0x6F014, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{0x6F028, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
+{0x6F030, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x6F034, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x6F040, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x6F044, 4, F_DPY, 0, D_ALL, NULL, NULL},
+
 {_REG_PIPEA_DATA_M1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PIPEA_DATA_N1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PIPEA_LINK_M1, 4, F_DPY, 0, D_ALL, NULL, NULL},
@@ -1985,12 +1994,14 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PCH_GPIOA, 6*6, F_VIRT, 0, D_ALL, NULL, NULL},
 
 {_REG_DP_BUFTRANS, 0x28, F_DPY, 0, D_ALL, NULL, NULL},
+
 {_REG_PCH_DPB_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL,
 	dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
 {_REG_PCH_DPC_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL,
 	dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
 {_REG_PCH_DPD_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL,
 	dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
+
 {_REG_PCH_ADPA, 4, F_DPY, 0, D_ALL, pch_adpa_mmio_read, pch_adpa_mmio_write},
 {_REG_DP_B_CTL, 4, F_DPY, 0, D_ALL, dp_ctl_mmio_read, dp_ctl_mmio_write},
 {_REG_DP_C_CTL, 4, F_DPY, 0, D_ALL, dp_ctl_mmio_read, dp_ctl_mmio_write},
@@ -2147,6 +2158,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_SPLL_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_WRPLL_CTL1, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_WRPLL_CTL2, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_PORT_CLK_SEL_DDIA, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_PORT_CLK_SEL_DDIB, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_PORT_CLK_SEL_DDIC, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_PORT_CLK_SEL_DDID, 4, F_DPY, 0, D_HSW, NULL, NULL},
@@ -2178,7 +2190,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIXCLK_GATE, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {0xF200C, 4, F_DPY, 0, D_SNB, NULL, NULL},
 
-{_REG_DPA_AUX_CH_CTL, 8, F_DPY, 0, D_HSW, dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
+{_REG_DPA_AUX_CH_CTL, 6*4, F_DPY, 0, D_HSW, dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
 
 {_REG_DDI_BUF_CTL_A, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
 {_REG_DDI_BUF_CTL_B, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
@@ -2215,6 +2227,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_TRANS_MSA_MISC_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_TRANS_MSA_MISC_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_TRANS_MSA_MISC_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{0x6F410, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
 	/* -------others---------- */
 {_REG_PMIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
