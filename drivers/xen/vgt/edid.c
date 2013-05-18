@@ -206,9 +206,21 @@ static unsigned int vgt_aux_ch_transaction(struct pgt_device *pdev,
 {
 	/* TODO: DATA from the i915 driver. Need more handling.
 	 */
-	int aux_clock_divider = 62;
-	int precharge = 3;		//GEN6
+	int aux_clock_divider;
+	int precharge;
 	unsigned int status;
+
+	if (aux_ctrl_addr == _REG_DPA_AUX_CH_CTL) {
+		aux_clock_divider = 169;
+	} else {
+		aux_clock_divider = 62;
+	}
+
+	if (_is_sandybridge(pdev->pdev->device)) {
+		precharge = 3;
+	} else {
+		precharge = 5;
+	}
 
 	while (VGT_MMIO_READ(pdev, aux_ctrl_addr) &
 				_REGBIT_DP_AUX_CH_CTL_SEND_BUSY);
