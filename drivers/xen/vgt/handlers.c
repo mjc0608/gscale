@@ -722,6 +722,62 @@ static bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset
 	}
 	return rc;
 }
+#define DP_TP_CTL_10_8_MASK	0x00000700
+#define DP_TP_CTL_8_SHIFT	0x8
+#define DP_TP_STATUS_25_SHIFT	25
+
+static bool dp_tp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	enum vgt_port port;
+	unsigned int dp_tp_status_reg, val;
+	vgt_reg_t ctl_val;
+	bool rc;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
+
+	if (!reg_hw_access(vgt, offset)) {
+		port = VGT_DP_TP_CTL_PORT(offset);
+		ctl_val = __vreg(vgt, offset);
+		val = (ctl_val & DP_TP_CTL_10_8_MASK) >> DP_TP_CTL_8_SHIFT;
+
+		if (val == 0x2) {
+			dp_tp_status_reg = VGT_DP_TP_STATUS(port);
+			__vreg(vgt, dp_tp_status_reg) |= (1 << DP_TP_STATUS_25_SHIFT);
+			__sreg(vgt, dp_tp_status_reg) = __vreg(vgt, dp_tp_status_reg);
+		}
+	}
+
+	return rc;
+}
+
+#define BIT_27		27
+#define BIT_26		26
+#define BIT_24		24
+
+static bool dp_tp_status_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	bool rc = true;
+	vgt_reg_t reg_val;
+	vgt_reg_t sticky_mask;
+
+	ASSERT(bytes == 4 && (offset & 0x3) == 0);
+
+	reg_val = *((vgt_reg_t *)p_data);
+	sticky_mask = ((1 << BIT_27) | (1 << BIT_26) | (1 << BIT_24)) & reg_val;
+
+	__vreg(vgt, offset) &= ~sticky_mask;
+	__sreg(vgt, offset) &= __vreg(vgt, offset);
+
+	if (reg_hw_access(vgt, offset)) {
+		VGT_MMIO_WRITE(vgt->pdev, offset, reg_val);
+	}
+
+	return rc;
+}
 
 /*
  * TODO:
@@ -2128,16 +2184,16 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x64400, 4, F_DPY, 0, D_HSW, NULL, NULL},
 #endif
 
-{_REG_DP_TP_CTL_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_DP_TP_CTL_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_DP_TP_CTL_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_DP_TP_CTL_D, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DP_TP_CTL_A, 4, F_DPY, 0, D_HSW, NULL, dp_tp_ctl_mmio_write},
+{_REG_DP_TP_CTL_B, 4, F_DPY, 0, D_HSW, NULL, dp_tp_ctl_mmio_write},
+{_REG_DP_TP_CTL_C, 4, F_DPY, 0, D_HSW, NULL, dp_tp_ctl_mmio_write},
+{_REG_DP_TP_CTL_D, 4, F_DPY, 0, D_HSW, NULL, dp_tp_ctl_mmio_write},
 {0x64440, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
-{_REG_DP_TP_STATUS_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_DP_TP_STATUS_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{0x64244, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{0x64344, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DP_TP_STATUS_A, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
+{_REG_DP_TP_STATUS_B, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
+{_REG_DP_TP_STATUS_C, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
+{_REG_DP_TP_STATUS_D, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
 {0x64444, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_DDI_BUF_TRANS_A, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
 {0x64E60, 0x50, F_DPY, 0, D_HSW, NULL, NULL},

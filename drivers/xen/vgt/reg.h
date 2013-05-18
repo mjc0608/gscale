@@ -45,8 +45,14 @@
 /*
  * Definition of MMIO registers.
  */
-#define _VGT_PIPE(pipe, a, b)	((a) + (pipe)*((b)-(a)))
-#define _VGT_GET_PIPE(reg, a, b)	(((reg)-(a))/((b)-(a)))
+#define _VGT_MMIO_THROUGH_OFFSET(index, a, b)	((a) + (index)*((b)-(a)))
+#define _VGT_MMIO_GET_INDEX(reg, a, b)		(((reg)-(a))/((b)-(a)))
+
+#define _VGT_PIPE(pipe, a, b)		_VGT_MMIO_THROUGH_OFFSET(pipe, a, b)
+#define _VGT_PORT(port, a, b)		_VGT_MMIO_THROUGH_OFFSET(port, a, b)
+
+#define _VGT_GET_PIPE(reg, a, b)	_VGT_MMIO_GET_INDEX(reg, a, b)
+#define _VGT_GET_PORT(reg, a, b)	_VGT_MMIO_GET_INDEX(reg, a, b)
 
 #define _REG_INVALID	0xFFFFFFFF
 
@@ -1121,6 +1127,26 @@ union _TRANS_CONFIG
 #define _REG_DP_D			0x64300
 #define _REG_DP_TP_CTL_D		0x64340
 
+#define _REG_DDI_BUF_CTL_A		0x64000
+#define  _DDI_BUFCTL_DETECT_MASK	0x1
+#define _REG_DDI_BUF_CTL_B		0x64100
+#define _REG_DDI_BUF_CTL_C		0x64200
+#define _REG_DDI_BUF_CTL_D		0x64300
+
+#define _REG_DP_TP_STATUS_A			0x64044
+#define _REG_DP_TP_STATUS_B			0x64144
+#define _REG_DP_TP_STATUS_C			0x64244
+#define _REG_DP_TP_STATUS_D			0x64344
+
+#define VGT_DP_TP_CTL(port)		_VGT_PORT(port, _REG_DP_TP_CTL_A, \
+						_REG_DP_TP_CTL_B)
+#define VGT_DP_TP_CTL_PORT(reg)		_VGT_GET_PORT(reg, _REG_DP_TP_CTL_A, \
+						_REG_DP_TP_CTL_B)
+#define VGT_DP_TP_STATUS(port)		_VGT_PORT(port, _REG_DP_TP_STATUS_A, \
+						_REG_DP_TP_STATUS_B)
+#define VGT_DP_TP_STATUS_PORT(reg)	_VGT_GET_PORT(reg, _REG_DP_TP_STATUS_A, \
+						_REG_DP_TP_STATUS_B)
+
 #define DRM_MODE_DPMS_ON		0
 
 /* DPCD */
@@ -1319,6 +1345,15 @@ enum vgt_pipe {
 	PIPE_B,
 	PIPE_C,
 	I915_MAX_PIPES
+};
+
+enum vgt_port {
+	PORT_A = 0,
+	PORT_B,
+	PORT_C,
+	PORT_D,
+	PORT_E,
+	I915_MAX_PORTS
 };
 
 #define VGT_PIPE_NAME(p)	((p) == PIPE_A ? "Pipe A" : ((p) == PIPE_B ? "Pipe B" : "Pipe C"))
@@ -1543,8 +1578,6 @@ enum vgt_port_type {
 
 #define _REG_DPA_AUX_CH_CTL			0x64010
 
-#define _REG_DP_TP_STATUS_A			0x64044
-#define _REG_DP_TP_STATUS_B			0x64144
 #define _REG_DDI_BUF_TRANS_A			0x64E00
 #define _REG_HSW_AUD_CONFIG_A			0x65000
 
