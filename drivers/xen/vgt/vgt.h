@@ -776,7 +776,7 @@ struct pgt_device {
 	spinlock_t v_force_wake_lock;
 
 	struct page *dummy_page;
-	struct page *(*rsvd_apertuer_pages)[VGT_APERTURE_PAGES];
+	struct page *(*rsvd_aperture_pages)[VGT_APERTURE_PAGES];
 
 	uint64_t rsvd_aperture_sz;
 	uint64_t rsvd_aperture_base;

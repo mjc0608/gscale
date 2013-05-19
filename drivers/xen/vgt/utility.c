@@ -297,7 +297,7 @@ static void vgt_free_gtt_pages(struct pgt_device *pdev)
 	int i;
 	struct page *dummy_page = pdev->dummy_page;
 	struct page *(*pages)[VGT_APERTURE_PAGES] =
-		pdev->rsvd_apertuer_pages;
+		pdev->rsvd_aperture_pages;
 
 	if (pages != NULL) {
 		for (i = 0; i < VGT_APERTURE_PAGES; i++) {
@@ -366,7 +366,7 @@ int setup_gtt(struct pgt_device *pdev)
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	pdev->rsvd_apertuer_pages = pages;
+	pdev->rsvd_aperture_pages = pages;
 
 	index = GTT_INDEX(pdev, aperture_2_gm(pdev, pdev->rsvd_aperture_base));
 	for (i = 0; i < VGT_APERTURE_PAGES; i++) {
