@@ -369,7 +369,6 @@ int vgt_thread(void *priv)
 					break;
 				}
 
-				previous_render_owner(pdev) = current_render_owner(pdev);
 				current_render_owner(pdev) = next;
 				//show_seqno(pdev);
 

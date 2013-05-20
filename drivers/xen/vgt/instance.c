@@ -383,8 +383,6 @@ void vgt_release_instance(struct vgt_device *vgt)
 		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 		wmb();
 	}
-	if (previous_render_owner(pdev) == vgt)
-		previous_render_owner(pdev) = NULL;
 
 	spin_unlock_irq(&pdev->lock);
 	if (vgt->force_removal)

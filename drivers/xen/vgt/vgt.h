@@ -787,7 +787,6 @@ struct pgt_device {
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
-	struct vgt_device *prev_owner[VGT_OT_MAX];	/* previous owner list of different engines */
 	struct vgt_device *foreground_vm;		/* current visible domain on display. */
 	struct list_head rendering_runq_head; /* reuse this for context scheduler */
 	struct list_head rendering_idleq_head; /* reuse this for context scheduler */
@@ -843,7 +842,6 @@ extern struct pgt_device default_device;
 #define vgt_data_ctx_magic(d)		(d->scratch_page + VGT_DATA_CTX_MAGIC)
 
 #define vgt_get_owner(d, t)		(d->owner[t])
-#define vgt_get_previous_owner(d, t)	(d->prev_owner[t])
 #define current_render_owner(d)		(vgt_get_owner(d, VGT_OT_RENDER))
 #define current_display_owner(d)	(vgt_get_owner(d, VGT_OT_DISPLAY))
 #define current_foreground_vm(d)	(d->foreground_vm)
@@ -851,9 +849,6 @@ extern struct pgt_device default_device;
 #define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
 #define is_current_display_owner(vgt)	(vgt && vgt == current_display_owner(vgt->pdev))
 #define is_current_config_owner(vgt)	(vgt && vgt == current_config_owner(vgt->pdev))
-#define previous_render_owner(d)	(vgt_get_previous_owner(d, VGT_OT_RENDER))
-#define previous_display_owner(d)	(vgt_get_previous_owner(d, VGT_OT_DISPLAY))
-#define previous_config_owner(d)	(vgt_get_previous_owner(d, VGT_OT_CONFIG))
 #define vgt_ctx_check(d)		(d->ctx_check)
 #define vgt_ctx_switch(d)		(d->ctx_switch)
 extern void do_vgt_fast_display_switch(struct vgt_device *pdev);
