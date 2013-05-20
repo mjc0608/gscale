@@ -416,6 +416,7 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
 	return rc;
 }
 
+#if 0
 /* TODO
  *
  * The mi_display_flip handler below is just a workaround. The completed
@@ -554,6 +555,7 @@ wrong_command:
 	vgt_warn("VM %d: wrong mi_display_flip command!\n", s->vgt->vm_id);
 	goto command_noop;
 }
+#endif
 
 #define USE_GLOBAL_GTT_MASK (1U << 22)
 static int vgt_cmd_handler_mi_update_gtt(struct parser_exec_state *s)
@@ -857,7 +859,7 @@ static struct cmd_info cmd_info[] = {
 	{"MI_RS_CONTEXT", OP_MI_RS_CONTEXT, F_LEN_CONST, R_RCS, D_HSW_PLUS, 0, 1, NULL},
 
 	{"MI_DISPLAY_FLIP", OP_MI_DISPLAY_FLIP, F_LEN_VAR, R_ALL, D_ALL,
-		ADDR_FIX_1(2), 8, vgt_cmd_handler_mi_display_flip},
+		ADDR_FIX_1(2), 8, NULL},
 
 	{"MI_SEMAPHORE_MBOX", OP_MI_SEMAPHORE_MBOX, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL },
 
