@@ -373,7 +373,7 @@ static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
 	if (cmd_val(s,0) & VGT_NOOP_ID_MASK){
 		vgt_err("VM %d: Guest reuse cmd buffer! Need ", s->vgt->vm_id);
 		parser_exec_state_dump(s);
-		return -EFAULT;
+		//return -EFAULT;
 	}
 
 	return 0;
@@ -1545,8 +1545,10 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	struct parser_exec_state s;
 	int rc=0;
 
+#if 0
 	if (error_count >= MAX_PARSER_ERROR_NUM)
 		return 0;
+#endif
 
 	/* ring base is page aligned */
 	ASSERT((base & (PAGE_SIZE-1)) == 0);
@@ -1593,11 +1595,13 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		if (rc < 0){
 			error_count++;
 			vgt_err("error_count=%d\n", error_count);
+#if 0
 			if (error_count >= MAX_PARSER_ERROR_NUM){
 				vgt_err("Reach max error number,stop parsing\n");
 			}
 			klog_printk("error_count=%d\n", error_count);
 			break;
+#endif
 		}
 	}
 	klog_printk("ring buffer scan end on ring %d\n", ring_id);
