@@ -87,12 +87,118 @@ static bool vgt_cfg_sci_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+#define VGT_OPREGION_FUNC(scic)						\
+	({								\
+		uint32_t __ret;						\
+		__ret = (scic & _REGBIT_OPREGION_SCIC_FUNC_MASK) >>	\
+		_REGBIT_OPREGION_SCIC_FUNC_SHIFT;			\
+		__ret;							\
+	})
+
+#define VGT_OPREGION_SUBFUNC(scic)					\
+	({								\
+		uint32_t __ret;						\
+		__ret = (scic & _REGBIT_OPREGION_SCIC_SUBFUNC_MASK) >>	\
+			_REGBIT_OPREGION_SCIC_SUBFUNC_SHIFT;		\
+		__ret;							\
+	})
+
+static const char *vgt_opregion_func_name(uint32_t func)
+{
+	const char *name = NULL;
+
+	switch (func) {
+	case 0 ... 3:
+	case 5:
+	case 7 ... 15:
+		name = "Reserved";
+		break;
+
+	case 4:
+		name = "Get BIOS Data";
+		break;
+
+	case 6:
+		name = "System BIOS Callbacks";
+		break;
+
+	default:
+		name = "Unknown";
+		break;
+	}
+	return name;
+}
+
+static const char *vgt_opregion_subfunc_name(uint32_t subfunc)
+{
+	const char *name = NULL;
+	switch (subfunc) {
+	case 0:
+		name = "Supported Calls";
+		break;
+
+	case 1:
+		name = "Requested Callbacks";
+		break;
+
+	case 2 ... 3:
+	case 8 ... 9:
+		name = "Reserved";
+		break;
+
+	case 5:
+		name = "Boot Display";
+		break;
+
+	case 6:
+		name = "TV-Standard/Video-Connector";
+		break;
+
+	case 7:
+		name = "Internal Graphics";
+		break;
+
+	case 10:
+		name = "Spread Spectrum Clocks";
+		break;
+
+	case 11:
+		name = "Get AKSV";
+		break;
+
+	default:
+		name = "Unknown";
+		break;
+	}
+	return name;
+};
+
+/* Only allowing capability queries */
+static bool vgt_opregion_is_capability_get(uint32_t scic)
+{
+	uint32_t func, subfunc;
+
+	func = VGT_OPREGION_FUNC(scic);
+	subfunc = VGT_OPREGION_SUBFUNC(scic);
+
+	if ((func == VGT_OPREGION_SCIC_F_GETBIOSDATA &&
+			subfunc == VGT_OPREGION_SCIC_SF_SUPPRTEDCALLS) ||
+			(func == VGT_OPREGION_SCIC_F_GETBIOSDATA &&
+			 subfunc == VGT_OPREGION_SCIC_SF_REQEUSTEDCALLBACKS) ||
+			(func == VGT_OPREGION_SCIC_F_GETBIOSCALLBACKS &&
+			 subfunc == VGT_OPREGION_SCIC_SF_SUPPRTEDCALLS)) {
+		return true;
+	}
+
+	return false;
+}
 /*
- * emulate the GetBIOSData function with 'supported calls' subfunction
+ * emulate multiple capability query requests
  */
 static void vgt_hvm_opregion_handle_request(struct vgt_device *vgt, uint32_t swsci)
 {
 	uint32_t *scic, *parm;
+	uint32_t func, subfunc;
 	scic = vgt->state.opregion_va + VGT_OPREGION_REG_SCIC;
 	parm = vgt->state.opregion_va + VGT_OPREGION_REG_PARM;
 
@@ -107,10 +213,19 @@ static void vgt_hvm_opregion_handle_request(struct vgt_device *vgt, uint32_t sws
 		return;
 	}
 
+	func = VGT_OPREGION_FUNC(*scic);
+	subfunc = VGT_OPREGION_SUBFUNC(*scic);
 	if (!vgt_opregion_is_capability_get(*scic)) {
-		vgt_warn("VM%d requesting runtime service: func 0x%x, subfunc 0x%x\n",
-				vgt->vm_id, VGT_OPREGION_FUNC(*scic),
-				VGT_OPREGION_SUBFUNC(*scic));
+		vgt_warn("VM%d requesting runtime service: func \"%s\", subfunc \"%s\"\n",
+				vgt->vm_id,
+				vgt_opregion_func_name(func),
+				vgt_opregion_subfunc_name(subfunc));
+
+		/*
+		 * emulate exit status of function call, '0' means
+		 * "failure, generic, unsupported or unkown cause"
+		 */
+		*scic &= ~_REGBIT_OPREGION_SCIC_EXIT_MASK;
 		return;
 	}
 

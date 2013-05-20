@@ -1795,35 +1795,6 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 	}
 }
 
-#define VGT_OPREGION_FUNC(scic)						\
-	({								\
-		uint32_t __ret;						\
-		__ret = (scic & _REGBIT_OPREGION_SCIC_FUNC_MASK) >>	\
-		_REGBIT_OPREGION_SCIC_FUNC_SHIFT;			\
-		__ret;							\
-	})
-
-#define VGT_OPREGION_SUBFUNC(scic)					\
-	({								\
-		uint32_t __ret;						\
-		__ret = (scic & _REGBIT_OPREGION_SCIC_SUBFUNC_MASK) >>	\
-			_REGBIT_OPREGION_SCIC_SUBFUNC_SHIFT;		\
-		__ret;							\
-	})
-/* Only allowing capability get */
-static inline bool vgt_opregion_is_capability_get(uint32_t scic)
-{
-	uint32_t func, subfunc;
-
-	func = VGT_OPREGION_FUNC(scic);
-	subfunc = VGT_OPREGION_SUBFUNC(scic);
-
-	if (func == VGT_OPREGION_SCIC_Q_FUNC &&
-			subfunc == VGT_OPREGION_SCIC_Q_SUBFUNC)
-		return true;
-
-	return false;
-}
 
 void vgt_forward_events(struct pgt_device *pdev);
 void vgt_install_irq(struct pci_dev *pdev);
@@ -2044,11 +2015,11 @@ extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);
 		if (!(x)) {						\
 			printk("Assert at %s line %d\n",		\
 				__FILE__, __LINE__);			\
-			if (atomic_cmpxchg(&vgt->crashing, 0, 1))	\
+			if (atomic_cmpxchg(&(vgt)->crashing, 0, 1))	\
 				break;					\
-			vgt_warn("Killing VM%d\n", vgt->vm_id);		\
-			if (!vgt_pause_domain(vgt))			\
-				vgt_crash_domain(vgt);			\
+			vgt_warn("Killing VM%d\n", (vgt)->vm_id);	\
+			if (!vgt_pause_domain((vgt)))			\
+				vgt_crash_domain((vgt));		\
 		}							\
 	} while (0)
 
