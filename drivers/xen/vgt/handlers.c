@@ -1709,6 +1709,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x12050, 4, F_PT, 0, D_ALL, NULL, NULL},
 {0x22050, 4, F_PT, 0, D_ALL, NULL, NULL},
 
+{0x20dc, 4, F_PT, 0, D_ALL, NULL, NULL},
+
 	/* -------display regs---------- */
 {_REG_DEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
 {_REG_DEIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
