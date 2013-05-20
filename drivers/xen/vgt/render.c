@@ -249,7 +249,6 @@ int vgt_thread(void *priv)
 	int threshold = 500; /* print every 500 times */
 	int ring_id;
 	cycles_t t0, t1, t2, t3;//t4 = 0, t5;
-	bool check_irq = false;
 
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
@@ -287,8 +286,6 @@ int vgt_thread(void *priv)
 
 		if (!vgt_ctx_switch)
 			continue;
-
-		check_irq = false;
 
 		if (!(vgt_ctx_check(pdev) % threshold))
 			vgt_dbg("vGT: %lldth checks, %lld switches\n",
@@ -378,7 +375,6 @@ int vgt_thread(void *priv)
 				vgt_resume_ringbuffers(next);
 
 				/* request to check IRQ when ctx switch happens */
-				check_irq = true;
 				if (prev->force_removal ||
 					bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
 					printk("Disable render for vgt(%d) from kthread\n",
@@ -391,7 +387,6 @@ int vgt_thread(void *priv)
 							wake_up(&pdev->destroy_wq);
 					}
 					/* no need to check if prev is to be destroyed */
-					check_irq = false;
 				}
 
 				t2 = vgt_get_cycles();

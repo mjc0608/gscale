@@ -100,7 +100,6 @@ extern bool vgt_enabled;
 extern bool fastpath_dpy_switch;
 extern bool shadow_tail_based_qos;
 extern bool event_based_qos;
-extern int fastmode;
 extern int enable_video_switch;
 extern int dom0_aperture_sz;
 extern int dom0_gm_sz;
