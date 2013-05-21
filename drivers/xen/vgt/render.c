@@ -715,11 +715,6 @@ static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs
 		 * OR vm's update with hw's bits?
 		 */
 		//if (!reg_hw_status(vgt->pdev, reg))
-		if (__sreg(vgt, _REG_RCS_UHPTR) & 1) {
-			vgt_dbg("!!!!!UHPTR is valid after resuming. Clear the valid bit\n");
-			__sreg(vgt, _REG_RCS_UHPTR) &= ~1;
-			__vreg(vgt, _REG_RCS_UHPTR) &= ~1;
-		}
 		VGT_MMIO_WRITE(vgt->pdev, reg, val);
 		vgt_dbg("....restore mmio (%x) with (%x)\n", reg, val);
 
