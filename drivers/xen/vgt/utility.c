@@ -144,7 +144,7 @@ void show_batchbuffer(struct pgt_device *pdev, u32 addr)
 		pte_val, (u64)p_contents);
 	printk("[%08x]:", (u32)(addr & ~GTT_PAGE_MASK));
 	for (i = 0; i < 32; i += 4)
-		printk(" %08x", *((u32 *)p_contents + i));
+		printk(" %08x", *((u32 *)(p_contents + i)));
 	printk("\n");
 }
 
