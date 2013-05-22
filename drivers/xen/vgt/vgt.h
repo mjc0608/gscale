@@ -91,9 +91,9 @@ extern void show_debug(struct pgt_device *pdev, int ring_id);
 	} while (0);
 
 extern bool hvm_render_owner;
-extern bool hvm_dpy_owner;
-extern bool hvm_owner;
+extern bool hvm_display_owner;
 extern bool hvm_super_owner;
+extern bool hvm_boot_foreground;
 extern bool vgt_primary;
 extern bool vgt_debug;
 extern bool vgt_enabled;

@@ -57,11 +57,19 @@ MODULE_PARM_DESC(hvm_render_owner, "Make HVM to be render owner after create (de
 
 bool hvm_dpy_owner = false;
 module_param_named(hvm_dpy_owner, hvm_dpy_owner, bool, 0600);
-MODULE_PARM_DESC(hvm_dpy_owner, "Make HVM to be display owner after create (default: false)");
+MODULE_PARM_DESC(hvm_dpy_owner, "Deprecated option! Please use hvm_boot_foreground or hvm_display_owner!");
+
+bool hvm_display_owner = false;
+module_param_named(hvm_display_owner, hvm_display_owner, bool, 0600);
+MODULE_PARM_DESC(hvm_display_owner, "Make HVM to be display owner after create (default: false)");
 
 bool hvm_super_owner = false;
 module_param_named(hvm_super_owner, hvm_super_owner, bool, 0600);
 MODULE_PARM_DESC(hvm_super_owner, "Make HVM to be GPU owner after create (default: false)");
+
+bool hvm_boot_foreground = false;
+module_param_named(hvm_boot_foreground, hvm_boot_foreground, bool, 0600);
+MODULE_PARM_DESC(hvm_boot_foreground, "Make HVM to be foreground after create and visible on screen from booting (default: false)");
 
 bool vgt_primary = false;
 module_param_named(vgt_primary, vgt_primary, bool, 0600);
@@ -403,13 +411,18 @@ int vgt_initialize(struct pci_dev *dev)
 	else
 		vgt_ctx_switch = 0;
 
-	if (!hvm_dpy_owner) {
+	if (!hvm_display_owner) {
 		current_display_owner(pdev) = vgt_dom0;
 		current_foreground_vm(pdev) = vgt_dom0;
 	}
 
-	if (!hvm_super_owner)
+	if (hvm_super_owner) {
+		ASSERT(hvm_render_owner);
+		ASSERT(hvm_display_owner);
+		ASSERT(hvm_boot_foreground);
+	} else {
 		current_config_owner(pdev) = vgt_dom0;
+	}
 
 	pdev->ctx_check = 0;
 	pdev->ctx_switch = 0;
@@ -517,10 +530,20 @@ EXPORT_SYMBOL(xen_start_vgt);
 
 static void vgt_param_check(void)
 {
-	/* TODO: hvm_dpy/render_owner are broken */
+	/* TODO: hvm_display/render_owner are broken */
 	if (hvm_super_owner) {
-		hvm_dpy_owner = true;
+		hvm_display_owner = true;
 		hvm_render_owner = true;
+		hvm_boot_foreground = true;
+	}
+
+	if (hvm_display_owner) {
+		hvm_boot_foreground = true;
+	}
+
+	if (hvm_dpy_owner) {
+		vgt_warn("hvm_dpy_owner is deprecated option! "
+			 "Please use hvm_boot_foreground or hvm_display_owner instead!\n");
 	}
 
 	if (dom0_aperture_sz > 256)

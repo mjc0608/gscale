@@ -282,13 +282,16 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		if (hvm_render_owner)
 			current_render_owner(pdev) = vgt;
 
-		if (hvm_dpy_owner)
+		if (hvm_display_owner)
+			current_display_owner(pdev) = vgt;
+
+		if (hvm_boot_foreground)
 			current_foreground_vm(pdev) = vgt;
 
 		if (hvm_super_owner) {
-			current_render_owner(pdev) = vgt;
-			current_foreground_vm(pdev) = vgt;
-			current_display_owner(pdev) = vgt;
+			ASSERT(hvm_render_owner);
+			ASSERT(hvm_display_owner);
+			ASSERT(hvm_boot_foreground);
 			current_config_owner(pdev) = vgt;
 		}
 	}
