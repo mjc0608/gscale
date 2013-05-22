@@ -59,7 +59,6 @@
 typedef uint32_t vgt_reg_t;
 
 #include "reg.h"
-#include "ringbuffer.h"
 #include "devtable.h"
 #include "edid.h"
 
@@ -230,6 +229,18 @@ typedef struct {
 	vgt_reg_t start;
 	vgt_reg_t ctl;
 } vgt_ringbuffer_t;
+
+struct vgt_ring_buffer {
+	struct pgt_device *pdev;
+	void *virtual_start;
+	int offset;
+
+	u32 head;
+	u32 tail;
+	int space;
+	int size;
+};
+
 #define _tail_reg_(ring_reg_off)	\
 		(ring_reg_off & ~(sizeof(vgt_ringbuffer_t)-1))
 
@@ -1648,10 +1659,24 @@ static inline bool is_ring_empty(struct pgt_device *pdev, int ring_id)
 		val = VGT_MMIO_READ(pdev, reg);	\
 	} while (0)
 
+#define VGT_READ_CTL(pdev, id)	VGT_MMIO_READ(pdev, RB_CTL(pdev, id))
+#define VGT_WRITE_CTL(pdev, id, val) VGT_MMIO_WRITE(pdev, RB_CTL(pdev, id), val)
+#define VGT_POST_READ_CTL(pdev, id)	VGT_POST_READ(pdev, RB_CTL(pdev,id))
+
+#define VGT_READ_HEAD(pdev, id)	VGT_MMIO_READ(pdev, RB_HEAD(pdev, id))
+#define VGT_WRITE_HEAD(pdev, id, val) VGT_MMIO_WRITE(pdev, RB_HEAD(pdev, id), val)
+
+#define VGT_READ_TAIL(pdev, id)	VGT_MMIO_READ(pdev, RB_TAIL(pdev, id))
+#define VGT_WRITE_TAIL(pdev, id, val) VGT_MMIO_WRITE(pdev, RB_TAIL(pdev, id), val)
+
+#define VGT_READ_START(pdev, id) VGT_MMIO_READ(pdev, RB_START(pdev, id))
+#define VGT_WRITE_START(pdev, id, val) VGT_MMIO_WRITE(pdev, RB_START(pdev, id), val)
+
 static inline bool is_ring_enabled (struct pgt_device *pdev, int ring_id)
 {
 	return (VGT_MMIO_READ(pdev, RB_CTL(pdev, ring_id)) & 1);	/* bit 0: enable/disable RB */
 }
+extern void vgt_ring_init(struct pgt_device *pdev);
 
 static inline u32 vgt_read_gtt(struct pgt_device *pdev, u32 index)
 {

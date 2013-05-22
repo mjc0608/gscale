@@ -72,6 +72,91 @@ void vgt_toggle_ctx_switch(bool enable)
 		vgt_ctx_switch = 0;
 }
 
+static inline int ring_space(struct vgt_ring_buffer *ring)
+{
+	int space = (ring->head & RB_HEAD_OFF_MASK) - (ring->tail + 8);
+	if (space < 0)
+		space += ring->size;
+	return space;
+}
+
+/* We just take easy implement of vGT ring, which would always be initialized
+ * from 0 before use. And we don't care about wrap case.
+ */
+static inline void vgt_ring_begin(struct vgt_ring_buffer *ring, int num_dwords)
+{
+	ring->space -= num_dwords * 4;
+}
+
+static inline void vgt_ring_emit(struct vgt_ring_buffer *ring,
+				u32 data)
+{
+	writel(data, ring->virtual_start + ring->tail);
+	ring->tail += 4;
+}
+
+static void vgt_ring_reset(struct vgt_ring_buffer *ring)
+{
+	ring->head = ring->tail = 0;
+	ring->space = ring_space(ring);
+}
+
+void vgt_ring_init(struct pgt_device *pdev)
+{
+	struct vgt_ring_buffer *ring;
+
+	pdev->ring_buffer = kzalloc(sizeof(struct vgt_ring_buffer), GFP_KERNEL);
+	if (!pdev->ring_buffer) {
+		printk(KERN_ERR "allocate vgt ring buffer failed!\n");
+		return;
+	}
+	ring = pdev->ring_buffer;
+	ring->pdev = pdev;
+	ring->size = 4096;
+	ring->offset = aperture_2_gm(pdev, rsvd_aperture_alloc(pdev, ring->size));
+	ring->virtual_start = v_aperture(pdev, ring->offset);
+
+	vgt_ring_reset(ring);
+}
+
+static void vgt_ring_start(struct vgt_ring_buffer *ring)
+{
+	struct pgt_device *pdev = ring->pdev;
+	int id = RING_BUFFER_RCS;
+	u32 head;
+
+	//ASSERT(ring->space == ring_space(ring));
+
+	vgt_ring_reset(ring);
+
+	/* execute our ring */
+	VGT_WRITE_CTL(pdev, id, 0);
+	VGT_WRITE_HEAD(pdev, id, 0);
+	VGT_WRITE_TAIL(pdev, id, 0);
+
+	head = VGT_READ_HEAD(pdev, id);
+	if (head != 0) {
+		VGT_WRITE_HEAD(pdev, id, 0);
+	}
+
+	VGT_WRITE_START(pdev, id, ring->offset);
+	VGT_WRITE_CTL(pdev, id, ((ring->size - PAGE_SIZE) & 0x1FF000) | 1);
+	VGT_POST_READ_CTL(pdev, id);
+
+	wait_for(((VGT_READ_CTL(pdev, id) & 1) != 0 &&
+			VGT_READ_START(pdev, id) == ring->offset &&
+			(VGT_READ_HEAD(pdev, id) & RB_HEAD_OFF_MASK) == 0), 50);
+	vgt_dbg("start vgt ring at 0x%x\n", ring->offset);
+}
+
+static void vgt_ring_advance(struct vgt_ring_buffer *ring)
+{
+	int id = RING_BUFFER_RCS;
+
+	ring->tail &= ring->size - 1;
+	VGT_WRITE_TAIL(ring->pdev, id, ring->tail);
+}
+
 /*
  * TODO: the context layout could be different on generations.
  * e.g. ring head/tail, ccid, etc. when PPGTT is enabled
