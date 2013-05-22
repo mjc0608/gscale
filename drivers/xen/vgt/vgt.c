@@ -177,6 +177,84 @@ static bool vgt_start_io_forwarding(struct pgt_device *pdev)
 	return true;
 }
 
+/*
+ * The thread to perform the VGT ownership switch.
+ *
+ * We need to handle race conditions from different paths around
+ * vreg/sreg/hwreg. So far there're 4 paths at least:
+ *   a) the vgt thread to conduct context switch
+ *   b) the GP handler to emulate MMIO for dom0
+ *   c) the event handler to emulate MMIO for other VMs
+ *   d) the interrupt handler to do interrupt virtualization
+ *   e) /sysfs interaction from userland program
+ *
+ * Now d) is removed from the race path, because we adopt a delayed
+ * injection mechanism. Physical interrupt handler only saves pending
+ * IIR bits, and then wake up the vgt thread. Later the vgt thread
+ * checks the pending bits to do the actual virq injection. This approach
+ * allows vgt thread to handle ownership switch cleanly.
+ *
+ * So it's possible for other 3 paths to touch vreg/sreg/hwreg:
+ *   a) the vgt thread may need to update HW updated regs into
+ *	  vreg/sreg of the prev owner
+ *   b) the GP handler and event handler always updates vreg/sreg,
+ *	  and may touch hwreg if vgt is the current owner
+ *	  and then update vreg for interrupt virtualization
+ *
+ * To simplify the lock design, we make below assumptions:
+ *   a) the vgt thread doesn't trigger GP fault itself, i.e. always
+ *	  issues hypercall to do hwreg access
+ *   b) the event handler simply notifies another kernel thread, leaving
+ *	  to that thread for actual MMIO emulation
+ *
+ * Given above assumption, no nest would happen among 4 paths, and a
+ * simple global spinlock now should be enough to protect the whole
+ * vreg/sreg/ hwreg. In the future we can futher tune this part on
+ * a necessary base.
+ */
+static int vgt_thread(void *priv)
+{
+	struct pgt_device *pdev = (struct pgt_device *)priv;
+
+	//ASSERT(current_render_owner(pdev));
+	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
+
+	while (!kthread_should_stop()) {
+		wait_event(pdev->event_wq, pdev->request);
+
+		if (!pdev->request) {
+			vgt_warn("Main thread waken up by unknown reasons!\n");
+			continue;
+		}
+
+		/* forward physical GPU events to VMs */
+		if (test_and_clear_bit(VGT_REQUEST_IRQ,
+					(void *)&pdev->request)) {
+			spin_lock_irq(&pdev->lock);
+			vgt_forward_events(pdev);
+			spin_unlock_irq(&pdev->lock);
+		}
+
+		/* Send uevent to userspace */
+		if (test_and_clear_bit(VGT_REQUEST_UEVENT,
+					(void *)&pdev->request)) {
+			vgt_signal_uevent(pdev);
+		}
+
+		/* Handle render context switch request */
+		if (vgt_ctx_switch &&
+		    test_and_clear_bit(VGT_REQUEST_CTX_SWITCH,
+				(void *)&pdev->request)) {
+			if (!vgt_do_render_context_switch(pdev)) {
+				vgt_err("Exiting thread!!!\n");
+				break;
+			}
+		}
+	}
+	return 0;
+}
+
+
 bool initial_phys_states(struct pgt_device *pdev)
 {
 	int i;
@@ -431,7 +509,7 @@ int vgt_initialize(struct pci_dev *dev)
 	init_waitqueue_head(&pdev->event_wq);
 	init_waitqueue_head(&pdev->destroy_wq);
 
-	p_thread = kthread_run(vgt_thread, vgt_dom0, "vgt_thread");
+	p_thread = kthread_run(vgt_thread, pdev, "vgt_thread");
 	if (!p_thread) {
 		goto err;
 	}

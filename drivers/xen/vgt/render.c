@@ -204,188 +204,121 @@ static bool idle_rendering_engines(struct pgt_device *pdev, int *ring_id)
 	return true;
 }
 
-/*
- * The thread to perform the VGT ownership switch.
- *
- * We need to handle race conditions from different paths around
- * vreg/sreg/hwreg. So far there're 4 paths at least:
- *   a) the vgt thread to conduct context switch
- *   b) the GP handler to emulate MMIO for dom0
- *   c) the event handler to emulate MMIO for other VMs
- *   d) the interrupt handler to do interrupt virtualization
- *   e) /sysfs interaction from userland program
- *
- * Now d) is removed from the race path, because we adopt a delayed
- * injection mechanism. Physical interrupt handler only saves pending
- * IIR bits, and then wake up the vgt thread. Later the vgt thread
- * checks the pending bits to do the actual virq injection. This approach
- * allows vgt thread to handle ownership switch cleanly.
- *
- * So it's possible for other 3 paths to touch vreg/sreg/hwreg:
- *   a) the vgt thread may need to update HW updated regs into
- *	  vreg/sreg of the prev owner
- *   b) the GP handler and event handler always updates vreg/sreg,
- *	  and may touch hwreg if vgt is the current owner
- *	  and then update vreg for interrupt virtualization
- *
- * To simplify the lock design, we make below assumptions:
- *   a) the vgt thread doesn't trigger GP fault itself, i.e. always
- *	  issues hypercall to do hwreg access
- *   b) the event handler simply notifies another kernel thread, leaving
- *	  to that thread for actual MMIO emulation
- *
- * Given above assumption, no nest would happen among 4 paths, and a
- * simple global spinlock now should be enough to protect the whole
- * vreg/sreg/ hwreg. In the future we can futher tune this part on
- * a necessary base.
- */
-int vgt_thread(void *priv)
+bool vgt_do_render_context_switch(struct pgt_device *pdev)
 {
-	struct vgt_device *next, *vgt = priv, *prev;
-	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_device *next, *prev;
 	int threshold = 500; /* print every 500 times */
 	int ring_id;
 	cycles_t t0, t1;
 
-	//ASSERT(current_render_owner(pdev));
-	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
+	if (!(vgt_ctx_check(pdev) % threshold))
+		vgt_dbg("vGT: %lldth checks, %lld switches\n",
+			vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
+	vgt_ctx_check(pdev)++;
 
-	while (!kthread_should_stop()) {
-		wait_event(pdev->event_wq, pdev->request);
+	ASSERT(!vgt_runq_is_empty(pdev));
 
-		if (!pdev->request) {
-			vgt_warn("Main thread waken up by unknown reasons!\n");
-			continue;
-		}
+	/*
+	 * disable interrupt which is sufficient to prevent more
+	 * cmds submitted by the current owner, when dom0 is UP.
+	 * if the mmio handler for HVM is made into a thread,
+	 * simply a spinlock is enough. IRQ handler is another
+	 * race point
+	 */
+	spin_lock_irq(&pdev->lock);
 
-		/* forward physical GPU events to VMs */
-		if (test_and_clear_bit(VGT_REQUEST_IRQ,
-					(void *)&pdev->request)) {
-			spin_lock_irq(&pdev->lock);
-			vgt_forward_events(pdev);
-			spin_unlock_irq(&pdev->lock);
-		}
+	ASSERT(next_sched_vgt);
+	next = next_sched_vgt;
+	prev = current_render_owner(pdev);
 
-		/* Send uevent to userspace */
-		if (test_and_clear_bit(VGT_REQUEST_UEVENT,
-					(void *)&pdev->request)) {
-			vgt_signal_uevent(pdev);
-		}
-
-		if (!vgt_ctx_switch ||
-		    !test_and_clear_bit(VGT_REQUEST_CTX_SWITCH,
-					(void *)&pdev->request))
-			continue;
-
-		if (!(vgt_ctx_check(pdev) % threshold))
-			vgt_dbg("vGT: %lldth checks, %lld switches\n",
-				vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
-		vgt_ctx_check(pdev)++;
-
-		ASSERT(!vgt_runq_is_empty(pdev));
-
-		/*
-		 * disable interrupt which is sufficient to prevent more
-		 * cmds submitted by the current owner, when dom0 is UP.
-		 * if the mmio handler for HVM is made into a thread,
-		 * simply a spinlock is enough. IRQ handler is another
-		 * race point
-		 */
-		spin_lock_irq(&pdev->lock);
-
-		ASSERT(next_sched_vgt);
-		next = next_sched_vgt;
-		prev = current_render_owner(pdev);
-
-		if (next == prev) {
-			spin_unlock_irq(&pdev->lock);
-			continue;
-		}
-
-		if (idle_rendering_engines(pdev, &ring_id)) {
-			vgt_dbg("vGT: next vgt (%d)\n", next->vgt_id);
-
-			/* variable exported by debugfs */
-			context_switch_num ++;
-			t0 = vgt_get_cycles();
-			/* Records actual tsc when all rendering engines
-			 * are stopped */
-			if (event_based_qos) {
-				ctx_actual_end_time(current_render_owner(pdev)) = t0;
-			}
-
-			if ( prev )
-				prev->stat.allocated_cycles +=
-					(t0 - prev->stat.schedule_in_time);
-			vgt_ctx_switch(pdev)++;
-
-			//show_seqno(pdev);
-			if (!vgt_save_context(prev)) {
-				vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
-					vgt_ctx_check(pdev),
-					vgt_ctx_switch(pdev),
-					prev->vgt_id,
-					next->vgt_id);
-
-				/* TODO: any recovery to do here. Now simply exits the thread */
-				spin_unlock_irq(&pdev->lock);
-				break;
-			}
-
-			if (!vgt_restore_context(next)) {
-				vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
-					vgt_ctx_check(pdev),
-					vgt_ctx_switch(pdev),
-					prev->vgt_id,
-					next->vgt_id);
-
-				/* TODO: any recovery to do here. Now simply exits the thread */
-				spin_unlock_irq(&pdev->lock);
-				break;
-			}
-
-			current_render_owner(pdev) = next;
-			//show_seqno(pdev);
-
-			if (pdev->enable_ppgtt && next->ppgtt_initialized)
-				vgt_ppgtt_switch(next);
-
-			vgt_resume_ringbuffers(next);
-
-			/* request to check IRQ when ctx switch happens */
-			if (prev->force_removal ||
-				bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
-				printk("Disable render for vgt(%d) from kthread\n",
-					prev->vgt_id);
-				vgt_disable_render(prev);
-				wmb();
-				if (prev->force_removal) {
-					prev->force_removal = false;
-					if (waitqueue_active(&pdev->destroy_wq))
-						wake_up(&pdev->destroy_wq);
-				}
-				/* no need to check if prev is to be destroyed */
-			}
-
-			next->stat.schedule_in_time = vgt_get_cycles();
-
-			/* setup countdown for next vgt context */
-			if (event_based_qos) {
-				vgt_setup_countdown(next);
-			}
-
-			t1 = vgt_get_cycles();
-			context_switch_cost += (t1-t0);
-		} else {
-			printk("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
-				vgt_ctx_switch(pdev),
-				current_render_owner(pdev)->vgt_id, ring_id);
-			show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
-		}
-
+	if (next == prev) {
 		spin_unlock_irq(&pdev->lock);
+		return true;
 	}
-	return 0;
+
+	if (idle_rendering_engines(pdev, &ring_id)) {
+		vgt_dbg("vGT: next vgt (%d)\n", next->vgt_id);
+
+		/* variable exported by debugfs */
+		context_switch_num ++;
+		t0 = vgt_get_cycles();
+		/* Records actual tsc when all rendering engines
+		 * are stopped */
+		if (event_based_qos) {
+			ctx_actual_end_time(current_render_owner(pdev)) = t0;
+		}
+
+		if ( prev )
+			prev->stat.allocated_cycles +=
+				(t0 - prev->stat.schedule_in_time);
+		vgt_ctx_switch(pdev)++;
+
+		//show_seqno(pdev);
+		if (!vgt_save_context(prev)) {
+			vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
+				vgt_ctx_check(pdev),
+				vgt_ctx_switch(pdev),
+				prev->vgt_id,
+				next->vgt_id);
+
+			/* TODO: any recovery to do here. Now simply exits the thread */
+			spin_unlock_irq(&pdev->lock);
+			return false;
+		}
+
+		if (!vgt_restore_context(next)) {
+			vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
+				vgt_ctx_check(pdev),
+				vgt_ctx_switch(pdev),
+				prev->vgt_id,
+				next->vgt_id);
+
+			/* TODO: any recovery to do here. Now simply exits the thread */
+			spin_unlock_irq(&pdev->lock);
+			return false;
+		}
+
+		current_render_owner(pdev) = next;
+		//show_seqno(pdev);
+
+		if (pdev->enable_ppgtt && next->ppgtt_initialized)
+			vgt_ppgtt_switch(next);
+
+		vgt_resume_ringbuffers(next);
+
+		/* request to check IRQ when ctx switch happens */
+		if (prev->force_removal ||
+			bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
+			printk("Disable render for vgt(%d) from kthread\n",
+				prev->vgt_id);
+			vgt_disable_render(prev);
+			wmb();
+			if (prev->force_removal) {
+				prev->force_removal = false;
+				if (waitqueue_active(&pdev->destroy_wq))
+					wake_up(&pdev->destroy_wq);
+			}
+			/* no need to check if prev is to be destroyed */
+		}
+
+		next->stat.schedule_in_time = vgt_get_cycles();
+
+		/* setup countdown for next vgt context */
+		if (event_based_qos) {
+			vgt_setup_countdown(next);
+		}
+
+		t1 = vgt_get_cycles();
+		context_switch_cost += (t1-t0);
+	} else {
+		printk("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
+			vgt_ctx_switch(pdev),
+			current_render_owner(pdev)->vgt_id, ring_id);
+		show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
+	}
+
+	spin_unlock_irq(&pdev->lock);
+	return true;
 }
 
 /*

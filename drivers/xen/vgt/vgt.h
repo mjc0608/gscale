@@ -396,7 +396,7 @@ struct vgt_intel_device_info {
 
 struct pgt_device;
 
-extern int vgt_thread(void *priv);
+extern bool vgt_do_render_context_switch(struct pgt_device *pdev);
 extern void vgt_destroy(void);
 extern void vgt_destroy_debugfs(struct vgt_device *vgt);
 extern void vgt_release_debugfs(void);
