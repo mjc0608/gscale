@@ -60,6 +60,18 @@ u64	context_switch_num = 0;
 int vgt_ctx_switch = 1;
 bool vgt_validate_ctx_switch = false;
 
+void vgt_toggle_ctx_switch(bool enable)
+{
+	/*
+	 * No need to hold lock as this will be observed
+	 * in the next check in kthread.
+	 */
+	if (enable)
+		vgt_ctx_switch = 1;
+	else
+		vgt_ctx_switch = 0;
+}
+
 /*
  * TODO: the context layout could be different on generations.
  * e.g. ring head/tail, ccid, etc. when PPGTT is enabled
@@ -87,11 +99,18 @@ static void update_context(struct vgt_device *vgt, uint64_t context)
 	UPDATE_FIELD(OFF_MI_MODE, _REG_RCS_MI_MODE);
 }
 
-bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
+static bool ring_is_empty(struct pgt_device *pdev,
+	int ring_id)
 {
 	if ( is_ring_enabled(pdev, ring_id) && !is_ring_empty(pdev, ring_id) )
 		return false;
 
+	return true;
+}
+
+static bool ring_is_idle(struct pgt_device *pdev,
+	int ring_id)
+{
 	/*
 	* FIXME: it turns out that psmi idle status bit check may not be
 	 * always true when both dom0/Linux VM runs glxgears in parallel. Not
@@ -102,109 +121,87 @@ bool is_rendering_engine_empty(struct pgt_device *pdev, int ring_id)
 	if (!(VGT_MMIO_READ(pdev, pdev->ring_psmi[ring_id]) & _REGBIT_PSMI_IDLE_INDICATOR))
 		return false;
 #endif
+	return true;
+}
 
-	if (!(VGT_MMIO_READ(pdev, pdev->ring_mi_mode[ring_id]) & _REGBIT_MI_RINGS_IDLE))
+static bool ring_is_stopped(struct pgt_device *pdev,
+	int ring_id)
+{
+	if (!(VGT_MMIO_READ(pdev, pdev->ring_mi_mode[ring_id]) &
+		_REGBIT_MI_RINGS_IDLE))
 		return false;
 
 	return true;
 }
 
-bool vgt_magic_done(struct pgt_device *pdev, int ring_id)
+static bool ring_wait_for_completion(struct pgt_device *pdev, int ring_id)
 {
 	u32 *ptr;
 
+	/* now a single magic number, because only RCS supports hw switch */
+	if (ring_id != RING_BUFFER_RCS)
+		return true;
+
 	ptr = (u32 *)(phys_aperture_vbase(pdev) + vgt_data_ctx_magic(pdev));
-	if (*ptr != pdev->magic)
-		return false;
-
-	return true;
-}
-
-static bool ring_wait_for_magic(struct pgt_device *pdev, int ring_id)
-{
-	if (wait_for_atomic(vgt_magic_done(pdev, ring_id), 100) != 0) {
-		vgt_err("wait for magic fail on ring %d\n", ring_id);
-		return false;
-	}
-	return true;
-}
-
-/*
- * Wait for the empty of RB.
- * TODO: Empty of RB doesn't mean the commands are retired. May need a STORE_IMM
- * after MI_FLUSH, but that needs our own hardware satus page.
- */
-static bool ring_wait_for_empty(struct pgt_device *pdev, int ring_id, char *str)
-{
-	/* wait to be completed */
-	if (wait_for_atomic(is_rendering_engine_empty(pdev, ring_id), 100) != 0) {
-		vgt_err("(%s): timeout wait 100 ms for ring(%d)\n", str, ring_id);
-
-		vgt_err("vGT-cur(%d): head(%x), tail(%x), start(%x)\n",
-				current_render_owner(pdev)->vgt_id,
-				current_render_owner(pdev)->rb[ring_id].sring.head,
-				current_render_owner(pdev)->rb[ring_id].sring.tail,
-				current_render_owner(pdev)->rb[ring_id].sring.start);
-		vgt_err("vGT-dom0(%d): head(%x), tail(%x), start(%x)\n",
-				vgt_dom0->vgt_id,
-				vgt_dom0->rb[ring_id].sring.head,
-				vgt_dom0->rb[ring_id].sring.tail,
-				vgt_dom0->rb[ring_id].sring.start);
-		show_debug(pdev, ring_id);
-		show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
+	if (wait_for_atomic((*ptr == pdev->magic), 100) != 0) {
+		vgt_err("Timeout 100ms for CMD comletion on ring %d\n", ring_id);
 		return false;
 	}
 
 	return true;
 }
 
-bool is_rendering_engines_empty(struct pgt_device *pdev, int *ring_id)
+/* make a render engine idle */
+static bool idle_render_engine(struct pgt_device *pdev, int ring_id)
+{
+	if (wait_for_atomic(ring_is_empty(pdev, ring_id), 100) != 0) {
+		vgt_err("Timeout wait 100 ms for ring(%d) empty\n", ring_id);
+		goto err;
+	}
+
+	/* may do some jobs here to make sure ring idle */
+
+	if (wait_for_atomic(ring_is_idle(pdev, ring_id), 100) != 0) {
+		vgt_err("Timeout wait 100 ms for ring(%d) idle\n", ring_id);
+		goto err;
+	}
+
+	return true;
+
+err:
+	vgt_err("vGT-cur(%d): head(%x), tail(%x), start(%x)\n",
+			current_render_owner(pdev)->vgt_id,
+			current_render_owner(pdev)->rb[ring_id].sring.head,
+			current_render_owner(pdev)->rb[ring_id].sring.tail,
+			current_render_owner(pdev)->rb[ring_id].sring.start);
+	vgt_err("vGT-dom0(%d): head(%x), tail(%x), start(%x)\n",
+			vgt_dom0->vgt_id,
+			vgt_dom0->rb[ring_id].sring.head,
+			vgt_dom0->rb[ring_id].sring.tail,
+			vgt_dom0->rb[ring_id].sring.start);
+	show_debug(pdev, ring_id);
+	show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
+	return false;
+}
+
+static bool idle_rendering_engines(struct pgt_device *pdev, int *ring_id)
 {
 	int i;
 
 	/*
-	 * TODO: timeout for 3 engines are not synchronous. Need suspend
-	 * command parser later
+	 * Though engines are checked in order, no further CMDs
+	 * are allowed from VM due to holding the big lock.
 	 */
 	for (i=0; i < pdev->max_engines; i++) {
 		if (!enable_video_switch && i == RING_BUFFER_VCS)
 			continue;
 
-		if ( !ring_wait_for_empty(pdev, i, "wait-empty") ) {
+		if ( !idle_render_engine(pdev, i) ) {
 			*ring_id = i;
 			return false;
 		}
 	}
 	return true;
-}
-
-/* update the tail pointer after all the context is restored */
-void vgt_resume_ringbuffers(struct vgt_device *vgt)
-{
-	int i;
-
-	for (i = 0; i < vgt->pdev->max_engines; i++) {
-		if (!enable_video_switch && i == RING_BUFFER_VCS)
-			continue;
-
-		if (!(vgt->rb[i].sring.ctl & _RING_CTL_ENABLE)) {
-			vgt_dbg("vGT: ring (%d) not enabled. exit resume\n", i);
-			continue;
-		}
-		VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(vgt->pdev, i), vgt->rb[i].sring.tail);
-	}
-}
-
-void vgt_toggle_ctx_switch(bool enable)
-{
-	/*
-	 * No need to hold lock as this will be observed
-	 * in the next check in kthread.
-	 */
-	if (enable)
-		vgt_ctx_switch = 1;
-	else
-		vgt_ctx_switch = 0;
 }
 
 /*
@@ -248,43 +245,36 @@ int vgt_thread(void *priv)
 	struct pgt_device *pdev = vgt->pdev;
 	int threshold = 500; /* print every 500 times */
 	int ring_id;
-	cycles_t t0, t1, t2, t3;//t4 = 0, t5;
+	cycles_t t0, t1;
 
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
 
 	while (!kthread_should_stop()) {
-		/*
-		 * TODO: Use high priority task and timeout based event
-		 *	mechanism for QoS. schedule in 50ms now.
-		 */
-		/* vgt_thread can only be waken up when there is a request */
 		wait_event(pdev->event_wq, pdev->request);
 
-		t0 = vgt_get_cycles();
 		if (!pdev->request) {
-			printk("vGT: main thread waken up by unknown reasons!\n");
+			vgt_warn("Main thread waken up by unknown reasons!\n");
 			continue;
 		}
 
-
-		/* Handle virtual interrupt injection to current owner */
-		if (test_and_clear_bit(VGT_REQUEST_IRQ, (void *)&pdev->request)) {
+		/* forward physical GPU events to VMs */
+		if (test_and_clear_bit(VGT_REQUEST_IRQ,
+					(void *)&pdev->request)) {
 			spin_lock_irq(&pdev->lock);
 			vgt_forward_events(pdev);
 			spin_unlock_irq(&pdev->lock);
 		}
 
 		/* Send uevent to userspace */
-		if (test_and_clear_bit(VGT_REQUEST_UEVENT, (void *)&pdev->request)) {
+		if (test_and_clear_bit(VGT_REQUEST_UEVENT,
+					(void *)&pdev->request)) {
 			vgt_signal_uevent(pdev);
 		}
 
-		if (!test_and_clear_bit(VGT_REQUEST_CTX_SWITCH,
+		if (!vgt_ctx_switch ||
+		    !test_and_clear_bit(VGT_REQUEST_CTX_SWITCH,
 					(void *)&pdev->request))
-			continue;
-
-		if (!vgt_ctx_switch)
 			continue;
 
 		if (!(vgt_ctx_check(pdev) % threshold))
@@ -292,124 +282,108 @@ int vgt_thread(void *priv)
 				vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
 		vgt_ctx_check(pdev)++;
 
-		/* FIXME: this should be guaranteed by ctx scheduler.
-		 * But for robustness, let's keep it temporarily */
-		if (vgt_runq_is_empty(pdev)) {
-			/* Idle now, and no pending activity */
-			vgt_dbg("....idle\n");
-			continue;
-		}
+		ASSERT(!vgt_runq_is_empty(pdev));
 
 		/*
 		 * disable interrupt which is sufficient to prevent more
 		 * cmds submitted by the current owner, when dom0 is UP.
 		 * if the mmio handler for HVM is made into a thread,
-		 * simply a spinlock is enough
+		 * simply a spinlock is enough. IRQ handler is another
+		 * race point
 		 */
 		spin_lock_irq(&pdev->lock);
 
 		ASSERT(next_sched_vgt);
 		next = next_sched_vgt;
+		prev = current_render_owner(pdev);
 
-		if ( next != (prev = current_render_owner(pdev)) )
-		{
-			if (is_rendering_engines_empty(pdev, &ring_id)) {
-				vgt_dbg("vGT: next vgt (%d)\n", next->vgt_id);
+		if (next == prev) {
+			spin_unlock_irq(&pdev->lock);
+			continue;
+		}
 
-				/* variable exported by debugfs */
-				context_switch_num ++;
-				t1 = vgt_get_cycles();
-				/* Records actual tsc when all rendering engines
-				 * are stopped */
-				if (event_based_qos) {
-					ctx_actual_end_time(current_render_owner(pdev)) = t1;
-				}
-				/*
-				 * FIXME: now acquire the lock with interrupt disabled.
-				 * So far vGT's own interrupt handler hasn't been
-				 * registered, so that a GEN interrupt may comes in the
-				 * middle of the context switch. the i915 interrupt
-				 * handler requires GP fault for emulation, and thus
-				 * result in dead lock.
-				 *
-				 * Later remove the irq disable when integrating
-				 * interrupt part.
-				 */
-				//prev = current_render_owner(pdev);
-				if ( prev )
-					prev->stat.allocated_cycles +=
-						(t1 - prev->stat.schedule_in_time);
-				vgt_ctx_switch(pdev)++;
+		if (idle_rendering_engines(pdev, &ring_id)) {
+			vgt_dbg("vGT: next vgt (%d)\n", next->vgt_id);
 
-				//show_seqno(pdev);
-				if (!vgt_save_context(prev)) {
-					vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
-						vgt_ctx_check(pdev),
-						vgt_ctx_switch(pdev),
-						prev->vgt_id,
-						next->vgt_id);
-
-					/* TODO: any recovery to do here. Now simply exits the thread */
-					local_irq_enable();
-					break;
-				}
-
-				if (!vgt_restore_context(next)) {
-					vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
-						vgt_ctx_check(pdev),
-						vgt_ctx_switch(pdev),
-						prev->vgt_id,
-						next->vgt_id);
-
-					/* TODO: any recovery to do here. Now simply exits the thread */
-					local_irq_enable();
-					break;
-				}
-
-				current_render_owner(pdev) = next;
-				//show_seqno(pdev);
-
-				if (pdev->enable_ppgtt && next->ppgtt_initialized)
-					vgt_ppgtt_switch(next);
-
-				vgt_resume_ringbuffers(next);
-
-				/* request to check IRQ when ctx switch happens */
-				if (prev->force_removal ||
-					bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
-					printk("Disable render for vgt(%d) from kthread\n",
-						prev->vgt_id);
-					vgt_disable_render(prev);
-					wmb();
-					if (prev->force_removal) {
-						prev->force_removal = false;
-						if (waitqueue_active(&pdev->destroy_wq))
-							wake_up(&pdev->destroy_wq);
-					}
-					/* no need to check if prev is to be destroyed */
-				}
-
-				t2 = vgt_get_cycles();
-				next->stat.schedule_in_time = t2;
-				//printk("vGT: take %lld cycles\n", t2 - t1);
-
-				/* setup countdown for next vgt context */
-				if (event_based_qos) {
-					vgt_setup_countdown(next);
-				}
-
-			} else {
-				printk("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
-					vgt_ctx_switch(pdev),
-					current_render_owner(pdev)->vgt_id, ring_id);
-				show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
+			/* variable exported by debugfs */
+			context_switch_num ++;
+			t0 = vgt_get_cycles();
+			/* Records actual tsc when all rendering engines
+			 * are stopped */
+			if (event_based_qos) {
+				ctx_actual_end_time(current_render_owner(pdev)) = t0;
 			}
+
+			if ( prev )
+				prev->stat.allocated_cycles +=
+					(t0 - prev->stat.schedule_in_time);
+			vgt_ctx_switch(pdev)++;
+
+			//show_seqno(pdev);
+			if (!vgt_save_context(prev)) {
+				vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
+					vgt_ctx_check(pdev),
+					vgt_ctx_switch(pdev),
+					prev->vgt_id,
+					next->vgt_id);
+
+				/* TODO: any recovery to do here. Now simply exits the thread */
+				spin_unlock_irq(&pdev->lock);
+				break;
+			}
+
+			if (!vgt_restore_context(next)) {
+				vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
+					vgt_ctx_check(pdev),
+					vgt_ctx_switch(pdev),
+					prev->vgt_id,
+					next->vgt_id);
+
+				/* TODO: any recovery to do here. Now simply exits the thread */
+				spin_unlock_irq(&pdev->lock);
+				break;
+			}
+
+			current_render_owner(pdev) = next;
+			//show_seqno(pdev);
+
+			if (pdev->enable_ppgtt && next->ppgtt_initialized)
+				vgt_ppgtt_switch(next);
+
+			vgt_resume_ringbuffers(next);
+
+			/* request to check IRQ when ctx switch happens */
+			if (prev->force_removal ||
+				bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
+				printk("Disable render for vgt(%d) from kthread\n",
+					prev->vgt_id);
+				vgt_disable_render(prev);
+				wmb();
+				if (prev->force_removal) {
+					prev->force_removal = false;
+					if (waitqueue_active(&pdev->destroy_wq))
+						wake_up(&pdev->destroy_wq);
+				}
+				/* no need to check if prev is to be destroyed */
+			}
+
+			next->stat.schedule_in_time = vgt_get_cycles();
+
+			/* setup countdown for next vgt context */
+			if (event_based_qos) {
+				vgt_setup_countdown(next);
+			}
+
+			t1 = vgt_get_cycles();
+			context_switch_cost += (t1-t0);
+		} else {
+			printk("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
+				vgt_ctx_switch(pdev),
+				current_render_owner(pdev)->vgt_id, ring_id);
+			show_ringbuffer(pdev, ring_id, 16 * sizeof(vgt_reg_t));
 		}
 
 		spin_unlock_irq(&pdev->lock);
-
-		t3 = vgt_get_cycles();
-		context_switch_cost += (t3-t0);
 	}
 	return 0;
 }
@@ -417,7 +391,7 @@ int vgt_thread(void *priv)
 /*
  * Only need to save head, since it's the only one updated by hw
  */
-void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
+static void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
 	vgt_dbg("old head(%x), old tail(%x)\n", srb->head, srb->tail);
 	srb->head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
@@ -429,24 +403,21 @@ void ring_phys_2_shadow(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *
 #endif
 }
 
-/* Rewind the head/tail registers */
-void rewind_ring(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
+static inline bool stop_ring(struct pgt_device *pdev, int ring_id)
 {
-	VGT_MMIO_WRITE(pdev, RB_TAIL(pdev, ring_id), srb->tail);
-	VGT_MMIO_WRITE(pdev, RB_HEAD(pdev, ring_id), srb->head);
-}
-
-static inline void stop_ring(struct pgt_device *pdev, int ring_id)
-{
-	/* wait for ring idle */
-	ring_wait_for_empty(pdev, ring_id, "stop-ring");
 	VGT_MMIO_WRITE(pdev, pdev->ring_mi_mode[ring_id],
 			_REGBIT_MI_STOP_RINGS | (_REGBIT_MI_STOP_RINGS << 16));
+
+	if (wait_for_atomic(ring_is_stopped(pdev, ring_id), 100) != 0) {
+		vgt_err("failed to stop ring-%d\n", ring_id);
+		return false;
+	}
+
+	return true;
 }
 
-static inline void resume_ring(struct pgt_device *pdev, int ring_id)
+static inline void restart_ring(struct pgt_device *pdev, int ring_id)
 {
-	/* make sure ring resumed */
 	VGT_MMIO_WRITE(pdev, pdev->ring_mi_mode[ring_id],
 			_REGBIT_MI_STOP_RINGS << 16);
 	if (VGT_MMIO_READ(pdev, pdev->ring_mi_mode[ring_id]) & _REGBIT_MI_STOP_RINGS)
@@ -472,10 +443,10 @@ static inline void enable_ring(struct pgt_device *pdev, int ring_id, vgt_reg_t v
 	ASSERT(val & _RING_CTL_ENABLE);
 	VGT_MMIO_WRITE(pdev, RB_CTL(pdev, ring_id), val);
 	VGT_POST_READ(pdev, RB_CTL(pdev, ring_id));
-	resume_ring(pdev, ring_id);
+	restart_ring(pdev, ring_id);
 }
 
-void stop_rings(struct pgt_device *pdev)
+static void stop_rings(struct pgt_device *pdev)
 {
 	int i;
 
@@ -483,14 +454,30 @@ void stop_rings(struct pgt_device *pdev)
 		stop_ring(pdev, i);
 }
 
-void resume_rings(struct pgt_device *pdev)
+static void restart_rings(struct pgt_device *pdev)
 {
 	int i;
 
 	for (i = 0; i < pdev->max_engines; i++)
-		resume_ring(pdev, i);
+		restart_ring(pdev, i);
 }
 
+/* update the tail pointer after all the context is restored */
+void vgt_resume_ringbuffers(struct vgt_device *vgt)
+{
+	int i;
+
+	for (i = 0; i < vgt->pdev->max_engines; i++) {
+		if (!enable_video_switch && i == RING_BUFFER_VCS)
+			continue;
+
+		if (!(vgt->rb[i].sring.ctl & _RING_CTL_ENABLE)) {
+			vgt_dbg("vGT: ring (%d) not enabled. exit resume\n", i);
+			continue;
+		}
+		VGT_MMIO_WRITE(vgt->pdev, RB_TAIL(vgt->pdev, i), vgt->rb[i].sring.tail);
+	}
+}
 
 bool vgt_vrings_empty(struct vgt_device *vgt)
 {
@@ -509,7 +496,7 @@ bool vgt_vrings_empty(struct vgt_device *vgt)
 /*
  * to restore to a new ring buffer, we need restore all ring regs including head.
  */
-void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
+static void ring_shadow_2_phys(struct pgt_device *pdev, int ring_id, vgt_ringbuffer_t *srb)
 {
 	vgt_dbg("shadow 2 phys: [%x, %x, %x, %x] \n", srb->head, srb->tail,
 		VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id)),
@@ -677,7 +664,7 @@ static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *reg
 
 /* For save/restore global states difference between VMs.
  * Other context states should be covered by normal context switch later. */
-void vgt_rendering_save_mmio(struct vgt_device *vgt)
+static void vgt_rendering_save_mmio(struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
 
@@ -731,10 +718,10 @@ static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs
 }
 
 /*
- * Rstore MMIO registers per rendering context.
+ * Restore MMIO registers per rendering context.
  * (Not include ring buffer registers).
  */
-void vgt_rendering_restore_mmio(struct vgt_device *vgt)
+static void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
 
@@ -748,18 +735,11 @@ void vgt_rendering_restore_mmio(struct vgt_device *vgt)
  * Rendering engine context switch
  *
  */
-
 static bool vgt_save_context (struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	int i;
 	vgt_state_ring_t *rb;
-	vgt_reg_t old_tail;
-
-	if (vgt == NULL)
-		return false;
-
-	//disable_power_management(vgt);
 
 	vgt_rendering_save_mmio(vgt);
 
@@ -769,7 +749,6 @@ static bool vgt_save_context (struct vgt_device *vgt)
 		vgt_reg_t	ccid;
 
 		rb = &vgt->rb[i];
-		old_tail = rb->sring.tail;
 		/* Save head */
 		ring_phys_2_shadow (pdev, i, &rb->sring);
 
@@ -778,11 +757,8 @@ static bool vgt_save_context (struct vgt_device *vgt)
 		if (!enable_video_switch && i == RING_BUFFER_VCS)
 			continue;
 
-		/* for stateless engine, no need to save/restore context */
+		/* for stateless engine, no need to save/restore HW context */
 		if (rb->stateless)
-			continue;
-
-		if (i != RING_BUFFER_RCS)
 			continue;
 
 		/* No need to submit ArbOnOffInstruction */
@@ -809,7 +785,7 @@ static bool vgt_save_context (struct vgt_device *vgt)
 
 		/* XXX disable_ring()->stop_ring() will disable ring in
 		 * MI_MODE */
-		resume_ring(pdev, i);
+		restart_ring(pdev, i);
 
 		vgt_ring_begin(ring, 14);
 		vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
@@ -831,7 +807,7 @@ static bool vgt_save_context (struct vgt_device *vgt)
 		vgt_ring_emit(ring, MI_NOOP);
 		vgt_ring_advance(ring);
 
-		if (!ring_wait_for_magic(pdev, i)) {
+		if (!ring_wait_for_completion(pdev, i)) {
 			vgt_err("save context commands unfinished\n");
 			show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
 			return false;
@@ -859,10 +835,6 @@ static bool vgt_restore_context (struct vgt_device *vgt)
 	struct pgt_device *pdev = vgt->pdev;
 	int i;
 	vgt_state_ring_t	*rb;
-	vgt_reg_t old_tail;
-
-	if (vgt == NULL)
-		return false;
 
 	for (i=0; i < pdev->max_engines; i++) {
 		struct vgt_ring_buffer *ring = pdev->ring_buffer;
@@ -874,11 +846,6 @@ static bool vgt_restore_context (struct vgt_device *vgt)
 
 		if (rb->stateless)
 			continue;
-
-		if (i != RING_BUFFER_RCS)
-			continue;
-
-		old_tail = rb->sring.tail;
 
 		/* some mode control registers can be only restored through this command */
 		update_context(vgt, rb->context_save_area);
@@ -913,7 +880,7 @@ static bool vgt_restore_context (struct vgt_device *vgt)
 		vgt_ring_emit(ring, 0);
 		vgt_ring_advance(ring);
 
-		if (!ring_wait_for_magic(pdev, i)) {
+		if (!ring_wait_for_completion(pdev, i)) {
 			vgt_err("restore context switch commands unfinished\n");
 			show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
 			return false;
@@ -937,11 +904,15 @@ static bool vgt_restore_context (struct vgt_device *vgt)
 			vgt_ring_emit(ring, 0);
 			vgt_ring_advance(ring);
 
-			if (!ring_wait_for_magic(pdev, i)) {
+			if (!ring_wait_for_completion(pdev, i)) {
 				vgt_err("change to VM context switch commands unfinished\n");
 				show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
 				return false;
 			}
+		}
+		if (!idle_render_engine(pdev, i)) {
+			vgt_err("failed to idle ring-%d after ctx switch\n", i);
+			return false;
 		}
 	}
 
@@ -960,10 +931,8 @@ static bool vgt_restore_context (struct vgt_device *vgt)
 
 	vgt_rendering_restore_mmio(vgt);
 
-	resume_rings(pdev);
+	restart_rings(pdev);
 
-	/* Restore the PM */
-	//restore_power_management(vgt);
 	vgt_dbg("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
 	return true;
 }
@@ -1143,7 +1112,7 @@ void vgt_gpu_perf_sample(void)
 	int	ring_id = 0;
 
 	if ( perf_pgt ) {
-		if ( is_rendering_engine_empty(perf_pgt, ring_id) )
+		if ( ring_is_empty(perf_pgt, ring_id) )
 			ring_0_idle ++;
 		else
 			ring_0_busy ++;
