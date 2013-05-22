@@ -390,21 +390,21 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			}
 		}
 
-		if (*pedid) {
+		if (*pedid && vgt_debug) {
 			int i;
 			unsigned char *block = (*pedid)->edid_block;
-					vgt_info("EDID_PROBE: EDID is:\n");
-					for (i = 0; i < EDID_SIZE; ++ i) {
-							if ((block[i] >= 'a' && block[i] <= 'z') ||
-								(block[i] >= 'A' && block[i] <= 'Z')) {
-									printk ("%c ", block[i]);
-							} else {
-									printk ("0x%x ", block[i]);
-							}
-							if (((i + 1) & 0xf) == 0) {
-									printk ("\n");
-							}
-					}
+			printk("EDID_PROBE: EDID is:\n");
+			for (i = 0; i < EDID_SIZE; ++ i) {
+				if ((block[i] >= 'a' && block[i] <= 'z') ||
+				    (block[i] >= 'A' && block[i] <= 'Z')) {
+					printk ("%c ", block[i]);
+				} else {
+					printk ("0x%x ", block[i]);
+				}
+				if (((i + 1) & 0xf) == 0) {
+					printk ("\n");
+				}
+			}
 		}
 	}
 }
@@ -545,21 +545,21 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 			memcpy(vgt->vgt_edids[i], edid,
 				sizeof(vgt_edid_data_t));
 
-			{
-			int j;
-			unsigned char *block = vgt->vgt_edids[i]->edid_block;
-			printk("EDID_PROPAGATE: EDID[%d] is:\n", i);
-			for (j = 0; j < EDID_SIZE; ++ j) {
-				if ((block[j] >= 'a' && block[j] <= 'z') ||
-					(block[j] >= 'A' && block[j] <= 'Z')) {
-					printk ("%c ", block[j]);
-				} else {
-					printk ("0x%x ", block[j]);
+			if (vgt_debug) {
+				int j;
+				unsigned char *block = vgt->vgt_edids[i]->edid_block;
+				printk("EDID_PROPAGATE: EDID[%d] is:\n", i);
+				for (j = 0; j < EDID_SIZE; ++ j) {
+					if ((block[j] >= 'a' && block[j] <= 'z') ||
+						(block[j] >= 'A' && block[j] <= 'Z')) {
+						printk ("%c ", block[j]);
+					} else {
+						printk ("0x%x ", block[j]);
+					}
+					if (((j + 1) & 0xf) == 0) {
+						printk ("\n");
+					}
 				}
-				if (((j + 1) & 0xf) == 0) {
-					printk ("\n");
-				}
-			}
 			}
 		}
 	}

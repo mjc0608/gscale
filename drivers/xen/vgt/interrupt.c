@@ -837,7 +837,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 
 	ret = hstate->ops->irq_handler(hstate);
 	if (ret == IRQ_NONE) {
-		vgt_info("Spurious interrupt received (or shared vector)\n");
+		vgt_dbg("Spurious interrupt received (or shared vector)\n");
 		goto out;
 	}
 
