@@ -363,6 +363,8 @@ static bool vgt_set_device_type(struct pgt_device *pdev)
 
 static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
 {
+	int i;
+
 	pdev->pdev = dev;
 	pdev->pbus = dev->bus;
 
@@ -422,7 +424,8 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 
 	vgt_init_reserved_aperture(pdev);
 
-	vgt_ring_init(pdev);
+	for (i = 0; i < pdev->max_engines; i++)
+		vgt_ring_init(pdev, i);
 
 	perf_pgt = pdev;
 	return true;

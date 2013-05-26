@@ -240,6 +240,10 @@ struct vgt_rsvd_ring {
 	u32 head;
 	u32 tail;
 	int size;
+	/* whether the engine requires special context switch */
+	bool	stateless;
+	/* whether the engine requires context switch */
+	bool	need_switch;
 };
 
 #define _tail_reg_(ring_reg_off)	\
@@ -332,7 +336,6 @@ typedef struct {
 	uint32_t	active_vm_context;	/* current active VM set context space.
 						_not_ next target ctx when switched to HW later. */
 	bool	initialized;	/* whether it includes an valid context */
-	bool	stateless;	/* whether the engine requires special context switch */
 	/* ppgtt info */
 	vgt_ring_ppgtt_t	vring_ppgtt_info; /* guest view */
 	vgt_ring_ppgtt_t	sring_ppgtt_info; /* shadow info */
@@ -834,7 +837,7 @@ struct pgt_device {
 
 	struct vgt_mmio_dev *mmio_dev;
 
-	struct vgt_rsvd_ring ring_buffer; /* vGT ring buffer */
+	struct vgt_rsvd_ring ring_buffer[MAX_ENGINES]; /* vGT ring buffer */
 
 	uint32_t opregion_pa;
 	void *opregion_va;
@@ -1676,7 +1679,7 @@ static inline bool is_ring_enabled (struct pgt_device *pdev, int ring_id)
 {
 	return (VGT_MMIO_READ(pdev, RB_CTL(pdev, ring_id)) & 1);	/* bit 0: enable/disable RB */
 }
-extern void vgt_ring_init(struct pgt_device *pdev);
+extern void vgt_ring_init(struct pgt_device *pdev, int id);
 
 static inline u32 vgt_read_gtt(struct pgt_device *pdev, u32 index)
 {

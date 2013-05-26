@@ -179,10 +179,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	vgt_vmem_init(vgt);
 
-	vgt->rb[RING_BUFFER_RCS].stateless = 0;	/* RCS */
-	vgt->rb[RING_BUFFER_VCS].stateless = 1;	/* BCS */
-	vgt->rb[RING_BUFFER_BCS].stateless = 1;	/* VCS */
-
 	vgt->state.bar_size[0] = pdev->bar_size[0];	/* MMIOGTT */
 	vgt->state.bar_size[1] =			/* Aperture */
 		vgt->ballooning ? pdev->bar_size[1] : vgt_aperture_sz(vgt);

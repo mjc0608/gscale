@@ -84,18 +84,41 @@ static inline void vgt_ring_emit(struct vgt_rsvd_ring *ring,
 	ring->tail += 4;
 }
 
-void vgt_ring_init(struct pgt_device *pdev)
+void vgt_ring_init(struct pgt_device *pdev, int id)
 {
-	struct vgt_rsvd_ring *ring = &pdev->ring_buffer;
+	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[id];
 
 	ring->pdev = pdev;
-	ring->id = RING_BUFFER_RCS;
+	ring->id = id;
 	ring->size = VGT_RSVD_RING_SIZE;
 	ring->start = aperture_2_gm(pdev,
 			rsvd_aperture_alloc(pdev, ring->size));
 	ring->virtual_start = v_aperture(pdev, ring->start);
 	ring->head = 0;
 	ring->tail = 0;
+
+	switch (id) {
+	case RING_BUFFER_RCS:
+		ring->stateless = 0;
+		ring->need_switch = 1;
+		break;
+	case RING_BUFFER_VCS:
+	case RING_BUFFER_VECS:
+		ring->stateless = 1;
+		if (enable_video_switch)
+			ring->need_switch = 1;
+		else
+			ring->need_switch = 0;
+		break;
+	case RING_BUFFER_BCS:
+		ring->stateless = 1;
+		ring->need_switch = 1;
+		break;
+	default:
+		vgt_err("Unknown ring ID (%d)\n", id);
+		ASSERT(0);
+		break;
+	}
 }
 
 static void vgt_prepare_rsvd_ring(struct vgt_rsvd_ring *ring)
@@ -607,7 +630,7 @@ static bool vgt_save_ring(int id, struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	vgt_state_ring_t *rb = &vgt->rb[id];
-	struct vgt_rsvd_ring *ring = &pdev->ring_buffer;
+	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[id];
 	vgt_reg_t	ccid;
 
 	/*
@@ -682,7 +705,7 @@ static bool vgt_restore_ring(int id, struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	vgt_state_ring_t	*rb = &vgt->rb[id];
-	struct vgt_rsvd_ring *ring = &pdev->ring_buffer;
+	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[id];
 
 	/* some mode control registers can be only restored through this command */
 	update_context(vgt, rb->context_save_area);
@@ -814,17 +837,18 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	/* STEP-2: HW render context switch */
 	for (i=0; i < pdev->max_engines; i++) {
 		vgt_state_ring_t *rb;
+		struct vgt_rsvd_ring *ring = &pdev->ring_buffer[i];
 
 		/* STEP-2a: save current ring buffer structure */
 		rb = &prev->rb[i];
 		ring_phys_2_shadow (pdev, i, &rb->sring);
 		sring_2_vring(prev, i, &rb->sring, &rb->vring);
 
-		if (!enable_video_switch && i == RING_BUFFER_VCS)
+		if (!ring->need_switch)
 			continue;
 
 		/* STEP-2b: save HW render context for prev */
-		if (!rb->stateless && !vgt_save_ring(i, prev)) {
+		if (!ring->stateless && !vgt_save_ring(i, prev)) {
 			vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
 				i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
 				prev->vgt_id, next->vgt_id);
@@ -835,7 +859,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 
 		/* STEP-2c: restore HW render context for next */
 		rb = &next->rb[i];
-		if (!rb->stateless && !vgt_restore_ring(i, next)) {
+		if (!ring->stateless && !vgt_restore_ring(i, next)) {
 			vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
 				i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
 				prev->vgt_id, next->vgt_id);
