@@ -603,206 +603,154 @@ static void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 		__vgt_rendering_restore(vgt, ARRAY_NUM(vgt_gen7_render_regs), &vgt_gen7_render_regs[0]);
 }
 
-/*
- * Rendering engine context switch
- *
- */
-static bool vgt_save_context (struct vgt_device *vgt)
+static bool vgt_save_ring(int id, struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
-	int i;
-	vgt_state_ring_t *rb;
+	vgt_state_ring_t *rb = &vgt->rb[id];
+	struct vgt_rsvd_ring *ring = &pdev->ring_buffer;
+	vgt_reg_t	ccid;
 
-	vgt_rendering_save_mmio(vgt);
+	/*
+	 * Switch context ID to the area allocated by vGT.
+	 *
+	 * If VM already has valid context ID in CCID, this will cause
+	 * the current context saved to the VM's area; Or else this is
+	 * purely an ID pointer change.
+	 *
+	 * Context save to vGT's area happens in the restore phase.
+	 */
 
-	/* save rendering engines */
-	for (i=0; i < pdev->max_engines; i++) {
-		struct vgt_rsvd_ring *ring = &pdev->ring_buffer;
-		vgt_reg_t	ccid;
-
-		rb = &vgt->rb[i];
-		/* Save head */
-		ring_phys_2_shadow (pdev, i, &rb->sring);
-
-		sring_2_vring(vgt, i, &rb->sring, &rb->vring);
-
-		if (!enable_video_switch && i == RING_BUFFER_VCS)
-			continue;
-
-		/* for stateless engine, no need to save/restore HW context */
-		if (rb->stateless)
-			continue;
-
-		/* No need to submit ArbOnOffInstruction */
-
-		/*
-		 * Switch context ID to the area allocated by vGT.
-		 *
-		 * If VM already has valid context ID in CCID, this will cause
-		 * the current context saved to the VM's area; Or else this is
-		 * purely an ID pointer change.
-		 *
-		 * Context save to vGT's area happens in the restore phase.
-		 */
-
-		if (vgt->has_context) {
-			rb->active_vm_context = VGT_MMIO_READ(pdev, _REG_CCID);
-			rb->active_vm_context &= 0xfffff000;
-			vgt_dbg("VM %d CCID 0x%x\n", vgt->vm_id, rb->active_vm_context);
-		}
-
-		disable_ring(pdev, i);
-
-		vgt_prepare_rsvd_ring(ring);
-
-		/* XXX disable_ring()->stop_ring() will disable ring in
-		 * MI_MODE */
-		restart_ring(pdev, i);
-
-		vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
-		vgt_ring_emit(ring, MI_SET_CONTEXT);
-		vgt_ring_emit(ring, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
-				MI_SAVE_EXT_STATE_EN |
-				MI_RESTORE_EXT_STATE_EN |
-				rb->context_save_area);
-		vgt_ring_emit(ring, MI_NOOP);
-		vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
-		vgt_ring_emit(ring, MI_NOOP);
-		vgt_ring_emit(ring, MI_FLUSH);
-		vgt_ring_emit(ring, MI_NOOP);
-		vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
-		vgt_ring_emit(ring, 0);
-		vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
-		vgt_ring_emit(ring, ++pdev->magic);
-		vgt_ring_emit(ring, 0);
-		vgt_ring_emit(ring, MI_NOOP);
-		vgt_ring_advance(ring);
-
-		if (!ring_wait_for_completion(pdev, i)) {
-			vgt_err("save context commands unfinished\n");
-			show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
-			return false;
-		}
-
-		vgt_dbg("new magic number: %d\n",
-				*(u32 *)(phys_aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
-
-		/* still confirm the CCID for safety. May remove in the future */
-		ccid = VGT_MMIO_READ (pdev, _REG_CCID);
-		if ((ccid & GTT_PAGE_MASK) != (rb->context_save_area & GTT_PAGE_MASK)) {
-			printk("vGT: CCID isn't changed [%x, %lx]\n", ccid, (unsigned long)rb->context_save_area);
-		}
-
-		rb->initialized = true;
-
-		vgt_dbg("<vgt-%d>vgt_save_context done\n", vgt->vgt_id);
-
+	if (vgt->has_context) {
+		rb->active_vm_context = VGT_MMIO_READ(pdev, _REG_CCID);
+		rb->active_vm_context &= 0xfffff000;
+		vgt_dbg("VM %d CCID 0x%x\n", vgt->vm_id, rb->active_vm_context);
 	}
+
+	disable_ring(pdev, id);
+
+	vgt_prepare_rsvd_ring(ring);
+
+	/* XXX disable_ring()->stop_ring() will disable ring in
+	 * MI_MODE */
+	restart_ring(pdev, id);
+
+	vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
+	vgt_ring_emit(ring, MI_SET_CONTEXT);
+	vgt_ring_emit(ring, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
+			MI_SAVE_EXT_STATE_EN |
+			MI_RESTORE_EXT_STATE_EN |
+			rb->context_save_area);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_FLUSH);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
+	vgt_ring_emit(ring, ++pdev->magic);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_advance(ring);
+
+	if (!ring_wait_for_completion(pdev, id)) {
+		vgt_err("save context commands unfinished\n");
+		show_ringbuffer(pdev, id, 16 * sizeof(vgt_reg_t));
+		return false;
+	}
+
+	vgt_dbg("new magic number: %d\n",
+			*(u32 *)(phys_aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
+
+	/* still confirm the CCID for safety. May remove in the future */
+	ccid = VGT_MMIO_READ (pdev, _REG_CCID);
+	if ((ccid & GTT_PAGE_MASK) != (rb->context_save_area & GTT_PAGE_MASK)) {
+		printk("vGT: CCID isn't changed [%x, %lx]\n", ccid, (unsigned long)rb->context_save_area);
+	}
+
+	rb->initialized = true;
+
+	if (!idle_render_engine(pdev, id)) {
+		vgt_err("failed to idle ring-%d after ctx switch\n", id);
+		return false;
+	}
+
 	return true;
 }
 
-static bool vgt_restore_context (struct vgt_device *vgt)
+static bool vgt_restore_ring(int id, struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
-	int i;
-	vgt_state_ring_t	*rb;
+	vgt_state_ring_t	*rb = &vgt->rb[id];
+	struct vgt_rsvd_ring *ring = &pdev->ring_buffer;
 
-	for (i=0; i < pdev->max_engines; i++) {
-		struct vgt_rsvd_ring *ring = &pdev->ring_buffer;
+	/* some mode control registers can be only restored through this command */
+	update_context(vgt, rb->context_save_area);
 
-		rb = &vgt->rb[i];
+	vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
+	vgt_ring_emit(ring, MI_SET_CONTEXT);
+	if (rb->initialized)
+		vgt_ring_emit(ring, rb->context_save_area |
+				MI_MM_SPACE_GTT |
+				MI_SAVE_EXT_STATE_EN |
+				MI_RESTORE_EXT_STATE_EN |
+				MI_FORCE_RESTORE);
+	else {
+		printk("vGT(%d): first initialization. switch to dummy context.\n",
+				vgt->vgt_id);
+		vgt_ring_emit(ring, pdev->dummy_area |
+				MI_MM_SPACE_GTT |
+				MI_SAVE_EXT_STATE_EN |
+				MI_RESTORE_EXT_STATE_EN |
+				MI_RESTORE_INHIBIT);
+	}
 
-		if (!enable_video_switch && i == RING_BUFFER_VCS)
-			continue;
+	vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_FLUSH);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
+	vgt_ring_emit(ring, ++pdev->magic);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_advance(ring);
 
-		if (rb->stateless)
-			continue;
+	if (!ring_wait_for_completion(pdev, id)) {
+		vgt_err("restore context switch commands unfinished\n");
+		show_ringbuffer(pdev, id, 16 * sizeof(vgt_reg_t));
+		return false;
+	}
 
-		/* some mode control registers can be only restored through this command */
-		update_context(vgt, rb->context_save_area);
-
-		vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
+	/* restore VM context */
+	if (vgt->has_context && rb->active_vm_context) {
 		vgt_ring_emit(ring, MI_SET_CONTEXT);
-		if (rb->initialized)
-			vgt_ring_emit(ring, rb->context_save_area |
-					MI_MM_SPACE_GTT |
-					MI_SAVE_EXT_STATE_EN |
-					MI_RESTORE_EXT_STATE_EN |
-					MI_FORCE_RESTORE);
-		else {
-			printk("vGT(%d): first initialization. switch to dummy context.\n",
-					vgt->vgt_id);
-			vgt_ring_emit(ring, pdev->dummy_area |
-					MI_MM_SPACE_GTT |
-					MI_SAVE_EXT_STATE_EN |
-					MI_RESTORE_EXT_STATE_EN |
-					MI_RESTORE_INHIBIT);
-		}
+		vgt_ring_emit(ring, rb->active_vm_context |
+				MI_MM_SPACE_GTT |
+				MI_SAVE_EXT_STATE_EN |
+				MI_RESTORE_EXT_STATE_EN |
+				MI_FORCE_RESTORE);
 
-		vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
-		vgt_ring_emit(ring, MI_NOOP);
-		vgt_ring_emit(ring, MI_FLUSH);
-		vgt_ring_emit(ring, MI_NOOP);
 		vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
 		vgt_ring_emit(ring, 0);
 		vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
 		vgt_ring_emit(ring, ++pdev->magic);
 		vgt_ring_emit(ring, 0);
+		vgt_ring_emit(ring, 0);
 		vgt_ring_advance(ring);
 
-		if (!ring_wait_for_completion(pdev, i)) {
-			vgt_err("restore context switch commands unfinished\n");
-			show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
-			return false;
-		}
-
-		/* restore VM context */
-		if (vgt->has_context && rb->active_vm_context) {
-			vgt_ring_emit(ring, MI_SET_CONTEXT);
-			vgt_ring_emit(ring, rb->active_vm_context |
-					MI_MM_SPACE_GTT |
-					MI_SAVE_EXT_STATE_EN |
-					MI_RESTORE_EXT_STATE_EN |
-					MI_FORCE_RESTORE);
-
-			vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
-			vgt_ring_emit(ring, 0);
-			vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
-			vgt_ring_emit(ring, ++pdev->magic);
-			vgt_ring_emit(ring, 0);
-			vgt_ring_emit(ring, 0);
-			vgt_ring_advance(ring);
-
-			if (!ring_wait_for_completion(pdev, i)) {
-				vgt_err("change to VM context switch commands unfinished\n");
-				show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
-				return false;
-			}
-		}
-		if (!idle_render_engine(pdev, i)) {
-			vgt_err("failed to idle ring-%d after ctx switch\n", i);
+		if (!ring_wait_for_completion(pdev, id)) {
+			vgt_err("change to VM context switch commands unfinished\n");
+			show_ringbuffer(pdev, id, 16 * sizeof(vgt_reg_t));
 			return false;
 		}
 	}
 
-	/* Restore ring registers */
-	for (i=0; i < pdev->max_engines; i++) {
-		if (!enable_video_switch && i == RING_BUFFER_VCS)
-			continue;
-
-		rb = &vgt->rb[i];
-		/* vring->sring */
-		//vring_2_sring(vgt, rb);
-		ring_shadow_2_phys (pdev, i, &rb->sring);
+	if (!idle_render_engine(pdev, id)) {
+		vgt_err("failed to idle ring-%d after ctx switch\n", id);
+		return false;
 	}
 
-	stop_rings(pdev);
-
-	vgt_rendering_restore_mmio(vgt);
-
-	restart_rings(pdev);
-
-	vgt_dbg("<vgt-%d>vgt_restore_context done\n", vgt->vgt_id);
 	return true;
 }
 
@@ -810,7 +758,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 {
 	struct vgt_device *next, *prev;
 	int threshold = 500; /* print every 500 times */
-	int id;
+	int id, i;
 	cycles_t t0, t1;
 
 	if (!(vgt_ctx_check(pdev) % threshold))
@@ -833,92 +781,111 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	next = next_sched_vgt;
 	prev = current_render_owner(pdev);
 
-	if (next == prev) {
-		spin_unlock_irq(&pdev->lock);
-		return true;
-	}
+	if (next == prev)
+		goto out;
 
-	if (idle_rendering_engines(pdev, &id)) {
-		vgt_dbg("vGT: next vgt (%d)\n", next->vgt_id);
-
-		/* variable exported by debugfs */
-		context_switch_num ++;
-		t0 = vgt_get_cycles();
-		/* Records actual tsc when all rendering engines
-		 * are stopped */
-		if (event_based_qos) {
-			ctx_actual_end_time(current_render_owner(pdev)) = t0;
-		}
-
-		if ( prev )
-			prev->stat.allocated_cycles +=
-				(t0 - prev->stat.schedule_in_time);
-		vgt_ctx_switch(pdev)++;
-
-		//show_seqno(pdev);
-		if (!vgt_save_context(prev)) {
-			vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
-				vgt_ctx_check(pdev),
-				vgt_ctx_switch(pdev),
-				prev->vgt_id,
-				next->vgt_id);
-
-			/* TODO: any recovery to do here. Now simply exits the thread */
-			spin_unlock_irq(&pdev->lock);
-			return false;
-		}
-
-		if (!vgt_restore_context(next)) {
-			vgt_err("vGT: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
-				vgt_ctx_check(pdev),
-				vgt_ctx_switch(pdev),
-				prev->vgt_id,
-				next->vgt_id);
-
-			/* TODO: any recovery to do here. Now simply exits the thread */
-			spin_unlock_irq(&pdev->lock);
-			return false;
-		}
-
-		current_render_owner(pdev) = next;
-		//show_seqno(pdev);
-
-		if (pdev->enable_ppgtt && next->ppgtt_initialized)
-			vgt_ppgtt_switch(next);
-
-		vgt_resume_ringbuffers(next);
-
-		/* request to check IRQ when ctx switch happens */
-		if (prev->force_removal ||
-			bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
-			printk("Disable render for vgt(%d) from kthread\n",
-				prev->vgt_id);
-			vgt_disable_render(prev);
-			wmb();
-			if (prev->force_removal) {
-				prev->force_removal = false;
-				if (waitqueue_active(&pdev->destroy_wq))
-					wake_up(&pdev->destroy_wq);
-			}
-			/* no need to check if prev is to be destroyed */
-		}
-
-		next->stat.schedule_in_time = vgt_get_cycles();
-
-		/* setup countdown for next vgt context */
-		if (event_based_qos) {
-			vgt_setup_countdown(next);
-		}
-
-		t1 = vgt_get_cycles();
-		context_switch_cost += (t1-t0);
-	} else {
+	if (!idle_rendering_engines(pdev, &id)) {
 		printk("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
 			vgt_ctx_switch(pdev),
 			current_render_owner(pdev)->vgt_id, id);
 		show_ringbuffer(pdev, id, 16 * sizeof(vgt_reg_t));
+		goto out;
 	}
 
+	vgt_dbg("vGT: next vgt (%d)\n", next->vgt_id);
+
+	/* variable exported by debugfs */
+	context_switch_num ++;
+	t0 = vgt_get_cycles();
+	/* Records actual tsc when all rendering engines
+	 * are stopped */
+	if (event_based_qos) {
+		ctx_actual_end_time(current_render_owner(pdev)) = t0;
+	}
+
+	if ( prev )
+		prev->stat.allocated_cycles +=
+			(t0 - prev->stat.schedule_in_time);
+	vgt_ctx_switch(pdev)++;
+
+	/* STEP-1: manually save render context */
+	vgt_rendering_save_mmio(prev);
+
+	/* STEP-2: HW render context switch */
+	for (i=0; i < pdev->max_engines; i++) {
+		vgt_state_ring_t *rb;
+
+		/* STEP-2a: save current ring buffer structure */
+		rb = &prev->rb[i];
+		ring_phys_2_shadow (pdev, i, &rb->sring);
+		sring_2_vring(prev, i, &rb->sring, &rb->vring);
+
+		if (!enable_video_switch && i == RING_BUFFER_VCS)
+			continue;
+
+		/* STEP-2b: save HW render context for prev */
+		if (!rb->stateless && !vgt_save_ring(i, prev)) {
+			vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
+				i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
+				prev->vgt_id, next->vgt_id);
+			/* TODO: any recovery to do here? */
+			spin_unlock_irq(&pdev->lock);
+			return false;
+		}
+
+		/* STEP-2c: restore HW render context for next */
+		rb = &next->rb[i];
+		if (!rb->stateless && !vgt_restore_ring(i, next)) {
+			vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
+				i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
+				prev->vgt_id, next->vgt_id);
+			/* TODO: any recovery to do here? */
+			spin_unlock_irq(&pdev->lock);
+			return false;
+		}
+
+		/* STEP-2d: restore ring buffer structure */
+		ring_shadow_2_phys (pdev, i, &rb->sring);
+	}
+
+	/* STEP-3: idle the rings and manually restore render context */
+	stop_rings(pdev);
+	vgt_rendering_restore_mmio(next);
+	restart_rings(pdev);
+
+	current_render_owner(pdev) = next;
+
+	if (pdev->enable_ppgtt && next->ppgtt_initialized)
+		vgt_ppgtt_switch(next);
+
+	/* STEP-4: finally restore the tail pointer */
+	vgt_resume_ringbuffers(next);
+
+	/* request to check IRQ when ctx switch happens */
+	if (prev->force_removal ||
+		bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
+		printk("Disable render for vgt(%d) from kthread\n",
+			prev->vgt_id);
+		vgt_disable_render(prev);
+		wmb();
+		if (prev->force_removal) {
+			prev->force_removal = false;
+			if (waitqueue_active(&pdev->destroy_wq))
+				wake_up(&pdev->destroy_wq);
+		}
+		/* no need to check if prev is to be destroyed */
+	}
+
+	next->stat.schedule_in_time = vgt_get_cycles();
+
+	/* setup countdown for next vgt context */
+	if (event_based_qos) {
+		vgt_setup_countdown(next);
+	}
+
+	t1 = vgt_get_cycles();
+	context_switch_cost += (t1-t0);
+out:
 	spin_unlock_irq(&pdev->lock);
 	return true;
 }
