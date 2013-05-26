@@ -230,14 +230,15 @@ typedef struct {
 	vgt_reg_t ctl;
 } vgt_ringbuffer_t;
 
-struct vgt_ring_buffer {
+#define VGT_RSVD_RING_SIZE	4096
+struct vgt_rsvd_ring {
 	struct pgt_device *pdev;
 	void *virtual_start;
-	int offset;
+	int start;
+	int id;
 
 	u32 head;
 	u32 tail;
-	int space;
 	int size;
 };
 
@@ -325,8 +326,6 @@ typedef	uint32_t	rb_dword;
 typedef struct {
 	vgt_ringbuffer_t	vring;		/* guest view ring */
 	vgt_ringbuffer_t	sring;		/* shadow ring */
-	vgt_reg_t	phys_tail;	/* temproray tail reg for context S/R */
-	rb_dword	save_buffer[RB_DWORDS_TO_SAVE];
 	/* In aperture, partitioned & 4KB aligned. */
 	/* 64KB alignment requirement for walkaround. */
 	uint64_t	context_save_area;	/* VGT default context space */
@@ -835,7 +834,7 @@ struct pgt_device {
 
 	struct vgt_mmio_dev *mmio_dev;
 
-	struct vgt_ring_buffer *ring_buffer; /* vGT ring buffer */
+	struct vgt_rsvd_ring ring_buffer; /* vGT ring buffer */
 
 	uint32_t opregion_pa;
 	void *opregion_va;
@@ -1665,6 +1664,7 @@ static inline bool is_ring_empty(struct pgt_device *pdev, int ring_id)
 
 #define VGT_READ_HEAD(pdev, id)	VGT_MMIO_READ(pdev, RB_HEAD(pdev, id))
 #define VGT_WRITE_HEAD(pdev, id, val) VGT_MMIO_WRITE(pdev, RB_HEAD(pdev, id), val)
+#define VGT_POST_READ_HEAD(pdev, id)	VGT_POST_READ(pdev, RB_HEAD(pdev,id))
 
 #define VGT_READ_TAIL(pdev, id)	VGT_MMIO_READ(pdev, RB_TAIL(pdev, id))
 #define VGT_WRITE_TAIL(pdev, id, val) VGT_MMIO_WRITE(pdev, RB_TAIL(pdev, id), val)
