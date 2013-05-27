@@ -283,6 +283,7 @@ struct decode_info{
 #define OP_MFX_AVC_WEIGHTOFFSET_STATE              OP_MFX(2, 1, 0, 5) /* ALL */
 
 #define OP_MFD_AVC_PICID_STATE                     OP_MFX(2, 1, 1, 5) /* HSW+ */
+#define OP_MFD_AVC_DPB_STATE			   OP_MFX(2, 1, 1, 6) /* IVB+ */
 #define OP_MFD_AVC_BSD_OBJECT                      OP_MFX(2, 1, 1, 8) /* ALL */
 
 #define OP_MFC_AVC_FQM_STATE                       OP_MFX(2, 1, 2, 2) /* SNB */
