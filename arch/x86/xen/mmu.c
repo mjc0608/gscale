@@ -2675,6 +2675,8 @@ struct vm_struct * xen_remap_domain_mfn_range_in_kernel(unsigned long mfn,
 	pgprot_t prot;
 	int err;
 
+	WARN_ON(in_interrupt() || irqs_disabled());
+
 	area = alloc_vm_area(nr << PAGE_SHIFT, NULL);
 	if (!area)
 		return NULL;
@@ -2700,12 +2702,11 @@ struct vm_struct * xen_remap_domain_mfn_range_in_kernel(unsigned long mfn,
 		addr += range;
 	}
 
-	flush_tlb_all();
+	xen_flush_tlb_all();
 	return area;
 err:
-	printk("vGT: xen_remap_domain_mfn_range_in_kernel: failed!!!\n");
 	free_vm_area(area);
-	flush_tlb_all();
+	xen_flush_tlb_all();
 	return NULL;
 }
 EXPORT_SYMBOL_GPL(xen_remap_domain_mfn_range_in_kernel);
@@ -2718,6 +2719,8 @@ void xen_unmap_domain_mfn_range_in_kernel(struct vm_struct *area, int nr,
 	int batch;
 	unsigned long range, addr = (unsigned long)area->addr;
 	int err;
+
+	WARN_ON(in_interrupt() || irqs_disabled());
 
 #define INVALID_MFN (~0UL)
 	rmd.mfn = INVALID_MFN;
@@ -2738,5 +2741,6 @@ void xen_unmap_domain_mfn_range_in_kernel(struct vm_struct *area, int nr,
 	}
 
 	free_vm_area(area);
+	xen_flush_tlb_all();
 }
 EXPORT_SYMBOL_GPL(xen_unmap_domain_mfn_range_in_kernel);
