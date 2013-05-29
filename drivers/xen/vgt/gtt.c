@@ -520,17 +520,6 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e
 	return true;
 }
 
-/* handler to map guest page in dom0 kernel space.
- * XXX no unmap for now, assume current PTE pages are always allocated.
- */
-struct vm_struct *vgt_ppgtt_map_guest_pte_page(struct vgt_device *vgt, unsigned long gaddr)
-{
-	struct vm_struct *area;
-
-	area = xen_remap_domain_mfn_range_in_kernel((gaddr >> PAGE_SHIFT), 1, vgt->vm_id);
-	return (area == NULL) ? NULL : area;
-}
-
 static void vgt_init_ppgtt_hw(struct vgt_device *vgt, u32 base)
 {
 	/* only change HW setting if vgt is current render owner.*/
