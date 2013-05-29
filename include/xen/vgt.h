@@ -29,8 +29,8 @@
 // structures
 struct vgt_device;
 typedef struct {
-    bool (*mem_read)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
-    bool (*mem_write)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
+    bool (*mem_read)(struct vgt_device *vgt, uint64_t pa, void *p_data, int bytes);
+    bool (*mem_write)(struct vgt_device *vgt, uint64_t pa, void *p_data, int bytes);
     bool (*cfg_read)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
     bool (*cfg_write)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
     bool boot_time;	/* in boot time dom0 access is always passed through */
@@ -44,8 +44,8 @@ extern vgt_ops_t *vgt_ops;
 /* get one bit of the data, bit is starting from zeor */
 #define VGT_GET_BIT(data, bit)		VGT_GET_BITS(data, bit, bit)
 
-bool vgt_emulate_write(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
-bool vgt_emulate_read(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
+bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa, void *p_data, int bytes);
+bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data, int bytes);
 bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
 bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
 

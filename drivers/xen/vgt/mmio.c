@@ -258,7 +258,8 @@ bool default_passthrough_mmio_read(struct vgt_device *vgt, unsigned int offset,
 
 #define PCI_BAR_ADDR_MASK (~0xFUL)  /* 4 LSB bits are not address */
 
-static inline unsigned int vgt_pa_to_mmio_offset(struct vgt_device *vgt, unsigned long pa)
+static inline unsigned int vgt_pa_to_mmio_offset(struct vgt_device *vgt,
+	uint64_t pa)
 {
 	return (vgt->vm_id == 0)?
 		pa - vgt->pdev->gttmmio_base :
@@ -270,7 +271,7 @@ static inline unsigned int vgt_pa_to_mmio_offset(struct vgt_device *vgt, unsigne
  * Emulate the VGT MMIO register read ops.
  * Return : true/false
  * */
-bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int bytes)
+bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int bytes)
 {
 	struct vgt_mmio_entry *mht;
 	struct pgt_device *pdev = vgt->pdev;
@@ -327,7 +328,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, unsigned int pa, void *p_data,int 
  * Emulate the VGT MMIO register write ops.
  * Return : true/false
  * */
-bool vgt_emulate_write(struct vgt_device *vgt, unsigned int pa,
+bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	void *p_data, int bytes)
 {
 	struct pgt_device *pdev = vgt->pdev;
