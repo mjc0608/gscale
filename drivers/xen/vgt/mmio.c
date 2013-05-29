@@ -24,6 +24,7 @@
  */
 
 #include <linux/acpi.h>
+#include <linux/kthread.h>
 
 #include <xen/events.h>
 #include <xen/xen-ops.h>
@@ -429,6 +430,51 @@ u64 mmio_wcnt=0;
 u64 mmio_rcycles=0;
 u64 mmio_wcycles=0;
 
+static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq);
+
+static int vgt_emulation_thread(void *priv)
+{
+	struct vgt_device *vgt = (struct vgt_device *)priv;
+	struct vgt_hvm_info *info = vgt->hvm_info;
+
+	int vcpu;
+	int nr_vcpus = info->nr_vcpu;
+
+	struct ioreq *ioreq;
+	int irq;
+
+	vgt_info("start kthread for VM%d\n", vgt->vm_id);
+
+	ASSERT(info->nr_vcpu <= MAX_HVM_VCPUS_SUPPORTED);
+
+	while (1) {
+		wait_event(info->io_event_wq,
+			kthread_should_stop() ||
+			bitmap_weight(info->ioreq_pending, nr_vcpus));
+
+		if (kthread_should_stop())
+			return 0;
+
+		for (vcpu = 0; vcpu < nr_vcpus; vcpu++) {
+			if (!test_and_clear_bit(vcpu,
+				&info->ioreq_pending[vcpu / sizeof(long)]))
+				continue;
+
+			ioreq = vgt_get_hvm_ioreq(vgt, vcpu);
+
+			vgt_hvm_do_ioreq(vgt, ioreq);
+
+			ioreq->state = STATE_IORESP_READY;
+
+			irq = info->evtchn_irq[vcpu];
+			notify_remote_via_irq(irq);
+		}
+	}
+
+	BUG(); /* It's actually impossible to reach here */
+	return 0;
+}
+
 void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 {
 	int i, sign;
@@ -600,12 +646,20 @@ static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
 	return 0;
 }
 
+static inline void vgt_raise_emulation_request(struct vgt_device *vgt,
+	int vcpu)
+{
+	struct vgt_hvm_info *info = vgt->hvm_info;
+	set_bit(vcpu, &info->ioreq_pending[vcpu / sizeof(long)]);
+	if (waitqueue_active(&info->io_event_wq))
+		wake_up(&info->io_event_wq);
+}
+
 static irqreturn_t vgt_hvm_io_req_handler(int irq, void* dev)
 {
 	struct vgt_device *vgt;
 	struct vgt_hvm_info *info;
 	int vcpu;
-	struct ioreq *ioreq;
 
 	vgt = (struct vgt_device *)dev;
 	info = vgt->hvm_info;
@@ -619,13 +673,7 @@ static irqreturn_t vgt_hvm_io_req_handler(int irq, void* dev)
 		return IRQ_NONE;
 	}
 
-	ioreq = vgt_get_hvm_ioreq(vgt, vcpu);
-
-	vgt_hvm_do_ioreq(vgt, ioreq);
-
-	ioreq->state = STATE_IORESP_READY;
-
-	notify_remote_via_irq(irq);
+	vgt_raise_emulation_request(vgt, vcpu);
 
 	return IRQ_HANDLED;
 }
@@ -691,7 +739,8 @@ void vgt_initial_opregion_setup(struct pgt_device *pdev)
 int vgt_hvm_info_init(struct vgt_device *vgt)
 {
 	struct vgt_hvm_info *info;
-	int vcpu, rc;
+	int vcpu, rc = 0;
+	struct task_struct *thread;
 
 	info = kzalloc(sizeof(struct vgt_hvm_info), GFP_KERNEL);
 	if (info == NULL)
@@ -709,6 +758,7 @@ int vgt_hvm_info_init(struct vgt_device *vgt)
 
 	info->nr_vcpu = xen_get_nr_vcpu(vgt->vm_id);
 	ASSERT(info->nr_vcpu > 0);
+	ASSERT(info->nr_vcpu <= MAX_HVM_VCPUS_SUPPORTED);
 
 	info->evtchn_irq = kmalloc(info->nr_vcpu * sizeof(int), GFP_KERNEL);
 	if (info->evtchn_irq == NULL){
@@ -730,6 +780,12 @@ int vgt_hvm_info_init(struct vgt_device *vgt)
 		info->evtchn_irq[vcpu] = rc;
 	}
 
+	init_waitqueue_head(&info->io_event_wq);
+	thread = kthread_run(vgt_emulation_thread, vgt, "vgt_emulation");
+	if(IS_ERR(thread))
+		goto err;
+	info->emulation_thread = thread;
+
 	return 0;
 
 err:
@@ -746,6 +802,9 @@ void vgt_hvm_info_deinit(struct vgt_device *vgt)
 
 	if (info == NULL)
 		return;
+
+	if (info->emulation_thread != NULL)
+		kthread_stop(info->emulation_thread);
 
 	if (vgt->state.opregion_va) {
 		vgt_hvm_opregion_map(vgt, 0);

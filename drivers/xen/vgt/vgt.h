@@ -415,8 +415,13 @@ extern void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs);
 
 struct vgt_irq_virt_state;
 
+#define MAX_HVM_VCPUS_SUPPORTED 128
 struct vgt_hvm_info{
 	shared_iopage_t *iopage;
+	DECLARE_BITMAP(ioreq_pending, MAX_HVM_VCPUS_SUPPORTED);
+	wait_queue_head_t io_event_wq;
+	struct task_struct *emulation_thread;
+
 	/* iopage_vma->addr is just iopage. We need iopage_vma on VM destroy */
 	struct vm_struct *iopage_vma;
 

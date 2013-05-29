@@ -309,6 +309,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	return 0;
 err:
+	vgt_hvm_info_deinit(vgt);
 	if ( vgt->aperture_base > 0)
 		free_vm_aperture_gm_and_fence(vgt);
 	vfree(vgt->vgtt);
