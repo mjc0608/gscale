@@ -739,7 +739,7 @@ void vgt_initial_opregion_setup(struct pgt_device *pdev)
 int vgt_hvm_info_init(struct vgt_device *vgt)
 {
 	struct vgt_hvm_info *info;
-	int vcpu, rc = 0;
+	int vcpu, irq, rc = 0;
 	struct task_struct *thread;
 
 	info = kzalloc(sizeof(struct vgt_hvm_info), GFP_KERNEL);
@@ -769,15 +769,16 @@ int vgt_hvm_info_init(struct vgt_device *vgt)
 		info->evtchn_irq[vcpu] = -1;
 
 	for( vcpu = 0; vcpu < info->nr_vcpu; vcpu++ ){
-		rc = bind_interdomain_evtchn_to_irqhandler( vgt->vm_id,
+		irq = bind_interdomain_evtchn_to_irqhandler( vgt->vm_id,
 				info->iopage->vcpu_ioreq[vcpu].vgt_eport,
 				vgt_hvm_io_req_handler, 0,
 				"vgt", vgt );
-		if ( rc < 0 ){
+		if ( irq < 0 ){
+			rc = irq;
 			printk(KERN_ERR "Failed to bind event channle for vgt HVM IO handler, rc=%d\n", rc);
 			goto err;
 		}
-		info->evtchn_irq[vcpu] = rc;
+		info->evtchn_irq[vcpu] = irq;
 	}
 
 	init_waitqueue_head(&info->io_event_wq);
