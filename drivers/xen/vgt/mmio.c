@@ -485,6 +485,12 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 	uint64_t tmp;
 	cycles_t t0, t1;
 
+	if (vgt->vmem_vma == NULL && vgt_hvm_vmem_init(vgt) < 0) {
+		vgt_err("can not map the memory of VM%d!!!\n", vgt->vm_id);
+		ASSERT_VM(vgt->vmem_vma != NULL, vgt);
+		return;
+	}
+
 	sign = req->df ? -1 : 1;
 
 	if (req->dir == IOREQ_READ) {

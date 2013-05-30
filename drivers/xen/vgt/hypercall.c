@@ -48,23 +48,12 @@ unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
 	return pfn_list[0];
 }
 
-/* get VM's total memory size */
-unsigned long xen_get_vm_mem_sz(int vm_id)
+int vgt_get_hvm_max_gpfn(int vm_id)
 {
-	struct xen_domctl arg;
-	int rc;
-
-	arg.domain = vm_id;
-	arg.cmd = XEN_DOMCTL_getdomaininfo;
-	arg.interface_version = XEN_DOMCTL_INTERFACE_VERSION;
-
-	rc = HYPERVISOR_domctl(&arg);
-	if (rc<0){
-		vgt_err("HYPERVISOR_domctl fail ret=%d\n",rc);
-		return 0;
-	}
-
-	return arg.u.getdomaininfo.tot_pages << PAGE_SHIFT;
+	domid_t dom_id = vm_id;
+	int max_gpfn = HYPERVISOR_memory_op(XENMEM_maximum_gpfn, &dom_id);
+	BUG_ON(max_gpfn < 0);
+	return max_gpfn;
 }
 
 int vgt_hvm_enable (struct vgt_device *vgt)
@@ -272,15 +261,18 @@ struct vm_struct *map_hvm_iopage(struct vgt_device *vgt)
 	return xen_remap_domain_mfn_range_in_kernel(ioreq_pfn, 1, vgt->vm_id);
 }
 
-int vgt_vmem_init(struct vgt_device *vgt)
+int vgt_hvm_vmem_init(struct vgt_device *vgt)
 {
 	unsigned long i;
 
 	/* Dom0 already has mapping for itself */
-	if(vgt->vm_id == 0)
-		return 0;
+	ASSERT(vgt->vm_id != 0)
 
-	vgt->vmem_sz = xen_get_vm_mem_sz(vgt->vm_id);
+	ASSERT(vgt->vmem_vma == NULL);
+
+	vgt->vmem_sz = vgt_get_hvm_max_gpfn(vgt->vm_id) + 1;
+	vgt->vmem_sz <<= PAGE_SHIFT;
+
 	vgt->vmem_vma = kmalloc(sizeof(*vgt->vmem_vma)*(vgt->vmem_sz>>VMEM_BUCK_SHIFT),GFP_KERNEL);
 	if (vgt->vmem_vma == NULL){
 		vgt_err("Insufficient memory for vmem_vma, vmem_sz=0x%llx\n",
@@ -293,8 +285,15 @@ int vgt_vmem_init(struct vgt_device *vgt)
 				i << (VMEM_BUCK_SHIFT - PAGE_SHIFT),
 				VMEM_BUCK_SIZE >> PAGE_SHIFT,
 				vgt->vm_id);
-		if (vgt->vmem_vma[i] == NULL)
-			vgt_warn("no mapping for vmem buck starting @ %ldMB\n", i<<(VMEM_BUCK_SHIFT-20));
+
+		/* To reduce the number of err messages, we only print the
+		 * message at every 64MB boundary.
+		 * NOTE: normally, only the MFNs of 0MB and the MMIO hole
+		 * below 4GB get mapping failure.
+		 */
+		if (vgt->vmem_vma[i] == NULL && (i % 64 == 0))
+			vgt_dbg("vGT: VM%d: can't map %ldMB\n",
+				vgt->vm_id, i<<(VMEM_BUCK_SHIFT-20));
 	}
 
 	return 0;
@@ -326,8 +325,14 @@ void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
 	if (vgt->vm_id == 0)
 		return (char*)mfn_to_virt(gpa>>PAGE_SHIFT) + (gpa & (PAGE_SIZE-1));
 
+	/*
+	 * At the beginning of _hvm_mmio_emulation(), we already initialize
+	 * vgt->vmem_vma.
+	 */
+	ASSERT(vgt->vmem_vma != NULL);
+
 	buck_index = gpa >> VMEM_BUCK_SHIFT;
-	if (!vgt->vmem_vma || !vgt->vmem_vma[buck_index])
+	if (!vgt->vmem_vma[buck_index])
 		return NULL;
 
 	return (char*)(vgt->vmem_vma[buck_index]->addr) + (gpa & (VMEM_BUCK_SIZE -1));

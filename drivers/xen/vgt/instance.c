@@ -161,8 +161,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	alloc_vm_rsvd_aperture(vgt);
 
-	vgt_vmem_init(vgt);
-
 	vgt->state.bar_size[0] = pdev->bar_size[0];	/* MMIOGTT */
 	vgt->state.bar_size[1] =			/* Aperture */
 		vgt->ballooning ? pdev->bar_size[1] : vgt_aperture_sz(vgt);
