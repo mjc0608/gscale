@@ -423,7 +423,6 @@ static struct vgt_device *ondemand_sched_next(struct pgt_device *pdev)
 }
 
 /* Command based scheduling */
-extern void vgt_resume_ringbuffers(struct vgt_device *vgt);
 static void ondemand_sched_ctx(struct pgt_device *pdev)
 {
 	struct vgt_device *cur_vgt = current_render_owner(pdev);
@@ -437,7 +436,7 @@ static void ondemand_sched_ctx(struct pgt_device *pdev)
 	if (next_vgt == cur_vgt) {
 		//FIXME: request 5 stails to be committed
 		vgt_rb_tailq_commit_num_stail(next_vgt, tails_per_ring);
-		vgt_resume_ringbuffers(next_vgt);
+		vgt_kick_ringbuffers(next_vgt);
 		return;
 	}
 
