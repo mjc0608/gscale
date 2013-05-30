@@ -44,6 +44,16 @@
 #include "reg.h"
 #include <xen/vgt_cmd_parser.h>
 
+/* vgt uses bit 20 to detect buffer reuse
+ *          bit 19 to mark MI_DISPLAY_FLIP command
+ *          bit 0-2 to record some command information
+ *
+ * Assumption: Linux/Windows guest will not use these bits
+ */
+#define VGT_NOOP_ID_MASK	(1U << 20)
+#define VGT_DISPLAY_FLIP_NOOP_ID_MASK	(1U << 19)
+#define VGT_NOOP_ID_CMD_MASK	(0x7)
+
 /*
  * new cmd parser
  */
@@ -363,22 +373,6 @@ static inline int cmd_length(struct parser_exec_state *s)
 	}
 }
 
-/* vgt use bit 20 to detect buffer reuse
-   Assumption: Linux/Windows guest will not set this bit
- */
-#define VGT_NOOP_ID_MASK	(1U << 20)
-
-static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
-{
-	if (cmd_val(s,0) & VGT_NOOP_ID_MASK){
-		vgt_err("VM %d: Guest reuse cmd buffer! Need ", s->vgt->vm_id);
-		parser_exec_state_dump(s);
-		//return -EFAULT;
-	}
-
-	return 0;
-}
-
 static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
 {
 	struct vgt_device *vgt = s->vgt;
@@ -422,7 +416,6 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
 	return rc;
 }
 
-#if 0
 /* TODO
  *
  * The mi_display_flip handler below is just a workaround. The completed
@@ -453,7 +446,7 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
 
 static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 {
-	uint32_t surf_reg, surf_val, surflive_reg, ctrl_reg;
+	uint32_t surf_reg, surf_val, ctrl_reg;
 	uint32_t stride_reg, stride_val, stride_mask;
 	uint32_t tile_para, tile_in_ctrl;
 	uint32_t opcode, plane_code;
@@ -462,15 +455,11 @@ static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 	bool async_flip;
 	int i, length = cmd_length(s);
 
-	if (s->vgt == current_foreground_vm(s->vgt->pdev)) {
-		return 0;
-	}
-
 	opcode = *(cmd_ptr(s, 0));
 	stride_val = *(cmd_ptr(s, 1));
 	surf_val = *(cmd_ptr(s, 2));
 
-	plane_code = (opcode >> PLANE_SELECT_SHIFT) & PLANE_SELECT_MASK;
+	plane_code = (opcode & PLANE_SELECT_MASK) >> PLANE_SELECT_SHIFT;
 
 	switch (plane_code) {
 		case 0:
@@ -492,14 +481,12 @@ static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 	if (plane == PRIMARY_PLANE) {
 		ctrl_reg = VGT_DSPCNTR(pipe);
 		surf_reg = VGT_DSPSURF(pipe);
-		surflive_reg = VGT_DSPSURFLIVE(pipe);
 		stride_reg = VGT_DSPSTRIDE(pipe);
 		stride_mask = _PRI_PLANE_STRIDE_MASK;
 	} else {
 		ASSERT (plane == SPRITE_PLANE);
 		ctrl_reg = VGT_SPRCTL(pipe);
 		surf_reg = VGT_SPRSURF(pipe);
-		surflive_reg = VGT_SPRSURFLIVE(pipe);
 		stride_reg = VGT_SPRSTRIDE(pipe);
 		stride_mask = _SPRITE_STRIDE_MASK;
 	}
@@ -545,16 +532,22 @@ static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 	__vreg(s->vgt, surf_reg) = (__vreg(s->vgt, surf_reg) & (~SURF_MASK)) |
 					(surf_val & SURF_MASK);
 	__sreg(s->vgt, surf_reg) = __vreg(s->vgt, surf_reg);
-	__vreg(s->vgt, surflive_reg) = __vreg(s->vgt, surf_reg);
-	__sreg(s->vgt, surflive_reg) = __sreg(s->vgt, surf_reg);
+
+	if (s->vgt == current_foreground_vm(s->vgt->pdev)) {
+		return 0;
+	}
 
 command_noop:
 	vgt_warn("VM %d: mi_display_flip to be ignored\n",
 		s->vgt->vm_id);
 
 	for (i = 0; i < length; i ++) {
-		*(cmd_ptr(s, i)) = MI_NOOP | VGT_NOOP_ID_MASK;
+		*(cmd_ptr(s, i)) = MI_NOOP | VGT_NOOP_ID_MASK |
+					VGT_DISPLAY_FLIP_NOOP_ID_MASK;
 	}
+
+	*(cmd_ptr(s,0)) |= plane_code;
+
 	s->ip_advance_update = length;
 
 	return 0;
@@ -563,7 +556,56 @@ wrong_command:
 	vgt_warn("VM %d: wrong mi_display_flip command!\n", s->vgt->vm_id);
 	goto command_noop;
 }
-#endif
+
+static int vgt_handle_resubmitted_flip_cmd(struct parser_exec_state* s)
+{
+	uint32_t plane_code, surf_reg;
+	vgt_reg_t surf_val;
+	enum vgt_pipe pipe;
+	enum vgt_plane_type plane;
+
+	plane_code = cmd_val(s, 0) & VGT_NOOP_ID_CMD_MASK;
+	surf_val = cmd_val(s, 2);
+
+	if (surf_val == (MI_NOOP | VGT_NOOP_ID_MASK |
+				VGT_DISPLAY_FLIP_NOOP_ID_MASK)) {
+		return 0;
+	} else {
+		vgt_dbg("cmd buffer contains partially updated command!\n");
+		*(cmd_ptr(s, 2)) = MI_NOOP | VGT_NOOP_ID_MASK |
+					VGT_DISPLAY_FLIP_NOOP_ID_MASK;
+	}
+
+	switch (plane_code) {
+		case 0:
+			pipe = PIPE_A; plane = PRIMARY_PLANE; break;
+		case 1:
+			pipe = PIPE_B; plane = PRIMARY_PLANE; break;
+		case 2:
+			pipe = PIPE_A; plane = SPRITE_PLANE; break;
+		case 3:
+			pipe = PIPE_B; plane = SPRITE_PLANE; break;
+		case 4:
+			pipe = PIPE_C; plane = PRIMARY_PLANE; break;
+		case 5:
+			pipe = PIPE_C; plane = SPRITE_PLANE; break;
+		default:
+			ASSERT(0);
+	}
+
+	if (plane == PRIMARY_PLANE) {
+		surf_reg = VGT_DSPSURF(pipe);
+	} else {
+		ASSERT (plane == SPRITE_PLANE);
+		surf_reg = VGT_SPRSURF(pipe);
+	}
+
+	__vreg(s->vgt, surf_reg) = (__vreg(s->vgt, surf_reg) & (~SURF_MASK)) |
+					(surf_val & SURF_MASK);
+	__sreg(s->vgt, surf_reg) = __vreg(s->vgt, surf_reg);
+
+	return 0;
+}
 
 #define USE_GLOBAL_GTT_MASK (1U << 22)
 static int vgt_cmd_handler_mi_update_gtt(struct parser_exec_state *s)
@@ -820,6 +862,22 @@ static int vgt_cmd_handler_mfx_2_6_0_0(struct parser_exec_state *s)
 	address_fixup(s,2);
 	return 0;
 }
+
+static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
+{
+	if (cmd_val(s,0) & VGT_NOOP_ID_MASK) {
+		if (cmd_val(s,0) & VGT_DISPLAY_FLIP_NOOP_ID_MASK) {
+			vgt_dbg("VM %d: Guest reuse cmd buffer!\n", s->vgt->vm_id);
+			vgt_handle_resubmitted_flip_cmd(s);
+		} else {
+			vgt_err("VM %d: Guest reuse cmd buffer!\n", s->vgt->vm_id);
+			parser_exec_state_dump(s);
+		}
+	}
+
+	return 0;
+}
+
 #if 0
 	{"", OP_, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
 
@@ -868,7 +926,7 @@ static struct cmd_info cmd_info[] = {
 	{"MI_RS_CONTEXT", OP_MI_RS_CONTEXT, F_LEN_CONST, R_RCS, D_HSW_PLUS, 0, 1, NULL},
 
 	{"MI_DISPLAY_FLIP", OP_MI_DISPLAY_FLIP, F_LEN_VAR, R_ALL, D_ALL,
-		ADDR_FIX_1(2), 8, NULL},
+		ADDR_FIX_1(2), 8, vgt_cmd_handler_mi_display_flip},
 
 	{"MI_SEMAPHORE_MBOX", OP_MI_SEMAPHORE_MBOX, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL },
 
