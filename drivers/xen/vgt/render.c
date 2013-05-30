@@ -556,9 +556,10 @@ static void vgt_setup_rsvd_ring(struct vgt_rsvd_ring *ring)
 
 	enable_ring(pdev, id, ((ring->size - PAGE_SIZE) & 0x1FF000) | 1);
 
-	wait_for(((VGT_READ_CTL(pdev, id) & 1) != 0 &&
+	ASSERT(!wait_for(((VGT_READ_CTL(pdev, id) & 1) != 0 &&
 			VGT_READ_START(pdev, id) == ring->start &&
-			(VGT_READ_HEAD(pdev, id) & RB_HEAD_OFF_MASK) == 0), 50);
+			(VGT_READ_HEAD(pdev, id) & RB_HEAD_OFF_MASK) == 0),
+			50));
 	vgt_dbg("start vgt ring at 0x%x\n", ring->start);
 }
 

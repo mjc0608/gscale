@@ -1998,7 +1998,20 @@ static __inline__ bool drm_can_sleep(void)
 })
 
 #define wait_for(COND, MS) _wait_for(COND, MS, 1)
-#define wait_for_atomic(COND, MS) _wait_for(COND, MS, 0)
+
+/* invoked likely in irq disabled condition */
+#define wait_for_atomic(COND, MS) ({					\
+	unsigned long cnt = MS*100;					\
+	int ret__ = 0;							\
+	while (!(COND)) {						\
+		if (!(--cnt)) {						\
+			ret__ = -ETIMEDOUT;				\
+			break;						\
+		}							\
+		udelay(10);						\
+	}								\
+	ret__;								\
+})
 
 extern reg_attr_t vgt_base_reg_info[];
 extern reg_list_t vgt_sticky_regs[];
