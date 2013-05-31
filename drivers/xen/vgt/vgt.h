@@ -549,9 +549,14 @@ struct vgt_device {
 
 	bool		bypass_addr_check;
 
+#define VMEM_1MB		(1ULL << 20)	/* the size of the first 1MB */
 #define VMEM_BUCK_SHIFT		20
-#define VMEM_BUCK_SIZE		(1<<VMEM_BUCK_SHIFT)
+#define VMEM_BUCK_SIZE		(1ULL << VMEM_BUCK_SHIFT)
+#define VMEM_BUCK_MASK		(~(VMEM_BUCK_SIZE - 1))
 	uint64_t	vmem_sz;
+	/* for the 1st 1MB memory of HVM: each vm_struct means one 4K-page */
+	struct vm_struct **vmem_vma_low_1mb;
+	/* for >1MB memory of HVM: each vm_struct means 1MB */
 	struct vm_struct **vmem_vma;
 
 	uint64_t vgtt_sz; /* virtual GTT size in byte */

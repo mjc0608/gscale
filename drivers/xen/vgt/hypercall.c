@@ -264,58 +264,113 @@ struct vm_struct *map_hvm_iopage(struct vgt_device *vgt)
 int vgt_hvm_vmem_init(struct vgt_device *vgt)
 {
 	unsigned long i;
+	unsigned long nr_low_1mb_bkt, nr_high_bkt;
 
 	/* Dom0 already has mapping for itself */
 	ASSERT(vgt->vm_id != 0)
 
-	ASSERT(vgt->vmem_vma == NULL);
+	ASSERT(vgt->vmem_vma == NULL && vgt->vmem_vma_low_1mb == NULL);
 
 	vgt->vmem_sz = vgt_get_hvm_max_gpfn(vgt->vm_id) + 1;
 	vgt->vmem_sz <<= PAGE_SHIFT;
 
-	vgt->vmem_vma = kmalloc(sizeof(*vgt->vmem_vma)*(vgt->vmem_sz>>VMEM_BUCK_SHIFT),GFP_KERNEL);
-	if (vgt->vmem_vma == NULL){
+	/* warn on non-1MB-aligned memory layout of HVM */
+	if (vgt->vmem_sz & ~VMEM_BUCK_MASK)
+		vgt_warn("VM%d: vmem_sz=0x%llx!\n", vgt->vm_id, vgt->vmem_sz);
+
+	nr_low_1mb_bkt = VMEM_1MB >> PAGE_SHIFT;
+	nr_high_bkt = (vgt->vmem_sz >> VMEM_BUCK_SHIFT);
+	--nr_high_bkt; /* don't count the first 1MB memory */
+
+	vgt->vmem_vma_low_1mb =
+		kmalloc(sizeof(*vgt->vmem_vma) * nr_low_1mb_bkt, GFP_KERNEL);
+	vgt->vmem_vma =
+		kmalloc(sizeof(*vgt->vmem_vma) * nr_high_bkt, GFP_KERNEL);
+
+	if (vgt->vmem_vma_low_1mb == NULL || vgt->vmem_vma == NULL) {
 		vgt_err("Insufficient memory for vmem_vma, vmem_sz=0x%llx\n",
 				vgt->vmem_sz );
-		return -ENOMEM;
+		goto err;
 	}
 
-	for (i = 0; i < vgt->vmem_sz >> VMEM_BUCK_SHIFT; i++){
-		vgt->vmem_vma[i]= xen_remap_domain_mfn_range_in_kernel(
-				i << (VMEM_BUCK_SHIFT - PAGE_SHIFT),
+	/* map the low 1MB memory */
+	for (i = 0; i < nr_low_1mb_bkt; i++) {
+		vgt->vmem_vma_low_1mb[i] =
+			xen_remap_domain_mfn_range_in_kernel(i, 1, vgt->vm_id);
+
+		if (vgt->vmem_vma[i] != NULL)
+			continue;
+
+		/* Don't warn on [0xa0000, 0x100000): a known non-RAM hole */
+		if (i < (0xa0000 >> PAGE_SHIFT))
+			vgt_dbg("vGT: VM%d: can't map GPFN %ld!\n",
+				vgt->vm_id, i);
+	}
+
+	/* map the >1MB memory */
+	for (i = 0; i < nr_high_bkt; i++) {
+		vgt->vmem_vma[i] = xen_remap_domain_mfn_range_in_kernel(
+				(i+1) << (VMEM_BUCK_SHIFT - PAGE_SHIFT),
 				VMEM_BUCK_SIZE >> PAGE_SHIFT,
 				vgt->vm_id);
 
-		/* To reduce the number of err messages, we only print the
-		 * message at every 64MB boundary.
-		 * NOTE: normally, only the MFNs of 0MB and the MMIO hole
-		 * below 4GB get mapping failure.
+		if (vgt->vmem_vma[i] != NULL)
+			continue;
+
+		/* To reduce the number of err messages(some of them, due to
+		 * the MMIO hole, are spurious and harmless) we only print a
+		 * message if it's at every 64MB boundary or >4GB memory.
 		 */
-		if (vgt->vmem_vma[i] == NULL && (i % 64 == 0))
+		if ((i % 64 == 0) || (i >= (1ULL << (32 - VMEM_BUCK_SHIFT))))
 			vgt_dbg("vGT: VM%d: can't map %ldMB\n",
 				vgt->vm_id, i<<(VMEM_BUCK_SHIFT-20));
 	}
 
 	return 0;
+err:
+	kfree(vgt->vmem_vma);
+	kfree(vgt->vmem_vma_low_1mb);
+	vgt->vmem_vma = vgt->vmem_vma_low_1mb = NULL;
+	return -ENOMEM;
 }
 
 void vgt_vmem_destroy(struct vgt_device *vgt)
 {
 	int i;
+	unsigned long nr_low_1mb_bkt, nr_high_bkt;
 
 	if(vgt->vm_id == 0)
 		return;
 
-	if (vgt->vmem_vma == NULL)
+	/*
+	 * Maybe the VM hasn't accessed GEN MMIO(e.g., still in the legacy VGA
+	 * mode), so no mapping is created yet.
+	 */
+	if (vgt->vmem_vma == NULL && vgt->vmem_vma_low_1mb == NULL)
 		return;
 
-	for (i=0; i <vgt->vmem_sz >> VMEM_BUCK_SHIFT; i++){
-		if (vgt->vmem_vma[i] != NULL){
-			xen_unmap_domain_mfn_range_in_kernel(vgt->vmem_vma[i],
-					VMEM_BUCK_SIZE >> PAGE_SHIFT, vgt->vm_id);
-		}
+	ASSERT(vgt->vmem_vma != NULL && vgt->vmem_vma_low_1mb != NULL);
+
+	nr_low_1mb_bkt = VMEM_1MB >> PAGE_SHIFT;
+	nr_high_bkt = (vgt->vmem_sz >> VMEM_BUCK_SHIFT) - 1;
+
+	for (i = 0; i < nr_low_1mb_bkt; i++) {
+		if (vgt->vmem_vma_low_1mb[i] == NULL)
+			continue;
+		xen_unmap_domain_mfn_range_in_kernel(
+			vgt->vmem_vma_low_1mb[i], 1, vgt->vm_id);
 	}
+
+	for (i = 0; i < nr_high_bkt; i++) {
+		if (vgt->vmem_vma[i] == NULL)
+			continue;
+		xen_unmap_domain_mfn_range_in_kernel(
+			vgt->vmem_vma[i], VMEM_BUCK_SIZE >> PAGE_SHIFT,
+			vgt->vm_id);
+	}
+
 	kfree(vgt->vmem_vma);
+	kfree(vgt->vmem_vma_low_1mb);
 }
 
 void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
@@ -327,13 +382,31 @@ void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
 
 	/*
 	 * At the beginning of _hvm_mmio_emulation(), we already initialize
-	 * vgt->vmem_vma.
+	 * vgt->vmem_vma and vgt->vmem_vma_low_1mb.
 	 */
-	ASSERT(vgt->vmem_vma != NULL);
+	ASSERT(vgt->vmem_vma != NULL && vgt->vmem_vma_low_1mb != NULL);
 
+	/* handle the low 1MB memory */
+	if (gpa < VMEM_1MB) {
+		buck_index = gpa >> PAGE_SHIFT;
+		if (!vgt->vmem_vma_low_1mb[buck_index])
+			return NULL;
+
+		return (char*)(vgt->vmem_vma_low_1mb[buck_index]->addr) +
+			(gpa & ~PAGE_MASK);
+
+	}
+
+	/* handle the >1MB memory */
 	buck_index = gpa >> VMEM_BUCK_SHIFT;
+
+	/* memory block X is in the (X-1)-th bucket */
+	--buck_index;
+
 	if (!vgt->vmem_vma[buck_index])
 		return NULL;
 
-	return (char*)(vgt->vmem_vma[buck_index]->addr) + (gpa & (VMEM_BUCK_SIZE -1));
+	return (char*)(vgt->vmem_vma[buck_index]->addr) +
+		(gpa & (VMEM_BUCK_SIZE -1));
 }
+
