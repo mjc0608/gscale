@@ -127,8 +127,9 @@ static bool ring_wait_for_completion(struct pgt_device *pdev, int id)
 		return true;
 
 	ptr = (u32 *)(phys_aperture_vbase(pdev) + vgt_data_ctx_magic(pdev));
-	if (wait_for_atomic((*ptr == pdev->magic), 100) != 0) {
-		vgt_err("Timeout 100ms for CMD comletion on ring %d\n", id);
+	if (wait_for_atomic((*ptr == pdev->magic), VGT_RING_TIMEOUT) != 0) {
+		vgt_err("Timeout %d ms for CMD comletion on ring %d\n",
+			VGT_RING_TIMEOUT, id);
 		return false;
 	}
 
@@ -138,15 +139,17 @@ static bool ring_wait_for_completion(struct pgt_device *pdev, int id)
 /* make a render engine idle */
 static bool idle_render_engine(struct pgt_device *pdev, int id)
 {
-	if (wait_for_atomic(ring_is_empty(pdev, id), 100) != 0) {
-		vgt_err("Timeout wait 100 ms for ring(%d) empty\n", id);
+	if (wait_for_atomic(ring_is_empty(pdev, id), VGT_RING_TIMEOUT) != 0) {
+		vgt_err("Timeout wait %d ms for ring(%d) empty\n",
+			VGT_RING_TIMEOUT, id);
 		return false;
 	}
 
 	/* may do some jobs here to make sure ring idle */
 
-	if (wait_for_atomic(ring_is_idle(pdev, id), 100) != 0) {
-		vgt_err("Timeout wait 100 ms for ring(%d) idle\n", id);
+	if (wait_for_atomic(ring_is_idle(pdev, id), VGT_RING_TIMEOUT) != 0) {
+		vgt_err("Timeout wait %d ms for ring(%d) idle\n",
+			VGT_RING_TIMEOUT, id);
 		return false;
 	}
 
@@ -180,7 +183,7 @@ static inline void stop_ring(struct pgt_device *pdev, int id)
 	VGT_MMIO_WRITE(pdev, pdev->ring_mi_mode[id],
 			_REGBIT_MI_STOP_RINGS | (_REGBIT_MI_STOP_RINGS << 16));
 
-	ASSERT(!wait_for_atomic(ring_is_stopped(pdev, id), 100));
+	ASSERT(!wait_for_atomic(ring_is_stopped(pdev, id), VGT_RING_TIMEOUT));
 }
 
 static inline void start_ring(struct pgt_device *pdev, int id)
@@ -559,7 +562,7 @@ static void vgt_setup_rsvd_ring(struct vgt_rsvd_ring *ring)
 	ASSERT(!wait_for(((VGT_READ_CTL(pdev, id) & 1) != 0 &&
 			VGT_READ_START(pdev, id) == ring->start &&
 			(VGT_READ_HEAD(pdev, id) & RB_HEAD_OFF_MASK) == 0),
-			50));
+			VGT_RING_TIMEOUT));
 	vgt_dbg("start vgt ring at 0x%x\n", ring->start);
 }
 

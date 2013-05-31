@@ -238,6 +238,7 @@ struct vgt_rsvd_ring {
 #define sleep_ns(x)	{long y=1UL*x/2; while (y-- > 0) ;}
 #define sleep_us(x)	{long y=500UL*x; while (y-- > 0) ;}
 
+#define VGT_RING_TIMEOUT	500	/* in ms */
 #define SIZE_1KB			(1024UL)
 #define SIZE_1MB			(1024UL*1024UL)
 
