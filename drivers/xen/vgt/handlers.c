@@ -1150,41 +1150,29 @@ static bool surflive_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes, enum vgt_plane_type plane)
 {
 	vgt_reg_t surflive_val;
+	unsigned int surf_reg = 0;
+	enum vgt_pipe pipe;
 
 	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 
-	/* update virtual SURFLIVE registers to tell vm that the surface
-	 * write has succeeded. It is only needed when vgt is not current
-	 * foreground vm. Otherwise, the SURFLIVE will be updated by
-	 * hardware automatically.
-	 */
-//	if (current_foreground_vm(vgt->pdev) != vgt) {
-	{
-		unsigned int surf_reg = 0;
-		enum vgt_pipe pipe;
-
-		if (plane == PRIMARY_PLANE) {
-			pipe = VGT_DSPSURFLIVEPIPE(offset);
-			surf_reg = VGT_DSPSURF(pipe);
-		} else if (plane == CURSOR_PLANE) {
-			if (offset == _REG_CURBSURFLIVE_SNB) {
-				surf_reg = _REG_CURBBASE_SNB;
-			} else {
-				pipe = VGT_CURSURFPIPE(offset);
-				surf_reg = VGT_CURSURF(pipe);
-			}
-		} else if (plane == SPRITE_PLANE) {
-			pipe = VGT_SPRSURFPIPE(offset);
-			surf_reg = VGT_SPRSURF(pipe);
+	if (plane == PRIMARY_PLANE) {
+		pipe = VGT_DSPSURFLIVEPIPE(offset);
+		surf_reg = VGT_DSPSURF(pipe);
+	} else if (plane == CURSOR_PLANE) {
+		if (offset == _REG_CURBSURFLIVE_SNB) {
+			surf_reg = _REG_CURBBASE_SNB;
 		} else {
-			BUG();
+			pipe = VGT_CURSURFPIPE(offset);
+			surf_reg = VGT_CURSURF(pipe);
 		}
-
-		surflive_val = __vreg(vgt, surf_reg);
-//	} else {
-//		surflive_val = VGT_MMIO_READ(vgt->pdev, offset);
+	} else if (plane == SPRITE_PLANE) {
+		pipe = VGT_SPRSURFPIPE(offset);
+		surf_reg = VGT_SPRSURF(pipe);
+	} else {
+		BUG();
 	}
 
+	surflive_val = __vreg(vgt, surf_reg);
 	__vreg(vgt, offset) = __sreg(vgt, offset) = surflive_val;
 	*(vgt_reg_t *)p_data = surflive_val;
 
