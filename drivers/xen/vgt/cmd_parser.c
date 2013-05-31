@@ -414,6 +414,10 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
  * interrupt for completion. VM's gfx driver may rely on that. Whether
  * we should inject virtual interrupt and when is the right time.
  *
+ * The user space could resubmit ring/batch buffer with partially updated
+ * MI_DISPLAY_FLIP. So special handling is needed in command parser for
+ * such scenario.
+ *
  * And we did not update HW state for the display flip.
  *
  */
@@ -522,7 +526,7 @@ static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 	}
 
 command_noop:
-	vgt_warn("VM %d: mi_display_flip to be ignored\n",
+	vgt_dbg("VM %d: mi_display_flip to be ignored\n",
 		s->vgt->vm_id);
 
 	for (i = 0; i < length; i ++) {
