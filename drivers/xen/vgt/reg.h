@@ -518,20 +518,47 @@
 #define MI_FLUSH			(0x4 << 23)
 #define MI_SUSPEND_FLUSH		(0xb << 23)
 #define    MI_SUSPEND_FLUSH_EN		(1<<0)
-#define    MI_SET_CONTEXT		(0x18 << 23)
+#define MI_SET_CONTEXT			(0x18 << 23)
 #define    MI_MM_SPACE_GTT		(1<<8)
-#define    MI_MM_SPACE_PHYSICAL		(0<<8)
+#define    MI_MM_SPACE_PHYSICAL		(0<<8)	/* deprecated */
 #define    MI_SAVE_EXT_STATE_EN		(1<<3)
 #define    MI_RESTORE_EXT_STATE_EN	(1<<2)
 #define    MI_FORCE_RESTORE		(1<<1)
 #define    MI_RESTORE_INHIBIT		(1<<0)
+#define MI_ARB_ON_OFF			(0x08 << 23)
+#define    MI_ARB_ENABLE		(1<<0)
+#define	   MI_ARB_DISABLE		(0<<0)
 /*
  * We use _IMM instead of _INDEX, to avoid switching hardware
  * status page
  */
-#define MI_STORE_DATA_IMM		((0x20 << 23) | 2)
-#define MI_STORE_DATA_IMM_QWORD		((0x20 << 23) | 3)
-#define        MI_SDI_USE_GTT		(1<<22)
+#define MI_STORE_DATA_IMM		((0x20<<23) | 2)
+#define MI_STORE_DATA_IMM_QWORD		((0x20<<23) | 3)
+#define   MI_SDI_USE_GTT		(1<<22)
+#define MI_LOAD_REGISTER_IMM		(0x22<<23 | 1)
+#define   MI_LRI_BYTE0_DISABLE		(1<<8)
+#define   MI_LRI_BYTE1_DISABLE		(1<<9)
+#define   MI_LRI_BYTE2_DISABLE		(1<<10)
+#define   MI_LRI_BYTE3_DISABLE		(1<<11)
+
+#define PIPE_CONTROL(len)		((0x3<<29)|(0x3<<27)|(0x2<<24)|(len-2))
+#define   PIPE_CONTROL_POST_SYNC_GLOBAL_GTT		(1<<24)
+#define   PIPE_CONTROL_POST_SYNC			(1<<23)
+#define   PIPE_CONTROL_CS_STALL				(1<<20)
+#define   PIPE_CONTROL_TLB_INVALIDATE			(1<<18)
+#define   PIPE_CONTROL_MEDIA_STATE_CLEAR		(1<<16)
+#define   PIPE_CONTROL_POST_SYNC_IMM			(1<<14)
+#define   PIPE_CONTROL_DEPTH_STALL			(1<<13)
+#define   PIPE_CONTROL_RENDER_TARGET_CACHE_FLUSH	(1<<12)
+#define   PIPE_CONTROL_INSTRUCTION_CACHE_INVALIDATE	(1<<11) /* MBZ on Ironlake */
+#define   PIPE_CONTROL_TEXTURE_CACHE_INVALIDATE		(1<<10) /* GM45+ only */
+#define   PIPE_CONTROL_INDIRECT_STATE_DISABLE		(1<<9)
+#define   PIPE_CONTROL_NOTIFY				(1<<8)
+#define   PIPE_CONTROL_VF_CACHE_INVALIDATE		(1<<4)
+#define   PIPE_CONTROL_CONST_CACHE_INVALIDATE		(1<<3)
+#define   PIPE_CONTROL_STATE_CACHE_INVALIDATE		(1<<2)
+#define   PIPE_CONTROL_STALL_AT_SCOREBOARD		(1<<1)
+#define   PIPE_CONTROL_DEPTH_CACHE_FLUSH		(1<<0)
 
 /* PCI config space */
 #define _REG_LBB	0xf4

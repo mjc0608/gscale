@@ -214,11 +214,16 @@ typedef struct {
 	vgt_reg_t ctl;
 } vgt_ringbuffer_t;
 
-#define VGT_RSVD_RING_SIZE	4096
+#define SIZE_1KB		(1024UL)
+#define SIZE_1MB		(1024UL*1024UL)
+
+#define VGT_RSVD_RING_SIZE	(16 * SIZE_1KB)
 struct vgt_rsvd_ring {
 	struct pgt_device *pdev;
 	void *virtual_start;
 	int start;
+	uint64_t null_context;
+	uint64_t indirect_state;
 	int id;
 
 	u32 head;
@@ -239,8 +244,6 @@ struct vgt_rsvd_ring {
 #define sleep_us(x)	{long y=500UL*x; while (y-- > 0) ;}
 
 #define VGT_RING_TIMEOUT	500	/* in ms */
-#define SIZE_1KB			(1024UL)
-#define SIZE_1MB			(1024UL*1024UL)
 
 /* Maximum VMs supported by vGT. Actual number is device specific */
 #define VGT_MAX_VMS			4
@@ -255,6 +258,7 @@ struct vgt_rsvd_ring {
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
 #define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 256 KB for now */
+#define SZ_INDIRECT_STATE		(4096)		/* use 4KB for now */
 #define VGT_APERTURE_PER_INSTANCE_SZ		(4*SIZE_1MB)	/* 4MB per instance (?) */
 #define VGT_ID_ALLOC_BITMAP		((1UL << VGT_MAX_VMS) - 1)
 
