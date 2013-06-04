@@ -1474,7 +1474,9 @@ enum vgt_port_type {
 #define        _REGBIT_DP_D_PULSE_DURATION		(3 << 18)
 #define        _REGBIT_DP_D_ENABLE			(1 << 20)
 
-#define RING_IMR(ring)	(0x20a8 + 0x10000 * ring)
+//#define RING_IMR(ring)	(0x20a8 + 0x10000 * ring)
+#define RING_IMR(ring) \
+	__RING_REG((ring), _REG_RCS_IMR, _REG_VCS_IMR, _REG_VECS_IMR)
 
 #define _REG_RCS_WATCHDOG_CTL	0x2178
 #define _REG_RCS_WATCHDOG_THRSH	0x217C
@@ -1488,10 +1490,32 @@ enum vgt_port_type {
 #define _REG_BCS_EIR	0x220B0
 #define _REG_BCS_EMR	0x220B4
 #define _REG_BCS_ESR	0x220B8
-/* interesting no definitiont about video error information. */
-//#define _REG_VCS_EIR	0x20B0
-//#define _REG_VCS_EMR	0x20B4
-//#define _REG_VCS_ESR	0x20B8
+#define _REG_VCS_EIR	0x120B0
+#define _REG_VCS_EMR	0x120B4
+#define _REG_VCS_ESR	0x120B8
+#define _REG_VECS_EIR	0x1A0B0
+#define _REG_VECS_EMR	0x1A0B4
+#define _REG_VECS_ESR	0x1A0B8
+
+#define RING_EIR(ring) \
+	__RING_REG((ring), _REG_RCS_EIR, _REG_VCS_EIR, _REG_VECS_EIR)
+#define RING_EMR(ring) \
+	__RING_REG((ring), _REG_RCS_EMR, _REG_VCS_EMR, _REG_VECS_EMR)
+#define RING_ESR(ring) \
+	__RING_REG((ring), _REG_RCS_ESR, _REG_VCS_ESR, _REG_VECS_ESR)
+
+#define RING_REG_2064(ring) \
+	({ASSERT((ring) > 0); \
+	 __RING_REG((ring), 0x2064, 0x12064, 0x1A064);})
+
+#define RING_REG_2068(ring) \
+	__RING_REG((ring), 0x2068, 0x12068, 0x1A068)
+
+#define RING_REG_2078(ring) \
+	__RING_REG((ring), 0x2078, 0x12078, 0x1A078)
+
+#define RING_REG_206C(ring) \
+	__RING_REG((ring), 0x206C, 0x1206C, 0x1A06C)
 
 /* blacklight PWM control */
 #define _REG_BLC_PWM_CTL2	0x48250

@@ -41,28 +41,44 @@ void show_debug(struct pgt_device *pdev, int ring_id)
 {
 	vgt_reg_t reg;
 
-	printk("debug registers(ring-%d),reg maked with <*> may not apply to every ring):\n", ring_id);
-	printk("....EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_EIR));
-	printk("....EMR: %x\n", VGT_MMIO_READ(pdev, _REG_RCS_EMR));
-	printk("....ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_RCS_ESR));
-	printk("....blit EIR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_EIR));
-	printk("....blit ESR: 0x%x\n", VGT_MMIO_READ(pdev, _REG_BCS_ESR));
-	printk("....%x: %x\n", 0x2064 + 0x10000*ring_id,
-		VGT_MMIO_READ(pdev, 0x2064 + 0x10000*ring_id));
-	printk("....%x: 0x%x\n", 0x2068 + 0x10000*ring_id,
-		VGT_MMIO_READ(pdev, 0x2068 + 0x10000*ring_id));
-	reg = VGT_MMIO_READ(pdev, 0x2070 + 0x10000*ring_id);
-	printk("....INSTPS* (parser state): 0x%x :\n", reg);
-	printk("....ACTHD(active header): 0x%x\n", VGT_MMIO_READ(pdev, VGT_ACTHD(ring_id)));
-	printk("....UHPTR(pending header): %x\n",
+	printk("debug registers(ring-%d),reg maked with <*>"
+			" may not apply to every ring):\n", ring_id);
+	printk("....RING_EIR: %08x\n", VGT_MMIO_READ(pdev, RING_EIR(ring_id)));
+	printk("....RING_EMR: %08x\n", VGT_MMIO_READ(pdev, RING_EMR(ring_id)));
+	printk("....RING_ESR: %08x\n", VGT_MMIO_READ(pdev, RING_ESR(ring_id)));
+
+	if (ring_id)
+		printk("....%08x*: %08x\n", RING_REG_2064(ring_id),
+				VGT_MMIO_READ(pdev, RING_REG_2064(ring_id)));
+
+	printk("....%08x: %08x\n", RING_REG_2068(ring_id),
+		VGT_MMIO_READ(pdev, RING_REG_2068(ring_id)));
+
+	if (!ring_id) {
+		reg = VGT_MMIO_READ(pdev, 0x2070);
+		printk("....INSTPS* (parser state): %08x :\n", reg);
+	}
+
+	printk("....ACTHD(active header): %08x\n",
+			VGT_MMIO_READ(pdev, VGT_ACTHD(ring_id)));
+	printk("....UHPTR(pending header): %08x\n",
 			VGT_MMIO_READ(pdev, VGT_UHPTR(ring_id)));
-	printk("....%x: 0x%x\n", 0x2078 + 0x10000*ring_id,
-		VGT_MMIO_READ(pdev, 0x2078 + 0x10000*ring_id));
-	printk("....CSCMDOP* (instruction DWORD): 0x%x\n", VGT_MMIO_READ(pdev, 0x220C + 0x10000*ring_id));
-	printk("....CSCMDVLD* (command buffer valid): 0x%x\n", VGT_MMIO_READ(pdev, 0x2210 + 0x10000*ring_id));
+	printk("....%08x: %08x\n", RING_REG_2078(ring_id),
+		VGT_MMIO_READ(pdev, RING_REG_2078(ring_id)));
+
+	if (!ring_id) {
+		printk("....CSCMDOP* (instruction DWORD): %08x\n",
+				VGT_MMIO_READ(pdev, 0x220C));
+		printk("....CSCMDVLD* (command buffer valid): %08x\n",
+				VGT_MMIO_READ(pdev, 0x2210));
+	}
+
 	printk("(informative)\n");
-	printk("....INSTDONE_1(FYI)*: 0x%x\n", VGT_MMIO_READ(pdev, 0x206C + 0x10000*ring_id));
-	printk("....INSTDONE_2*: 0x%x\n", VGT_MMIO_READ(pdev, 0x207C + 0x10000*ring_id));
+	printk("....INSTDONE_1(FYI): %08x\n",
+			VGT_MMIO_READ(pdev, RING_REG_206C(ring_id)));
+	if (!ring_id)
+		printk("....INSTDONE_2*: %08x\n",
+				VGT_MMIO_READ(pdev, 0x207C));
 }
 
 /*
