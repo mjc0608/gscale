@@ -313,7 +313,7 @@ bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 
 extern int resend_irq_on_evtchn(unsigned int i915_irq);
 
-void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
+static void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
 {
 	unsigned long flags;
 	int i915_irq = vgt->pdev->irq_hstate->i915_irq;
@@ -329,7 +329,7 @@ void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
 #define MSI_CAP_CONTROL (MSI_CAP_OFFSET + 2)
 #define MSI_CAP_ADDRESS (MSI_CAP_OFFSET + 4)
 #define MSI_CAP_DATA	(MSI_CAP_OFFSET + 8)
-void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
+static void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint16_t control = *(uint16_t *)(cfg_space + MSI_CAP_CONTROL);
@@ -395,7 +395,7 @@ static void vgt_propagate_event(struct vgt_irq_host_state *hstate,
 
 /* =======================vEvent Handlers===================== */
 
-void vgt_handle_default_event_virt(struct vgt_irq_host_state *hstate,
+static void vgt_handle_default_event_virt(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event, struct vgt_device *vgt)
 {
 	if (!vgt_irq_warn_once[vgt->vgt_id][event]) {
@@ -407,21 +407,21 @@ void vgt_handle_default_event_virt(struct vgt_irq_host_state *hstate,
 	vgt->stat.events[event]++;
 }
 
-void vgt_handle_phase_in_virt(struct vgt_irq_host_state *hstate,
+static void vgt_handle_phase_in_virt(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event, struct vgt_device *vgt)
 {
 	__vreg(vgt, _REG_BLC_PWM_CTL2) |= _REGBIT_PHASE_IN_IRQ_STATUS;
 	vgt_handle_default_event_virt(hstate, event, vgt);
 }
 
-void vgt_handle_histogram_virt(struct vgt_irq_host_state *hstate,
+static void vgt_handle_histogram_virt(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event, struct vgt_device *vgt)
 {
 	__vreg(vgt, _REG_HISTOGRAM_THRSH) |= _REGBIT_HISTOGRAM_IRQ_STATUS;
 	vgt_handle_default_event_virt(hstate, event, vgt);
 }
 
-void vgt_handle_crt_hotplug_virt(struct vgt_irq_host_state *hstate,
+static void vgt_handle_crt_hotplug_virt(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event, struct vgt_device *vgt)
 {
 	/* update channel status */
@@ -433,7 +433,7 @@ void vgt_handle_crt_hotplug_virt(struct vgt_irq_host_state *hstate,
 
 /* =======================pEvent Handlers===================== */
 
-void vgt_handle_default_event_phys(struct vgt_irq_host_state *hstate,
+static void vgt_handle_default_event_phys(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event)
 {
 	if (!vgt_irq_warn_once[VGT_MAX_VMS][event]) {
@@ -443,7 +443,7 @@ void vgt_handle_default_event_phys(struct vgt_irq_host_state *hstate,
 	}
 }
 
-void vgt_handle_phase_in_phys(struct vgt_irq_host_state *hstate,
+static void vgt_handle_phase_in_phys(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event)
 {
 	uint32_t val;
@@ -456,7 +456,7 @@ void vgt_handle_phase_in_phys(struct vgt_irq_host_state *hstate,
 	vgt_handle_default_event_phys(hstate, event);
 }
 
-void vgt_handle_histogram_phys(struct vgt_irq_host_state *hstate,
+static void vgt_handle_histogram_phys(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event)
 {
 	uint32_t val;
@@ -475,7 +475,7 @@ void vgt_handle_histogram_phys(struct vgt_irq_host_state *hstate,
  * for CRT (likely through some other polling method). But let's use this
  * as the example for how hotplug event is generally handled here.
  */
-void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
+static void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event)
 {
 	vgt_reg_t adpa_ctrl;
