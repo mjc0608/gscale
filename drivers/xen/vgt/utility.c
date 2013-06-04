@@ -158,26 +158,28 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	char *p_contents;
 	int i;
 	struct vgt_device *vgt = current_render_owner(pdev);
-	u32* cur;
+	u32* cur, off;
 
 	p_tail = VGT_MMIO_READ(pdev, RB_TAIL(pdev, ring_id));
 	p_head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
 	p_start = VGT_MMIO_READ(pdev, RB_START(pdev, ring_id));
 	p_ctl = VGT_MMIO_READ(pdev, RB_CTL(pdev, ring_id));
-	printk("ring buffer(%d): head (0x%x) tail(0x%x), start(0x%x), ctl(0x%x)\n", ring_id,
-		p_head, p_tail, p_start, p_ctl);
+	printk("ring buffer(%d): head (0x%x) tail(0x%x), start(0x%x), "
+			"ctl(0x%x)\n", ring_id, p_head, p_tail, p_start, p_ctl);
 	printk("psmi idle:(%d), mi_mode idle:(%d)\n",
-		VGT_MMIO_READ(pdev, pdev->ring_psmi[ring_id]) & _REGBIT_PSMI_IDLE_INDICATOR,
-		VGT_MMIO_READ(pdev, pdev->ring_mi_mode[ring_id]) & _REGBIT_MI_RINGS_IDLE);
+		VGT_MMIO_READ(pdev, pdev->ring_psmi[ring_id])
+		& _REGBIT_PSMI_IDLE_INDICATOR,
+		VGT_MMIO_READ(pdev, pdev->ring_mi_mode[ring_id])
+		& _REGBIT_MI_RINGS_IDLE);
 
 	p_head &= RB_HEAD_OFF_MASK;
-	p_contents = phys_aperture_vbase(pdev) + p_start + p_head;
+	p_contents = phys_aperture_vbase(pdev) + p_start;
 	printk("p_contents(%lx)\n", (unsigned long)p_contents);
-	/* FIXME: consider wrap */
 	for (i = -(bytes/4); i < bytes/4; i++) {
+		off = (p_head + i * 4) & RB_HEAD_OFF_MASK;
 		if (!(i % 8))
-			printk("\n[%08x]:", p_head + i * 4);
-		printk(" %8x", *((u32*)p_contents + i));
+			printk("\n[%08x]:", off);
+		printk(" %08x", *((u32*)(p_contents + off)));
 		if (!i)
 			printk("(*)");
 	}
@@ -188,7 +190,8 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 		u32 val, h_val;
 		u64 mfn;
 		int rc;
-		extern int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val);
+		extern int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val,
+				uint32_t *m_gtt_val);
 
 		cur++;
 		printk("Hang in batch buffer (%x)\n", *cur);
@@ -211,8 +214,7 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 		}
 		printk("Actual pGTT: %x\n",
 			vgt_read_gtt(pdev, GTT_INDEX(pdev, *cur)));
-		show_batchbuffer(pdev, VGT_MMIO_READ(pdev,
-			_REG_RCS_ACTHD + 0x10000 * ring_id));
+		show_batchbuffer(pdev, VGT_MMIO_READ(pdev,VGT_ACTHD(ring_id)));
 	}
 }
 
