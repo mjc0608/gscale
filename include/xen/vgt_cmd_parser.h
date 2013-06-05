@@ -125,6 +125,7 @@ struct decode_info{
 
 #define OP_STATE_BASE_ADDRESS                   OP_3D_MEDIA(0x0, 0x1, 0x01)
 #define OP_STATE_SIP                            OP_3D_MEDIA(0x0, 0x1, 0x02)
+#define OP_3D_MEDIA_0_1_4			OP_3D_MEDIA(0x0, 0x1, 0x04)
 
 #define OP_3DSTATE_VF_STATISTICS_GM45           OP_3D_MEDIA(0x1, 0x0, 0x0B)
 
