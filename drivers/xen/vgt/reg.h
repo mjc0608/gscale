@@ -37,7 +37,8 @@
 
 #define _VGT_GET_PIPE(reg, a, b)	_VGT_MMIO_GET_INDEX(reg, a, b)
 #define _VGT_GET_PORT(reg, a, b)	_VGT_MMIO_GET_INDEX(reg, a, b)
-
+#define __RING_REG(ring_id, rcs_reg, vcs_reg, vecs_reg) \
+	((ring_id) == 3 ? (vecs_reg) : ((rcs_reg) + (ring_id) * ((vcs_reg) - (rcs_reg))))
 #define _REG_INVALID	0xFFFFFFFF
 
 /* PRB0, RCS */
@@ -92,6 +93,7 @@
 #define CCID_VALID		0x1
 #define _REG_CXT_SIZE		0x021a0
 #define _REG_GEN7_CXT_SIZE	0x021a8
+#define _REG_VECS_CXT_SIZE	0x1A1A8
 
 #define _REG_RCS_MI_MODE	0x209C
 #define        _REGBIT_MI_ASYNC_FLIP_PERFORMANCE_MODE	(1 << 14)
@@ -103,6 +105,7 @@
 #define        _REGBIT_MI_STOP_RINGS			(1 << 8)
 #define    _REG_VCS_MI_MODE	0x1209C
 #define _REG_BCS_MI_MODE	0x2209C
+#define _REG_VECS_MI_MODE	0x1A09c
 #define _REG_GFX_MODE	0x2520
 #define        _REGBIT_FLUSH_TLB_INVALIDATION_MODE	(1 << 13)
 #define        _REGBIT_REPLAY_MODE			(1 << 11)
@@ -117,6 +120,8 @@
 #define _REG_RCS_INSTPM		0x20C0
 #define _REG_VCS_INSTPM		0x120C0
 #define _REG_BCS_INSTPM		0x220C0
+#define _REG_VECS_INSTPM	0x1A0C0
+
 #define INSTPM_CONS_BUF_ADDR_OFFSET_DIS (1<<6)
 
 /* IVB+ */
@@ -136,37 +141,48 @@
 #define _REGBIT_PTE_CTL_MASK_GEN7	0xe	/* SNB/IVB */
 #define _REGBIT_PTE_CTL_MASK_GEN7_5	0x80e	/* HSW */
 
-#define 	_REGBIT_PSMI_IDLE_INDICATOR	(1 << 3)
+#define	_REGBIT_PSMI_IDLE_INDICATOR	(1 << 3)
 
 #define _REG_RCS_IMR		0x20A8
 #define _REG_VCS_IMR		0x120A8
 #define _REG_BCS_IMR		0x220A8
+#define _REG_VECS_IMR		0x1A0A8
 
 #define _REG_RCS_BB_ADDR	0x2140
 #define _REG_VCS_BB_ADDR	0x12140
 #define _REG_BCS_BB_ADDR	0x22140
+#define _REG_VECS_BB_ADDR	0x1A140
+
+#define _REG_VECS_CTX_WA_BB_ADDR 0x1A144
 
 #define _REG_RCS_HWS_PGA	0x4080
 #define _REG_VCS_HWS_PGA	0x4180
 #define _REG_BCS_HWS_PGA	0x24080
 #define _REG_BCS_HWS_PGA_GEN7	0x4280
+#define _REG_VECS_HWS_PGA	0x1A080
 #define _REG_VEBOX_HWS_PGA_GEN7	0x4380
 
 #define _REG_RCS_EXCC		0x2028
 #define _REG_VCS_EXCC		0x12028
 #define _REG_BCS_EXCC		0x22028
+#define _REG_VECS_EXCC		0x1A028
 
 #define _REG_RCS_UHPTR		0x2134
 #define _REG_VCS_UHPTR		0x12134
 #define _REG_BCS_UHPTR		0x22134
+#define _REG_VECS_UHPTR		0x1A134
+#define VGT_UHPTR(ring_id) __RING_REG(ring_id, _REG_RCS_UHPTR, _REG_VCS_UHPTR, _REG_VECS_UHPTR)
 
 #define _REG_RCS_ACTHD		0x2074
 #define _REG_VCS_ACTHD		0x12074
 #define _REG_BCS_ACTHD		0x22074
+#define _REG_VECS_ACTHD		0x1A074
+#define VGT_ACTHD(ring_id) __RING_REG(ring_id, _REG_RCS_ACTHD, _REG_VCS_ACTHD, _REG_VECS_ACTHD)
 
 #define _REG_RCS_HWSTAM		0x2098
 #define _REG_VCS_HWSTAM		0x12098
 #define _REG_BCS_HWSTAM		0x22098
+#define _REG_VECS_HWSTAM	0x1A098
 
 #define _REG_RCS_BB_PREEMPT_ADDR	0x2148
 
@@ -187,12 +203,19 @@
 
 #define _REG_RVSYNC		0x2040
 #define _REG_RBSYNC		0x2044
+#define _REG_RVESYNC		0x2048
 
 #define _REG_BRSYNC		0x22040
 #define _REG_BVSYNC		0x22044
+#define _REG_BVESYNC		0x22048
 
 #define _REG_VBSYNC		0x12040
 #define _REG_VRSYNC		0x12044
+#define _REG_VVESYNC		0x12048
+
+#define _REG_VEBSYNC		0x1A040
+#define _REG_VERSYNC		0x1A044
+#define _REG_VEVSYNC		0x1A048
 
 #define _REG_FENCE_0_LOW	0x100000
 #define _REG_FENCE_0_HIGH	0x100004

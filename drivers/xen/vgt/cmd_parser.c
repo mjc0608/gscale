@@ -152,6 +152,22 @@ static struct decode_info decode_info_mfx_vc = {
 	sub_op_mfx_vc,
 };
 
+/* ring VECS, command type 3 */
+static struct sub_op_bits sub_op_vebox[] = {
+	{31, 29},
+	{28, 27},
+	{26, 24},
+	{23, 21},
+	{20, 16},
+};
+
+static struct decode_info decode_info_vebox = {
+	"VEBOX",
+	OP_LEN_VEBOX,
+	ARRAY_SIZE(sub_op_vebox),
+	sub_op_vebox,
+};
+
 static struct decode_info* ring_decode_info[MAX_ENGINES][8]=
 {
 	[RING_BUFFER_RCS] = {
@@ -188,10 +204,10 @@ static struct decode_info* ring_decode_info[MAX_ENGINES][8]=
 	},
 
 	[RING_BUFFER_VECS] = {
+		&decode_info_mi,
 		NULL,
 		NULL,
-		NULL,
-		&decode_info_mfx_vc,
+		&decode_info_vebox,
 		NULL,
 		NULL,
 		NULL,
@@ -1474,6 +1490,12 @@ static struct cmd_info cmd_info[] = {
 
 	{"MFD_JPEG_BSD_OBJECT", OP_MFD_JPEG_BSD_OBJECT, F_LEN_VAR,
 		R_VCS, D_GEN7PLUS, 0, 12, NULL},
+
+	{"VEBOX_STATE", OP_VEB_STATE, F_LEN_VAR, R_VECS, D_HSW, 0, 12, NULL},
+
+	{"VEBOX_SURFACE_STATE", OP_VEB_SURFACE_STATE, F_LEN_VAR, R_VECS, D_HSW_PLUS, 0, 12, NULL},
+
+	{"VEB_DI_IECP", OP_VEB_DNDI_IECP_STATE, F_LEN_VAR, R_VECS, D_HSW, 0, 12, NULL},
 };
 
 static int cmd_hash_init(struct pgt_device *pdev)

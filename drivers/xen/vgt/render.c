@@ -359,6 +359,7 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_BCS_HWS_PGA_GEN7,
 	_REG_RCS_HWS_PGA,
 	_REG_VCS_HWS_PGA,
+	_REG_VECS_HWS_PGA,
 
 	_REG_GT_MODE_IVB,
 	_REG_CACHE_MODE_0_IVB,
@@ -372,6 +373,7 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_BCS_UHPTR,
 	_REG_BRSYNC,
 	_REG_BVSYNC,
+	_REG_BVESYNC,
 
 	_REG_RCS_MI_MODE,
 	_REG_RCS_GFX_MODE_IVB,
@@ -381,6 +383,7 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_RCS_UHPTR,
 	_REG_RBSYNC,
 	_REG_RVSYNC,
+	_REG_RVESYNC,
 
 	_REG_VCS_MI_MODE,
 	_REG_VCS_MFX_MODE_IVB,
@@ -390,6 +393,16 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_VCS_UHPTR,
 	_REG_VBSYNC,
 	_REG_VRSYNC,
+	_REG_VVESYNC,
+
+	_REG_VECS_MI_MODE,
+	_REG_VEBOX_MODE,
+	_REG_VECS_INSTPM,
+	_REG_VECS_HWSTAM,
+	_REG_VECS_EXCC,
+	_REG_VERSYNC,
+	_REG_VEBSYNC,
+	_REG_VEVSYNC,
 
 	_REG_TILECTL,
 };

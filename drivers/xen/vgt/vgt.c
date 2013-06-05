@@ -362,8 +362,6 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	INIT_LIST_HEAD(&pdev->rendering_runq_head);
 	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
 
-	/* TODO: add ivb/hsw difference later */
-	pdev->max_engines = 3;
 	pdev->ring_mmio_base[RING_BUFFER_RCS] = _REG_RCS_TAIL;
 	pdev->ring_mmio_base[RING_BUFFER_VCS] = _REG_VCS_TAIL;
 	pdev->ring_mmio_base[RING_BUFFER_BCS] = _REG_BCS_TAIL;
@@ -375,6 +373,14 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	pdev->ring_mi_mode[RING_BUFFER_RCS] = _REG_RCS_MI_MODE;
 	pdev->ring_mi_mode[RING_BUFFER_VCS] = _REG_VCS_MI_MODE;
 	pdev->ring_mi_mode[RING_BUFFER_BCS] = _REG_BCS_MI_MODE;
+
+	pdev->max_engines = 3;
+	if (IS_HSW(pdev)) {
+		pdev->ring_mmio_base[RING_BUFFER_VECS] = _REG_VECS_TAIL;
+		pdev->ring_psmi[RING_BUFFER_VECS] = 0x1a050;
+		pdev->ring_mi_mode[RING_BUFFER_VECS] = _REG_VECS_MI_MODE;
+		pdev->max_engines = 4;
+	}
 
 	/* clean port status, 0 means not plugged in */
 	memset(pdev->port_detect_status, 0, sizeof(pdev->port_detect_status));

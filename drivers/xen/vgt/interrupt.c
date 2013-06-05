@@ -134,6 +134,7 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[RP_DOWN_THRESHOLD] = "RP DOWN threshold interrupt",
 	[RP_UP_THRESHOLD] = "RP UP threshold interrupt",
 	[FREQ_DOWNWARD_TIMEOUT_RC6] = "Render Frequency Downward Timeout During RC6 interrupt",
+	[PM_RESERVED_13] = "PM reserved irq 13 (Unknown)",
 	[PCU_THERMAL] = "PCU Thermal Event",
 	[PCU_PCODE2DRIVER_MAILBOX] = "PCU pcode2driver mailbox event",
 
@@ -664,6 +665,7 @@ static void vgt_base_init_irq(
 	SET_BIT_INFO(hstate, 4, RP_DOWN_THRESHOLD, IRQ_INFO_PM);
 	SET_BIT_INFO(hstate, 5, RP_UP_THRESHOLD, IRQ_INFO_PM);
 	SET_BIT_INFO(hstate, 6, FREQ_DOWNWARD_TIMEOUT_RC6, IRQ_INFO_PM);
+	SET_BIT_INFO(hstate, 13, PM_RESERVED_13, IRQ_INFO_PM);
 	SET_BIT_INFO(hstate, 24, PCU_THERMAL, IRQ_INFO_PM);
 	SET_BIT_INFO(hstate, 25, PCU_PCODE2DRIVER_MAILBOX, IRQ_INFO_PM);
 

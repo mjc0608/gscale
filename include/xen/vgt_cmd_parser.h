@@ -31,6 +31,7 @@
 #define OP_LEN_2D           10
 #define OP_LEN_3D_MEDIA     16
 #define OP_LEN_MFX_VC       16
+#define OP_LEN_VEBOX	    16
 
 #define CMD_TYPE(cmd)	(((cmd) >> 29) & 7)
 
@@ -313,19 +314,17 @@ struct decode_info{
 
 #define OP_MFD_JPEG_BSD_OBJECT                     OP_MFX(2, 7, 1, 8)
 
-#if 0
 /* copy from vaapi, but not found definition in PRM yet */
 #define OP_VEB(pipeline, op, sub_opa, sub_opb)     \
-     (3 << 29 |                                 \
-     (pipeline) << 27 |                         \
-     (op) << 24 |                               \
-     (sub_opa) << 21 |                          \
-     (sub_opb) << 16)
+     (3 << 13 |                                 \
+     (pipeline) << 11 |                         \
+     (op) << 8 |                               \
+     (sub_opa) << 5 |                          \
+     (sub_opb))
 
 #define OP_VEB_SURFACE_STATE                       OP_VEB(2, 4, 0, 0)
 #define OP_VEB_STATE                               OP_VEB(2, 4, 0, 2)
 #define OP_VEB_DNDI_IECP_STATE                     OP_VEB(2, 4, 0, 3)
-#endif
 
 extern int vgt_scan_vring_2(struct vgt_device *vgt, int ring_id);
 

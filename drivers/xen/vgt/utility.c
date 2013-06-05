@@ -53,8 +53,9 @@ void show_debug(struct pgt_device *pdev, int ring_id)
 		VGT_MMIO_READ(pdev, 0x2068 + 0x10000*ring_id));
 	reg = VGT_MMIO_READ(pdev, 0x2070 + 0x10000*ring_id);
 	printk("....INSTPS* (parser state): 0x%x :\n", reg);
-	printk("....ACTHD(active header): 0x%x\n", VGT_MMIO_READ(pdev, 0x2074 + 0x10000*ring_id));
-	printk("....UHPTR(pending header): %x\n", VGT_MMIO_READ(pdev, _REG_RCS_UHPTR));
+	printk("....ACTHD(active header): 0x%x\n", VGT_MMIO_READ(pdev, VGT_ACTHD(ring_id)));
+	printk("....UHPTR(pending header): %x\n",
+			VGT_MMIO_READ(pdev, VGT_UHPTR(ring_id)));
 	printk("....%x: 0x%x\n", 0x2078 + 0x10000*ring_id,
 		VGT_MMIO_READ(pdev, 0x2078 + 0x10000*ring_id));
 	printk("....CSCMDOP* (instruction DWORD): 0x%x\n", VGT_MMIO_READ(pdev, 0x220C + 0x10000*ring_id));
@@ -175,6 +176,14 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 
 		cur++;
 		printk("Hang in batch buffer (%x)\n", *cur);
+
+		/*TODO: we do not handle batch buffer in PPGTT yet */
+		if (*(cur - 1) & 0x100) {
+			printk("Dumping batch buffer in PPGTT"
+					" is not supported yet!\n");
+			return;
+		}
+
 		val = vgt->vgtt[GTT_INDEX(pdev, *cur)];
 		printk("vGTT: %x\n", val);
 		rc = gtt_p2m(vgt, val, &h_val);
