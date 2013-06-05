@@ -1542,7 +1542,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 {
 	struct cmd_info *info;
 
-	int rc = 0;
+	int rc = 0, i, cmd_len;
 
 	info = vgt_get_cmd_info(*s->ip_va, s->ring_id);
 	if(info == NULL){
@@ -1565,6 +1565,15 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 			address_fixup(s, bit);
 	}
 #endif
+	klog_printk("%s ip(%08lx): ",
+			s->buf_type == RING_BUFFER_INSTRUCTION ?
+			"RB" : "BB",
+			s->ip_gma);
+	cmd_len = cmd_length(s);
+	for (i = 0; i < cmd_len; i++) {
+		klog_printk("%08x ", cmd_val(s, i));
+	}
+	klog_printk("\n");
 
 	if (info->handler){
 		rc = info->handler(s);
@@ -1655,10 +1664,6 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 				break;
 			}
 		}
-		klog_printk("%s ip(%08lx): %08x %08x %08x %08x\n ",
-				s.buf_type == RING_BUFFER_INSTRUCTION ? "RB": "BB",
-				s.ip_gma, cmd_val(&s,0), cmd_val(&s,1),
-				cmd_val(&s,2), cmd_val(&s,3));
 
 		stat_nr_cmd_inc(&s);
 
