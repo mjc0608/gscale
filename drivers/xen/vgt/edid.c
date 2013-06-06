@@ -269,7 +269,9 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			gmbus_port = 6;
 			break;
 		case VGT_DP_A:
-			if (VGT_MMIO_READ(pdev, _REG_DDI_BUF_CTL_A) | _DDI_BUFCTL_DETECT_MASK) {
+			if ((VGT_MMIO_READ(pdev, _REG_DDI_BUF_CTL_A) |
+				_DDI_BUFCTL_DETECT_MASK) &&
+				(test_bit(VGT_DP_A, pdev->detected_ports))) {
 				vgt_info("EDID_PROBE: DP A Detected.\n");
 				aux_ch_addr = _REG_DPA_AUX_CH_CTL;
 			} else {
@@ -277,7 +279,9 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			}
 			break;
 		case VGT_DP_B:
-			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_B_PRESENTED) {
+			if ((VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) |
+				_REGBIT_SFUSE_STRAP_B_PRESENTED) &&
+				(test_bit(VGT_DP_B, pdev->detected_ports))) {
 				vgt_info("EDID_PROBE: DP B Detected.\n");
 				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
 			} else {
@@ -285,7 +289,9 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			}
 			break;
 		case VGT_DP_C:
-			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_C_PRESENTED) {
+			if ((VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) |
+				_REGBIT_SFUSE_STRAP_C_PRESENTED) &&
+				(test_bit(VGT_DP_C, pdev->detected_ports))) {
 				vgt_info("EDID_PROBE: DP C Detected.\n");
 				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
 			} else {
@@ -293,7 +299,9 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			}
 			break;
 		case VGT_DP_D:
-			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_D_PRESENTED) {
+			if ((VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) |
+				_REGBIT_SFUSE_STRAP_D_PRESENTED) &&
+				(test_bit(VGT_DP_D, pdev->detected_ports))) {
 				vgt_info("EDID_PROBE: DP D Detected.\n");
 				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
 			} else {
@@ -407,6 +415,7 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 
 	for (i = 0; i < DPCD_MAX; i++) {
 		unsigned int aux_ch_addr = 0;
+		enum vgt_port_type dp_port = 0;
 		struct vgt_dpcd_data **dpcd = &(pdev->pdev_dpcds[i]);
 
 		if ((i != index) && (index != -1))
@@ -414,35 +423,27 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 
 		switch (i) {
 		case DPCD_DPA:
+			dp_port = VGT_DP_A;
 			if (VGT_MMIO_READ(pdev, _REG_DDI_BUF_CTL_A) | _DDI_BUFCTL_DETECT_MASK) {
-				vgt_info("DPCD_PROBE: DP A Detected.\n");
 				aux_ch_addr = _REG_DPA_AUX_CH_CTL;
-			} else {
-				vgt_info("DPCD_PROBE: DP A is not detected.\n");
 			}
 			break;
 		case DPCD_DPB:
+			dp_port = VGT_DP_B;
 			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_B_PRESENTED) {
-				vgt_info("DPCD_PROBE: DP B Detected.\n");
 				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
-			} else {
-				vgt_info("DPCD_PROBE: DP B is not detected.\n");
 			}
 			break;
 		case DPCD_DPC:
+			dp_port = VGT_DP_C;
 			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_C_PRESENTED) {
-				vgt_info("DPCD_PROBE: DP C Detected.\n");
 				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
-			} else {
-				vgt_info("DPCD_PROBE: DP C is not detected.\n");
 			}
 			break;
 		case DPCD_DPD:
+			dp_port = VGT_DP_D;
 			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_D_PRESENTED) {
-				vgt_info("DPCD_PROBE: DP D Detected.\n");
 				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
-			} else {
-				vgt_info("DPCD_PROBE: DP D is not detected.\n");
 			}
 			break;
 		default:
@@ -482,11 +483,23 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 			}
 		}
 
-		if (*dpcd && vgt_debug) {
-			vgt_info("DPCD_PROBE: DPCD is:\n");
-			vgt_print_dpcd(*dpcd);
-		}
+		ASSERT(dp_port >= VGT_DP_A && dp_port <= VGT_DP_D);
 
+		if (*dpcd) {
+			if (!(*dpcd)->data[DPCD_REV]) {
+				kfree(*dpcd);
+				*dpcd = NULL;
+				clear_bit(dp_port, pdev->detected_ports);
+			} else {
+				set_bit(dp_port, pdev->detected_ports);
+				if (vgt_debug) {
+					vgt_info("DPCD_PROBE: DPCD is:\n");
+					vgt_print_dpcd(*dpcd);
+				}
+			}
+		} else {
+			clear_bit(dp_port, pdev->detected_ports);
+		}
 	}
 }
 
@@ -1135,19 +1148,19 @@ void vgt_i2c_handle_aux_ch_read(vgt_i2c_bus_t *i2c_bus,
 		_DP_AUX_CH_CTL_MESSAGE_SIZE_SHIFT)
 
 void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
-				vgt_edid_data_t **pedid,
+				vgt_edid_data_t *edid,
 				unsigned int offset,
 				VGT_DP_PORTS_IDX port_idx, void *p_data)
 {
 	int msg_length, ret_msg_size;
-	bool auxch_emulate;
+	bool edid_presented;
 	int msg, addr, ctrl, op;
 	int value = *(int *)p_data;
 	int aux_data_for_write = 0;
 	AUX_CH_REGISTERS reg = vgt_get_aux_ch_reg(offset);
-	auxch_emulate = (*pedid != NULL);
+	edid_presented = (edid != NULL);
 
-	EDID_MSG(VGT_EDID_INFO, auxch_emulate,
+	EDID_MSG(VGT_EDID_INFO, edid_presented,
 	"vgt_i2c_handle_aux_ch_write with offset:0x%x, port_idx:0x%x, value:0x%x\n",
 		offset, port_idx, value);
 
@@ -1167,11 +1180,6 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 		return;
 	}
 
-	if (!auxch_emulate) {
-		return;
-	}
-	ASSERT(auxch_emulate);
-
 	/* Always set the wanted value for vms. */
 	ret_msg_size = (((op & 0x1) == VGT_AUX_I2C_READ) ? 2 : 1);
 	*i2c_bus->aux_ch.aux_registers[port_idx][reg] =
@@ -1182,29 +1190,29 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 	if (msg_length == 3) {
 		if (!(op & VGT_AUX_I2C_MOT)) {
 			/* stop */
-			EDID_MSG(VGT_EDID_INFO, auxch_emulate,
+			EDID_MSG(VGT_EDID_INFO, edid_presented,
 				"AUX_CH: stop. reset I2C!\n");
 			vgt_init_i2c_bus(i2c_bus);
 		} else {
 			/* start or restart */
-			EDID_MSG(VGT_EDID_INFO, auxch_emulate,
+			EDID_MSG(VGT_EDID_INFO, edid_presented,
 				"AUX_CH: start or restart I2C!\n");
 			i2c_bus->aux_ch.i2c_over_aux_ch = true;
 			i2c_bus->aux_ch.aux_ch_mot = true;
 			if (addr == 0) {
 				/* reset the address */
-				EDID_MSG(VGT_EDID_INFO, auxch_emulate,
+				EDID_MSG(VGT_EDID_INFO, edid_presented,
 					"AUX_CH: reset I2C!\n");
 				vgt_init_i2c_bus(i2c_bus);
 			} else if (addr == EDID_ADDR) {
-				EDID_MSG(VGT_EDID_INFO, auxch_emulate,
+				EDID_MSG(VGT_EDID_INFO, edid_presented,
 					"AUX_CH: setting EDID_ADDR!\n");
 				i2c_bus->current_slave_addr = EDID_ADDR;
 				i2c_bus->current_slave =
 					(vgt_i2c_slave_t *)&i2c_bus->edid_slave;
-				i2c_bus->edid_slave.edid_data = *pedid;
+				i2c_bus->edid_slave.edid_data = edid;
 			} else {
-				EDID_MSG(VGT_EDID_WARN, auxch_emulate,
+				EDID_MSG(VGT_EDID_WARN, edid_presented,
 		"Not supported address access [0x%x]with I2C over AUX_CH!\n",
 				addr);
 			}
@@ -1215,7 +1223,7 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 
 		write_length = msg_length - 4;
 
-		EDID_MSG(VGT_EDID_INFO, auxch_emulate,
+		EDID_MSG(VGT_EDID_INFO, edid_presented,
 			"AUX_CH WRITE length is:%d\n", write_length);
 
 		ASSERT(write_length == 1);

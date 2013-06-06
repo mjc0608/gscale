@@ -443,10 +443,9 @@ int vgt_initialize(struct pci_dev *dev)
 	if (vgt_cmd_parser_init(pdev) < 0)
 		goto err;
 
-	/* initialize EDID data */
-	vgt_probe_edid(pdev, -1);
-
 	vgt_probe_dpcd(pdev, -1);
+
+	vgt_probe_edid(pdev, -1);
 
 	/* create debugfs interface */
 	if (!vgt_init_debugfs(pdev)) {

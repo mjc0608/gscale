@@ -1260,7 +1260,7 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 	unsigned int reg = 0;
 	vgt_reg_t value = *(vgt_reg_t *)p_data;
 	int msg, addr, ctrl, op, len;
-	vgt_edid_data_t **pedid = NULL;
+	vgt_edid_data_t *edid = NULL;
 	struct vgt_dpcd_data *dpcd = NULL;
 	VGT_DP_PORTS_IDX port_idx = vgt_get_dp_port_idx(offset);
 
@@ -1291,19 +1291,19 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 
 	switch (port_idx) {
 	case VGT_DPA_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_A];
+		edid = vgt->vgt_edids[VGT_DP_A];
 		dpcd = vgt->vgt_dpcds[DPCD_DPA];
 		break;
 	case VGT_DPB_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_B];
+		edid = vgt->vgt_edids[VGT_DP_B];
 		dpcd = vgt->vgt_dpcds[DPCD_DPB];
 		break;
 	case VGT_DPC_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_C];
+		edid = vgt->vgt_edids[VGT_DP_C];
 		dpcd = vgt->vgt_dpcds[DPCD_DPC];
 		break;
 	case VGT_DPD_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_D];
+		edid = vgt->vgt_edids[VGT_DP_D];
 		dpcd = vgt->vgt_dpcds[DPCD_DPD];
 		break;
 	default:
@@ -1357,14 +1357,16 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 		}
 
 		/* write to virtual DPCD */
-		for (t = 0; t <= len; t ++) {
-			int p = addr + t;
+		if (dpcd) {
+			for (t = 0; t <= len; t ++) {
+				int p = addr + t;
 
-			dpcd->data[p] = buf[t];
+				dpcd->data[p] = buf[t];
 
-			/* check for link training */
-			if (p == DPCD_TRAINING_PATTERN_SET)
-				dp_aux_ch_ctl_link_training(dpcd, buf[t]);
+				/* check for link training */
+				if (p == DPCD_TRAINING_PATTERN_SET)
+					dp_aux_ch_ctl_link_training(dpcd, buf[t]);
+			}
 		}
 
 		/* ACK the write */
@@ -1411,16 +1413,18 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 
 		/* read from virtual DPCD to vreg */
 		/* first 4 bytes: [ACK][addr][addr+1][addr+2] */
-		for (i = 1; i <= (len + 1); i ++) {
-			int t;
+		if (dpcd) {
+			for (i = 1; i <= (len + 1); i ++) {
+				int t;
 
-			t = dpcd->data[addr + i - 1];
-			t <<= (24 - 8*(i%4));
-			ret |= t;
+				t = dpcd->data[addr + i - 1];
+				t <<= (24 - 8*(i%4));
+				ret |= t;
 
-			if ((i%4 == 3) || (i == (len + 1))) {
-				__vreg(vgt, reg + (i/4 + 1)*4) = ret;
-				ret = 0;
+				if ((i%4 == 3) || (i == (len + 1))) {
+					__vreg(vgt, reg + (i/4 + 1)*4) = ret;
+					ret = 0;
+				}
 			}
 		}
 
@@ -1431,7 +1435,7 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 
 	/* i2c transaction starts */
 
-	vgt_i2c_handle_aux_ch_write(&vgt->vgt_i2c_bus, pedid,
+	vgt_i2c_handle_aux_ch_write(&vgt->vgt_i2c_bus, edid,
 				offset, port_idx, p_data);
 	return true;
 }

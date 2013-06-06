@@ -293,7 +293,7 @@ void vgt_i2c_handle_aux_ch_read(vgt_i2c_bus_t *i2c_bus,
 				VGT_DP_PORTS_IDX port_idx, void *p_data);
 
 void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
-				vgt_edid_data_t **pedid,
+				vgt_edid_data_t *edid,
 				unsigned int offset,
 				VGT_DP_PORTS_IDX port_idx, void *p_data);
 

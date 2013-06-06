@@ -501,6 +501,7 @@ enum dpcd_index {
 };
 
 /* DPCD addresses */
+#define DPCD_REV			0x000
 #define DPCD_TRAINING_PATTERN_SET	0x102
 #define	DPCD_SINK_COUNT			0x200
 #define DPCD_LANE0_1_STATUS		0x202
