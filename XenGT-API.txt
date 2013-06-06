@@ -37,7 +37,7 @@ Take a look at the line for handling uevent "CRT_INSERT" (CRT monitor hotplug-in
 ):
 
 ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", \
-RUN+="/bin/sh -c 'echo 241 > /sys/kernel/vgt/control/virtual_event'"
+RUN+="/bin/sh -c 'echo 0xf1 > /sys/kernel/vgt/control/virtual_event'"
 
 The field "KERNEL" indicates where this uevent comes out. The "ACTION" field can
 be "add","remove" or "change". Here use "add" to signify new CRT monitor "added"
@@ -55,9 +55,9 @@ various hotplug uevents. The rules of handling CRT monitor insertion/removal
 are exemplified below:
 
 ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", \
-RUN+="/bin/sh -c 'echo 241 > /sys/kernel/vgt/control/virtual_event'"
+RUN+="/bin/sh -c 'echo 0xf1 > /sys/kernel/vgt/control/virtual_event'"
 ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", \
-RUN+="/bin/sh -c 'echo 240 > /sys/kernel/vgt/control/virtual_event'"
+RUN+="/bin/sh -c 'echo 0xf0 > /sys/kernel/vgt/control/virtual_event'"
 
 1.2.2 udev rules for enabling/disabling VGA mode (in progress)
 
@@ -331,15 +331,12 @@ vec		This is a 32-bit vector to indicate which virtual event
 				  it means forwarding the virtual_event
 				  for all live VMs.
 		bit 7 - bit 4	: Reserved;
-		bit 3 - bit 1	: Monitor selection:
+		bit 3 - bit 1	: Port/monitor selection:
 			0	-	CRT
-			1	-	DP_A
-			2	-	DP_B
-			3	-	DP_C
-			4	-	DP_D
-			5	-	HDMIB
-			6	-	HDMIC
-			7	-	HDMID
+			1	-	PORT_A
+			2	-	PORT_B
+			3	-	PORT_C
+			4	-	PORT_D
 		bit 0 - bit 0	: Direction.
 			0: pull out;
 			1: plug in;

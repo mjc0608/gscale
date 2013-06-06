@@ -255,15 +255,12 @@ static ssize_t vgt_hot_plug_reader(struct kobject *kobj,
  * bit 31 - bit 16	: Reserved;
  * bit 15 - bit 8	: vmid;
  * bit 7 - bit 4	: Reserved;
- * bit 3 - bit 1	: Monitor selection:
+ * bit 3 - bit 1	: port/monitor selection:
  *		0	-	CRT
- *		1	-	DP_A
- *		2	-	DP_B
- *		3	-	DP_C
- *		4	-	DP_D
- *		5	-	HDMIB
- *		6	-	HDMIC
- *		7	-	HDMID
+ *		1	-	PORT_A
+ *		2	-	PORT_B
+ *		3	-	PORT_C
+ *		4	-	PORT_D
  * bit 0 - bit 0	: Direction.
  *		0: pull out;
  *		1: plug in;
@@ -273,7 +270,7 @@ static ssize_t vgt_hot_plug_trigger(struct kobject *kobj,
 				const char *buf, size_t count)
 {
 	unsigned hotplug_cmd = 0;
-	if (sscanf(buf, "%du", &hotplug_cmd) != 1)
+	if (sscanf(buf, "%i", &hotplug_cmd) != 1)
 		return -EINVAL;
 	vgt_trigger_display_hot_plug(&default_device, (vgt_hotplug_cmd_t)hotplug_cmd);
 	return count;

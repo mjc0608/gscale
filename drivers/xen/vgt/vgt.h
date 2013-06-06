@@ -667,25 +667,22 @@ typedef union {
 struct vgt_irq_host_state;
 #define VGT_VBIOS_PAGES 16
 
+/* PLUG_OUT must equal to PLUG_IN + 1
+ * hot plug handler code has such assumption. Actually it might
+ * be OK to send HOTPLUG only, not necessarily differ IN aond
+ * OUT.
+ */
 enum vgt_uevent_type {
 	CRT_HOTPLUG_IN = 0,
 	CRT_HOTPLUG_OUT,
-	DP_A_HOTPLUG_IN,
-	DP_A_HOTPLUG_OUT,
-	SDVO_B_HOTPLUG_IN,
-	SDVO_B_HOTPLUG_OUT,
-	DP_B_HOTPLUG_IN,
-	DP_B_HOTPLUG_OUT,
-	DP_C_HOTPLUG_IN,
-	DP_C_HOTPLUG_OUT,
-	DP_D_HOTPLUG_IN,
-	DP_D_HOTPLUG_OUT,
-	HDMI_B_HOTPLUG_IN,
-	HDMI_B_HOTPLUG_OUT,
-	HDMI_C_HOTPLUG_IN,
-	HDMI_C_HOTPLUG_OUT,
-	HDMI_D_HOTPLUG_IN,
-	HDMI_D_HOTPLUG_OUT,
+	PORT_A_HOTPLUG_IN,
+	PORT_A_HOTPLUG_OUT,
+	PORT_B_HOTPLUG_IN,
+	PORT_B_HOTPLUG_OUT,
+	PORT_C_HOTPLUG_IN,
+	PORT_C_HOTPLUG_OUT,
+	PORT_D_HOTPLUG_IN,
+	PORT_D_HOTPLUG_OUT,
 	VGT_ENABLE_VGA,
 	VGT_DISABLE_VGA,
 	UEVENT_MAX

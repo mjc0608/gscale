@@ -30,15 +30,12 @@
 #					  Now we only use 0 as vmid in our command  and by default forward virtual_event for all other live VMs.
 #					  In future, we will redesign this command to avoid vmid out of range.
 # bit 7 - bit 4		: Reserved;
-# bit 3 - bit 1		: Monitor selection:
+# bit 3 - bit 1		: Port/monitor selection:
 # 		0	-	CRT
-# 		1	-	DP_A
-# 		2	-	DP_B
-# 		3	-	DP_C
-# 		4	-	DP_D
-#		5	-	HDMIB
-#		6	-	HDMIC
-#		7	-	HDMID
+# 		1	-	PORT_A
+# 		2	-	PORT_B
+# 		3	-	PORT_C
+# 		4	-	PORT_D
 # bit 0 - bit 0		: Direction.
 #		0: pull out;
 #		1: plug in;
@@ -50,7 +47,7 @@
 #KERNEL=="control", RUN+="/bin/sh -c 'echo inserted >> /tmp/hotplug'"
 #
 #write 0x0f1(241) for plug in; 0x0f0(240) for pull out.
-ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo 241 > /sys/kernel/vgt/control/virtual_event'"
-ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo 240 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xf1 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xf0 > /sys/kernel/vgt/control/virtual_event'"
 ACTION=="add", KERNEL=="control", ENV{VGT_ENABLE_VGA}=="1", RUN+="/bin/sh -c 'echo VM_$env{VMID}_enable_VGA_mode >> /tmp/vgt-log'"
 ACTION=="add", KERNEL=="control", ENV{VGT_ENABLE_VGA}=="0", RUN+="/bin/sh -c 'echo VM_$env{VMID}_disable_VGA_mode >> /tmp/vgt-log'"
