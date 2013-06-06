@@ -374,21 +374,26 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			}
 		}
 
-		if (*pedid && vgt_debug) {
-			int i;
-			unsigned char *block = (*pedid)->edid_block;
-			printk("EDID_PROBE: EDID is:\n");
-			for (i = 0; i < EDID_SIZE; ++ i) {
-				if ((block[i] >= 'a' && block[i] <= 'z') ||
-				    (block[i] >= 'A' && block[i] <= 'Z')) {
-					printk ("%c ", block[i]);
-				} else {
-					printk ("0x%x ", block[i]);
-				}
-				if (((i + 1) & 0xf) == 0) {
-					printk ("\n");
+		if (*pedid) {
+			set_bit(i, pdev->detected_ports);
+			if (vgt_debug) {
+				int i;
+				unsigned char *block = (*pedid)->edid_block;
+				printk("EDID_PROBE: EDID is:\n");
+				for (i = 0; i < EDID_SIZE; ++ i) {
+					if ((block[i] >= 'a' && block[i] <= 'z') ||
+					    (block[i] >= 'A' && block[i] <= 'Z')) {
+						printk ("%c ", block[i]);
+					} else {
+						printk ("0x%x ", block[i]);
+					}
+					if (((i + 1) & 0xf) == 0) {
+						printk ("\n");
+					}
 				}
 			}
+		} else {
+			clear_bit(i, pdev->detected_ports);
 		}
 	}
 }
@@ -512,6 +517,7 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 			if (vgt->vgt_edids[i]) {
 				kfree(vgt->vgt_edids[i]);
 				vgt->vgt_edids[i] = NULL;
+				clear_bit(i, vgt->presented_ports);
 			}
 		} else {
 			printk ("EDID_PROPAGATE: Propagate EDID %d\n", i);
@@ -528,6 +534,7 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 			}
 			memcpy(vgt->vgt_edids[i], edid,
 				sizeof(vgt_edid_data_t));
+			set_bit(i, vgt->presented_ports);
 
 			if (vgt_debug) {
 				int j;
@@ -560,6 +567,7 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 					i, vgt->vm_id);
 				kfree(vgt->vgt_edids[i]);
 				vgt->vgt_edids[i] = NULL;
+				clear_bit(i, vgt->presented_ports);
 			}
 		}
 	}

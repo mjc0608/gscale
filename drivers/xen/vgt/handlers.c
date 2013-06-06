@@ -823,9 +823,9 @@ static bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			 * irq is disabled, no virtual event is triggered.
 			 */
 			if (__vreg(vgt, reg) & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK)
-				set_bit(VGT_CRT, vgt->pdev->port_detect_status);
+				set_bit(VGT_CRT, vgt->pdev->detected_ports);
 			else
-				clear_bit(VGT_CRT, vgt->pdev->port_detect_status);
+				clear_bit(VGT_CRT, vgt->pdev->detected_ports);
 		}
 
 		/* clear trigger bit to indicate end of emulation */
@@ -889,13 +889,13 @@ static bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		/*
 		 * if vgt is the owner, the force trigger bit is forwarded
 		 * to hw so that channel status will be detected in the read handler.
-		 * Or else we emulate channel detection based on port_detect_status.
+		 * Or else we emulate channel detection based on detected_ports.
 		 *
 		 * TODO: this trick can be eliminated if XenGT detects ports directly
 		 */
 		if (!reg_hw_access(vgt, reg)) {
 			/* FIXME: sometimes only one channel is OK ??? */
-			if (test_bit(VGT_CRT, pdev->port_detect_status))
+			if (test_bit(VGT_CRT, pdev->detected_ports))
 				vreg_data |= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 			else
 				vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
@@ -927,13 +927,13 @@ static bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 		if (reg_data & _REGBIT_DP_PORT_DETECTED) {
 			switch (reg) {
 				case _REG_DP_B_CTL:
-					set_bit(VGT_DP_B, pdev->port_detect_status);
+					set_bit(VGT_DP_B, pdev->detected_ports);
 					break;
 				case _REG_DP_C_CTL:
-					set_bit(VGT_DP_C, pdev->port_detect_status);
+					set_bit(VGT_DP_C, pdev->detected_ports);
 					break;
 				case _REG_DP_D_CTL:
-					set_bit(VGT_DP_D, pdev->port_detect_status);
+					set_bit(VGT_DP_D, pdev->detected_ports);
 					break;
 				default:
 					BUG();
@@ -942,13 +942,13 @@ static bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 		} else {
 			switch (reg) {
 				case _REG_DP_B_CTL:
-					clear_bit(VGT_DP_B, pdev->port_detect_status);
+					clear_bit(VGT_DP_B, pdev->detected_ports);
 					break;
 				case _REG_DP_C_CTL:
-					clear_bit(VGT_DP_C, pdev->port_detect_status);
+					clear_bit(VGT_DP_C, pdev->detected_ports);
 					break;
 				case _REG_DP_D_CTL:
-					clear_bit(VGT_DP_D, pdev->port_detect_status);
+					clear_bit(VGT_DP_D, pdev->detected_ports);
 					break;
 				default:
 					BUG();
@@ -977,19 +977,19 @@ static bool dp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	/* Read only bit should be keeped coherent with intended hardware status */
 	switch (reg) {
 		case _REG_DP_B_CTL:
-			if (test_bit(VGT_DP_B, pdev->port_detect_status))
+			if (test_bit(VGT_DP_B, pdev->detected_ports))
 				vreg_data |= _REGBIT_DP_PORT_DETECTED;
 			else
 				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
 			break;
 		case _REG_DP_C_CTL:
-			if (test_bit(VGT_DP_C, pdev->port_detect_status))
+			if (test_bit(VGT_DP_C, pdev->detected_ports))
 				vreg_data |= _REGBIT_DP_PORT_DETECTED;
 			else
 				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
 			break;
 		case _REG_DP_D_CTL:
-			if (test_bit(VGT_DP_D, pdev->port_detect_status))
+			if (test_bit(VGT_DP_D, pdev->detected_ports))
 				vreg_data |= _REGBIT_DP_PORT_DETECTED;
 			else
 				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
@@ -1020,13 +1020,13 @@ static bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 		if (reg_data & _REGBIT_HDMI_PORT_DETECTED) {
 			switch (reg) {
 				case _REG_HDMI_B_CTL:
-					set_bit(VGT_HDMI_B, pdev->port_detect_status);
+					set_bit(VGT_HDMI_B, pdev->detected_ports);
 					break;
 				case _REG_HDMI_C_CTL:
-					set_bit(VGT_HDMI_C, pdev->port_detect_status);
+					set_bit(VGT_HDMI_C, pdev->detected_ports);
 					break;
 				case _REG_HDMI_D_CTL:
-					set_bit(VGT_HDMI_D, pdev->port_detect_status);
+					set_bit(VGT_HDMI_D, pdev->detected_ports);
 					break;
 				default:
 					BUG();
@@ -1035,13 +1035,13 @@ static bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 		} else {
 			switch (reg) {
 				case _REG_HDMI_B_CTL:
-					clear_bit(VGT_HDMI_B, pdev->port_detect_status);
+					clear_bit(VGT_HDMI_B, pdev->detected_ports);
 					break;
 				case _REG_HDMI_C_CTL:
-					clear_bit(VGT_HDMI_C, pdev->port_detect_status);
+					clear_bit(VGT_HDMI_C, pdev->detected_ports);
 					break;
 				case _REG_HDMI_D_CTL:
-					clear_bit(VGT_HDMI_D, pdev->port_detect_status);
+					clear_bit(VGT_HDMI_D, pdev->detected_ports);
 					break;
 				default:
 					BUG();
@@ -1070,19 +1070,19 @@ static bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	/* Read only bit should be keeped coherent with intended hardware status */
 	switch (reg) {
 		case _REG_HDMI_B_CTL:
-			if (test_bit(VGT_HDMI_B, pdev->port_detect_status))
+			if (test_bit(VGT_HDMI_B, pdev->detected_ports))
 				vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
 			else
 				vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
 			break;
 		case _REG_HDMI_C_CTL:
-			if (test_bit(VGT_HDMI_C, pdev->port_detect_status))
+			if (test_bit(VGT_HDMI_C, pdev->detected_ports))
 				vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
 			else
 				vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
 			break;
 		case _REG_HDMI_D_CTL:
-			if (test_bit(VGT_HDMI_D, pdev->port_detect_status))
+			if (test_bit(VGT_HDMI_D, pdev->detected_ports))
 				vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
 			else
 				vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;

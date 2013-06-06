@@ -541,6 +541,8 @@ struct vgt_device {
 	vgt_edid_data_t		*vgt_edids[VGT_PORT_MAX];	/* per display EDID information */
 	struct vgt_dpcd_data		*vgt_dpcds[DPCD_MAX];	/* per display DPCD information */
 
+	DECLARE_BITMAP(presented_ports, VGT_PORT_MAX);
+
 	uint64_t	aperture_base;
 	void		*aperture_base_va;
 	uint64_t	aperture_sz;
@@ -812,13 +814,7 @@ struct pgt_device {
 	uint64_t vgtt_sz; /* in bytes */
 	uint32_t *vgtt; /* virtual GTT table for guest to read*/
 
-	/* FIXME: Temperary solution: use this to tell hvm domain if external
-	 * monitors are detected. This should be per vm, that
-	 * we can decide how many monitors each vm can use, this
-	 * data structure is mainly to provide the "read only"
-	 * protection upon virtual regs
-	 */
-	DECLARE_BITMAP(port_detect_status, VGT_PORT_MAX);
+	DECLARE_BITMAP(detected_ports, VGT_PORT_MAX);
 
 	DECLARE_BITMAP(dpy_emul_request, VGT_MAX_VMS);
 

@@ -132,6 +132,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	if ((rc = create_state_instance(vgt)) < 0)
 		goto err;
 
+	memset(vgt->presented_ports, 0, sizeof(vgt->presented_ports));
+
 	/* Hard code ballooning now. We can support non-ballooning too in the future */
 	vgt->ballooning = true;
 

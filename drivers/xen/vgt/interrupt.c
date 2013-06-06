@@ -492,13 +492,13 @@ static void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
 	if (adpa_ctrl & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) {
 		vgt_info("IRQ: detect crt insert event!\n");
 
-		if (test_and_set_bit(VGT_CRT, pdev->port_detect_status))
+		if (test_and_set_bit(VGT_CRT, pdev->detected_ports))
 			vgt_info("IRQ: capture CRT hot-plug when it's attached!\n");
 		vgt_set_uevent(vgt_dom0, CRT_HOTPLUG_IN);
 	} else {
 		vgt_info("IRQ: detect crt removal event!\n");
 
-		if (!test_and_clear_bit(VGT_CRT, pdev->port_detect_status))
+		if (!test_and_clear_bit(VGT_CRT, pdev->detected_ports))
 			vgt_info("IRQ: capture CRT hot-removal when it's disattached!\n");
 		vgt_set_uevent(vgt_dom0, CRT_HOTPLUG_OUT);
 	}
