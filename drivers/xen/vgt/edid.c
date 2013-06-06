@@ -232,6 +232,36 @@ static unsigned int vgt_aux_ch_transaction(struct pgt_device *pdev,
 	return VGT_MMIO_READ(pdev, aux_ctrl_addr + 4);
 }
 
+#define IS_SHARED_PORT(port) \
+	(((port) >= VGT_DP_B && (port) <= VGT_DP_D) ||	\
+			((port) >= VGT_HDMI_B && (port) <= VGT_HDMI_D))
+
+static inline int SHARED_PORT_IDX(int port)
+{
+	ASSERT(IS_SHARED_PORT(port));
+	if (port >= VGT_DP_B && port <= VGT_DP_D) {
+		return port - VGT_DP_B + 1;
+	} else {
+		ASSERT (port >= VGT_HDMI_B && port <= VGT_HDMI_D);
+		return port - VGT_HDMI_B + 1;
+	}
+}
+
+static inline bool vgt_port_equivalent(int id, int given_index)
+{
+	if (given_index == -1) {
+		/* -1 is an alias id which is equivalent with all the ports */
+		return true;
+	} else if (id == given_index) {
+		return true;
+	} else {
+		if (IS_SHARED_PORT(given_index) && IS_SHARED_PORT(id)) {
+			return (SHARED_PORT_IDX(id) ==
+					SHARED_PORT_IDX(given_index));
+		}
+	}
+	return false;
+}
 
 void vgt_probe_edid(struct pgt_device *pdev, int index)
 {
@@ -244,9 +274,10 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		unsigned int aux_ch_addr = 0;
 		vgt_edid_data_t **pedid = &(pdev->pdev_edids[i]);
 
-		if ((i != index) && (index != -1)) {
+		if (!vgt_port_equivalent(i, index)) {
 			continue;
 		}
+
 		switch (i) {
 		case VGT_CRT:
 			vgt_info("EDID_PROBE: VGA.\n");
@@ -418,7 +449,7 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 		enum vgt_port_type dp_port = 0;
 		struct vgt_dpcd_data **dpcd = &(pdev->pdev_dpcds[i]);
 
-		if ((i != index) && (index != -1))
+		if (!vgt_port_equivalent(i, index))
 			continue;
 
 		switch (i) {
@@ -521,7 +552,7 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 	for (i = 0; i < VGT_PORT_MAX; ++ i) {
 		vgt_edid_data_t	*edid = vgt->pdev->pdev_edids[i];
 
-		if ((i != index) && (index != -1)) {
+		if (!vgt_port_equivalent(i, index)) {
 			continue;
 		}
 
@@ -574,7 +605,7 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 	int i;
 
 	for (i = 0; i < VGT_PORT_MAX; ++ i) {
-		if ((i == index) || (index == -1)) {
+		if (vgt_port_equivalent(i, index)) {
 			if (vgt->vgt_edids[i]) {
 				printk("EDID_CLEAR: Clear EDID[0x%x] of VM%d\n",
 					i, vgt->vm_id);
@@ -593,7 +624,7 @@ void vgt_propagate_dpcd(struct vgt_device *vgt, int index)
 	for (i = 0; i < DPCD_MAX; ++i) {
 		struct vgt_dpcd_data *dpcd = vgt->pdev->pdev_dpcds[i];
 
-		if ((i != index) && (index != -1))
+		if (!vgt_port_equivalent(i, index))
 			continue;
 
 		if (!dpcd) {
@@ -633,7 +664,7 @@ void vgt_clear_dpcd(struct vgt_device *vgt, int index)
 	int i;
 
 	for (i = 0; i < DPCD_MAX; ++i) {
-		if ((i == index) || (index == -1)) {
+		if (vgt_port_equivalent(i, index)) {
 			if (vgt->vgt_dpcds[i]) {
 				vgt_dbg("DPCD clear: Clear DPCD[0x%x] of VM%d\n",
 					i, vgt->vm_id);
