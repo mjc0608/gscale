@@ -447,7 +447,6 @@ int vgt_initialize(struct pci_dev *dev)
 	vgt_probe_edid(pdev, -1);
 
 	vgt_probe_dpcd(pdev, -1);
-	pdev->probe_ports = true;
 
 	/* create debugfs interface */
 	if (!vgt_init_debugfs(pdev)) {
@@ -574,7 +573,7 @@ void vgt_destroy(void)
 	vfree(pdev->reg_info);
 	vfree(pdev->initial_mmio_state);
 
-	for (i = 0; i < EDID_MAX; ++ i) {
+	for (i = 0; i < VGT_PORT_MAX; ++ i) {
 		if (pdev->pdev_edids[i]) {
 			kfree(pdev->pdev_edids[i]);
 			pdev->pdev_edids[i] = NULL;

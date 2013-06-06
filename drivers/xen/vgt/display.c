@@ -111,34 +111,34 @@ ssize_t vgt_get_display_pointer(char *buf)
 
 static inline int get_event_and_edid_info(vgt_hotplug_cmd_t cmd,
 				enum vgt_event_type *pevent,
-				edid_index_t *pedid_idx)
+				enum vgt_port_type *pedid_idx)
 {
 	int ret = 0;
 	switch(cmd.port_sel) {
 	case 0:
-		*pedid_idx = EDID_VGA;
+		*pedid_idx = VGT_CRT;
 		*pevent = CRT_HOTPLUG;
 		break;
 	case 1:
-		*pedid_idx = EDID_MAX;
+		*pedid_idx = VGT_PORT_MAX;
 		*pevent = EVENT_MAX;
 		printk("vGT: No support for hot plug type: DP_A!\n");
 		ret = -EINVAL;
 		break;
 	case 2:
-		*pedid_idx = EDID_DPB;
+		*pedid_idx = VGT_DP_B;
 		*pevent = DP_B_HOTPLUG;
 		break;
 	case 3:
-		*pedid_idx = EDID_DPC;
+		*pedid_idx = VGT_DP_C;
 		*pevent = DP_C_HOTPLUG;
 		break;
 	case 4:
-		*pedid_idx = EDID_DPD;
+		*pedid_idx = VGT_DP_D;
 		*pevent = DP_D_HOTPLUG;
 		break;
 	default:
-		*pedid_idx = EDID_MAX;
+		*pedid_idx = VGT_PORT_MAX;
 		*pevent = EVENT_MAX;
 		printk("vGT: Not supported hot plug type: 0x%x!\n",
 			cmd.port_sel);
@@ -153,7 +153,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 {
 	int i;
 	enum vgt_event_type event = EVENT_MAX;
-	edid_index_t edid_idx = EDID_MAX;
+	enum vgt_port_type edid_idx = VGT_PORT_MAX;
 
 	if (get_event_and_edid_info(hotplug_cmd, &event, &edid_idx) < 0)
 		return;

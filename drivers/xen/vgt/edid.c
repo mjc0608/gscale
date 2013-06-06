@@ -239,7 +239,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 
 	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
 
-	for (i = 0; i < EDID_MAX; ++ i) {
+	for (i = 0; i < VGT_PORT_MAX; ++ i) {
 		int gmbus_port = 0;
 		unsigned int aux_ch_addr = 0;
 		vgt_edid_data_t **pedid = &(pdev->pdev_edids[i]);
@@ -248,27 +248,27 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			continue;
 		}
 		switch (i) {
-		case EDID_VGA:
+		case VGT_CRT:
 			vgt_info("EDID_PROBE: VGA.\n");
 			gmbus_port = 2;
 			break;
-		case EDID_LVDS:
+		case VGT_LVDS:
 			vgt_info("EDID_PROBE: LVDS.\n");
 			gmbus_port = 3;
 			break;
-		case EDID_HDMIC:
+		case VGT_HDMI_C:
 			vgt_info("EDID_PROBE: HDMI C.\n");
 			gmbus_port = 4;
 			break;
-		case EDID_HDMIB:
+		case VGT_HDMI_B:
 			vgt_info("EDID_PROBE: HDMI B.\n");
 			// no gmbus corresponding interface. Do not handle it.
 			break;
-		case EDID_HDMID:
+		case VGT_HDMI_D:
 			vgt_info("EDID_PROBE: HDMI D.\n");
 			gmbus_port = 6;
 			break;
-		case EDID_DPA:
+		case VGT_DP_A:
 			if (VGT_MMIO_READ(pdev, _REG_DDI_BUF_CTL_A) | _DDI_BUFCTL_DETECT_MASK) {
 				vgt_info("EDID_PROBE: DP A Detected.\n");
 				aux_ch_addr = _REG_DPA_AUX_CH_CTL;
@@ -276,7 +276,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				vgt_info("EDID_PROBE: DP A is not detected.\n");
 			}
 			break;
-		case EDID_DPB:
+		case VGT_DP_B:
 			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_B_PRESENTED) {
 				vgt_info("EDID_PROBE: DP B Detected.\n");
 				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
@@ -284,7 +284,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				vgt_info("EDID_PROBE: DP B is not detected.\n");
 			}
 			break;
-		case EDID_DPC:
+		case VGT_DP_C:
 			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_C_PRESENTED) {
 				vgt_info("EDID_PROBE: DP C Detected.\n");
 				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
@@ -292,7 +292,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				vgt_info("EDID_PROBE: DP C is not detected.\n");
 			}
 			break;
-		case EDID_DPD:
+		case VGT_DP_D:
 			if (VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) | _REGBIT_SFUSE_STRAP_D_PRESENTED) {
 				vgt_info("EDID_PROBE: DP D Detected.\n");
 				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
@@ -500,7 +500,7 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 {
 	int i;
 
-	for (i = 0; i < EDID_MAX; ++ i) {
+	for (i = 0; i < VGT_PORT_MAX; ++ i) {
 		vgt_edid_data_t	*edid = vgt->pdev->pdev_edids[i];
 
 		if ((i != index) && (index != -1)) {
@@ -553,7 +553,7 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 {
 	int i;
 
-	for (i = 0; i < EDID_MAX; ++ i) {
+	for (i = 0; i < VGT_PORT_MAX; ++ i) {
 		if ((i == index) || (index == -1)) {
 			if (vgt->vgt_edids[i]) {
 				printk("EDID_CLEAR: Clear EDID[0x%x] of VM%d\n",
@@ -769,22 +769,19 @@ static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt, unsigned int offset, v
 			vgt->vgt_id);
 		break;
 	case 2: /* Analog Mon */
-		edid_data = vgt->vgt_edids[EDID_VGA];
+		edid_data = vgt->vgt_edids[VGT_CRT];
 		break;
 	case 3: /* LVDS */
-		edid_data = vgt->vgt_edids[EDID_LVDS];
+		edid_data = vgt->vgt_edids[VGT_LVDS];
 		break;
 	case 4: /* Port C use */
-		/* TODO: how about DP ??? */
-		edid_data = vgt->vgt_edids[EDID_HDMIC];
+		edid_data = vgt->vgt_edids[VGT_HDMI_C];
 		break;
 	case 5: /* Port B use */
-		/* TODO: how about DP ??? */
-		edid_data = vgt->vgt_edids[EDID_HDMIB];
+		edid_data = vgt->vgt_edids[VGT_HDMI_B];
 		break;
 	case 6: /* Port D use */
-		/* TODO: how about DP ??? */
-		edid_data = vgt->vgt_edids[EDID_HDMID];
+		edid_data = vgt->vgt_edids[VGT_HDMI_D];
 		break;
 	case 7:
 		printk("vGT(%d): WARNING: GMBUS accessing reserved port!!!!\n", vgt->vgt_id);

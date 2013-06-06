@@ -1404,31 +1404,14 @@ enum vgt_plane_type {
 	SPRITE_PLANE
 };
 
-typedef enum {
-	EDID_VGA = 0,
-	EDID_LVDS,
-	EDID_HDMIC,
-	EDID_HDMIB,
-	EDID_HDMID,
-	EDID_DPA,
-	EDID_DPB,
-	EDID_DPC,
-	EDID_DPD,
-	EDID_MAX
-}edid_index_t;
-
 enum vgt_port_type {
 	VGT_CRT = 0,
 	VGT_DP_A,
-	VGT_DP_B,   /* DP use the same physical pins as HDMI/DVI, therefore HDMI/DI and DP cannot be enabled simultaneously */
+	VGT_DP_B,
 	VGT_DP_C,
 	VGT_DP_D,
-	VGT_SDVO_B, /* HDMI port B can be used for sDVO by setting the encoding field */
-	VGT_DVI_B,
-	VGT_DVI_C,
-	VGT_DVI_D,
 	VGT_HDMI_B,
-	VGT_HDMI_C, /* HDMI port C can only be used for HDMI/DVI */
+	VGT_HDMI_C,
 	VGT_HDMI_D,
 	VGT_LVDS,
 	VGT_PORT_MAX

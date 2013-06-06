@@ -385,7 +385,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	/* already idle */
 	list_del(&vgt->list);
 
-	for (i = 0; i < EDID_MAX; ++ i) {
+	for (i = 0; i < VGT_PORT_MAX; ++ i) {
 		if (vgt->vgt_edids[i]) {
 			kfree(vgt->vgt_edids[i]);
 			vgt->vgt_edids[i] = NULL;

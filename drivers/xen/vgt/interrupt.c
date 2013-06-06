@@ -481,8 +481,6 @@ static void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
 	vgt_reg_t adpa_ctrl;
 	struct pgt_device *pdev = hstate->pdev;
 
-	pdev->probe_ports = true;
-
 	adpa_ctrl = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
 	if (!(adpa_ctrl & _REGBIT_ADPA_DAC_ENABLE))
 		vgt_warn("IRQ: captured CRT hotplug event when CRT is disabled\n");

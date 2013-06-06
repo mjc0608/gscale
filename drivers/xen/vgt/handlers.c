@@ -541,16 +541,16 @@ static bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	port_idx = vgt_get_dp_port_idx(offset);
 	switch (port_idx) {
 	case VGT_DPA_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPA];
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_A];
 		break;
 	case VGT_DPB_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPB];
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_B];
 		break;
 	case VGT_DPC_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPC];
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_C];
 		break;
 	case VGT_DPD_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPD];
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_D];
 		break;
 	default:
 		printk("vGT(%d): WARNING: Unsupported DP port [0x%x]access!\n",
@@ -1291,19 +1291,19 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 
 	switch (port_idx) {
 	case VGT_DPA_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPA];
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_A];
 		dpcd = vgt->vgt_dpcds[DPCD_DPA];
 		break;
 	case VGT_DPB_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPB];
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_B];
 		dpcd = vgt->vgt_dpcds[DPCD_DPB];
 		break;
 	case VGT_DPC_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPC];
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_C];
 		dpcd = vgt->vgt_dpcds[DPCD_DPC];
 		break;
 	case VGT_DPD_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[EDID_DPD];
+		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_D];
 		dpcd = vgt->vgt_dpcds[DPCD_DPD];
 		break;
 	default:

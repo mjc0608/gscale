@@ -538,7 +538,7 @@ struct vgt_device {
 
 	struct vgt_port_struct *attached_port[I915_MAX_PIPES]; /* one port per PIPE */
 	vgt_i2c_bus_t		vgt_i2c_bus;	/* i2c bus state emulaton for reading EDID */
-	vgt_edid_data_t		*vgt_edids[EDID_MAX];	/* per display EDID information */
+	vgt_edid_data_t		*vgt_edids[VGT_PORT_MAX];	/* per display EDID information */
 	struct vgt_dpcd_data		*vgt_dpcds[DPCD_MAX];	/* per display DPCD information */
 
 	uint64_t	aperture_base;
@@ -773,7 +773,7 @@ struct pgt_device {
 	u32 ring_psmi[MAX_ENGINES];
 	u32 ring_mi_mode[MAX_ENGINES];
 
-	vgt_edid_data_t		*pdev_edids[EDID_MAX];	/* per display EDID information */
+	vgt_edid_data_t		*pdev_edids[VGT_PORT_MAX];	/* per display EDID information */
 	struct vgt_dpcd_data	*pdev_dpcds[DPCD_MAX];	/* per display DPCD information */
 
 	 /* 1 bit corresponds to 1MB in the GM space */
@@ -826,7 +826,6 @@ struct pgt_device {
 
 	u8 enable_ppgtt : 1;
 	u8 in_ctx_switch : 1;
-	u8 probe_ports : 1;
 
 	vgt_aux_entry_t vgt_aux_table[VGT_AUX_TABLE_NUM];
 	int at_index;
