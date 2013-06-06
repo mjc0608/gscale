@@ -819,7 +819,7 @@ static bool vgt_init_null_context(struct pgt_device *pdev, int id)
 		return false;
 
 	/* only RCS support HW context on HSW */
-	if (id != RING_BUFFER_RCS)
+	if ((id != RING_BUFFER_RCS) || ring->null_context)
 		return true;
 
 	/* assume no active usage so far */
@@ -925,6 +925,11 @@ static bool vgt_init_null_context(struct pgt_device *pdev, int id)
 	stop_ring(pdev, id);
 	vgt_restore_ringbuffer(vgt_dom0, id);
 	start_ring(pdev, id);
+
+	/* Update dom0's initial context area */
+	memcpy((char *)v_aperture(pdev, vgt_dom0->rb[id].context_save_area),
+	       (char *)v_aperture(pdev, ring->null_context),
+	       SZ_CONTEXT_AREA_PER_RING);
 	return true;
 
 err:
@@ -990,8 +995,6 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 		return false;
 	}
 
-	rb->initialized = true;
-
 	return true;
 }
 
@@ -1006,21 +1009,11 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 
 	vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
 	vgt_ring_emit(ring, MI_SET_CONTEXT);
-	if (rb->initialized)
-		vgt_ring_emit(ring, rb->context_save_area |
-				MI_MM_SPACE_GTT |
-				MI_SAVE_EXT_STATE_EN |
-				MI_RESTORE_EXT_STATE_EN |
-				MI_FORCE_RESTORE);
-	else {
-		printk("vGT(%d): first initialization. switch to dummy context.\n",
-				vgt->vgt_id);
-		vgt_ring_emit(ring, pdev->dummy_area |
-				MI_MM_SPACE_GTT |
-				MI_SAVE_EXT_STATE_EN |
-				MI_RESTORE_EXT_STATE_EN |
-				MI_RESTORE_INHIBIT);
-	}
+	vgt_ring_emit(ring, rb->context_save_area |
+			MI_MM_SPACE_GTT |
+			MI_SAVE_EXT_STATE_EN |
+			MI_RESTORE_EXT_STATE_EN |
+			MI_FORCE_RESTORE);
 
 	vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
 	vgt_ring_emit(ring, MI_NOOP);

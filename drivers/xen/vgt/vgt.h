@@ -325,7 +325,6 @@ typedef struct {
 	uint64_t	context_save_area;	/* VGT default context space */
 	uint32_t	active_vm_context;	/* current active VM set context space.
 						_not_ next target ctx when switched to HW later. */
-	bool	initialized;	/* whether it includes an valid context */
 	/* ppgtt info */
 	vgt_ring_ppgtt_t	vring_ppgtt_info; /* guest view */
 	vgt_ring_ppgtt_t	sring_ppgtt_info; /* shadow info */
