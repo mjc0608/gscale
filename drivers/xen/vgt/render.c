@@ -130,6 +130,7 @@ static bool ring_wait_for_completion(struct pgt_device *pdev, int id)
 	if (wait_for_atomic((*ptr == pdev->magic), VGT_RING_TIMEOUT) != 0) {
 		vgt_err("Timeout %d ms for CMD comletion on ring %d\n",
 			VGT_RING_TIMEOUT, id);
+		vgt_err("expected(%d), actual(%d)\n", pdev->magic, *ptr);
 		return false;
 	}
 
@@ -503,7 +504,7 @@ static void vgt_rendering_restore_mmio(struct vgt_device *vgt)
  * and thus emit function is implemented simply by sequentially advancing
  * tail point, w/o the wrap handling requirement.
  */
-static inline void vgt_ring_emit(struct vgt_rsvd_ring *ring,
+static void vgt_ring_emit(struct vgt_rsvd_ring *ring,
 				u32 data)
 {
 	ASSERT(ring->tail + 4 < ring->size);
@@ -947,6 +948,25 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[id];
 	vgt_reg_t	ccid;
 
+	/* pipeline flush */
+	vgt_ring_emit(ring, PIPE_CONTROL(5));
+	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
+			    PIPE_CONTROL_TLB_INVALIDATE |
+			    PIPE_CONTROL_FLUSH_ENABLE);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+
+	vgt_ring_emit(ring, PIPE_CONTROL(5));
+	vgt_ring_emit(ring, PIPE_CONTROL_RENDER_TARGET_CACHE_FLUSH |
+			    PIPE_CONTROL_FLUSH_ENABLE |
+			    PIPE_CONTROL_VF_CACHE_INVALIDATE |
+			    PIPE_CONTROL_CONST_CACHE_INVALIDATE |
+			    PIPE_CONTROL_STATE_CACHE_INVALIDATE);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+
 	/*
 	 * Activate XenGT context for prev
 	 * Guest may have an active context already. Better to not clobber
@@ -957,14 +977,37 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 	       CCID_EXTENDED_STATE_SAVE_ENABLE |
 	       CCID_EXTENDED_STATE_RESTORE_ENABLE |
 	       CCID_VALID;
-	VGT_MMIO_WRITE(pdev, _REG_CCID, ccid);
+	vgt_ring_emit(ring, MI_LOAD_REGISTER_IMM);
+	vgt_ring_emit(ring, _REG_CCID);
+	vgt_ring_emit(ring, ccid);
+
+	/* pipeline flush */
+	vgt_ring_emit(ring, PIPE_CONTROL(5));
+	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
+			    PIPE_CONTROL_TLB_INVALIDATE |
+			    PIPE_CONTROL_FLUSH_ENABLE |
+			    PIPE_CONTROL_POST_SYNC_IMM |
+			    PIPE_CONTROL_POST_SYNC_GLOBAL_GTT);
+	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
+	vgt_ring_emit(ring, ++pdev->magic);
+	vgt_ring_emit(ring, 0);
+
+	/* submit cmds */
+	vgt_ring_advance(ring);
+
+	if (!ring_wait_for_completion(pdev, id)) {
+		vgt_err("change CCID to XenGT save context: commands unfinished\n");
+		return false;
+	}
+
 	if (VGT_MMIO_READ(pdev, _REG_CCID) != ccid) {
-		vgt_err("Active XenGT context (CCID: %x) fail\n", ccid);
+		vgt_err("change CCID to XenGT save context: fail [%x, %x]\n",
+			VGT_MMIO_READ(pdev, _REG_CCID), ccid);
 		return false;
 	}
 
 	/* Save context and switch to NULL context */
-	vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
+	vgt_ring_emit(ring, MI_ARB_ON_OFF | MI_ARB_DISABLE);
 	vgt_ring_emit(ring, MI_SET_CONTEXT);
 	vgt_ring_emit(ring, ring->null_context |
 			    MI_MM_SPACE_GTT |
@@ -972,16 +1015,32 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 			    MI_RESTORE_EXT_STATE_EN |
 			    MI_FORCE_RESTORE);
 	vgt_ring_emit(ring, MI_NOOP);
-	vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
-	vgt_ring_emit(ring, MI_NOOP);
-	vgt_ring_emit(ring, MI_FLUSH);
-	vgt_ring_emit(ring, MI_NOOP);
-	vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
+	vgt_ring_emit(ring, MI_ARB_ON_OFF | MI_ARB_ENABLE);
+
+	vgt_ring_emit(ring, DUMMY_3D);
+	vgt_ring_emit(ring, PRIM_TRILIST);
 	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, MI_NOOP);
+
+	/* pipeline flush */
+	vgt_ring_emit(ring, PIPE_CONTROL(5));
+	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
+			    PIPE_CONTROL_TLB_INVALIDATE |
+			    PIPE_CONTROL_FLUSH_ENABLE |
+			    PIPE_CONTROL_MEDIA_STATE_CLEAR |
+			    PIPE_CONTROL_DC_FLUSH_ENABLE |
+			    PIPE_CONTROL_RENDER_TARGET_CACHE_FLUSH |
+			    PIPE_CONTROL_POST_SYNC_IMM |
+			    PIPE_CONTROL_POST_SYNC_GLOBAL_GTT);
 	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
 	vgt_ring_emit(ring, ++pdev->magic);
 	vgt_ring_emit(ring, 0);
-	vgt_ring_emit(ring, MI_NOOP);
+
+	/* submit cmds */
 	vgt_ring_advance(ring);
 
 	if (!ring_wait_for_completion(pdev, id)) {
@@ -989,13 +1048,9 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 		return false;
 	}
 
-	vgt_dbg("new magic number: %d\n",
-			*(u32 *)(phys_aperture_vbase(pdev) + vgt_data_ctx_magic(pdev)));
-
-	/* still confirm the CCID for safety. May remove in the future */
 	ccid = VGT_MMIO_READ (pdev, _REG_CCID);
 	if ((ccid & GTT_PAGE_MASK) != (ring->null_context & GTT_PAGE_MASK)) {
-		printk("vGT: CCID isn't changed [%x, %lx]\n", ccid, (unsigned long)ring->null_context);
+		vgt_err("vGT: CCID isn't changed [%x, %lx]\n", ccid, (unsigned long)ring->null_context);
 		return false;
 	}
 
@@ -1011,40 +1066,87 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 	/* sync between vReg and saved context */
 	//update_context(vgt, rb->context_save_area);
 
+	/* pipeline flush */
+	vgt_ring_emit(ring, PIPE_CONTROL(5));
+	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
+			    PIPE_CONTROL_TLB_INVALIDATE |
+			    PIPE_CONTROL_FLUSH_ENABLE);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+
 	/*
 	 * we don't want to clobber the null context. so invalidate
 	 * the current context before restoring next instance
 	 */
-	VGT_MMIO_WRITE(pdev, _REG_CCID, 0);
-	if (VGT_MMIO_READ(pdev, _REG_CCID) != 0) {
-		vgt_err("Deactive NULL context (CCID: %x) fail\n",
-			VGT_MMIO_READ(pdev, _REG_CCID));
+	vgt_ring_emit(ring, MI_LOAD_REGISTER_IMM);
+	vgt_ring_emit(ring, _REG_CCID);
+	vgt_ring_emit(ring, 0);
+
+	/* pipeline flush */
+	vgt_ring_emit(ring, PIPE_CONTROL(5));
+	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
+			    PIPE_CONTROL_TLB_INVALIDATE |
+			    PIPE_CONTROL_FLUSH_ENABLE |
+			    PIPE_CONTROL_POST_SYNC_IMM |
+			    PIPE_CONTROL_POST_SYNC_GLOBAL_GTT);
+	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
+	vgt_ring_emit(ring, ++pdev->magic);
+	vgt_ring_emit(ring, 0);
+
+#if 1
+	/* submit cmds */
+	vgt_ring_advance(ring);
+
+	if (!ring_wait_for_completion(pdev, id)) {
+		vgt_err("Invalidate CCID after NULL restore: commands unfinished\n");
 		return false;
 	}
 
-	vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
+	if (VGT_MMIO_READ(pdev, _REG_CCID) != 0) {
+		vgt_err("Invalidate CCID after NULL restore: fail [%x, %x]\n",
+			VGT_MMIO_READ(pdev, _REG_CCID), 0);
+		return false;
+	}
+#endif
+
+	/* restore HW context */
+	vgt_ring_emit(ring, MI_ARB_ON_OFF | MI_ARB_DISABLE);
 	vgt_ring_emit(ring, MI_SET_CONTEXT);
 	vgt_ring_emit(ring, rb->context_save_area |
 			    MI_MM_SPACE_GTT |
 			    MI_SAVE_EXT_STATE_EN |
 			    MI_RESTORE_EXT_STATE_EN |
 			    MI_FORCE_RESTORE);
-
-	vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
 	vgt_ring_emit(ring, MI_NOOP);
-	vgt_ring_emit(ring, MI_FLUSH);
-	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_ARB_ON_OFF | MI_ARB_ENABLE);
 
-	/* then restore current context to whatever VM expects */
-	vgt_ring_emit(ring, MI_LOAD_REGISTER_IMM);
-	vgt_ring_emit(ring, _REG_CCID);
-	vgt_ring_emit(ring, __vreg(vgt, _REG_CCID));
-
-	vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
+	vgt_ring_emit(ring, DUMMY_3D);
+	vgt_ring_emit(ring, PRIM_TRILIST);
 	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, 0);
+	vgt_ring_emit(ring, MI_NOOP);
+
+	/* pipeline flush */
+	vgt_ring_emit(ring, PIPE_CONTROL(5));
+	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
+			    PIPE_CONTROL_TLB_INVALIDATE |
+			    PIPE_CONTROL_FLUSH_ENABLE |
+			    PIPE_CONTROL_MEDIA_STATE_CLEAR |
+			    PIPE_CONTROL_POST_SYNC_IMM |
+			    PIPE_CONTROL_POST_SYNC_GLOBAL_GTT);
 	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
 	vgt_ring_emit(ring, ++pdev->magic);
 	vgt_ring_emit(ring, 0);
+
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_NOOP);
+
+	/* submit CMDs */
 	vgt_ring_advance(ring);
 
 	if (!ring_wait_for_completion(pdev, id)) {
@@ -1052,8 +1154,32 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 		return false;
 	}
 
-	if (VGT_MMIO_READ(pdev, _REG_CCID) != __vreg(vgt, _REG_CCID)) {
-		vgt_err("fail to restore CCID (p:%x, v:%x)\n",
+	/* then restore current context to whatever VM expects */
+	vgt_ring_emit(ring, MI_LOAD_REGISTER_IMM);
+	vgt_ring_emit(ring, _REG_CCID);
+	vgt_ring_emit(ring, __vreg(vgt, _REG_CCID));
+
+	/* pipeline flush */
+	vgt_ring_emit(ring, PIPE_CONTROL(5));
+	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
+			    PIPE_CONTROL_TLB_INVALIDATE |
+			    PIPE_CONTROL_FLUSH_ENABLE |
+			    PIPE_CONTROL_POST_SYNC_IMM |
+			    PIPE_CONTROL_POST_SYNC_GLOBAL_GTT);
+	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
+	vgt_ring_emit(ring, ++pdev->magic);
+	vgt_ring_emit(ring, 0);
+
+	/* submit CMDs */
+	vgt_ring_advance(ring);
+
+	if (!ring_wait_for_completion(pdev, id)) {
+		vgt_err("Restore VM CCID: commands unfinished\n");
+		return false;
+	}
+
+	if (VGT_MMIO_READ(pdev, _REG_CCID != __vreg(vgt, _REG_CCID)) != 0) {
+		vgt_err("Restore VM CCID: fail [%x, %x]\n",
 			VGT_MMIO_READ(pdev, _REG_CCID),
 			__vreg(vgt, _REG_CCID));
 		return false;
