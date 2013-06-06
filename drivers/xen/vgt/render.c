@@ -252,7 +252,7 @@ static void vgt_restore_ringbuffer(struct vgt_device *vgt, int id)
 		VGT_READ_TAIL(pdev, id));
 
 	if (!(srb->ctl & _RING_CTL_ENABLE)) {
-		printk("vGT/switch-%lld: ring (%d) not enabled. exit restore\n",
+		vgt_dbg("vGT/switch-%lld: ring (%d) not enabled. skip\n",
 			vgt_ctx_switch(pdev), id);
 		VGT_WRITE_CTL(pdev, id, 0);
 		return;
