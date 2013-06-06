@@ -262,7 +262,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			break;
 		case VGT_HDMI_B:
 			vgt_info("EDID_PROBE: HDMI B.\n");
-			// no gmbus corresponding interface. Do not handle it.
+			gmbus_port = 5;
 			break;
 		case VGT_HDMI_D:
 			vgt_info("EDID_PROBE: HDMI D.\n");
