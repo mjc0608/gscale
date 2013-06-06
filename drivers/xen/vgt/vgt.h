@@ -323,8 +323,6 @@ typedef struct {
 	/* In aperture, partitioned & 4KB aligned. */
 	/* 64KB alignment requirement for walkaround. */
 	uint64_t	context_save_area;	/* VGT default context space */
-	uint32_t	active_vm_context;	/* current active VM set context space.
-						_not_ next target ctx when switched to HW later. */
 	/* ppgtt info */
 	vgt_ring_ppgtt_t	vring_ppgtt_info; /* guest view */
 	vgt_ring_ppgtt_t	sring_ppgtt_info; /* shadow info */

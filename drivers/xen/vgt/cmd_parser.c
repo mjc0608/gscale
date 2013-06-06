@@ -377,13 +377,11 @@ static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
 {
 	struct vgt_device *vgt = s->vgt;
 
-	/* Only mark VM with context usage when it's render owner.
-	 * For possible race that VM has issued in ring but not scheduled yet.
-	 */
-	if (vgt == current_render_owner(vgt->pdev)) {
-		vgt_dbg("VM %d active context\n", vgt->vm_id);
+	if (!vgt->has_context) {
+		printk("VM %d activate context\n", vgt->vm_id);
 		vgt->has_context = true;
 	}
+
 	return 0;
 }
 

@@ -63,7 +63,7 @@ void vgt_toggle_ctx_switch(bool enable)
 #define OFF_INSTPM		0x4D
 #define OFF_EXCC		0x4E
 #define OFF_MI_MODE		0x4F
-static void update_context(struct vgt_device *vgt, uint64_t context)
+void update_context(struct vgt_device *vgt, uint64_t context)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	uint64_t ptr;
@@ -861,6 +861,7 @@ static bool vgt_init_null_context(struct pgt_device *pdev, int id)
 	vgt_ring_emit_cmds(ring, (char *)hsw_null_context_cmds,
 		sizeof(hsw_null_context_cmds));
 
+#if 0
 	{
 		char *p_contents = ring->virtual_start;
 		int i;
@@ -871,6 +872,7 @@ static bool vgt_init_null_context(struct pgt_device *pdev, int id)
 		}
 		printk("\n");
 	}
+#endif
 
 	vgt_ring_advance(ring);
 	if (!idle_render_engine(pdev, id)) {
@@ -946,27 +948,29 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 	vgt_reg_t	ccid;
 
 	/*
-	 * Switch context ID to the area allocated by vGT.
-	 *
-	 * If VM already has valid context ID in CCID, this will cause
-	 * the current context saved to the VM's area; Or else this is
-	 * purely an ID pointer change.
-	 *
-	 * Context save to vGT's area happens in the restore phase.
+	 * Activate XenGT context for prev
+	 * Guest may have an active context already. Better to not clobber
+	 * that area, and instead have full control on the context save
+	 * area directly in XenGT driver.
 	 */
-
-	if (vgt->has_context) {
-		rb->active_vm_context = VGT_MMIO_READ(pdev, _REG_CCID);
-		rb->active_vm_context &= 0xfffff000;
-		vgt_dbg("VM %d CCID 0x%x\n", vgt->vm_id, rb->active_vm_context);
+	ccid = rb->context_save_area |
+	       CCID_EXTENDED_STATE_SAVE_ENABLE |
+	       CCID_EXTENDED_STATE_RESTORE_ENABLE |
+	       CCID_VALID;
+	VGT_MMIO_WRITE(pdev, _REG_CCID, ccid);
+	if (VGT_MMIO_READ(pdev, _REG_CCID) != ccid) {
+		vgt_err("Active XenGT context (CCID: %x) fail\n", ccid);
+		return false;
 	}
 
+	/* Save context and switch to NULL context */
 	vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
 	vgt_ring_emit(ring, MI_SET_CONTEXT);
-	vgt_ring_emit(ring, MI_RESTORE_INHIBIT | MI_MM_SPACE_GTT |
-			MI_SAVE_EXT_STATE_EN |
-			MI_RESTORE_EXT_STATE_EN |
-			rb->context_save_area);
+	vgt_ring_emit(ring, ring->null_context |
+			    MI_MM_SPACE_GTT |
+			    MI_SAVE_EXT_STATE_EN |
+			    MI_RESTORE_EXT_STATE_EN |
+			    MI_FORCE_RESTORE);
 	vgt_ring_emit(ring, MI_NOOP);
 	vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
 	vgt_ring_emit(ring, MI_NOOP);
@@ -990,8 +994,8 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 
 	/* still confirm the CCID for safety. May remove in the future */
 	ccid = VGT_MMIO_READ (pdev, _REG_CCID);
-	if ((ccid & GTT_PAGE_MASK) != (rb->context_save_area & GTT_PAGE_MASK)) {
-		printk("vGT: CCID isn't changed [%x, %lx]\n", ccid, (unsigned long)rb->context_save_area);
+	if ((ccid & GTT_PAGE_MASK) != (ring->null_context & GTT_PAGE_MASK)) {
+		printk("vGT: CCID isn't changed [%x, %lx]\n", ccid, (unsigned long)ring->null_context);
 		return false;
 	}
 
@@ -1005,20 +1009,37 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[id];
 
 	/* sync between vReg and saved context */
-	update_context(vgt, rb->context_save_area);
+	//update_context(vgt, rb->context_save_area);
+
+	/*
+	 * we don't want to clobber the null context. so invalidate
+	 * the current context before restoring next instance
+	 */
+	VGT_MMIO_WRITE(pdev, _REG_CCID, 0);
+	if (VGT_MMIO_READ(pdev, _REG_CCID) != 0) {
+		vgt_err("Deactive NULL context (CCID: %x) fail\n",
+			VGT_MMIO_READ(pdev, _REG_CCID));
+		return false;
+	}
 
 	vgt_ring_emit(ring, MI_SUSPEND_FLUSH | MI_SUSPEND_FLUSH_EN);
 	vgt_ring_emit(ring, MI_SET_CONTEXT);
 	vgt_ring_emit(ring, rb->context_save_area |
-			MI_MM_SPACE_GTT |
-			MI_SAVE_EXT_STATE_EN |
-			MI_RESTORE_EXT_STATE_EN |
-			MI_FORCE_RESTORE);
+			    MI_MM_SPACE_GTT |
+			    MI_SAVE_EXT_STATE_EN |
+			    MI_RESTORE_EXT_STATE_EN |
+			    MI_FORCE_RESTORE);
 
 	vgt_ring_emit(ring, MI_SUSPEND_FLUSH);
 	vgt_ring_emit(ring, MI_NOOP);
 	vgt_ring_emit(ring, MI_FLUSH);
 	vgt_ring_emit(ring, MI_NOOP);
+
+	/* then restore current context to whatever VM expects */
+	vgt_ring_emit(ring, MI_LOAD_REGISTER_IMM);
+	vgt_ring_emit(ring, _REG_CCID);
+	vgt_ring_emit(ring, __vreg(vgt, _REG_CCID));
+
 	vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
 	vgt_ring_emit(ring, 0);
 	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
@@ -1031,27 +1052,11 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 		return false;
 	}
 
-	/* restore VM context */
-	if (vgt->has_context && rb->active_vm_context) {
-		vgt_ring_emit(ring, MI_SET_CONTEXT);
-		vgt_ring_emit(ring, rb->active_vm_context |
-				MI_MM_SPACE_GTT |
-				MI_SAVE_EXT_STATE_EN |
-				MI_RESTORE_EXT_STATE_EN |
-				MI_FORCE_RESTORE);
-
-		vgt_ring_emit(ring, MI_STORE_DATA_IMM | MI_SDI_USE_GTT);
-		vgt_ring_emit(ring, 0);
-		vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
-		vgt_ring_emit(ring, ++pdev->magic);
-		vgt_ring_emit(ring, 0);
-		vgt_ring_emit(ring, 0);
-		vgt_ring_advance(ring);
-
-		if (!ring_wait_for_completion(pdev, id)) {
-			vgt_err("change to VM context switch commands unfinished\n");
-			return false;
-		}
+	if (VGT_MMIO_READ(pdev, _REG_CCID) != __vreg(vgt, _REG_CCID)) {
+		vgt_err("fail to restore CCID (p:%x, v:%x)\n",
+			VGT_MMIO_READ(pdev, _REG_CCID),
+			__vreg(vgt, _REG_CCID));
+		return false;
 	}
 
 	return true;

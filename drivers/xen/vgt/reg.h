@@ -87,10 +87,10 @@
 #define _RING_CTL_RB_WAIT	(1 << 11)
 
 #define _REG_CCID		0x02180
-#define CCID_MBO_BITS		0x100		/* bit 8 must be one */
-#define CCID_EXTENDED_STATE_SAVE_ENABLE		0x8
-#define CCID_EXTENDED_STATE_RESTORE_ENABLE	0x4
-#define CCID_VALID		0x1
+#define CCID_MBO_BITS		(1 << 8)	/* bit 8 must be one */
+#define CCID_EXTENDED_STATE_SAVE_ENABLE		(1 << 3)
+#define CCID_EXTENDED_STATE_RESTORE_ENABLE	(1 << 2)
+#define CCID_VALID		(1 << 0)
 #define _REG_CXT_SIZE		0x021a0
 #define _REG_GEN7_CXT_SIZE	0x021a8
 #define _REG_VECS_CXT_SIZE	0x1A1A8
