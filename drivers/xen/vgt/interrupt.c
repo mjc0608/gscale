@@ -425,10 +425,17 @@ static void vgt_handle_crt_hotplug_virt(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event, struct vgt_device *vgt)
 {
 	/* update channel status */
-	__vreg(vgt, _REG_PCH_ADPA) &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-	__vreg(vgt, _REG_PCH_ADPA) |= vgt_get_event_val(hstate, event) &
+	if (__vreg(vgt, _REG_PCH_ADPA) & _REGBIT_ADPA_CRT_HOTPLUG_ENABLE) {
+
+		__vreg(vgt, _REG_PCH_ADPA) &=
+				~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+
+		__vreg(vgt, _REG_PCH_ADPA) |=
+					vgt_get_event_val(hstate, event) &
 					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-	vgt_handle_default_event_virt(hstate, event, vgt);
+
+		vgt_handle_default_event_virt(hstate, event, vgt);
+	}
 }
 
 /* =======================pEvent Handlers===================== */
@@ -482,8 +489,9 @@ static void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
 	struct pgt_device *pdev = hstate->pdev;
 
 	adpa_ctrl = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
-	if (!(adpa_ctrl & _REGBIT_ADPA_DAC_ENABLE))
+	if (!(adpa_ctrl & _REGBIT_ADPA_DAC_ENABLE)) {
 		vgt_warn("IRQ: captured CRT hotplug event when CRT is disabled\n");
+	}
 
 	/* write back value to clear channel status */
 	VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, adpa_ctrl);
@@ -491,15 +499,9 @@ static void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
 	/* check blue/green channel status for attachment status */
 	if (adpa_ctrl & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) {
 		vgt_info("IRQ: detect crt insert event!\n");
-
-		if (test_and_set_bit(VGT_CRT, pdev->detected_ports))
-			vgt_info("IRQ: capture CRT hot-plug when it's attached!\n");
 		vgt_set_uevent(vgt_dom0, CRT_HOTPLUG_IN);
 	} else {
 		vgt_info("IRQ: detect crt removal event!\n");
-
-		if (!test_and_clear_bit(VGT_CRT, pdev->detected_ports))
-			vgt_info("IRQ: capture CRT hot-removal when it's disattached!\n");
 		vgt_set_uevent(vgt_dom0, CRT_HOTPLUG_OUT);
 	}
 

@@ -781,14 +781,18 @@ static bool dp_tp_status_mmio_write(struct vgt_device *vgt, unsigned int offset,
 }
 
 /*
- * TODO:
  * DAC_CTL is special regarding to that its bits containing multiple
  * policies:
  *	- CRT control bits like enabling, transcoder selection belong
  *	  to display owner
  *	- hotplug status bits are fully virtualized like other interrupt
  *	  status bits
- *	- force hotplug trigger bit needs be emulated
+ *	- force hotplug trigger bit is also fully virtualized in the MMIO
+ *	  write. XenGT will determin what status bits will look like based
+ *	  on the monitor connection information. From driver's point of
+ *	  view, the force hotplug will always succeed immediately(bit is
+ *	  cleared immediately) and status bits contains the expected
+ *	  information.
  *
  * Let's take this as one example how this category may be abstracted
  * in the future
@@ -797,39 +801,28 @@ static bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes)
 {
 	unsigned int reg;
-	bool rc = true;
+	vgt_reg_t adpa_value;
 
 	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 	reg = offset & ~(bytes - 1);
 
 	/*
 	 * the channel status bit is updated by interrupt handler,
-	 * or the write handler. so in most time we simply return
-	 * vreg value back. The only exception is when force hotplug
-	 * trigger bit is set at driver init time when hotplug irq
-	 * is disabled. At that time we need to read back hw status
-	 * if vgt is the display owner.
+	 * or the write handler.
 	 */
-	if (__vreg(vgt, reg) & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER) {
-		if ((__vreg(vgt, reg) & _REGBIT_ADPA_DAC_ENABLE)) {
-			vgt_warn("HOTPLUG_FORCE_TRIGGER is set while VGA is enabled!\n");
-		}
 
-		if (reg_hw_access(vgt, reg)) {
-			rc = default_mmio_read(vgt, offset, p_data, bytes);
+	if (reg_hw_access(vgt, reg)) {
 
-			/*
-			 * update port detect status accordingly. since hotplug
-			 * irq is disabled, no virtual event is triggered.
-			 */
-			if (__vreg(vgt, reg) & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK)
-				set_bit(VGT_CRT, vgt->pdev->detected_ports);
-			else
-				clear_bit(VGT_CRT, vgt->pdev->detected_ports);
-		}
+		adpa_value = VGT_MMIO_READ(vgt->pdev, _REG_PCH_ADPA);
 
-		/* clear trigger bit to indicate end of emulation */
-		__vreg(vgt, reg) &= ~_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER;
+		/* force trigger bit was fully virtualized. Should always be zero */
+		ASSERT (!(adpa_value & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER));
+
+		__vreg(vgt, reg) &= _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER |
+					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+		__vreg(vgt, reg) |= adpa_value &
+					~(_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER |
+					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK);
 	}
 
 	memcpy(p_data, (char *)vgt->state.vReg + offset, bytes);
@@ -840,75 +833,59 @@ static bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
 static bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
-	unsigned int reg;
-	unsigned long wr_data;
-	vgt_reg_t old, new, vreg_data;
-	bool rc;
+	vgt_reg_t old, new;
 	struct pgt_device *pdev = vgt->pdev;
 
 	ASSERT(bytes == 4 && (offset & 0x3) == 0);
-	reg = offset & ~(bytes - 1);
 
-	new = wr_data = *(vgt_reg_t *)p_data;
-	old = __vreg(vgt, reg);
+	new = *(vgt_reg_t *)p_data;
+	old = __vreg(vgt, offset);
 
 	/* This can verify that bspec was wrong that: channel status
 	 * can be cleared by writing back the status bits
 	 * */
 #if 0
-	if ((wr_data & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK)) {
-		VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, wr_data);
+	if ((new & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK)) {
+		vgt_reg_t pdata;
+		VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, new);
 		pdata = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
 		if ((pdata & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK))
 			printk("vGT: xuanhua failed to clear channel status\n");
 	}
 #endif
 
-	/* go to general write handler leaving channel status handling aside */
-	wr_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-	rc = default_mmio_write(vgt, offset, &wr_data, bytes);
-	vreg_data = __vreg(vgt, reg);
-
-	/* keep channel status bits read-only, it can only be updated by hw */
-	vreg_data = (vreg_data & ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) |
-		(old & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK);
-
-	/*
-	 * emulate 'force hotplug trigger' which detect the channel status
-	 * even when hotplug enable bit is not set.
+	/* Clear the bits of 'force hotplug trigger' and status because they
+	 * will be fully virtualized. Other bits will be written to hardware.
 	 */
+	if (reg_hw_access(vgt, offset)) {
+		VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, new &
+				~(_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK |
+				 _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER));
+	}
+
 	if (new & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER) {
-		/*
-		 * TODO: need consider whether to trigger virtual hotplug event
-		 * when hotplug is already enabled. Not sure how HW will behave.
-		 */
+
 		if ((new & _REGBIT_ADPA_DAC_ENABLE)) {
 			vgt_warn("HOTPLUG_FORCE_TRIGGER is set while VGA is enabled!\n");
 		}
 
-		/*
-		 * if vgt is the owner, the force trigger bit is forwarded
-		 * to hw so that channel status will be detected in the read handler.
-		 * Or else we emulate channel detection based on detected_ports.
-		 *
-		 * TODO: this trick can be eliminated if XenGT detects ports directly
-		 */
-		if (!reg_hw_access(vgt, reg)) {
-			/* FIXME: sometimes only one channel is OK ??? */
-			if (test_bit(VGT_CRT, pdev->detected_ports))
-				vreg_data |= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-			else
-				vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-		}
+		/* emulate the status based on monitor connection information */
+		new &= ~_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER;
 
-		/* delay clear of this bit to the 1st read after this write */
-		//vreg_data &= ~_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER;
+		if (test_bit(VGT_CRT, vgt->presented_ports))
+			new |= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+		else
+			new &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
+	} else {
+		old &= ~(_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK & new);
+		new = (new & ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) |
+			(old & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK);
 	}
 
-	__vreg(vgt, reg) = vreg_data;
-	return rc;
-}
+	__vreg(vgt, offset) = __sreg(vgt, offset) = new;
 
+	return true;
+}
 
 static bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes)
