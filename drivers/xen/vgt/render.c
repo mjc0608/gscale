@@ -504,7 +504,7 @@ static void vgt_rendering_restore_mmio(struct vgt_device *vgt)
  * and thus emit function is implemented simply by sequentially advancing
  * tail point, w/o the wrap handling requirement.
  */
-static void vgt_ring_emit(struct vgt_rsvd_ring *ring,
+static inline void vgt_ring_emit(struct vgt_rsvd_ring *ring,
 				u32 data)
 {
 	ASSERT(ring->tail + 4 < ring->size);
@@ -992,6 +992,10 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 	vgt_ring_emit(ring, ++pdev->magic);
 	vgt_ring_emit(ring, 0);
 
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_NOOP);
+
 	/* submit cmds */
 	vgt_ring_advance(ring);
 
@@ -1040,6 +1044,10 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 	vgt_ring_emit(ring, ++pdev->magic);
 	vgt_ring_emit(ring, 0);
 
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_NOOP);
+
 	/* submit cmds */
 	vgt_ring_advance(ring);
 
@@ -1079,7 +1087,10 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 	 * we don't want to clobber the null context. so invalidate
 	 * the current context before restoring next instance
 	 */
-	vgt_ring_emit(ring, MI_LOAD_REGISTER_IMM);
+	vgt_ring_emit(ring, MI_LOAD_REGISTER_IMM |
+			    MI_LRI_BYTE1_DISABLE |
+			    MI_LRI_BYTE2_DISABLE |
+			    MI_LRI_BYTE3_DISABLE);
 	vgt_ring_emit(ring, _REG_CCID);
 	vgt_ring_emit(ring, 0);
 
@@ -1094,7 +1105,10 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 	vgt_ring_emit(ring, ++pdev->magic);
 	vgt_ring_emit(ring, 0);
 
-#if 1
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_NOOP);
+
 	/* submit cmds */
 	vgt_ring_advance(ring);
 
@@ -1108,7 +1122,6 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 			VGT_MMIO_READ(pdev, _REG_CCID), 0);
 		return false;
 	}
-#endif
 
 	/* restore HW context */
 	vgt_ring_emit(ring, MI_ARB_ON_OFF | MI_ARB_DISABLE);
@@ -1170,6 +1183,10 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 	vgt_ring_emit(ring, ++pdev->magic);
 	vgt_ring_emit(ring, 0);
 
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_NOOP);
+	vgt_ring_emit(ring, MI_NOOP);
+
 	/* submit CMDs */
 	vgt_ring_advance(ring);
 
@@ -1178,7 +1195,7 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 		return false;
 	}
 
-	if (VGT_MMIO_READ(pdev, _REG_CCID != __vreg(vgt, _REG_CCID)) != 0) {
+	if (VGT_MMIO_READ(pdev, _REG_CCID) != __vreg(vgt, _REG_CCID)) {
 		vgt_err("Restore VM CCID: fail [%x, %x]\n",
 			VGT_MMIO_READ(pdev, _REG_CCID),
 			__vreg(vgt, _REG_CCID));
@@ -1219,9 +1236,14 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 		goto out;
 
 	if (!idle_rendering_engines(pdev, &i)) {
+		int j;
 		vgt_err("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
 			vgt_ctx_switch(pdev),
 			current_render_owner(pdev)->vgt_id, i);
+		for (j = 0; j < 10; j++)
+			printk("pHEAD(%x), pTAIL(%x)\n",
+				VGT_READ_HEAD(pdev, i),
+				VGT_READ_TAIL(pdev, i));
 		goto err;
 	}
 
