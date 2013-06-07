@@ -438,6 +438,33 @@ static void vgt_handle_crt_hotplug_virt(struct vgt_irq_host_state *hstate,
 	}
 }
 
+static void vgt_handle_port_hotplug_virt(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event, struct vgt_device *vgt)
+{
+	vgt_reg_t enable_mask, status_mask;
+
+	if (event == DP_B_HOTPLUG) {
+		enable_mask = _REGBIT_DP_B_ENABLE;
+		status_mask = _REGBIT_DP_B_STATUS;
+	} else if (event == DP_C_HOTPLUG) {
+		enable_mask = _REGBIT_DP_C_ENABLE;
+		status_mask = _REGBIT_DP_C_STATUS;
+	} else {
+		ASSERT(event == DP_D_HOTPLUG);
+		enable_mask = _REGBIT_DP_D_ENABLE;
+		status_mask = _REGBIT_DP_D_STATUS;
+	}
+
+	if (__vreg(vgt, _REG_SHOTPLUG_CTL) & enable_mask) {
+
+		__vreg(vgt, _REG_SHOTPLUG_CTL) &= ~status_mask;
+		__vreg(vgt, _REG_SHOTPLUG_CTL) |=
+				vgt_get_event_val(hstate, event) & status_mask;
+
+		vgt_handle_default_event_virt(hstate, event, vgt);
+	}
+}
+
 /* =======================pEvent Handlers===================== */
 
 static void vgt_handle_default_event_phys(struct vgt_irq_host_state *hstate,
@@ -506,6 +533,57 @@ static void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
 	}
 
 	vgt_set_event_val(hstate, event, adpa_ctrl);
+	/* send out udev events when handling physical interruts */
+	vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
+
+	vgt_handle_default_event_phys(hstate, event);
+}
+
+static void vgt_handle_port_hotplug_phys(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event)
+{
+	vgt_reg_t hotplug_ctrl;
+	vgt_reg_t enable_mask, status_mask, tmp;
+	enum vgt_uevent_type hotplug_event;
+	struct pgt_device *pdev = hstate->pdev;
+
+	if (event == DP_B_HOTPLUG) {
+		enable_mask = _REGBIT_DP_B_ENABLE;
+		status_mask = _REGBIT_DP_B_STATUS;
+		hotplug_event = PORT_B_HOTPLUG_IN;
+	} else if (event == DP_C_HOTPLUG) {
+		enable_mask = _REGBIT_DP_C_ENABLE;
+		status_mask = _REGBIT_DP_C_STATUS;
+		hotplug_event = PORT_C_HOTPLUG_IN;
+	} else {
+		ASSERT(event == DP_D_HOTPLUG);
+		enable_mask = _REGBIT_DP_D_ENABLE;
+		status_mask = _REGBIT_DP_D_STATUS;
+		hotplug_event = PORT_D_HOTPLUG_IN;
+	}
+
+	hotplug_ctrl = VGT_MMIO_READ(pdev, _REG_SHOTPLUG_CTL);
+
+	if (!(hotplug_ctrl & enable_mask)) {
+		vgt_warn("IRQ: captured port hotplug event when HPD is disabled\n");
+	}
+
+	tmp = hotplug_ctrl & ~(_REGBIT_DP_B_STATUS |
+				_REGBIT_DP_C_STATUS |
+				_REGBIT_DP_D_STATUS);
+	tmp |= hotplug_ctrl & status_mask;
+	/* write back value to clear specific port status */
+	VGT_MMIO_WRITE(pdev, _REG_SHOTPLUG_CTL, tmp);
+
+	if (hotplug_ctrl & status_mask) {
+		vgt_info("IRQ: detect monitor insert event on port!\n");
+		vgt_set_uevent(vgt_dom0, hotplug_event);
+	} else {
+		vgt_info("IRQ: detect monitor removal eventon port!\n");
+		vgt_set_uevent(vgt_dom0, hotplug_event + 1);
+	}
+
+	vgt_set_event_val(hstate, event, hotplug_ctrl);
 	/* send out udev events when handling physical interruts */
 	vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
 
@@ -672,6 +750,9 @@ static void vgt_base_init_irq(
 	/* PCH events */
 	SET_BIT_INFO(hstate, 17, GMBUS, IRQ_INFO_PCH);
 	SET_BIT_INFO(hstate, 19, CRT_HOTPLUG, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 21, DP_B_HOTPLUG, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 22, DP_C_HOTPLUG, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 23, DP_D_HOTPLUG, IRQ_INFO_PCH);
 	SET_BIT_INFO(hstate, 25, AUX_CHENNEL_B, IRQ_INFO_PCH);
 	SET_BIT_INFO(hstate, 26, AUX_CHENNEL_C, IRQ_INFO_PCH);
 	SET_BIT_INFO(hstate, 27, AUX_CHENNEL_D, IRQ_INFO_PCH);
@@ -866,10 +947,16 @@ static void vgt_init_events(
 	SET_P_HANDLER(hstate, DPST_PHASE_IN, vgt_handle_phase_in_phys);
 	SET_P_HANDLER(hstate, DPST_HISTOGRAM, vgt_handle_histogram_phys);
 	SET_P_HANDLER(hstate, CRT_HOTPLUG, vgt_handle_crt_hotplug_phys);
+	SET_P_HANDLER(hstate, DP_B_HOTPLUG, vgt_handle_port_hotplug_phys);
+	SET_P_HANDLER(hstate, DP_C_HOTPLUG, vgt_handle_port_hotplug_phys);
+	SET_P_HANDLER(hstate, DP_D_HOTPLUG, vgt_handle_port_hotplug_phys);
 
 	SET_V_HANDLER(hstate, DPST_PHASE_IN, vgt_handle_phase_in_virt);
 	SET_V_HANDLER(hstate, DPST_HISTOGRAM, vgt_handle_histogram_virt);
 	SET_V_HANDLER(hstate, CRT_HOTPLUG, vgt_handle_crt_hotplug_virt);
+	SET_V_HANDLER(hstate, DP_B_HOTPLUG, vgt_handle_port_hotplug_virt);
+	SET_V_HANDLER(hstate, DP_C_HOTPLUG, vgt_handle_port_hotplug_virt);
+	SET_V_HANDLER(hstate, DP_D_HOTPLUG, vgt_handle_port_hotplug_virt);
 
 	/* for engine specific reset */
 	SET_POLICY_DOM0(hstate, RCS_WATCHDOG_EXCEEDED);
