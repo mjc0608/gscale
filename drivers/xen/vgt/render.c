@@ -1080,6 +1080,119 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 	return true;
 }
 
+struct reg_mask_t {
+	u32		reg;
+	vgt_reg_t	val;
+	u8		mask;
+};
+
+static struct reg_mask_t rcs_reset_mmio[] = {
+	{0x4080, 0},
+	{0x2134, 0},
+	{0x20c0, 1},
+	{0x20a8, 0},
+
+	{0x7000, 1},
+	{0x209c, 1},
+	{0x2090, 1},
+	{0x9400, 0},
+
+	{0x9404, 0},
+	{0x42000, 0},
+	{0x42020, 0},
+	{0x902c, 0},
+
+	{0x4090, 0},
+	{0x9424, 0},
+	{0x229c, 1},
+	{0x2044, 0},
+
+	{0x20a0, 0},
+	{0x20e4, 1},
+	{0x7004, 1},
+	{0x20dc, 1},
+
+	{0x2220, 0},
+	{0x2228, 0},
+	{0x2180, 0},
+};
+
+static bool vgt_reset_engine(struct pgt_device *pdev, int id)
+{
+	int i;
+	vgt_reg_t head, tail, start, ctl;
+	vgt_reg_t val, val1;
+
+	if (id != RING_BUFFER_RCS) {
+		vgt_err("ring-%d reset unsupported\n", id);
+		return false;
+	}
+
+	/* save reset context */
+	for (i = 0; i < ARRAY_NUM(rcs_reset_mmio); i++) {
+		struct reg_mask_t *r = &rcs_reset_mmio[i];
+
+		if ((r->reg == 0x2220) || (r->reg == 0x2228))
+			r->reg += 0x10000;
+
+		r->val = VGT_MMIO_READ(pdev, r->reg);
+		if (r->mask)
+			r->val += 0xFFFF0000;
+	}
+
+	head = VGT_READ_HEAD(pdev, id);
+	tail = VGT_READ_TAIL(pdev, id);
+	start = VGT_READ_START(pdev, id);
+	ctl = VGT_READ_CTL(pdev, id);
+
+	/* trigger engine specific reset */
+	VGT_MMIO_WRITE(pdev, _REG_GEN6_GDRST, _REGBIT_GEN6_GRDOM_RENDER);
+
+#define GDRST_COUNT 0x1000
+	/* wait for reset complete */
+	for (i = 0; i < GDRST_COUNT; i++) {
+		if (!(VGT_MMIO_READ(pdev, _REG_GEN6_GDRST) &
+			_REGBIT_GEN6_GRDOM_RENDER))
+			break;
+	}
+
+	if (i == GDRST_COUNT) {
+		vgt_err("ring-%d engine reset incomplete\n", id);
+		return false;
+	}
+
+	/* restore reset context */
+	for (i = 0; i < ARRAY_NUM(rcs_reset_mmio); i++) {
+		struct reg_mask_t *r = &rcs_reset_mmio[i];
+
+		VGT_MMIO_WRITE(pdev, r->reg, r->val);
+	}
+
+	VGT_WRITE_CTL(pdev, id, 0);
+	VGT_WRITE_START(pdev, id, start);
+	VGT_WRITE_HEAD(pdev, id, head);
+	VGT_WRITE_TAIL(pdev, id, tail);
+
+	val = VGT_MMIO_READ(pdev, 0x2214);
+	val &= 0xFFFFFFFE;
+	val1 = VGT_MMIO_READ(pdev, 0x138064);
+	if (val1 & 0x3) {
+		if (val1 & 0x1)
+			val |= 0x1;
+	} else if (val1 & 0x8) {
+		val |= 0x1;
+	}
+	VGT_MMIO_WRITE(pdev, 0x2214, val);
+
+	VGT_WRITE_CTL(pdev, id, ctl);
+	VGT_POST_READ_TAIL(pdev, id);
+	VGT_POST_READ_HEAD(pdev, id);
+	VGT_POST_READ_START(pdev, id);
+	VGT_POST_READ_CTL(pdev, id);
+
+	return true;
+}
+
 static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
@@ -1345,6 +1458,13 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 		/* STEP-2d: save HW render context for prev */
 		if (!vgt_save_hw_context(i, prev)) {
 			vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
+				i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
+				prev->vgt_id, next->vgt_id);
+			goto err;
+		}
+
+		if (!vgt_reset_engine(pdev, i)) {
+			vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>): fail to reset engine\n",
 				i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
 				prev->vgt_id, next->vgt_id);
 			goto err;

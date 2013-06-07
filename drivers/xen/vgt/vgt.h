@@ -1669,9 +1669,11 @@ static inline bool is_ring_empty(struct pgt_device *pdev, int ring_id)
 
 #define VGT_READ_TAIL(pdev, id)	VGT_MMIO_READ(pdev, RB_TAIL(pdev, id))
 #define VGT_WRITE_TAIL(pdev, id, val) VGT_MMIO_WRITE(pdev, RB_TAIL(pdev, id), val)
+#define VGT_POST_READ_TAIL(pdev, id)	VGT_POST_READ(pdev, RB_TAIL(pdev,id))
 
 #define VGT_READ_START(pdev, id) VGT_MMIO_READ(pdev, RB_START(pdev, id))
 #define VGT_WRITE_START(pdev, id, val) VGT_MMIO_WRITE(pdev, RB_START(pdev, id), val)
+#define VGT_POST_READ_START(pdev, id)	VGT_POST_READ(pdev, RB_START(pdev,id))
 
 static inline bool is_ring_enabled (struct pgt_device *pdev, int ring_id)
 {
