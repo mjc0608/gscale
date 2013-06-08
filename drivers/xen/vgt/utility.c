@@ -132,20 +132,31 @@ void show_batchbuffer(struct pgt_device *pdev, u32 addr)
 {
 	int i, index1, index2, pte_val;
 	char *p_contents;
+	u32 offset;
 
 	index1 = GTT_INDEX(pdev, pdev->batch_buffer_page);
+
 	index2 = GTT_INDEX(pdev, addr);
 	pte_val = vgt_read_gtt(pdev, index2);
 	vgt_write_gtt(pdev, index1, pte_val);
 
+	/* offset within page */
+	offset = (addr & (~GTT_PAGE_MASK));
+
 	p_contents = phys_aperture_vbase(pdev) +
-		pdev->batch_buffer_page +
-		(addr & ~GTT_PAGE_MASK);
+		pdev->batch_buffer_page;
 	printk("Batch buffer remaps to %x (p_contents: %llx)\n",
 		pte_val, (u64)p_contents);
-	printk("[%08x]:", (u32)(addr & ~GTT_PAGE_MASK));
-	for (i = 0; i < 32; i += 4)
-		printk(" %08x", *((u32 *)(p_contents + i)));
+	printk("[%08x]:", offset);
+	for (i = 0; i < 8; i++, offset +=4) {
+		if (offset >= GTT_PAGE_SIZE) {
+			index2 = GTT_INDEX(pdev, addr + GTT_PAGE_SIZE);
+			pte_val = vgt_read_gtt(pdev, index2);
+			vgt_write_gtt(pdev, index1, pte_val);
+			offset = 0;
+		}
+		printk(" %08x", *((u32 *)(p_contents + offset)));
+	}
 	printk("\n");
 }
 
