@@ -185,7 +185,7 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	char *p_contents;
 	int i;
 	struct vgt_device *vgt = current_render_owner(pdev);
-	u32* cur, off;
+	u32* cur, ring_len, off;
 
 	p_tail = VGT_MMIO_READ(pdev, RB_TAIL(pdev, ring_id));
 	p_head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
@@ -200,11 +200,18 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 		& _REGBIT_MI_RINGS_IDLE);
 
 	p_head &= RB_HEAD_OFF_MASK;
+	ring_len = _RING_CTL_BUF_SIZE(p_ctl);
 	p_contents = phys_aperture_vbase(pdev) + p_start;
+
 	printk("p_contents(%lx)\n", (unsigned long)p_contents);
-	for (i = -(bytes/4); i < bytes/4; i++) {
-		off = (p_head + i * 4) & RB_HEAD_OFF_MASK;
-		if (!(i % 8))
+	/* length should be 4 bytes aligned */
+	bytes &= ~0x3;
+	for (i = -bytes; i < bytes; i += 4) {
+		off = (p_head + i) % ring_len;
+		if ((int32_t)off < 0)
+			off += ring_len;
+		/* print offset within the ring every 8 Dword */
+		if (!((i + bytes) % 32))
 			printk("\n[%08x]:", off);
 		printk(" %08x", *((u32*)(p_contents + off)));
 		if (!i)
@@ -212,13 +219,11 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	}
 	printk("\n");
 
-	cur = (u32*)p_contents - 2;
+	cur = (u32*)(p_contents + p_head) - 2;
 	if ((*cur & 0xfffff000) == 0x18800000 && vgt) {
 		u32 val, h_val;
 		u64 mfn;
 		int rc;
-		extern int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val,
-				uint32_t *m_gtt_val);
 
 		printk("Hang in batch buffer (%x)\n", *(cur + 1));
 

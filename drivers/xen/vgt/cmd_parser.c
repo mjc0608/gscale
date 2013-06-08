@@ -297,7 +297,7 @@ static void parser_exec_state_dump(struct parser_exec_state *s)
 		vgt_print_opcode(cmd_val(s,0), s->ring_id);
 	}
 }
-#define RING_BUF_WRAP(s, ip)	(((s)->buf_type == RING_BUFFER_INSTRUCTION) && \
+#define RING_BUF_WRAP(s, ip_gma)	(((s)->buf_type == RING_BUFFER_INSTRUCTION) && \
 		((ip_gma) >= (s)->ring_start + (s)->ring_size))
 
 static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)

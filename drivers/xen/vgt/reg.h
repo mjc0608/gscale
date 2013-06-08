@@ -217,6 +217,10 @@
 #define _REG_VERSYNC		0x1A044
 #define _REG_VEVSYNC		0x1A048
 
+#define _REG_RCS_TIMESTAMP	0x2358
+#define _REG_VCS_TIMESTAMP	0x12358
+#define _REG_BCS_TIMESTAMP	0x22358
+
 #define _REG_FENCE_0_LOW	0x100000
 #define _REG_FENCE_0_HIGH	0x100004
 #define _REG_FENCE_1_LOW	0x100008
@@ -1478,7 +1482,6 @@ enum vgt_port_type {
 #define        _REGBIT_DP_D_PULSE_DURATION		(3 << 18)
 #define        _REGBIT_DP_D_ENABLE			(1 << 20)
 
-//#define RING_IMR(ring)	(0x20a8 + 0x10000 * ring)
 #define RING_IMR(ring) \
 	__RING_REG((ring), _REG_RCS_IMR, _REG_VCS_IMR, _REG_VECS_IMR)
 
