@@ -97,6 +97,8 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[BCS_PAGE_DIRECTORY_FAULT] = "Blitter page directory faults",
 	[BCS_AS_CONTEXT_SWITCH] = "Blitter AS Context Switch Interrupt",
 
+	[VECS_MI_FLUSH_DW] = "Video Enhanced Streamer MI FLUSH DW notify",
+
 	// DISPLAY
 	[PIPE_A_FIFO_UNDERRUN] = "Pipe A FIFO underrun",
 	[PIPE_A_CRC_ERR] = "Pipe A CRC error",
@@ -134,7 +136,6 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[RP_DOWN_THRESHOLD] = "RP DOWN threshold interrupt",
 	[RP_UP_THRESHOLD] = "RP UP threshold interrupt",
 	[FREQ_DOWNWARD_TIMEOUT_RC6] = "Render Frequency Downward Timeout During RC6 interrupt",
-	[PM_RESERVED_13] = "PM reserved irq 13 (Unknown)",
 	[PCU_THERMAL] = "PCU Thermal Event",
 	[PCU_PCODE2DRIVER_MAILBOX] = "PCU pcode2driver mailbox event",
 
@@ -704,6 +705,8 @@ static void vgt_base_init_irq(
 	SET_BIT_INFO(hstate, 16, VCS_MI_FLUSH_DW, IRQ_INFO_GT);
 	SET_BIT_INFO(hstate, 22, BCS_MI_USER_INTERRUPT, IRQ_INFO_GT);
 	SET_BIT_INFO(hstate, 26, BCS_MI_FLUSH_DW, IRQ_INFO_GT);
+	/* No space in GT, so put it in PM */
+	SET_BIT_INFO(hstate, 13, VECS_MI_FLUSH_DW, IRQ_INFO_PM);
 
 	/* Display events */
 	if (IS_IVB(pdev) || IS_HSW(pdev)) {
@@ -743,7 +746,6 @@ static void vgt_base_init_irq(
 	SET_BIT_INFO(hstate, 4, RP_DOWN_THRESHOLD, IRQ_INFO_PM);
 	SET_BIT_INFO(hstate, 5, RP_UP_THRESHOLD, IRQ_INFO_PM);
 	SET_BIT_INFO(hstate, 6, FREQ_DOWNWARD_TIMEOUT_RC6, IRQ_INFO_PM);
-	SET_BIT_INFO(hstate, 13, PM_RESERVED_13, IRQ_INFO_PM);
 	SET_BIT_INFO(hstate, 24, PCU_THERMAL, IRQ_INFO_PM);
 	SET_BIT_INFO(hstate, 25, PCU_PCODE2DRIVER_MAILBOX, IRQ_INFO_PM);
 
