@@ -60,6 +60,55 @@ TRACE_EVENT(vgt_mmio_rw,
 				__entry->bytes)
 );
 
+#define MAX_CMD_STR_LEN	200
+TRACE_EVENT(vgt_command,
+		TP_PROTO(u32 vm_id, u32 ip_gma, u32 *cmd_va, u32 cmd_len, bool ring_buffer_cmd),
+
+		TP_ARGS(vm_id, ip_gma, cmd_va, cmd_len, ring_buffer_cmd),
+
+		TP_STRUCT__entry(
+			__field(int, i)
+			__array(char,tmp_buf, MAX_CMD_STR_LEN)
+			__array(char, cmd_str, MAX_CMD_STR_LEN)
+			),
+
+		TP_fast_assign(
+			__entry->cmd_str[0] = '\0';
+			snprintf(__entry->tmp_buf, MAX_CMD_STR_LEN, "VM(%d): %s ip(%08x) ", vm_id, ring_buffer_cmd ? "RB":"BB", ip_gma);
+			strcat(__entry->cmd_str, __entry->tmp_buf);
+			entry->i = 0;
+			while (cmd_len > 0) {
+				if (cmd_len >= 8) {
+					snprintf(__entry->tmp_buf, MAX_CMD_STR_LEN, "%08x %08x %08x %08x %08x %08x %08x %08x ",
+						cmd_va[__entry->i], cmd_va[__entry->i+1], cmd_va[__entry->i+2], cmd_va[__entry->i+3],
+						cmd_va[__entry->i+4],cmd_va[__entry->i+5],cmd_va[__entry->i+6],cmd_va[__entry->i+7]);
+					__entry->i += 8;
+					cmd_len -= 8;
+					strcat(__entry->cmd_str, __entry->tmp_buf);
+				} else if (cmd_len >= 4) {
+					snprintf(__entry->tmp_buf, MAX_CMD_STR_LEN, "%08x %08x %08x %08x ",
+						cmd_va[__entry->i], cmd_va[__entry->i+1], cmd_va[__entry->i+2], cmd_va[__entry->i+3]);
+					__entry->i += 4;
+					cmd_len -= 4;
+					strcat(__entry->cmd_str, __entry->tmp_buf);
+				} else if (cmd_len >= 2) {
+					snprintf(__entry->tmp_buf, MAX_CMD_STR_LEN, "%08x %08x ", cmd_va[__entry->i], cmd_va[__entry->i+1]);
+					__entry->i += 2;
+					cmd_len -= 2;
+					strcat(__entry->cmd_str, __entry->tmp_buf);
+				} else if (cmd_len == 1) {
+					snprintf(__entry->tmp_buf, MAX_CMD_STR_LEN, "%08x ", cmd_va[__entry->i]);
+					__entry->i += 1;
+					cmd_len -= 1;
+					strcat(__entry->cmd_str, __entry->tmp_buf);
+				}
+			}
+			strcat(__entry->cmd_str, "\n");
+		),
+
+		TP_printk("%s", __entry->cmd_str)
+);
+
 #endif /* _VGT_TRACE_H_ */
 
 /* This part must be out of protection */

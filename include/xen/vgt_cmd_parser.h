@@ -87,6 +87,10 @@ struct decode_info{
 #define OP_MI_BATCH_BUFFER_START            0x31
 #define OP_MI_CONDITIONAL_BATCH_BUFFER_END  0x36
 
+#define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))
+#define BATCH_BUFFER_ADR_SPACE_BIT(x)	(((x)>>8) & 1U)
+#define BATCH_BUFFER_2ND_LEVEL_BIT(x)   ((x)>>22 & 1U)
+
 /* 2D command: Opcode (28:22) */
 #define OP_2D(x)    ((2<<7) | x)
 
@@ -379,7 +383,7 @@ struct cmd_info{
 
 	parser_cmd_handler handler;
 };
-
+#define VGT_MAX_CMD_LENGTH	20  /* In Dword */
 struct vgt_cmd_entry {
 	struct hlist_node hlist;
 	struct cmd_info* info;

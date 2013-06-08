@@ -213,8 +213,10 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 			printk("MACH: %x %llx\n", h_val, mfn);
 		}
 		printk("Actual pGTT: %x\n",
-			vgt_read_gtt(pdev, GTT_INDEX(pdev, *cur)));
-		show_batchbuffer(pdev, VGT_MMIO_READ(pdev,VGT_ACTHD(ring_id)));
+				vgt_read_gtt(pdev, GTT_INDEX(pdev, *cur)));
+		show_batchbuffer(pdev, VGT_MMIO_READ(pdev,
+					VGT_ACTHD(ring_id)));
+
 	}
 }
 

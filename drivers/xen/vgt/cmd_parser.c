@@ -28,6 +28,7 @@
 #include "reg.h"
 #include <xen/vgt_cmd_parser.h>
 
+#include "trace.h"
 /* vgt uses bit 20 to detect buffer reuse
  *          bit 19 to mark MI_DISPLAY_FLIP command
  *          bit 0-2 to record some command information
@@ -649,10 +650,6 @@ static int vgt_cmd_handler_mi_flush_dw(struct parser_exec_state* s)
 
 	return 0;
 }
-
-#define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))
-#define BATCH_BUFFER_ADR_SPACE_BIT(x)	(((x)>>8) & 1U)
-#define BATCH_BUFFER_2ND_LEVEL_BIT(x)   ((x)>>22 & 1U)
 
 static void addr_type_update_snb(struct parser_exec_state* s)
 {
@@ -1538,6 +1535,11 @@ static int cmd_hash_init(struct pgt_device *pdev)
 	return 0;
 }
 
+/* This buffer is used by ftrace to store all commands copied from guest gma
+ * space. Sometimes commands can cross pages, this should not be handled in
+ * ftrace logic. So this is just used as a 'bounce buffer' */
+static u32 cmd_trace_buf[VGT_MAX_CMD_LENGTH];
+
 /* call the cmd handler, and advance ip */
 static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 {
@@ -1566,6 +1568,11 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 			address_fixup(s, bit);
 	}
 #endif
+
+	/* Let's keep this logic here. Someone has special needs for dumping
+	 * commands can customize this code snippet.
+	 */
+#if 0
 	klog_printk("%s ip(%08lx): ",
 			s->buf_type == RING_BUFFER_INSTRUCTION ?
 			"RB" : "BB",
@@ -1575,6 +1582,27 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 		klog_printk("%08x ", cmd_val(s, i));
 	}
 	klog_printk("\n");
+#endif
+
+	cmd_len = cmd_length(s);
+	/* The chosen value of VGT_MAX_CMD_LENGTH are just based on
+	 * following two considerations:
+	 * 1) From observation, most common ring commands is not that long.
+	 *    But there are execeptions. So it indeed makes sence to observe
+	 *    longer commands.
+	 * 2) From the performance and debugging point of view, dumping all
+	 *    contents of very commands is not necessary.
+	 * We mgith shrink VGT_MAX_CMD_LENGTH or remove this trace event in
+	 * future for performance considerations.
+	 */
+	if (unlikely(cmd_len > VGT_MAX_CMD_LENGTH)) {
+		vgt_dbg("cmd length exceed tracing limitation!\n");
+		cmd_len = VGT_MAX_CMD_LENGTH;
+	}
+	for (i = 0; i < cmd_len; i++)
+		cmd_trace_buf[i] = cmd_val(s, i);
+	trace_vgt_command(s->vgt->vm_id, s->ip_gma, cmd_trace_buf, cmd_len,
+			s->buf_type == RING_BUFFER_INSTRUCTION);
 
 	if (info->handler){
 		rc = info->handler(s);
