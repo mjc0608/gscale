@@ -85,6 +85,10 @@ struct decode_info{
 #define OP_MI_LOAD_URB_MEM                  0x2C  /* HSW+ */
 #define OP_MI_STORE_URM_MEM                 0x2D  /* HSW+ */
 #define OP_MI_BATCH_BUFFER_START            0x31
+
+/* Bit definition for dword 0 */
+#define _CMDBIT_BB_START_IN_PPGTT	(1UL << 8)
+
 #define OP_MI_CONDITIONAL_BATCH_BUFFER_END  0x36
 
 #define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))

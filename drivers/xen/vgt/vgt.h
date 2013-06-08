@@ -49,7 +49,7 @@ typedef uint32_t vgt_reg_t;
 struct pgt_device;
 extern struct vgt_device *dom0_vgt;
 extern void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes);
-extern void show_batchbuffer(struct pgt_device *pdev, u32 addr);
+extern void show_batchbuffer(struct pgt_device *pdev, u32 addr, bool in_ppgtt);
 extern void show_mode_settings(struct pgt_device *pdev);
 extern void show_debug(struct pgt_device *pdev, int ring_id);
 #define ASSERT(x)							\
