@@ -406,37 +406,6 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_VEVSYNC,
 
 	_REG_TILECTL,
-
-	_REG_RCS_BB_PREEMPT_ADDR,
-
-	0x23bc,
-	0x2448,
-	0x244c,
-	0x2450,
-	0x2454,
-	0x7034,
-	0x2b00,
-	0x91b8,
-	0x91bc,
-	0x91c0,
-	0x91c4,
-	0x9150,
-	0x9154,
-	0x9160,
-	0x9164,
-
-	0x4040,
-	0xb010,
-	0xb020,
-	0xb024,
-
-	_REG_UCG_CTL1,
-	_REG_UCG_CTL2,
-	_REG_DISPLAY_CHICKEN_BITS_1,
-	_REG_DSPCLK_GATE_D,
-	_REG_SUPER_QUEUE_CONFIG,
-	_REG_ECOCHK,
-	_REG_MISC_CLOCK_GATING,
 };
 
 static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *regs)
