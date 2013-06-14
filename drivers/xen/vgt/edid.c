@@ -36,6 +36,18 @@ typedef enum {
 	VGT_EDID_ERROR = 3,
 } vgt_edid_log_t;
 
+static const char *vgt_port_name[] = {
+	"CRT",
+	"DP_A",
+	"DP_B",
+	"DP_C",
+	"DP_D",
+	"HDMI_B",
+	"HDMI_C",
+	"HDMI_D",
+	"LVDS"
+};
+
 #define EDID_LOG(log, emu, fmt, args...)			\
 	do {							\
 		printk("[VGT_EDID");				\
@@ -280,63 +292,46 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 
 		switch (i) {
 		case VGT_CRT:
-			vgt_info("EDID_PROBE: VGA.\n");
 			gmbus_port = 2;
 			break;
 		case VGT_LVDS:
-			vgt_info("EDID_PROBE: LVDS.\n");
 			gmbus_port = 3;
 			break;
 		case VGT_HDMI_C:
-			vgt_info("EDID_PROBE: HDMI C.\n");
 			gmbus_port = 4;
 			break;
 		case VGT_HDMI_B:
-			vgt_info("EDID_PROBE: HDMI B.\n");
 			gmbus_port = 5;
 			break;
 		case VGT_HDMI_D:
-			vgt_info("EDID_PROBE: HDMI D.\n");
 			gmbus_port = 6;
 			break;
 		case VGT_DP_A:
 			if ((VGT_MMIO_READ(pdev, _REG_DDI_BUF_CTL_A) |
 				_DDI_BUFCTL_DETECT_MASK) &&
 				(test_bit(VGT_DP_A, pdev->detected_ports))) {
-				vgt_info("EDID_PROBE: DP A Detected.\n");
 				aux_ch_addr = _REG_DPA_AUX_CH_CTL;
-			} else {
-				vgt_info("EDID_PROBE: DP A is not detected.\n");
 			}
 			break;
 		case VGT_DP_B:
 			if ((VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) |
 				_REGBIT_SFUSE_STRAP_B_PRESENTED) &&
 				(test_bit(VGT_DP_B, pdev->detected_ports))) {
-				vgt_info("EDID_PROBE: DP B Detected.\n");
 				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
-			} else {
-				vgt_info("EDID_PROBE: DP B is not detected.\n");
 			}
 			break;
 		case VGT_DP_C:
 			if ((VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) |
 				_REGBIT_SFUSE_STRAP_C_PRESENTED) &&
 				(test_bit(VGT_DP_C, pdev->detected_ports))) {
-				vgt_info("EDID_PROBE: DP C Detected.\n");
 				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
-			} else {
-				vgt_info("EDID_PROBE: DP C is not detected.\n");
 			}
 			break;
 		case VGT_DP_D:
 			if ((VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) |
 				_REGBIT_SFUSE_STRAP_D_PRESENTED) &&
 				(test_bit(VGT_DP_D, pdev->detected_ports))) {
-				vgt_info("EDID_PROBE: DP D Detected.\n");
 				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
-			} else {
-				vgt_info("EDID_PROBE: DP D is not detected.\n");
 			}
 			break;
 		default:
@@ -429,8 +424,10 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				block[0x7f] += block[0x7e];
 				block[0x7e] = 0;
 			}
+			vgt_info("EDID_PROBE: %s\tis detected.\n", vgt_port_name[i]);
 		} else {
 			clear_bit(i, pdev->detected_ports);
+			vgt_info("EDID_PROBE: %s\tis not detected\n", vgt_port_name[i]);
 		}
 	}
 }
@@ -555,14 +552,14 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 		}
 
 		if (!edid) {
-			printk ("EDID_PROPAGATE: Clear EDID %d\n", i);
 			if (vgt->vgt_edids[i]) {
+				printk ("EDID_PROPAGATE: Clear EDID %s\n", vgt_port_name[i]);
 				kfree(vgt->vgt_edids[i]);
 				vgt->vgt_edids[i] = NULL;
 				clear_bit(i, vgt->presented_ports);
 			}
 		} else {
-			printk ("EDID_PROPAGATE: Propagate EDID %d\n", i);
+			printk ("EDID_PROPAGATE: Propagate EDID %s\n", vgt_port_name[i]);
 			if (!vgt->vgt_edids[i]) {
 				BUG_ON(in_interrupt());
 				vgt->vgt_edids[i] = kmalloc(
@@ -581,7 +578,7 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 			if (vgt_debug) {
 				int j;
 				unsigned char *block = vgt->vgt_edids[i]->edid_block;
-				printk("EDID_PROPAGATE: EDID[%d] is:\n", i);
+				printk("EDID_PROPAGATE: EDID[%s] is:\n", vgt_port_name[i]);
 				for (j = 0; j < EDID_SIZE; ++ j) {
 					if ((block[j] >= 'a' && block[j] <= 'z') ||
 						(block[j] >= 'A' && block[j] <= 'Z')) {
@@ -605,8 +602,8 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 	for (i = 0; i < VGT_PORT_MAX; ++ i) {
 		if (vgt_port_equivalent(i, index)) {
 			if (vgt->vgt_edids[i]) {
-				printk("EDID_CLEAR: Clear EDID[0x%x] of VM%d\n",
-					i, vgt->vm_id);
+				printk("EDID_CLEAR: Clear EDID[%s] of VM%d\n",
+					vgt_port_name[i], vgt->vm_id);
 				kfree(vgt->vgt_edids[i]);
 				vgt->vgt_edids[i] = NULL;
 				clear_bit(i, vgt->presented_ports);
