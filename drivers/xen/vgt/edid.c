@@ -372,20 +372,8 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 					(*pedid)->edid_block, EDID_ADDR,
 					EDID_SIZE, gmbus_port);
 			if (ret) {
-				vgt_warn("Failed to probe EDID from pin(%d)\n",
-						gmbus_port);
 				kfree(*pedid);
 				*pedid = NULL;
-				continue;
-			}
-			/* Check the extension */
-			if ((*pedid)->edid_block[0x7e]) {
-				/* Disable the extension whilst
-				 * keep the checksum
-				 */
-				u8 *block = (*pedid)->edid_block;
-				block[0x7f] += block[0x7e];
-				block[0x7e] = 0;
 			}
 		}
 
@@ -430,6 +418,16 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 						printk ("\n");
 					}
 				}
+			}
+
+			/* Check the extension */
+			if ((*pedid)->edid_block[0x7e]) {
+				/* Disable the extension whilst
+				 * keep the checksum
+				 */
+				u8 *block = (*pedid)->edid_block;
+				block[0x7f] += block[0x7e];
+				block[0x7e] = 0;
 			}
 		} else {
 			clear_bit(i, pdev->detected_ports);
