@@ -92,7 +92,7 @@ module_param_named(enable_video_switch, enable_video_switch, int, 0600);
 int dom0_aperture_sz = 64;	//in MB.
 module_param_named(dom0_aperture_sz, dom0_aperture_sz, int, 0600);
 
-int dom0_gm_sz = 512;		//in MB.
+int dom0_gm_sz = 448;		//in MB.
 module_param_named(dom0_gm_sz, dom0_gm_sz, int, 0600);
 
 int dom0_fence_sz = 4;
