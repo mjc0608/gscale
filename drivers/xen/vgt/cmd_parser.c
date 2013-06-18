@@ -621,7 +621,7 @@ static int vgt_cmd_handler_mi_update_gtt(struct parser_exec_state *s)
 
 	address_fixup(s, 1);
 
-	entry_num = cmd_val(s,0) & ((1U<<8) - 1); /* bit 7:0 */
+	entry_num = cmd_length(s) - 2; /* GTT items begin from the 3rd dword */
 	//entry = v_aperture(s->vgt->pdev, cmd_val(s,1));
 	entry = cmd_ptr(s, 2);
 	for (i=0; i<entry_num; i++){
@@ -944,8 +944,11 @@ static struct cmd_info cmd_info[] = {
 
 	{"MI_LOAD_REGISTER_IMM", OP_MI_LOAD_REGISTER_IMM, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL},
 
-	{"MI_UPDATE_GTT", OP_MI_UPDATE_GTT, F_LEN_VAR, R_ALL, D_ALL,
+	{"MI_UPDATE_GTT", OP_MI_UPDATE_GTT, F_LEN_VAR, R_RCS, D_ALL,
 		0, 8, vgt_cmd_handler_mi_update_gtt},
+
+	{"MI_UPDATE_GTT", OP_MI_UPDATE_GTT, F_LEN_VAR, (R_VCS | R_BCS | R_VECS), D_ALL,
+		0, 6, vgt_cmd_handler_mi_update_gtt},
 
 	{"MI_STORE_REGISTER_MEM", OP_MI_STORE_REGISTER_MEM, F_LEN_VAR, R_ALL, D_ALL,
 		ADDR_FIX_1(2), 8, NULL},
