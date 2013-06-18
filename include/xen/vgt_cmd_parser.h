@@ -139,15 +139,16 @@ struct decode_info{
 
 #define OP_PIPELINE_SELECT                      OP_3D_MEDIA(0x1, 0x1, 0x04)
 
-#define OP_MEDIA_VFE_STATE                      OP_3D_MEDIA( 0x2, 0x0, 0x0)
-#define OP_MEDIA_CURBE_LOAD                     OP_3D_MEDIA( 0x2, 0x0, 0x1)
-#define OP_MEDIA_INTERFACE_DESCRIPTOR_LOAD      OP_3D_MEDIA( 0x2, 0x0, 0x2)
-#define OP_MEDIA_GATEWAY_STATE                  OP_3D_MEDIA( 0x2, 0x0, 0x3)
-#define OP_MEDIA_STATE_FLUSH                    OP_3D_MEDIA( 0x2, 0x0, 0x4)
+#define OP_MEDIA_VFE_STATE                      OP_3D_MEDIA(0x2, 0x0, 0x0)
+#define OP_MEDIA_CURBE_LOAD                     OP_3D_MEDIA(0x2, 0x0, 0x1)
+#define OP_MEDIA_INTERFACE_DESCRIPTOR_LOAD      OP_3D_MEDIA(0x2, 0x0, 0x2)
+#define OP_MEDIA_GATEWAY_STATE                  OP_3D_MEDIA(0x2, 0x0, 0x3)
+#define OP_MEDIA_STATE_FLUSH                    OP_3D_MEDIA(0x2, 0x0, 0x4)
 
-#define OP_MEDIA_OBJECT                         OP_3D_MEDIA( 0x2, 0x1, 0x0)
-#define OP_MEDIA_OBJECT_PRT                     OP_3D_MEDIA( 0x2, 0x1, 0x2)
-#define OP_MEDIA_OBJECT_WALKER                  OP_3D_MEDIA( 0x2, 0x1, 0x3)
+#define OP_MEDIA_OBJECT                         OP_3D_MEDIA(0x2, 0x1, 0x0)
+#define OP_MEDIA_OBJECT_PRT                     OP_3D_MEDIA(0x2, 0x1, 0x2)
+#define OP_MEDIA_OBJECT_WALKER                  OP_3D_MEDIA(0x2, 0x1, 0x3)
+#define OP_3D_MEDIA_2_1_5			OP_3D_MEDIA(0x2, 0x1, 0x5)
 
 #define OP_3DSTATE_BINDING_TABLE_POINTERS       OP_3D_MEDIA(0x3, 0x0, 0x01)
 #define OP_3DSTATE_SAMPLER_STATE_POINTERS       OP_3D_MEDIA(0x3, 0x0, 0x02)
