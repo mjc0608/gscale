@@ -1586,8 +1586,8 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 	}
 	for (i = 0; i < cmd_len; i++)
 		cmd_trace_buf[i] = cmd_val(s, i);
-	trace_vgt_command(s->vgt->vm_id, s->ip_gma, cmd_trace_buf, cmd_len,
-			s->buf_type == RING_BUFFER_INSTRUCTION);
+	trace_vgt_command(s->vgt->vm_id, s->ring_id, s->ip_gma, cmd_trace_buf,
+			cmd_len, s->buf_type == RING_BUFFER_INSTRUCTION);
 
 	if (info->handler){
 		rc = info->handler(s);
