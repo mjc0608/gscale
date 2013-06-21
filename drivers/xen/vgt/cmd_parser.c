@@ -29,15 +29,23 @@
 #include <xen/vgt_cmd_parser.h>
 
 #include "trace.h"
-/* vgt uses bit 20 to detect buffer reuse
- *          bit 19 to mark MI_DISPLAY_FLIP command
- *          bit 0-2 to record some command information
+/* vgt uses below bits in NOOP_ID:
+ *	    bit 21 - 16 is command type.
+ *	    bit 15 - 0  holds command specific information.
  *
- * Assumption: Linux/Windows guest will not use these bits
+ * for the command of MI_DISPLAY_FLIP:
+ *	bit 20 - bit 16 is 1, indicating MI_DISPLAY_FLIP;
+ *	bit 10 - bit 8  is plane select;
+ *	bit 7  - bit 0  is the cmd length
+ *
+ * Assumption: Linux/Windows guest will not use bits 21 - bits 16.
  */
-#define VGT_NOOP_ID_MASK	(1U << 20)
-#define VGT_DISPLAY_FLIP_NOOP_ID_MASK	(1U << 19)
-#define VGT_NOOP_ID_CMD_MASK	(0x7)
+#define VGT_CMD_TYPE_SHIFT	29
+#define VGT_CMD_TYPE_MASK	(0x7 << VGT_CMD_TYPE_SHIFT)
+#define VGT_NOOP_ID_MASK	(1U << 21)
+#define VGT_DISPLAY_FLIP_NOOP_ID_MASK	(1U << 20)
+#define VGT_NOOP_ID_CMD_SHIFT	16
+#define VGT_NOOP_ID_CMD_MASK	(0x3f << VGT_NOOP_ID_CMD_SHIFT)
 
 /*
  * new cmd parser
@@ -447,7 +455,12 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
 #define PLANE_TILE_MASK		(0x1 << PLANE_TILE_SHIFT)
 #define FLIP_TYPE_MASK		0x3
 
-static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
+/*plane info stored in resubmitted command*/
+#define PLANE_INFO_SHIFT	8
+#define PLANE_INFO_MASK		(0x7 << PLANE_INFO_SHIFT)
+#define CMD_LENGTH_MASK		0xff
+
+static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmitted)
 {
 	uint32_t surf_reg, surf_val, ctrl_reg;
 	uint32_t stride_reg, stride_val, stride_mask;
@@ -456,13 +469,19 @@ static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 	enum vgt_pipe pipe;
 	enum vgt_plane_type plane;
 	bool async_flip;
-	int i, length = cmd_length(s);
+	int i, length;
 
 	opcode = *(cmd_ptr(s, 0));
 	stride_val = *(cmd_ptr(s, 1));
 	surf_val = *(cmd_ptr(s, 2));
 
-	plane_code = (opcode & PLANE_SELECT_MASK) >> PLANE_SELECT_SHIFT;
+	if (resubmitted) {
+		plane_code = (opcode & PLANE_INFO_MASK) >> PLANE_INFO_SHIFT;
+		length = opcode & CMD_LENGTH_MASK;
+	} else {
+		plane_code = (opcode & PLANE_SELECT_MASK) >> PLANE_SELECT_SHIFT;
+		length = cmd_length(s);
+	}
 
 	switch (plane_code) {
 		case 0:
@@ -502,41 +521,45 @@ static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 		goto wrong_command;
 	}
 
-	async_flip = ((surf_val & FLIP_TYPE_MASK) == 0x1);
-	tile_para = ((stride_val & TILE_PARA_MASK) >> TILE_PARA_SHIFT);
-	tile_in_ctrl = (__vreg(s->vgt, ctrl_reg) & PLANE_TILE_MASK)
-				>> PLANE_TILE_SHIFT;
+	if (!resubmitted) {
+		async_flip = ((surf_val & FLIP_TYPE_MASK) == 0x1);
+		tile_para = ((stride_val & TILE_PARA_MASK) >> TILE_PARA_SHIFT);
+		tile_in_ctrl = (__vreg(s->vgt, ctrl_reg) & PLANE_TILE_MASK)
+					>> PLANE_TILE_SHIFT;
 
-	if ((__vreg(s->vgt, stride_reg) & stride_mask)
-		!= (stride_val & PITCH_MASK)) {
+		if ((__vreg(s->vgt, stride_reg) & stride_mask)
+			!= (stride_val & PITCH_MASK)) {
 
-		if (async_flip) {
-			vgt_warn("Cannot change stride in async flip!\n");
-			goto wrong_command;
-		}
-		__vreg(s->vgt, stride_reg) = (__vreg(s->vgt, stride_reg) &
+			if (async_flip) {
+				vgt_warn("Cannot change stride in async flip!\n");
+				goto wrong_command;
+			}
+			__vreg(s->vgt, stride_reg) = (__vreg(s->vgt, stride_reg) &
 							(~stride_mask)) |
 					(stride_val & stride_mask);
-		__sreg(s->vgt, stride_reg) = __vreg(s->vgt, stride_reg);
-	}
-
-	if (tile_para != tile_in_ctrl) {
-
-		if (async_flip) {
-			vgt_warn("Cannot change tiling in async flip!\n");
-			goto wrong_command;
+			__sreg(s->vgt, stride_reg) = __vreg(s->vgt, stride_reg);
 		}
-		__vreg(s->vgt, ctrl_reg) =
-			(__vreg(s->vgt, ctrl_reg) & (~PLANE_TILE_MASK)) |
+
+		if (tile_para != tile_in_ctrl) {
+
+			if (async_flip) {
+				vgt_warn("Cannot change tiling in async flip!\n");
+				goto wrong_command;
+			}
+			__vreg(s->vgt, ctrl_reg) =
+				(__vreg(s->vgt, ctrl_reg) & (~PLANE_TILE_MASK)) |
 					(tile_para << PLANE_TILE_SHIFT);
-		__sreg(s->vgt, ctrl_reg) = __vreg(s->vgt, ctrl_reg);
+			__sreg(s->vgt, ctrl_reg) = __vreg(s->vgt, ctrl_reg);
+		}
 	}
 
-	__vreg(s->vgt, surf_reg) = (__vreg(s->vgt, surf_reg) & (~SURF_MASK)) |
-					(surf_val & SURF_MASK);
-	__sreg(s->vgt, surf_reg) = __vreg(s->vgt, surf_reg);
+	if (!(resubmitted && ((surf_val & SURF_MASK) == 0))) {
+		__vreg(s->vgt, surf_reg) = (__vreg(s->vgt, surf_reg) &
+				(~SURF_MASK)) | (surf_val & SURF_MASK);
+		__sreg(s->vgt, surf_reg) = __vreg(s->vgt, surf_reg);
+	}
 
-	if (s->vgt == current_foreground_vm(s->vgt->pdev)) {
+	if ((s->vgt == current_foreground_vm(s->vgt->pdev)) && !resubmitted) {
 		return 0;
 	}
 
@@ -545,12 +568,12 @@ command_noop:
 		s->vgt->vm_id);
 
 	for (i = 0; i < length; i ++) {
-		*(cmd_ptr(s, i)) = MI_NOOP | VGT_NOOP_ID_MASK |
-					VGT_DISPLAY_FLIP_NOOP_ID_MASK;
+		*(cmd_ptr(s, i)) = MI_NOOP |
+			(OP_MI_DISPLAY_FLIP << VGT_NOOP_ID_CMD_SHIFT);
 	}
 
-	*(cmd_ptr(s,0)) |= plane_code;
-
+	*(cmd_ptr(s,0)) |= (plane_code << PLANE_INFO_SHIFT) |
+				(length & CMD_LENGTH_MASK);
 	s->ip_advance_update = length;
 
 	return 0;
@@ -560,54 +583,9 @@ wrong_command:
 	goto command_noop;
 }
 
-static int vgt_handle_resubmitted_flip_cmd(struct parser_exec_state* s)
+static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 {
-	uint32_t plane_code, surf_reg;
-	vgt_reg_t surf_val;
-	enum vgt_pipe pipe;
-	enum vgt_plane_type plane;
-
-	plane_code = cmd_val(s, 0) & VGT_NOOP_ID_CMD_MASK;
-	surf_val = cmd_val(s, 2);
-
-	if (surf_val == (MI_NOOP | VGT_NOOP_ID_MASK |
-				VGT_DISPLAY_FLIP_NOOP_ID_MASK)) {
-		return 0;
-	} else {
-		vgt_dbg("cmd buffer contains partially updated command!\n");
-		*(cmd_ptr(s, 2)) = MI_NOOP | VGT_NOOP_ID_MASK |
-					VGT_DISPLAY_FLIP_NOOP_ID_MASK;
-	}
-
-	switch (plane_code) {
-		case 0:
-			pipe = PIPE_A; plane = PRIMARY_PLANE; break;
-		case 1:
-			pipe = PIPE_B; plane = PRIMARY_PLANE; break;
-		case 2:
-			pipe = PIPE_A; plane = SPRITE_PLANE; break;
-		case 3:
-			pipe = PIPE_B; plane = SPRITE_PLANE; break;
-		case 4:
-			pipe = PIPE_C; plane = PRIMARY_PLANE; break;
-		case 5:
-			pipe = PIPE_C; plane = SPRITE_PLANE; break;
-		default:
-			ASSERT(0);
-	}
-
-	if (plane == PRIMARY_PLANE) {
-		surf_reg = VGT_DSPSURF(pipe);
-	} else {
-		ASSERT (plane == SPRITE_PLANE);
-		surf_reg = VGT_SPRSURF(pipe);
-	}
-
-	__vreg(s->vgt, surf_reg) = (__vreg(s->vgt, surf_reg) & (~SURF_MASK)) |
-					(surf_val & SURF_MASK);
-	__sreg(s->vgt, surf_reg) = __vreg(s->vgt, surf_reg);
-
-	return 0;
+	return vgt_handle_mi_display_flip(s, false);
 }
 
 #define USE_GLOBAL_GTT_MASK (1U << 22)
@@ -864,12 +842,15 @@ static int vgt_cmd_handler_mfx_2_6_0_0(struct parser_exec_state *s)
 
 static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
 {
-	if (cmd_val(s,0) & VGT_NOOP_ID_MASK) {
-		if (cmd_val(s,0) & VGT_DISPLAY_FLIP_NOOP_ID_MASK) {
-			vgt_dbg("VM %d: Guest reuse cmd buffer!\n", s->vgt->vm_id);
-			vgt_handle_resubmitted_flip_cmd(s);
+	unsigned int cmd;
+	cmd = (cmd_val(s,0) & VGT_NOOP_ID_CMD_MASK) >> VGT_NOOP_ID_CMD_SHIFT;
+
+	if (cmd) {
+		if (cmd == OP_MI_DISPLAY_FLIP) {
+			vgt_handle_mi_display_flip(s, true);
 		} else {
-			vgt_err("VM %d: Guest reuse cmd buffer!\n", s->vgt->vm_id);
+			vgt_err("VM %d: Guest reuse cmd buffer that is not handled!\n",
+					s->vgt->vm_id);
 			parser_exec_state_dump(s);
 		}
 	}
