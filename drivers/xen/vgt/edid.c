@@ -198,12 +198,14 @@ int vgt_get_phys_edid_from_gmbus(struct pgt_device *pdev,
  */
 static unsigned int vgt_aux_ch_transaction(struct pgt_device *pdev,
 				unsigned int aux_ctrl_addr,
-				unsigned int msg, int msg_size)
+				unsigned char *msg, int msg_size)
 {
 	/* TODO: DATA from the i915 driver. Need more handling.
 	 */
 	int aux_clock_divider;
 	int precharge;
+	int i;
+	unsigned int aux_data_addr;
 	unsigned int status;
 
 	if (aux_ctrl_addr == _REG_DPA_AUX_CH_CTL) {
@@ -221,7 +223,14 @@ static unsigned int vgt_aux_ch_transaction(struct pgt_device *pdev,
 	while (VGT_MMIO_READ(pdev, aux_ctrl_addr) &
 				_REGBIT_DP_AUX_CH_CTL_SEND_BUSY);
 
-	VGT_MMIO_WRITE(pdev, aux_ctrl_addr + 4, msg);
+	aux_data_addr = aux_ctrl_addr + 4;
+
+	for (i = 0; i < msg_size; i += 4) {
+		unsigned int buffer;
+		buffer = (msg[i + 0] << 24) | (msg[i + 1] << 16) | (msg[i + 2] << 8) | msg[i + 3];
+		VGT_MMIO_WRITE(pdev, aux_data_addr + i, buffer);
+	}
+
 	VGT_MMIO_WRITE(pdev, aux_ctrl_addr,
 				_REGBIT_DP_AUX_CH_CTL_SEND_BUSY	|
 				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_400us |
@@ -241,7 +250,7 @@ static unsigned int vgt_aux_ch_transaction(struct pgt_device *pdev,
 				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR |
 				_REGBIT_DP_AUX_CH_CTL_RECV_ERR);
 
-	return VGT_MMIO_READ(pdev, aux_ctrl_addr + 4);
+	return VGT_MMIO_READ(pdev, aux_data_addr);
 }
 
 #define IS_SHARED_PORT(port) \
@@ -373,22 +382,30 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		}
 
 		if (aux_ch_addr) {
-			unsigned int msg;
+			unsigned char msg[8];
 			unsigned int value;
 			int length;
 
-			msg = ((VGT_AUX_I2C_MOT << 4) << 24) |
-				(0 << 16) |
-				(EDID_ADDR << 8) |
-				0;
+			msg[0] = VGT_AUX_I2C_WRITE << 4;
+			msg[1] = 0;
+			msg[2] = EDID_ADDR;
+			msg[3] = 1;
+			msg[4] = 0;
+
+			/* start */
+			vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 3);
+
+			/* set offset */
+			vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 5);
+
 			/* start */
 			vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 3);
 
 			/* read */
-			msg = (((VGT_AUX_I2C_MOT | VGT_AUX_I2C_READ) << 4) << 24) |
-				(0 << 16) |
-				(EDID_ADDR << 8) |
-				0;
+			msg[0] = VGT_AUX_I2C_READ << 4;
+			msg[1] = 0;
+			msg[2] = EDID_ADDR;
+			msg[3] = 0;
 
 			for (length = 0; length < EDID_SIZE; length ++) {
 				value = vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 4);
@@ -479,7 +496,7 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 		}
 
 		if (aux_ch_addr) {
-			unsigned int msg = 0;
+			unsigned char msg[4];
 			unsigned int value;
 			uint16_t dpcd_addr;
 
@@ -492,13 +509,11 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 			}
 
 			for (dpcd_addr = 0; dpcd_addr < DPCD_SIZE; dpcd_addr++) {
-				uint8_t low = dpcd_addr & 0x00ff;
-				uint8_t high = (dpcd_addr & 0xff00) >> 8;
-
+				msg[0] = VGT_AUX_NATIVE_READ << 4;
+				msg[1] = (dpcd_addr & 0xff00) >> 8;
+				msg[2] = dpcd_addr & 0x00ff;
 				/* Read one byte at a time, so set len to 0 */
-				msg = ((VGT_AUX_NATIVE_READ << 4) << 24) |
-					(high << 16) |
-					(low << 8);
+				msg[3] = 0;
 
 				value = vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 4);
 				/*
