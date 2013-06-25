@@ -699,6 +699,7 @@
 #define    _REGBIT_DREF_SSC4_ENABLE			(1)
 
 #define _REG_PCH_RAWCLK_FREQ		0xc6204
+#define  _REGBIT_RAWCLK_FREQ_MASK       0x3ff
 
 /*
  * digital port hotplug
@@ -1569,7 +1570,10 @@ enum vgt_port_type {
 
 /* HSW */
 #define _REG_LCPLL_CTL		0x130040
+#define  _REGBIT_LCPLL_CLK_FREQ_MASK		(3<<26)
+#define  _LCPLL_CLK_FREQ_450		(0<<26)
 #define _REG_HSW_FUSE_STRAP	0x42014
+#define  _REGBIT_HSW_CDCLK_LIMIT	(1 << 24)
 #define _REG_GFX_FLSH_CNT	0x101008
 
 #define _REG_HSW_PWR_WELL_CTL1	0x45400

@@ -192,27 +192,41 @@ int vgt_get_phys_edid_from_gmbus(struct pgt_device *pdev,
 
 }
 
-/* vgt_aux_ch_transaction()
- *
- * msg_size will not be larger than 4.
- */
+/* code logic copied from i915: intel_ddi.c */
+static inline int vgt_get_aux_clock_divider(struct pgt_device *pdev,
+						unsigned int aux_ctrl_addr)
+{
+	int clk_freq = 0;
+	if (aux_ctrl_addr == _REG_DPA_AUX_CH_CTL) { /* eDP */
+		if (VGT_MMIO_READ(pdev, _REG_HSW_FUSE_STRAP) &
+					_REGBIT_HSW_CDCLK_LIMIT) {
+			clk_freq = 450;
+		} else if ((VGT_MMIO_READ(pdev, _REG_LCPLL_CTL) &
+			_REGBIT_LCPLL_CLK_FREQ_MASK) == _LCPLL_CLK_FREQ_450) {
+			clk_freq = 450;
+		} else if ((pdev->pdev->device & 0xFF00) == 0x0A00) { /* is ULT */
+			clk_freq = 338;
+		} else {
+			clk_freq = 540;
+		}
+	} else {
+		clk_freq = VGT_MMIO_READ(pdev, _REG_PCH_RAWCLK_FREQ) &
+						_REGBIT_RAWCLK_FREQ_MASK;
+	}
+	return ((clk_freq + 1) / 2);
+}
+
 static unsigned int vgt_aux_ch_transaction(struct pgt_device *pdev,
 				unsigned int aux_ctrl_addr,
 				unsigned char *msg, int msg_size)
 {
-	/* TODO: DATA from the i915 driver. Need more handling.
-	 */
-	int aux_clock_divider;
 	int precharge;
 	int i;
-	unsigned int aux_data_addr;
+	int try;
 	unsigned int status;
 
-	if (aux_ctrl_addr == _REG_DPA_AUX_CH_CTL) {
-		aux_clock_divider = 169;
-	} else {
-		aux_clock_divider = 62;
-	}
+	unsigned int aux_data_addr = aux_ctrl_addr + 4;
+	int aux_clock_divider = vgt_get_aux_clock_divider(pdev, aux_ctrl_addr);
 
 	if (_is_sandybridge(pdev->pdev->device)) {
 		precharge = 3;
@@ -223,32 +237,48 @@ static unsigned int vgt_aux_ch_transaction(struct pgt_device *pdev,
 	while (VGT_MMIO_READ(pdev, aux_ctrl_addr) &
 				_REGBIT_DP_AUX_CH_CTL_SEND_BUSY);
 
-	aux_data_addr = aux_ctrl_addr + 4;
+	for (try = 0; try < 5; ++ try) {
 
-	for (i = 0; i < msg_size; i += 4) {
-		unsigned int buffer;
-		buffer = (msg[i + 0] << 24) | (msg[i + 1] << 16) | (msg[i + 2] << 8) | msg[i + 3];
-		VGT_MMIO_WRITE(pdev, aux_data_addr + i, buffer);
-	}
+		for (i = 0; i < msg_size; i += 4) {
+			unsigned int buffer;
+			buffer = (msg[i + 0] << 24) |
+					(msg[i + 1] << 16) |
+					(msg[i + 2] << 8) |
+					msg[i + 3];
+			VGT_MMIO_WRITE(pdev, aux_data_addr + i, buffer);
+		}
 
-	VGT_MMIO_WRITE(pdev, aux_ctrl_addr,
-				_REGBIT_DP_AUX_CH_CTL_SEND_BUSY	|
-				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_400us |
-				msg_size << _DP_AUX_CH_CTL_MESSAGE_SIZE_SHIFT |
-				precharge << _DP_AUX_CH_CTL_PRECHARGE_2US_SHIFT	|
-				aux_clock_divider << _DP_AUX_CH_CTL_BIT_CLOCK_2X_SHIFT |
-				_REGBIT_DP_AUX_CH_CTL_DONE |
-				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR |
-				_REGBIT_DP_AUX_CH_CTL_RECV_ERR);
+		VGT_MMIO_WRITE(pdev, aux_ctrl_addr,
+			_REGBIT_DP_AUX_CH_CTL_SEND_BUSY	|
+			_REGBIT_DP_AUX_CH_CTL_TIME_OUT_400us |
+			msg_size << _DP_AUX_CH_CTL_MESSAGE_SIZE_SHIFT |
+			precharge << _DP_AUX_CH_CTL_PRECHARGE_2US_SHIFT	|
+			aux_clock_divider << _DP_AUX_CH_CTL_BIT_CLOCK_2X_SHIFT |
+			_REGBIT_DP_AUX_CH_CTL_DONE |
+			_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR |
+			_REGBIT_DP_AUX_CH_CTL_RECV_ERR);
 
-	while((status = VGT_MMIO_READ(pdev, aux_ctrl_addr)) &
-		_REGBIT_DP_AUX_CH_CTL_SEND_BUSY);
+		while((status = VGT_MMIO_READ(pdev, aux_ctrl_addr)) &
+			_REGBIT_DP_AUX_CH_CTL_SEND_BUSY);
 
-	VGT_MMIO_WRITE(pdev, aux_ctrl_addr,
+		VGT_MMIO_WRITE(pdev, aux_ctrl_addr,
 				status |
 				_REGBIT_DP_AUX_CH_CTL_DONE |
 				_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR |
 				_REGBIT_DP_AUX_CH_CTL_RECV_ERR);
+		if (status & (_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR |
+				_REGBIT_DP_AUX_CH_CTL_RECV_ERR)) {
+			continue;
+		}
+
+		if (status & _REGBIT_DP_AUX_CH_CTL_DONE) {
+			break;
+		}
+	}
+
+	if (!(status & _REGBIT_DP_AUX_CH_CTL_DONE)) {
+		vgt_err("AUX_CH transaction error with status 0x%x!\n", status);
+	}
 
 	return VGT_MMIO_READ(pdev, aux_data_addr);
 }
