@@ -29,21 +29,14 @@
 #include <xen/vgt_cmd_parser.h>
 
 #include "trace.h"
+
 /* vgt uses below bits in NOOP_ID:
  *	    bit 21 - 16 is command type.
  *	    bit 15 - 0  holds command specific information.
  *
- * for the command of MI_DISPLAY_FLIP:
- *	bit 20 - bit 16 is 1, indicating MI_DISPLAY_FLIP;
- *	bit 10 - bit 8  is plane select;
- *	bit 7  - bit 0  is the cmd length
- *
- * Assumption: Linux/Windows guest will not use bits 21 - bits 16.
+ * Assumption: Linux/Windows guest will not use bits 21 - bits 16 with
+ * non-zero value.
  */
-#define VGT_CMD_TYPE_SHIFT	29
-#define VGT_CMD_TYPE_MASK	(0x7 << VGT_CMD_TYPE_SHIFT)
-#define VGT_NOOP_ID_MASK	(1U << 21)
-#define VGT_DISPLAY_FLIP_NOOP_ID_MASK	(1U << 20)
 #define VGT_NOOP_ID_CMD_SHIFT	16
 #define VGT_NOOP_ID_CMD_MASK	(0x3f << VGT_NOOP_ID_CMD_SHIFT)
 
@@ -455,7 +448,12 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
 #define PLANE_TILE_MASK		(0x1 << PLANE_TILE_SHIFT)
 #define FLIP_TYPE_MASK		0x3
 
-/*plane info stored in resubmitted command*/
+/* The NOOP for MI_DISPLAY_FLIP has below information stored in NOOP_ID:
+ *
+ *	bit 21 - bit 16 is 0x14, opcode of MI_DISPLAY_FLIP;
+ *	bit 10 - bit 8  is plane select;
+ *	bit 7  - bit 0  is the cmd length
+ */
 #define PLANE_INFO_SHIFT	8
 #define PLANE_INFO_MASK		(0x7 << PLANE_INFO_SHIFT)
 #define CMD_LENGTH_MASK		0xff
