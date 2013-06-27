@@ -441,16 +441,19 @@ static int vgt_emulation_thread(void *priv)
 	int nr_vcpus = info->nr_vcpu;
 
 	struct ioreq *ioreq;
-	int irq;
+	int irq, ret;
 
 	vgt_info("start kthread for VM%d\n", vgt->vm_id);
 
 	ASSERT(info->nr_vcpu <= MAX_HVM_VCPUS_SUPPORTED);
 
 	while (1) {
-		wait_event(info->io_event_wq,
+		ret = wait_event_interruptible(info->io_event_wq,
 			kthread_should_stop() ||
 			bitmap_weight(info->ioreq_pending, nr_vcpus));
+		if (ret)
+			vgt_warn("Emulation thread(%d) waken up"
+				 "by unexpected signal!\n", vgt->vm_id);
 
 		if (kthread_should_stop())
 			return 0;

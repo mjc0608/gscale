@@ -199,12 +199,15 @@ static bool vgt_start_io_forwarding(struct pgt_device *pdev)
 static int vgt_thread(void *priv)
 {
 	struct pgt_device *pdev = (struct pgt_device *)priv;
+	int ret;
 
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
 
 	while (!kthread_should_stop()) {
-		wait_event(pdev->event_wq, pdev->request);
+		ret = wait_event_interruptible(pdev->event_wq, pdev->request);
+		if (ret)
+			vgt_warn("Main thread waken up by unexpected signal!\n");
 
 		if (!pdev->request) {
 			vgt_warn("Main thread waken up by unknown reasons!\n");
