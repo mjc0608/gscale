@@ -383,7 +383,7 @@ vgt_ppgtt_pde_write(struct vgt_device *vgt, unsigned int g_gtt_index, u32 g_gtt_
 	}
 }
 
-bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
+static bool gtt_mmio_read32(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t g_gtt_index;
@@ -407,9 +407,22 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
+bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes)
+{
+	int ret;
+	ASSERT(bytes == 4 || bytes == 8);
+
+	ret = gtt_mmio_read32(vgt, off, p_data, 4);
+	if (ret && bytes == 8)
+		ret = gtt_mmio_read32(vgt, off + 4, (char*)p_data + 4, 4);
+
+	return ret;
+}
+
 #define GTT_INDEX_MB(x) ((SIZE_1MB*(x)) >> GTT_PAGE_SHIFT)
 
-bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
+static bool gtt_mmio_write32(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t g_gtt_val, h_gtt_val, g_gtt_index, h_gtt_index;
@@ -469,6 +482,19 @@ out:
 	gtt_mmio_wcycles += (u64) t1;
 
 	return true;
+}
+
+bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes)
+{
+	int ret;
+	ASSERT(bytes == 4 || bytes == 8);
+
+	ret = gtt_mmio_write32(vgt, off, p_data, 4);
+	if (ret && bytes == 8)
+		ret = gtt_mmio_write32(vgt, off + 4, (char*)p_data + 4, 4);
+
+	return ret;
 }
 
 /* So idea is that for PPGTT base in GGTT, real PDE entry will point to shadow
