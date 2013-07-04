@@ -75,6 +75,9 @@ bool shadow_tail_based_qos = false;
 module_param_named(shadow_tail_based_qos, shadow_tail_based_qos, bool, 0600);
 MODULE_PARM_DESC(shadow_tail_based_qos, "Use Shadow tail based QoS scheduler (default: false)");
 
+bool render_engine_reset = true;
+module_param_named(render_engine_reset, render_engine_reset, bool, 0600);
+MODULE_PARM_DESC(render_engine_reset, "Reset rendering engines before loading another VM's context");
 /*
  * FIXME: now video ring switch has weird issue. The cmd
  * parser may enter endless loop even when head/tail is

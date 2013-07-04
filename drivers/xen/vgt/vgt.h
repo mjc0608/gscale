@@ -89,6 +89,7 @@ extern int dom0_gm_sz;
 extern int dom0_fence_sz;
 extern bool bypass_scan;
 extern bool bypass_dom0_addr_check;
+extern bool render_engine_reset;
 
 enum vgt_event_type {
 	// GT

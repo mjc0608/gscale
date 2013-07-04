@@ -1494,7 +1494,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 			goto err;
 		}
 
-		if (!vgt_reset_engine(pdev, i)) {
+		if (render_engine_reset && !vgt_reset_engine(pdev, i)) {
 			vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>): fail to reset engine\n",
 				i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
 				prev->vgt_id, next->vgt_id);
