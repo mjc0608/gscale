@@ -75,7 +75,7 @@ bool shadow_tail_based_qos = false;
 module_param_named(shadow_tail_based_qos, shadow_tail_based_qos, bool, 0600);
 MODULE_PARM_DESC(shadow_tail_based_qos, "Use Shadow tail based QoS scheduler (default: false)");
 
-bool render_engine_reset = true;
+bool render_engine_reset = false;
 module_param_named(render_engine_reset, render_engine_reset, bool, 0600);
 MODULE_PARM_DESC(render_engine_reset, "Reset rendering engines before loading another VM's context");
 /*
