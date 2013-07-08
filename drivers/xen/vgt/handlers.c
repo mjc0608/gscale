@@ -1900,7 +1900,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_BLC_PWM_PCH_CTL2, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 
 {_REG_PCH_GMBUS0, 4*4, F_VIRT, 0, D_ALL, gmbus_mmio_read, gmbus_mmio_write},
-{_REG_PCH_GPIOA, 6*6, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PCH_GPIOA, 6*4, F_VIRT, 0, D_ALL, NULL, NULL},
 
 {_REG_DP_BUFTRANS, 0x28, F_DPY, 0, D_ALL, NULL, NULL},
 
