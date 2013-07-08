@@ -157,11 +157,6 @@ static bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 {
 	uint32_t data;
 
-	if (bytes > 4){
-		printk("invalid force wake data\n");
-		return false;
-	}
-
 	data = (*(uint32_t*) p_data) & 1 ;
 
 	vgt_dbg("VM%d write register FORCE_WAKE with %x\n", vgt->vm_id, data);
@@ -196,12 +191,6 @@ static bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t data, mask, wake, old_wake, new_wake;
-
-
-	if (bytes > 4){
-		printk("invalid force wake data\n");
-		return false;
-	}
 
 	data = *(uint32_t*) p_data;
 
@@ -246,8 +235,6 @@ static bool rc_state_ctrl_1_mmio_write(struct vgt_device *vgt, unsigned int offs
 {
 	uint32_t data;
 
-	ASSERT(bytes == 4);
-
 	data = *(uint32_t*)p_data;
 	printk("VM%d write register RC_STATE_CTRL_1 with 0x%x\n", vgt->vm_id, data);
 
@@ -266,8 +253,6 @@ static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 {
 	uint32_t data;
 	int i;
-
-	ASSERT(bytes <=4);
 
 	data = 0;
 	memcpy(&data, p_data, bytes);
@@ -305,8 +290,6 @@ static bool pch_pp_control_mmio_write(struct vgt_device *vgt, unsigned int offse
 	union PCH_PP_CONTROL pp_control;
 	union PCH_PP_STAUTS pp_status;
 
-	ASSERT(bytes == 4);
-
 	reg = offset & ~(bytes - 1);
 	if (reg_hw_access(vgt, reg)){
 		return default_mmio_write(vgt, offset, p_data, bytes);
@@ -340,8 +323,6 @@ static bool transaconf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	uint32_t reg;
 	union _TRANS_CONFIG config;
 
-	ASSERT(bytes == 4);
-
 	reg = offset & ~(bytes - 1);
 	if (reg_hw_access(vgt, reg)){
 		return default_mmio_write(vgt, offset, p_data, bytes);
@@ -373,8 +354,6 @@ static bool pipe_dsl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 static bool dpy_reg_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	ASSERT(bytes == 4);
-
 	*(uint32_t*)p_data = (1<<17);
 
 	return true;
@@ -383,8 +362,6 @@ static bool dpy_reg_mmio_read(struct vgt_device *vgt, unsigned int offset,
 static bool dpy_reg_mmio_read_2(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	ASSERT(bytes == 4);
-
 	*(uint32_t*)p_data = 3;
 
 	return true;
@@ -393,8 +370,6 @@ static bool dpy_reg_mmio_read_2(struct vgt_device *vgt, unsigned int offset,
 static bool dpy_reg_mmio_read_3(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	ASSERT(bytes == 4);
-
 	*(uint32_t*)p_data = (0x2F << 16);
 
 	return true;
@@ -436,8 +411,6 @@ static bool pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 	int ring_id = pp_mmio_to_ring_id(off);
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 
-	ASSERT(bytes == 4);
-
 	*(u32 *)p_data = v_info->base;
 
 	vgt_dbg("<ring-%d>PP_DIR_BASE read: 0x%x\n", ring_id, v_info->base);
@@ -451,8 +424,6 @@ static bool pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 	int ring_id = pp_mmio_to_ring_id(off);
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 	vgt_ring_ppgtt_t *s_info = &vgt->rb[ring_id].sring_ppgtt_info;
-
-	ASSERT(bytes == 4);
 
 	vgt_dbg("<ring-%d> PP_DIR_BASE write: 0x%x\n", ring_id, base);
 
@@ -473,8 +444,6 @@ static bool pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 static bool pp_dclv_read(struct vgt_device *vgt, unsigned int off,
 			void *p_data, unsigned int bytes)
 {
-	ASSERT(bytes == 4);
-
 	*(u32 *)p_data = 0xFFFFFFFF;
 	return true;
 }
@@ -483,8 +452,6 @@ static bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
 			void *p_data, unsigned int bytes)
 {
 	u32 dclv = *(u32 *)p_data;
-
-	ASSERT(bytes == 4);
 	__vreg(vgt, off) = dclv;
 	__sreg(vgt, off) = dclv;
 
@@ -500,8 +467,6 @@ static bool ring_pp_mode_read(struct vgt_device *vgt, unsigned int off,
 	int ring_id = pp_mmio_to_ring_id(off);
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 
-	ASSERT(bytes == 4);
-
 	*(u32 *)p_data = v_info->mode;
 	vgt_dbg("<ring-%d>GFX_MODE read: 0x%x\n", ring_id, v_info->mode);
 	return true;
@@ -512,8 +477,6 @@ static bool ring_pp_mode_write(struct vgt_device *vgt, unsigned int off,
 {
 	u32 mode = *(u32 *)p_data;
 	int ring_id = pp_mmio_to_ring_id(off);
-
-	ASSERT(bytes == 4);
 
 	vgt_dbg("<ring-%d>GFX_MODE write: 0x%x\n", ring_id, mode);
 
@@ -571,8 +534,6 @@ static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	unsigned int reg;
 	uint32_t wr_data;
 
-	ASSERT(bytes == 4);
-
 	reg = offset & ~(bytes - 1);
 
 	wr_data = *((uint32_t *)p_data);
@@ -597,8 +558,6 @@ static bool ddi_buf_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	bool rc;
 	vgt_reg_t reg_val;
 
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
-
 	reg_val = *(vgt_reg_t *)p_data;
 
 	// set the RO bit with its original value
@@ -617,7 +576,6 @@ static bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	vgt_reg_t wr_data, old_iir;
 	bool rc;
 
-	ASSERT(bytes == 4 && !(offset & (bytes - 1)));
 	reg = offset & ~(bytes -1);
 
 	wr_data = *(vgt_reg_t *)p_data;
@@ -685,8 +643,6 @@ static bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset
 	unsigned int reg, fdi_rx_iir;
 	bool rc;
 
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
-
 	reg = offset & ~(bytes - 1);
 
 	switch (offset) {
@@ -735,8 +691,6 @@ static bool dp_tp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	vgt_reg_t ctl_val;
 	bool rc;
 
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
-
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
 
 	if (!reg_hw_access(vgt, offset)) {
@@ -764,8 +718,6 @@ static bool dp_tp_status_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	bool rc = true;
 	vgt_reg_t reg_val;
 	vgt_reg_t sticky_mask;
-
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 
 	reg_val = *((vgt_reg_t *)p_data);
 	sticky_mask = ((1 << BIT_27) | (1 << BIT_26) | (1 << BIT_24)) & reg_val;
@@ -803,7 +755,6 @@ static bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	unsigned int reg;
 	vgt_reg_t adpa_value;
 
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 	reg = offset & ~(bytes - 1);
 
 	/*
@@ -835,8 +786,6 @@ static bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 {
 	vgt_reg_t old, new;
 	struct pgt_device *pdev = vgt->pdev;
-
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 
 	new = *(vgt_reg_t *)p_data;
 	old = __vreg(vgt, offset);
@@ -895,7 +844,6 @@ static bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	bool rc;
 	struct pgt_device *pdev = vgt->pdev;
 
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 	reg = offset & ~(bytes - 1);
 
 	rc = default_mmio_read(vgt, offset, p_data, bytes);
@@ -945,8 +893,6 @@ static bool dp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	bool rc;
 	struct pgt_device *pdev = vgt->pdev;
 
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
-
 	reg = offset & ~(bytes - 1);
 	vreg_data = *(vgt_reg_t *)p_data;
 
@@ -988,7 +934,6 @@ static bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	bool rc;
 	struct pgt_device *pdev = vgt->pdev;
 
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 	reg = offset & ~(bytes - 1);
 
 	rc = default_mmio_read(vgt, offset, p_data, bytes);
@@ -1038,8 +983,6 @@ static bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	bool rc;
 	struct pgt_device *pdev = vgt->pdev;
 
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
-
 	reg = offset & ~(bytes - 1);
 	vreg_data = *(vgt_reg_t *)p_data;
 
@@ -1076,8 +1019,6 @@ static bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 static bool dpy_plane_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes)
 {
-	ASSERT (bytes == 4);
-
 	if (current_foreground_vm(vgt->pdev) == vgt) {
 		__sreg(vgt, offset) = VGT_MMIO_READ(vgt->pdev, offset);
 		__vreg(vgt, offset) = mmio_h2g_gmadr(vgt, offset,
@@ -1092,7 +1033,6 @@ static bool dpy_plane_mmio_read(struct vgt_device *vgt, unsigned int offset,
 static bool dpy_plane_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	ASSERT(bytes == 4);
 	memcpy ((char *)vgt->state.vReg + offset, p_data, bytes);
 	memcpy ((char *)vgt->state.sReg + offset, p_data, bytes);
 	if (current_foreground_vm(vgt->pdev) == vgt) {
@@ -1105,8 +1045,6 @@ static bool dpy_modeset_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	bool rc;
-
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
 
@@ -1129,8 +1067,6 @@ static bool surflive_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	vgt_reg_t surflive_val;
 	unsigned int surf_reg = 0;
 	enum vgt_pipe pipe;
-
-	ASSERT(bytes == 4 && (offset & 0x3) == 0);
 
 	if (plane == PRIMARY_PLANE) {
 		pipe = VGT_DSPSURFLIVEPIPE(offset);
@@ -1447,8 +1383,6 @@ void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs)
 static bool vga_control_r(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	ASSERT (bytes == 4 && offset == _REG_CPU_VGACNTRL);
-
 	return default_mmio_read(vgt, offset, p_data, bytes);
 }
 
@@ -1456,7 +1390,6 @@ static bool vga_control_w (struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	struct pgt_device *pdev = vgt->pdev;
-	ASSERT (bytes == 4 && offset == _REG_CPU_VGACNTRL);
 
 	default_mmio_write(vgt, offset, p_data, bytes);
 
@@ -1499,9 +1432,6 @@ static bool sbi_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	bool rc;
-
-	ASSERT(bytes == 4);
-	ASSERT((offset & (bytes - 1)) == 0);
 
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
 

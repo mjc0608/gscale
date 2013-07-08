@@ -216,8 +216,6 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
-	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
-
 	vgt_dbg("IRQ: capture IMR write on reg (%x) with val (%x)\n",
 		reg, imr);
 
@@ -261,8 +259,6 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
-	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
-
 	vgt_dbg("IRQ: capture IER write on reg (%x) with val (%x)\n",
 		reg, ier);
 
@@ -299,8 +295,6 @@ bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 	void *p_data, unsigned int bytes)
 {
 	vgt_reg_t iir = *(vgt_reg_t *)p_data;
-
-	ASSERT(bytes <= 4 && !(reg & (bytes - 1)));
 
 	vgt_dbg("IRQ: capture IIR write on reg (%x) with val (%x)\n",
 		reg, iir);
