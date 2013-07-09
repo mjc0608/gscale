@@ -111,6 +111,9 @@ void vgt_clear_wp_table(struct vgt_device *vgt)
 	hash_init((vgt->wp_table));
 }
 
+/* Default MMIO handler registration
+ * These MMIO are registered as at least 4-byte aligned
+ */
 bool vgt_register_mmio_handler(unsigned int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write)
 {
@@ -131,6 +134,7 @@ bool vgt_register_mmio_handler(unsigned int start, int bytes,
 			return false;
 		}
 		mht->base = i;
+		mht->align_bytes = 4;
 		mht->read = read;
 		mht->write = write;
 		INIT_HLIST_NODE(&mht->hlist);
@@ -268,6 +272,14 @@ static inline unsigned int vgt_pa_to_mmio_offset(struct vgt_device *vgt,
 				& PCI_BAR_ADDR_MASK );
 }
 
+static inline bool valid_mmio_alignment(struct vgt_mmio_entry *mht,
+		unsigned int offset, int bytes)
+{
+	if ((bytes >= mht->align_bytes) && !(offset & (bytes - 1)))
+		return true;
+	vgt_err("Invalid MMIO offset(%08x), bytes(%d)\n",offset, bytes);
+	return false;
+}
 /*
  * Emulate the VGT MMIO register read ops.
  * Return : true/false
@@ -281,12 +293,9 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
+	/* FENCE registers / GTT entries(sometimes) are accessed in 8 bytes. */
 	ASSERT (bytes <= 8);
-//	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
-	if (!VGT_REG_IS_ALIGNED(offset, bytes)){
-		printk("unaligned reg %x, bytes=%d\n", offset, bytes);
-		offset = VGT_REG_ALIGN(offset, bytes);
-	}
+	ASSERT (!(offset & (bytes - 1)));
 
 	if (bytes > 4)
 		vgt_dbg("vGT: capture >4 bytes read to %x\n", offset);
@@ -304,9 +313,10 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	ASSERT (reg_is_mmio(pdev, offset + bytes));
 
 	mht = vgt_find_mmio_entry(offset);
-	if ( mht && mht->read )
+	if ( mht && mht->read ) {
+		ASSERT(valid_mmio_alignment(mht, offset, bytes));
 		mht->read(vgt, offset, p_data, bytes);
-	else {
+	} else {
 		default_mmio_read(vgt, offset, p_data, bytes);
 	}
 
@@ -351,9 +361,9 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
-	/* at least FENCE registers are accessed in 8 bytes */
+	/* FENCE registers / GTT entries(sometimes) are accessed in 8 bytes. */
 	ASSERT (bytes <= 8);
-	ASSERT ((offset & (bytes - 1)) + bytes <= bytes);
+	ASSERT (!(offset & (bytes - 1)));
 
 	if (bytes > 4)
 		vgt_dbg("vGT: capture >4 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
@@ -390,9 +400,10 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	}
 
 	mht = vgt_find_mmio_entry(offset);
-	if ( mht && mht->write )
+	if ( mht && mht->write ) {
+		ASSERT(valid_mmio_alignment(mht, offset, bytes));
 		mht->write(vgt, offset, p_data, bytes);
-	else {
+	} else {
 		default_mmio_write(vgt, offset, p_data, bytes);
 	}
 
@@ -912,10 +923,16 @@ static void vgt_initialize_reg_attr(struct pgt_device *pdev,
 void vgt_setup_reg_info(struct pgt_device *pdev)
 {
 	int i, reg;
+	struct vgt_mmio_entry *mht;
 
 	printk("vGT: setup tracked reg info\n");
 	vgt_initialize_reg_attr(pdev, vgt_base_reg_info,
 		vgt_get_base_reg_num(), true);
+
+	/* GDRST can be accessed by byte */
+	mht = vgt_find_mmio_entry(_REG_GEN6_GDRST);
+	if (mht)
+		mht->align_bytes = 1;
 
 	for (i = 0; i < vgt_get_sticky_reg_num(); i++) {
 		for (reg = vgt_sticky_regs[i].reg;

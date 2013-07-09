@@ -330,6 +330,7 @@ typedef bool (*vgt_mmio_write)(struct vgt_device *vgt, unsigned int offset,
 struct vgt_mmio_entry {
 	struct hlist_node hlist;
 	unsigned int base;
+	unsigned int align_bytes;
 	vgt_mmio_read	read;
 	vgt_mmio_write	write;
 };
