@@ -47,31 +47,15 @@ typedef uint32_t vgt_reg_t;
 #include "edid.h"
 
 struct pgt_device;
-extern struct vgt_device *dom0_vgt;
+struct vgt_device;
+extern struct vgt_device *vgt_dom0;
+extern struct pgt_device *perf_pgt;
+extern struct list_head pgt_devices;
+extern struct pgt_device default_device;
 extern void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes);
 extern void show_batchbuffer(struct pgt_device *pdev, u32 addr, bool in_ppgtt);
 extern void show_mode_settings(struct pgt_device *pdev);
 extern void show_debug(struct pgt_device *pdev, int ring_id);
-#define ASSERT(x)							\
-	do {								\
-		if (!(x)) {						\
-			printk("Assert at %s line %d\n",		\
-				__FILE__, __LINE__);			\
-			if (vgt_dom0)					\
-				show_ringbuffer(vgt_dom0->pdev, 0, 64);	\
-			BUG();						\
-		}							\
-	} while (0);
-#define ASSERT_NUM(x, y)						\
-	do {								\
-		if (!(x)) {						\
-			printk("Assert at %s line %d para 0x%llx\n",	\
-				__FILE__, __LINE__, (u64)y);		\
-			if (vgt_dom0)					\
-				show_ringbuffer(vgt_dom0->pdev, 0, 64);	\
-			BUG();						\
-		}							\
-	} while (0);
 
 extern bool hvm_render_owner;
 extern bool hvm_display_owner;
@@ -612,7 +596,6 @@ struct vgt_device {
 	atomic_t crashing;
 };
 
-extern struct vgt_device *vgt_dom0;
 enum vgt_owner_type {
 	VGT_OT_NONE = 0,		// No owner type
 	VGT_OT_RENDER,			// the owner directly operating all render buffers (render/blit/video)
@@ -836,9 +819,6 @@ struct pgt_device {
 	void *opregion_va;
 };
 
-extern struct pgt_device *perf_pgt;
-extern struct list_head pgt_devices;
-extern struct pgt_device default_device;
 /*
  * MI_STORE_DATA is used widely for synchronization between GPU and driver,
  * which suppports the destination in either a specific hardware status
@@ -881,6 +861,42 @@ extern void do_vgt_fast_display_switch(struct vgt_device *pdev);
 	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].mode_ctl.mask)
 #define reg_aux_addr_mask(pdev, index)	\
 	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].addr_fix.mask)
+
+/*
+ * Kernel BUG() doesn't work, because bust_spinlocks try to unblank screen
+ * which may call into i915 and thus cause undesired more errors on the
+ * screen
+ */
+static inline void vgt_panic(void)
+{
+	int i;
+	struct pgt_device *pdev = &default_device;
+
+	for (i = 0; i < pdev->max_engines; i++) {
+		show_debug(pdev, i);
+		show_ringbuffer(pdev, i, 64);
+	}
+
+	dump_stack();
+	printk("________end of stack dump_________\n");
+	panic("FATAL VGT ERROR\n");
+}
+#define ASSERT(x)							\
+	do {								\
+		if (!(x)) {						\
+			printk("Assert at %s line %d\n",		\
+				__FILE__, __LINE__);			\
+			vgt_panic();					\
+		}							\
+	} while (0);
+#define ASSERT_NUM(x, y)						\
+	do {								\
+		if (!(x)) {						\
+			printk("Assert at %s line %d para 0x%llx\n",	\
+				__FILE__, __LINE__, (u64)y);		\
+			vgt_panic();					\
+		}							\
+	} while (0);
 
 static inline void reg_set_hw_status(struct pgt_device *pdev, vgt_reg_t reg)
 {
