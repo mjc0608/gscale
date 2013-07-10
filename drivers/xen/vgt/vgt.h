@@ -1818,7 +1818,7 @@ static inline void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int 
 	vgt_reg_t vreg_data;
 	unsigned int i;
 
-	ASSERT(!(offset & 0x3));
+	offset &= ~0x3;
 	for (i = 0; i < VGT_MAX_VMS; i++) {
 		vgt = pdev->device[i];
 		if (vgt) {
@@ -1834,8 +1834,7 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 	vgt_reg_t vreg_data;
 	unsigned int i;
 
-	ASSERT(!(offset & 0x3));
-
+	offset &= ~0x3;
 	for (i = 0; i < VGT_MAX_VMS; i++) {
 		vgt = pdev->device[i];
 		if (vgt) {
