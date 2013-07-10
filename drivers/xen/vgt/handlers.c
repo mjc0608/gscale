@@ -531,6 +531,7 @@ static bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
+	bool rc;
 	unsigned int reg;
 	uint32_t wr_data;
 
@@ -545,11 +546,20 @@ static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 			wr_data &= ~_REGBIT_PIPE_STAT_ENABLED;
 	}
 
-	/* FIXME: this will cause writing to bit _REGBIT_PIPE_STAT_ENABLED,
-	 * this bit indicate actual pipe state, but in prm, not marked
-	 * readonly bit
-	 */
-	return default_mmio_write(vgt, offset, &wr_data, bytes);
+	rc = default_mmio_write(vgt, offset, &wr_data, bytes);
+
+	if (hvm_boot_foreground == true
+		&& vgt->hvm_boot_foreground_visible == false
+		&& (wr_data & _REGBIT_PIPE_ENABLE)) {
+		/*
+		 * Guest have enabled PIPEx on virtual PIPExCONF.
+		 * So at this point, guest had a vaild surface to show.
+		 */
+		vgt->hvm_boot_foreground_visible = true;
+		do_vgt_fast_display_switch(vgt);
+	}
+
+	return rc;
 }
 
 static bool ddi_buf_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,

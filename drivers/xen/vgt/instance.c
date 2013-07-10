@@ -265,9 +265,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		if (hvm_display_owner)
 			current_display_owner(pdev) = vgt;
 
-		if (hvm_boot_foreground)
-			current_foreground_vm(pdev) = vgt;
-
 		if (hvm_super_owner) {
 			ASSERT(hvm_render_owner);
 			ASSERT(hvm_display_owner);

@@ -595,6 +595,11 @@ struct vgt_device {
 	bool has_context;
 
 	atomic_t crashing;
+	/*
+	 * Have HVM been visible from boot time?
+	 * Used when hvm_boot_foreground mode is enabled.
+	 */
+	bool hvm_boot_foreground_visible;
 };
 
 enum vgt_owner_type {
