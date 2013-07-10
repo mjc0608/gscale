@@ -210,9 +210,8 @@ static struct dentry *vgt_debugfs_create_blob(const char *name, mode_t mode,
 					struct dentry *parent,
 					struct array_data *p)
 {
-	ASSERT(p);
-	ASSERT(p->array);
-
+	if (!p || !(p->array))
+		return NULL;
 	return debugfs_create_file(name, mode, parent, p, &u32_array_fops);
 }
 
@@ -538,8 +537,8 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	printk("vGT(%d): Display surface A va(%p) size(%d)\n", vgt_id, dsp_surf_base[vgt_id][PIPE_A], dsp_surf_size[vgt_id][PIPE_A]);
 	printk("vGT(%d): Display surface B va(%p) size(%d)\n", vgt_id, dsp_surf_base[vgt_id][PIPE_B], dsp_surf_size[vgt_id][PIPE_B]);
 
-	ASSERT(vgt);
-	ASSERT(d_vgt_debug);
+	if (!vgt || !d_vgt_debug)
+		return -EINVAL;
 
 	retval = sprintf(vm_dir_name[vgt_id], "vm%d", vgt->vm_id);
 	if (retval <= 0) {
@@ -650,7 +649,8 @@ void vgt_destroy_debugfs(struct vgt_device *vgt)
 {
 	int vgt_id = vgt->vgt_id;
 
-	ASSERT(d_per_vgt[vgt_id]);
+	if(!d_per_vgt[vgt_id])
+		return;
 
 	debugfs_remove_recursive(d_per_vgt[vgt_id]);
 	d_per_vgt[vgt_id] = NULL;
