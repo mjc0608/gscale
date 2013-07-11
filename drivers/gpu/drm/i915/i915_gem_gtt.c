@@ -93,11 +93,29 @@ void i915_check_vgt(struct drm_i915_private *dev_priv)
 		dev_priv->in_xen_vgt = true;
 }
 
+static int sanitize_enable_ppgtt(struct drm_device *dev, int enable_ppgtt);
 static int i915_balloon(struct drm_i915_private *dev_priv)
 {
-        unsigned long 	apert_base, apert_size;
-        unsigned long	gmadr_base, gmadr_size;
+        unsigned long apert_base, apert_size, apert_end;
+        unsigned long gmadr_base, gmadr_size, gmadr_end;
 	int	fail = 0;
+
+	bool enable_ppgtt = sanitize_enable_ppgtt(dev_priv->dev, i915.enable_ppgtt);
+	bool ppgtt_pdes_allocated = false;
+
+	/* At the end of low_gm and high_gm there is a guard page,
+	 * respectively.
+	 *
+	 * And, if i915 wants to enable PPGTT, we also need to reserve
+	 * I915_PPGTT_PD_ENTRIES pages at the end of high_gm (in this
+	 * case, the guard page is the page that is just before the
+	 * I915_PPGTT_PD_ENTRIES pages).
+	 * If the size of high_gm is not big enough, we try to reserve
+	 * the I915_PPGTT_PD_ENTRIES pages at the end of low_gm.
+	 */
+
+	unsigned long guard_pg_sz = PAGE_SIZE;
+	unsigned long rsvd_pg_sz_for_ppgtt = GEN6_PPGTT_PD_ENTRIES * PAGE_SIZE;
 
 	printk("i915_balloon...\n");
 
@@ -105,6 +123,9 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 	apert_size = I915_READ(vgt_info_off(avail_rs.low_gmadr.my_size));
 	gmadr_base = I915_READ(vgt_info_off(avail_rs.high_gmadr.my_base));
 	gmadr_size = I915_READ(vgt_info_off(avail_rs.high_gmadr.my_size));
+
+	apert_end = apert_base + apert_size;
+	gmadr_end = gmadr_base + gmadr_size;
 
 	printk("Balooning configuration: aperture_base 0x%lx aperture_size %ldKB, gmaddr_base 0x%lx gmaddr_size %ldKB\n",
 			apert_base, apert_size/1024, gmadr_base, gmadr_size/1024);
@@ -114,7 +135,7 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 		(gmadr_base + gmadr_size) > dev_priv->gtt.base.start + dev_priv->gtt.base.total) {
 		printk("Invalid ballooning configuration: %lx %lx, %lx %lx\n",
 			apert_base, apert_size, gmadr_base, gmadr_size);
-		return 0;
+		return -EINVAL;
 	}
 
 	dev_priv->mm.vgt_apert_base = apert_base;
@@ -123,6 +144,39 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 	dev_priv->mm.vgt_gmaddr_size = gmadr_size;
 
 	memset (&bl_info, 0, sizeof(bl_info));
+
+	/* GMADR ballooning */
+	if (gmadr_base > dev_priv->gtt.mappable_end) {
+	        fail |= i915_balloon_space(
+			&dev_priv->gtt.base.mm,
+			&bl_info.space[2],
+			dev_priv->gtt.mappable_end, gmadr_base);
+	}
+
+	if (gmadr_base + gmadr_size <= dev_priv->gtt.base.start +
+					dev_priv->gtt.base.total) {
+		if (enable_ppgtt &&
+			(gmadr_size >= rsvd_pg_sz_for_ppgtt)) {
+			gmadr_size -= rsvd_pg_sz_for_ppgtt;
+			ppgtt_pdes_allocated = true;
+		}
+
+		if (gmadr_size > guard_pg_sz) {
+			gmadr_size -= guard_pg_sz;
+		} else {
+			/* gmadr_size is in MB and rsvd_pg_sz_for_ppgtt is
+			 * actually 2M, so gmadr_size must be 0 here.
+			 */
+			BUG_ON(gmadr_size != 0);
+		}
+
+	        fail |= i915_balloon_space(
+			&dev_priv->gtt.base.mm,
+			&bl_info.space[3],
+			gmadr_base + gmadr_size,
+			dev_priv->gtt.base.start + dev_priv->gtt.base.total);
+	}
+
 	/* Aperture ballooning */
 	if ( apert_base > dev_priv->gtt.base.start ) {
 	        fail |= i915_balloon_space(
@@ -131,7 +185,23 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 			dev_priv->gtt.base.start, apert_base);
 	}
 
-	if ( apert_base + apert_size < dev_priv->gtt.mappable_end ) {
+	if ( apert_base + apert_size <= dev_priv->gtt.mappable_end ) {
+		if (enable_ppgtt &&
+			!ppgtt_pdes_allocated &&
+			(apert_size >= rsvd_pg_sz_for_ppgtt)) {
+			apert_size -= rsvd_pg_sz_for_ppgtt;
+			ppgtt_pdes_allocated = true;
+		}
+
+		if (apert_size > guard_pg_sz) {
+			apert_size -= guard_pg_sz;
+		} else {
+			/* apert_size is in MB and rsvd_pg_sz_for_ppgtt is
+			 * actually 2M, so apert_size can only be 0 here.
+			 */
+			BUG_ON(apert_size != 0);
+		}
+
 	        fail |= i915_balloon_space(
 			&dev_priv->gtt.base.mm,
 			&bl_info.space[1],
@@ -139,31 +209,20 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 			dev_priv->gtt.mappable_end);
 	}
 
-	/* GMADR ballooning */
-	if ( gmadr_base > dev_priv->gtt.mappable_end ) {
-	        fail |= i915_balloon_space(
-			&dev_priv->gtt.base.mm,
-			&bl_info.space[2],
-			dev_priv->gtt.mappable_end, gmadr_base);
+	if (enable_ppgtt) {
+		if (!ppgtt_pdes_allocated) {
+			fail |= 1;
+			printk("vGT: can not get space for PPGTT table!\n");
+		}
 	}
-
-	if ( gmadr_base + gmadr_size < dev_priv->gtt.base.start + dev_priv->gtt.base.total) {
-	        fail |= i915_balloon_space(
-			&dev_priv->gtt.base.mm,
-			&bl_info.space[3],
-			gmadr_base + gmadr_size,
-			dev_priv->gtt.base.start + dev_priv->gtt.base.total);
-	}
-
-	/* Fence register ballooning */
 
 	if ( fail ) {
 		printk(KERN_ERR "balloon fail!\n");
 		i915_deballoon(dev_priv);
-		return 0;
+		return -ENOMEM;
 	}
 	printk("balloon successfully\n");
-	return 1;
+	return 0;
 }
 #endif
 
@@ -1825,14 +1884,12 @@ static int i915_gem_setup_global_gtt(struct drm_device *dev,
 	struct drm_mm_node *entry;
 	struct drm_i915_gem_object *obj;
 	unsigned long hole_start, hole_end;
-	int ret;
+	int ret = 0;
 
 	/* REVISIT. */
 //	BUG_ON(mappable_end > end);
 	printk("Eddie: mappable_end %lx\n", mappable_end);
-       /*
-        * TO Check: mappable_end report 64MB while end is 64MB - one page.
-        */
+      
        if ( mappable_end > end )
                mappable_end = end;
 
@@ -1862,7 +1919,7 @@ static int i915_gem_setup_global_gtt(struct drm_device *dev,
 
 #ifdef DRM_I915_VGT_SUPPORT
 	if (dev_priv->in_xen_vgt)
-		i915_balloon(dev_priv);
+		ret = i915_balloon(dev_priv);
 #endif
 
 	/* Clear any non-preallocated blocks */
