@@ -93,16 +93,11 @@ static bool ring_is_empty(struct pgt_device *pdev,
 static bool ring_is_idle(struct pgt_device *pdev,
 	int id)
 {
-	/*
-	* FIXME: it turns out that psmi idle status bit check may not be
-	 * always true when both dom0/Linux VM runs glxgears in parallel. Not
-	 * sure the reason yet. So disable this check for now, but need revise
-	 * in the future
-	 */
-#if 0
-	if (!(VGT_MMIO_READ(pdev, pdev->ring_psmi[id]) & _REGBIT_PSMI_IDLE_INDICATOR))
+	if (pdev->ring_idle_check &&
+	    !(VGT_MMIO_READ(pdev, pdev->ring_idle[id]) &
+		      (1 << pdev->ring_idle_bit[id])))
 		return false;
-#endif
+
 	return true;
 }
 

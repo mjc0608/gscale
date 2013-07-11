@@ -141,7 +141,11 @@
 #define _REGBIT_PTE_CTL_MASK_GEN7	0xe	/* SNB/IVB */
 #define _REGBIT_PTE_CTL_MASK_GEN7_5	0x80e	/* HSW */
 
-#define	_REGBIT_PSMI_IDLE_INDICATOR	(1 << 3)
+#define 	_SNB_IDLE_BIT	3
+#define 	_RCS_IDLE_BIT	0
+#define 	_VCS_IDLE_BIT	1
+#define 	_BCS_IDLE_BIT	2
+#define 	_VECS_IDLE_BIT	10
 
 #define _REG_RCS_IMR		0x20A8
 #define _REG_VCS_IMR		0x120A8

@@ -193,11 +193,9 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	p_ctl = VGT_MMIO_READ(pdev, RB_CTL(pdev, ring_id));
 	printk("ring buffer(%d): head (0x%x) tail(0x%x), start(0x%x), "
 			"ctl(0x%x)\n", ring_id, p_head, p_tail, p_start, p_ctl);
-	printk("psmi idle:(%d), mi_mode idle:(%d)\n",
-		VGT_MMIO_READ(pdev, pdev->ring_psmi[ring_id])
-		& _REGBIT_PSMI_IDLE_INDICATOR,
-		VGT_MMIO_READ(pdev, pdev->ring_mi_mode[ring_id])
-		& _REGBIT_MI_RINGS_IDLE);
+	printk("ring idle:(%d), mi_mode idle:(%d)\n",
+		VGT_MMIO_READ(pdev, pdev->ring_idle[ring_id]) & (1 << pdev->ring_idle_bit[ring_id]),
+		VGT_MMIO_READ(pdev, pdev->ring_mi_mode[ring_id]) & _REGBIT_MI_RINGS_IDLE);
 
 	p_head &= RB_HEAD_OFF_MASK;
 	ring_len = _RING_CTL_BUF_SIZE(p_ctl);
