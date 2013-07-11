@@ -531,7 +531,7 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 			uint16_t dpcd_addr;
 
 			if (!*dpcd) {
-				*dpcd = kmalloc(sizeof(struct vgt_dpcd_data), GFP_KERNEL);
+				*dpcd = kzalloc(sizeof(struct vgt_dpcd_data), GFP_KERNEL);
 				if (*dpcd == NULL) {
 					vgt_err("Insufficient memory\n");
 					BUG();
@@ -551,6 +551,8 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 				 *i the second MSB is the returned data.
 				 */
 				(*dpcd)->data[dpcd_addr] = ((value) & 0xff0000) >> 16;
+				if (!(*dpcd)->data[DPCD_REV])
+					break;
 			}
 		}
 
