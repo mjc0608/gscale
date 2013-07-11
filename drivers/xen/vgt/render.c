@@ -179,12 +179,18 @@ static bool idle_rendering_engines(struct pgt_device *pdev, int *id)
 	return true;
 }
 
-static inline void stop_ring(struct pgt_device *pdev, int id)
+static inline bool stop_ring(struct pgt_device *pdev, int id)
 {
 	VGT_MMIO_WRITE(pdev, pdev->ring_mi_mode[id],
 			_REGBIT_MI_STOP_RINGS | (_REGBIT_MI_STOP_RINGS << 16));
 
-	ASSERT(!wait_for_atomic(ring_is_stopped(pdev, id), VGT_RING_TIMEOUT));
+	if (wait_for_atomic(ring_is_stopped(pdev, id), VGT_RING_TIMEOUT)) {
+		vgt_err("Timeout stop ring (%d) for %d ms\n",
+			id, VGT_RING_TIMEOUT);
+		return false;
+	}
+
+	return true;
 }
 
 static inline void start_ring(struct pgt_device *pdev, int id)
@@ -587,7 +593,7 @@ void vgt_ring_init(struct pgt_device *pdev, int id)
 	}
 }
 
-static void vgt_setup_rsvd_ring(struct vgt_rsvd_ring *ring)
+static bool vgt_setup_rsvd_ring(struct vgt_rsvd_ring *ring)
 {
 	struct pgt_device *pdev = ring->pdev;
 	u32 head;
@@ -611,11 +617,17 @@ static void vgt_setup_rsvd_ring(struct vgt_rsvd_ring *ring)
 
 	enable_ring(pdev, id, ((ring->size - PAGE_SIZE) & 0x1FF000) | 1);
 
-	ASSERT(!wait_for(((VGT_READ_CTL(pdev, id) & 1) != 0 &&
+	if (wait_for(((VGT_READ_CTL(pdev, id) & 1) != 0 &&
 			VGT_READ_START(pdev, id) == ring->start &&
 			(VGT_READ_HEAD(pdev, id) & RB_HEAD_OFF_MASK) == 0),
-			VGT_RING_TIMEOUT));
+			VGT_RING_TIMEOUT)) {
+		vgt_err("Timeout setup rsvd ring-%d for %dms\n",
+			VGT_RING_TIMEOUT, id);
+		return false;
+	}
+
 	vgt_dbg("start vgt ring at 0x%x\n", ring->start);
+	return true;
 }
 
 static void vgt_ring_advance(struct vgt_rsvd_ring *ring)
@@ -860,7 +872,8 @@ static bool vgt_init_null_context(struct pgt_device *pdev, int id)
 	ASSERT(!VGT_READ_TAIL(pdev, id));
 
 	/* current ring buffer is dom0's. so switch first */
-	vgt_setup_rsvd_ring(ring);
+	if (!vgt_setup_rsvd_ring(ring))
+		goto err;
 
 	ring->null_context = aperture_2_gm(pdev,
 			rsvd_aperture_alloc(pdev, SZ_CONTEXT_AREA_PER_RING));
@@ -956,7 +969,8 @@ static bool vgt_init_null_context(struct pgt_device *pdev, int id)
 	}
 
 	/* Then recover dom0's ring structure */
-	stop_ring(pdev, id);
+	if (!stop_ring(pdev, id))
+		goto err;
 	vgt_restore_ringbuffer(vgt_dom0, id);
 	start_ring(pdev, id);
 
@@ -969,6 +983,7 @@ static bool vgt_init_null_context(struct pgt_device *pdev, int id)
 err:
 	ring->null_context = 0;
 	ring->indirect_state = 0;
+	vgt_err("NULL context initialization fails!\n");
 	return false;
 }
 
@@ -1474,7 +1489,10 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 			continue;
 
 		/* STEP-2a: stop the ring */
-		stop_ring(pdev, i);
+		if (!stop_ring(pdev, i)) {
+			vgt_err("Fail to stop ring (1st)\n");
+			goto err;
+		}
 
 		/* STEP-2b: save current ring buffer structure */
 		vgt_save_ringbuffer(prev, i);
@@ -1483,29 +1501,27 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 			continue;
 
 		/* STEP-2c: switch to vGT ring buffer */
-		vgt_setup_rsvd_ring(ring);
+		if (!vgt_setup_rsvd_ring(ring)) {
+			vgt_err("Fail to setup rsvd ring\n");
+			goto err;
+		}
+
 		start_ring(pdev, i);
 
 		/* STEP-2d: save HW render context for prev */
 		if (!vgt_save_hw_context(i, prev)) {
-			vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>): fail to save context\n",
-				i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
-				prev->vgt_id, next->vgt_id);
+			vgt_err("Fail to save context\n");
 			goto err;
 		}
 
 		if (render_engine_reset && !vgt_reset_engine(pdev, i)) {
-			vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>): fail to reset engine\n",
-				i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
-				prev->vgt_id, next->vgt_id);
+			vgt_err("Fail to reset engine\n");
 			goto err;
 		}
 
 		/* STEP-2e: restore HW render context for next */
 		if (!vgt_restore_hw_context(i, next)) {
-			vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>): fail to restore context\n",
-				i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
-				prev->vgt_id, next->vgt_id);
+			vgt_err("Fail to restore context\n");
 			goto err;
 		}
 
@@ -1514,7 +1530,11 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 			vgt_err("fail to idle ring-%d after ctx restore\n", i);
 			goto err;
 		}
-		stop_ring(pdev, i);
+
+		if (!stop_ring(pdev, i)) {
+			vgt_err("Fail to stop ring (2nd)\n");
+			goto err;
+		}
 	}
 
 	/* STEP-3: manually restore render context */
@@ -1562,6 +1582,9 @@ out:
 	return true;
 err:
 	/* TODO: any cleanup for context switch errors? */
+	vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>)\n",
+			i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
+			prev->vgt_id, next->vgt_id);
 	vgt_err("FAIL on ring-%d\n", i);
 	vgt_err("cur(%d): head(%x), tail(%x), start(%x)\n",
 			current_render_owner(pdev)->vgt_id,
