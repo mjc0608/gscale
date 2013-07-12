@@ -960,7 +960,7 @@ void *p_data, unsigned int bytes)
 			i2c_bus->edid_slave.edid_data = i2c_bus->gmbus.pedid;
 
 		} else if (slave_addr != 0) {
-			vgt_err("vGT(%d): unsupported gmbus slave addr(%x)\n",
+			vgt_dbg("vGT(%d): unsupported gmbus slave addr(%x)\n",
 					vgt->vgt_id, slave_addr);
 			i2c_bus->current_slave = (vgt_i2c_slave_t *)&i2c_bus->edid_slave;
 			i2c_bus->edid_slave.edid_data = i2c_bus->gmbus.pedid;
