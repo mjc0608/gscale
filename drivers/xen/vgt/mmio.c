@@ -280,6 +280,7 @@ static inline bool valid_mmio_alignment(struct vgt_mmio_entry *mht,
 	vgt_err("Invalid MMIO offset(%08x), bytes(%d)\n",offset, bytes);
 	return false;
 }
+
 /*
  * Emulate the VGT MMIO register read ops.
  * Return : true/false
@@ -320,12 +321,20 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 		default_mmio_read(vgt, offset, p_data, bytes);
 	}
 
-	if (!reg_is_tracked(pdev, offset)) {
-		vgt_warn("vGT: untracked MMIO: vm_id(%d), offset=0x%x,"
+	if (!reg_is_tracked(pdev, offset) && vgt->warn_untrack) {
+		vgt_warn("vGT: untracked MMIO read: vm_id(%d), offset=0x%x,"
 			"len=%d, val=0x%x!!!\n",
-			vgt->vm_id,	offset, bytes, *(u32 *)p_data);
+			vgt->vm_id, offset, bytes, *(u32 *)p_data);
 
-		WARN_ON(vgt->vm_id == 0); /* The call stack is meaningless for HVM */
+		if (offset == 0x206c) {
+			printk("------------------------------------------\n");
+			printk("VM(%d) likely triggers a gfx reset\n", vgt->vm_id);
+			printk("Disable untracked MMIO warning for VM(%d)\n", vgt->vm_id);
+			printk("------------------------------------------\n");
+			vgt->warn_untrack = false;
+		}
+
+		//WARN_ON(vgt->vm_id == 0); /* The call stack is meaningless for HVM */
 	}
 
 	reg_set_accessed(pdev, offset);
@@ -391,12 +400,12 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 		old_sreg = __sreg(vgt, offset);
 	}
 
-	if (!reg_is_tracked(pdev, offset)) {
-		vgt_warn("vGT: untracked MMIO : vm_id(%d), offset=0x%x,"
+	if (!reg_is_tracked(pdev, offset) && vgt->warn_untrack) {
+		vgt_warn("vGT: untracked MMIO write: vm_id(%d), offset=0x%x,"
 			"len=%d, val=0x%x!!!\n",
-			vgt->vm_id,	offset, bytes, *(u32 *)p_data);
+			vgt->vm_id, offset, bytes, *(u32 *)p_data);
 
-		WARN_ON(vgt->vm_id == 0); /* The call stack is meaningless for HVM */
+		//WARN_ON(vgt->vm_id == 0); /* The call stack is meaningless for HVM */
 	}
 
 	mht = vgt_find_mmio_entry(offset);

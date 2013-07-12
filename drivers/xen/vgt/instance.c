@@ -304,6 +304,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	if (shadow_tail_based_qos)
 		vgt_init_rb_tailq(vgt);
 
+	vgt->warn_untrack = true;
 	return 0;
 err:
 	vgt_hvm_info_deinit(vgt);

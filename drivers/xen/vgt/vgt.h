@@ -600,6 +600,8 @@ struct vgt_device {
 	 * Used when hvm_boot_foreground mode is enabled.
 	 */
 	bool hvm_boot_foreground_visible;
+
+	bool warn_untrack;
 };
 
 enum vgt_owner_type {

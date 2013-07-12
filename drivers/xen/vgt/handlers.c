@@ -279,6 +279,9 @@ static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		show_debug(vgt->pdev, i);
 		show_ringbuffer(vgt->pdev, i, 16 * sizeof(vgt_reg_t));
 	}
+
+	/* after this point, driver should re-initialize the device */
+	vgt->warn_untrack = true;
 	return true;
 }
 
