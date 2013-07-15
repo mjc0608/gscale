@@ -779,6 +779,7 @@ struct xen_domctl_getdomaininfo {
 	uint32_t flags;              /* XEN_DOMINF_* */
 	aligned_u64 tot_pages;
 	aligned_u64 max_pages;
+	aligned_u64 outstanding_pages;
 	aligned_u64 shr_pages;
 	aligned_u64 paged_pages;
 	aligned_u64 shared_info_frame; /* GMFN of shared_info struct */
@@ -791,7 +792,7 @@ struct xen_domctl_getdomaininfo {
 };
 DEFINE_GUEST_HANDLE_STRUCT(xen_domctl_getdomaininfo);
 
-#define XEN_DOMCTL_INTERFACE_VERSION 0x00000008
+#define XEN_DOMCTL_INTERFACE_VERSION 0x00000009
 #define XEN_DOMCTL_pausedomain                    3
 #define XEN_DOMCTL_getdomaininfo                  5
 struct xen_domctl {
