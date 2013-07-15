@@ -158,6 +158,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt->vgtt = vzalloc(vgt->vgtt_sz);
 	if (!vgt->vgtt) {
 		printk("vGT: failed to allocate virtual GTT table\n");
+		rc = -ENOMEM;
 		goto err;
 	}
 
@@ -276,13 +277,13 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	bitmap_zero(vgt->started_rings, MAX_ENGINES);
 
 	/* create debugfs per vgt */
-	if (vgt_create_debugfs(vgt)) {
+	if ((rc = vgt_create_debugfs(vgt)) < 0) {
 		vgt_err("failed to create debugfs for vgt-%d\n",
 			vgt->vgt_id);
 		goto err;
 	}
 
-	if (vgt_create_mmio_dev(vgt)) {
+	if ((rc = vgt_create_mmio_dev(vgt)) < 0) {
 		vgt_err("failed to create mmio devnode for vgt-%d\n",
 				vgt->vgt_id);
 		goto err;
