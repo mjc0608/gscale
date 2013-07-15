@@ -1625,9 +1625,6 @@ bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
 
 	ring_mmio_rcnt++;
 
-	ASSERT(bytes <= 4 && !(off & (bytes - 1)));
-	//printk("vGT:ring_mmio_read (%x)\n", off);
-
 	if ((hvm_render_owner && (vgt->vm_id != 0)) || reg_hw_access(vgt, off)){
 		unsigned long data;
 		data = VGT_MMIO_READ_BYTES(vgt->pdev, off, bytes);
@@ -1656,10 +1653,8 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	struct pgt_device *pdev = vgt->pdev;
 
 	ring_mmio_wcnt++;
-	ASSERT(bytes <= 4);
 	vgt_dbg("vGT:ring_mmio_write (0x%x) with val (0x%x)\n", off, *((u32 *)p_data));
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
-	ASSERT(!(rel_off & (bytes - 1)));
 
 	ring_id = tail_to_ring_id (pdev, _tail_reg_(off) );
 	vring = &vgt->rb[ring_id].vring;
@@ -1756,7 +1751,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 		}
 		break;
 	default:
-		ASSERT(0);
+		return false;
 		break;
 	}
 
