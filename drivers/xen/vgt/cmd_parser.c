@@ -25,8 +25,7 @@
 
 #include <linux/slab.h>
 #include "vgt.h"
-#include "reg.h"
-#include <xen/vgt_cmd_parser.h>
+#include "cmd_parser.h"
 
 #include "trace.h"
 
