@@ -319,6 +319,7 @@ typedef struct {
 	/* statistics */
 	uint64_t nr_cmd_ring; /* cmd issued in ring buffer*/
 	uint64_t nr_cmd_batch; /* cmd issued in batch buffer */
+	vgt_reg_t	last_scan_head;
 } vgt_state_ring_t;
 
 struct vgt_device;
@@ -522,7 +523,6 @@ struct vgt_device {
 	struct list_head	list;	/* FIXME: used for context switch ?? */
 	vgt_state_t	state;		/* MMIO state except ring buffers */
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
-	vgt_reg_t		last_scan_head[MAX_ENGINES];
 
 	struct vgt_port_struct *attached_port[I915_MAX_PIPES]; /* one port per PIPE */
 	vgt_i2c_bus_t		vgt_i2c_bus;	/* i2c bus state emulaton for reading EDID */

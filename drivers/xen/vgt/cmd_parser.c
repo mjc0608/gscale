@@ -1705,10 +1705,9 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
  */
 int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 {
-	vgt_ringbuffer_t *vring;
+	vgt_state_ring_t *rs = &vgt->rb[ring_id];
+	vgt_ringbuffer_t *vring = &rs->vring;
 	int ret;
-
-	vring = &vgt->rb[ring_id].vring;
 
 	if ( !(vring->ctl & _RING_CTL_ENABLE) ) {
 		/* Ring is enabled */
@@ -1717,11 +1716,11 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 		return 0;
 	}
 
-	ret = __vgt_scan_vring (vgt, ring_id, vgt->last_scan_head[ring_id],
+	ret = __vgt_scan_vring (vgt, ring_id, rs->last_scan_head,
 		vring->tail & RB_TAIL_OFF_MASK,
 		vring->start, _RING_CTL_BUF_SIZE(vring->ctl));
 
-	vgt->last_scan_head[ring_id] = vring->tail;
+	rs->last_scan_head = vring->tail;
 	return ret;
 }
 

@@ -1645,6 +1645,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ring_id, rel_off;
+	vgt_state_ring_t	*rs;
 	vgt_ringbuffer_t	*vring;
 	vgt_ringbuffer_t	*sring;
 	struct vgt_tailq *tailq = NULL;
@@ -1657,8 +1658,9 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 
 	ring_id = tail_to_ring_id (pdev, _tail_reg_(off) );
-	vring = &vgt->rb[ring_id].vring;
-	sring = &vgt->rb[ring_id].sring;
+	rs = &vgt->rb[ring_id];
+	vring = &rs->vring;
+	sring = &rs->sring;
 
 	if (shadow_tail_based_qos)
 		tailq = &vgt->rb_tailq[ring_id];
@@ -1745,7 +1747,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 			}
 		}
 		if (!bypass_scan && (vring->ctl & _RING_CTL_ENABLE)) {
-			vgt->last_scan_head[ring_id] =
+			rs->last_scan_head =
 				vring->head & RB_HEAD_OFF_MASK;
 			vgt_scan_vring(vgt, ring_id);
 		}
