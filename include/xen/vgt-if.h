@@ -72,7 +72,7 @@ struct vgt_if {
         uint32_t fence_num;
         uint32_t  rsv2[3];
     } avail_rs;			/* available/assigned resource */
-    uint32_t  rsv3[0x200-0x60];	/* pad to half page */
+    uint32_t  rsv3[0x200-24];   /* pad to half page */
     /*
      * The bottom half page is for the response from Gfx driver to hypervisor.
      */
