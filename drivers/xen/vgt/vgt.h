@@ -562,8 +562,6 @@ struct vgt_device {
 	struct kobject kobj;
 	struct vgt_statistics	stat;		/* statistics info */
 
-	bool		ballooning;		/* VM supports ballooning */
-
 	/* PPGTT info: currently not per-ring but assume three rings share same
 	* table.
 	 */
@@ -575,33 +573,29 @@ struct vgt_device {
 	vgt_ppgtt_pde_t	shadow_pde_table[VGT_PPGTT_PDE_ENTRIES];	/* current max PDE entries should be 512 for 2G mapping */
 	vgt_ppgtt_pte_t shadow_pte_table[VGT_PPGTT_PDE_ENTRIES]; /* Current PTE number is same as PDE entries */
 
-	/* force removal from the render run queue */
-	bool force_removal;
-
-	/* Temporary flag for VEBOX guest driver support.
-	 * Linux VM will have official VEBOX support until kernel 3.9.
-	 * Windows driver already enables VEBOX support now.
-	 * So in order to determine whether VM has turned on VEBOX on HSW, this
-	 * flag is used. Will remove in future when VM drivers all have VEBOX
-	 * support. */
-	bool vebox_support;
-
 	/* embedded context scheduler information */
 	struct vgt_sched_info sched_info;
 
 	/* Tail Queue (used to cache tail-writingt) */
 	struct vgt_tailq rb_tailq[MAX_ENGINES];
 
-	bool has_context;
-
-	atomic_t crashing;
+	uint8_t	ballooning:1; /* VM supports ballooning */
+	uint8_t	force_removal:1; /* force removal from the render run queue */
+	/* Temporary flag for VEBOX guest driver support.
+	 * Linux VM will have official VEBOX support until kernel 3.9.
+	 * Windows driver already enables VEBOX support now.
+	 * So in order to determine whether VM has turned on VEBOX on HSW, this
+	 * flag is used. Will remove in future when VM drivers all have VEBOX
+	 * support. */
+	uint8_t vebox_support:1;
+	uint8_t has_context:1;
 	/*
 	 * Have HVM been visible from boot time?
 	 * Used when hvm_boot_foreground mode is enabled.
 	 */
-	bool hvm_boot_foreground_visible;
-
-	bool warn_untrack;
+	uint8_t hvm_boot_foreground_visible:1;
+	uint8_t warn_untrack:1;
+	atomic_t crashing;
 };
 
 enum vgt_owner_type {

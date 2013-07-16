@@ -281,7 +281,7 @@ static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	}
 
 	/* after this point, driver should re-initialize the device */
-	vgt->warn_untrack = true;
+	vgt->warn_untrack = 1;
 	return true;
 }
 
@@ -484,7 +484,7 @@ static bool ring_pp_mode_write(struct vgt_device *vgt, unsigned int off,
 	vgt_dbg("<ring-%d>GFX_MODE write: 0x%x\n", ring_id, mode);
 
 	if (ring_id == RING_BUFFER_VECS)
-		vgt->vebox_support = true;
+		vgt->vebox_support = 1;
 
 	ring_ppgtt_mode(vgt, ring_id, off, mode);
 	return true;
@@ -552,13 +552,13 @@ static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	rc = default_mmio_write(vgt, offset, &wr_data, bytes);
 
 	if (hvm_boot_foreground == true
-		&& vgt->hvm_boot_foreground_visible == false
+		&& !vgt->hvm_boot_foreground_visible
 		&& (wr_data & _REGBIT_PIPE_ENABLE)) {
 		/*
 		 * Guest have enabled PIPEx on virtual PIPExCONF.
 		 * So at this point, guest had a vaild surface to show.
 		 */
-		vgt->hvm_boot_foreground_visible = true;
+		vgt->hvm_boot_foreground_visible = 1;
 		do_vgt_fast_display_switch(vgt);
 	}
 

@@ -1556,7 +1556,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 		vgt_disable_render(prev);
 		wmb();
 		if (prev->force_removal) {
-			prev->force_removal = false;
+			prev->force_removal = 0;
 			if (waitqueue_active(&pdev->destroy_wq))
 				wake_up(&pdev->destroy_wq);
 		}
@@ -1664,7 +1664,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 		tailq = &vgt->rb_tailq[ring_id];
 
 	if (ring_id == RING_BUFFER_VECS)
-		vgt->vebox_support = true;
+		vgt->vebox_support = 1;
 
 	oval = *(vgt_reg_t *)((char *)vring + rel_off);
 	memcpy((char *)vring + rel_off, p_data, bytes);

@@ -381,7 +381,7 @@ static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
 
 	if (!vgt->has_context) {
 		printk("VM %d activate context\n", vgt->vm_id);
-		vgt->has_context = true;
+		vgt->has_context = 1;
 	}
 
 	return 0;

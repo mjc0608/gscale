@@ -125,7 +125,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt->vm_id = vp.vm_id;
 	vgt->pdev = pdev;
 
-	vgt->force_removal = false;
+	vgt->force_removal = 0;
 
 	INIT_LIST_HEAD(&vgt->list);
 
@@ -135,7 +135,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	memset(vgt->presented_ports, 0, sizeof(vgt->presented_ports));
 
 	/* Hard code ballooning now. We can support non-ballooning too in the future */
-	vgt->ballooning = true;
+	vgt->ballooning = 1;
 
 	/* present aperture to the guest at the same host address */
 	vgt->state.aperture_base = phys_aperture_base(pdev);
@@ -305,7 +305,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	if (shadow_tail_based_qos)
 		vgt_init_rb_tailq(vgt);
 
-	vgt->warn_untrack = true;
+	vgt->warn_untrack = 1;
 	return 0;
 err:
 	vgt_hvm_info_deinit(vgt);
@@ -363,7 +363,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	} else {
 		printk("vgt(%d) is current owner, request reschedule\n",
 			vgt->vgt_id);
-		vgt->force_removal = true;
+		vgt->force_removal = 1;
 		next_sched_vgt = vgt_dom0;
 		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 		wmb();
