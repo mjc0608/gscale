@@ -163,7 +163,7 @@ static bool idle_rendering_engines(struct pgt_device *pdev, int *id)
 	for (i=0; i < pdev->max_engines; i++) {
 		struct vgt_rsvd_ring *ring = &pdev->ring_buffer[i];
 
-		if (!ring->need_switch)
+		if (!is_ring_enabled(pdev, i) || !ring->need_switch)
 			continue;
 
 		if ( !idle_render_engine(pdev, i) ) {
@@ -1484,7 +1484,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 			continue;
 
 		/* STEP-2a: stop the ring */
-		if (!stop_ring(pdev, i)) {
+		if (is_ring_enabled(pdev, i) && !stop_ring(pdev, i)) {
 			vgt_err("Fail to stop ring (1st)\n");
 			goto err;
 		}
