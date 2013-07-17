@@ -303,6 +303,7 @@ void vgt_kick_ringbuffers(struct vgt_device *vgt)
 			continue;
 
 		start_ring(pdev, i);
+		apply_post_handle_list(rs, rs->request_id);
 		apply_patch_list(rs, rs->request_id);
 		VGT_WRITE_TAIL(pdev, i, srb->tail);
 	}
@@ -1768,6 +1769,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	 * quantum
 	 */
 	if (reg_hw_access(vgt, off)) {
+		apply_post_handle_list(rs, rs->request_id);
 		apply_patch_list(rs, rs->request_id);
 		VGT_MMIO_WRITE(pdev, off, *(vgt_reg_t*)((char *)sring + rel_off));
 	}

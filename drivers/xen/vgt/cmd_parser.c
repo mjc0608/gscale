@@ -148,6 +148,31 @@ static int add_patch_entry(struct parser_exec_state *s,
 	return 0;
 }
 
+static int add_post_handle_entry(struct parser_exec_state *s,
+	parser_cmd_handler handler)
+{
+	vgt_state_ring_t* rs = &s->vgt->rb[s->ring_id];
+	struct cmd_general_info *list = &rs->handler_list;
+	struct cmd_handler_info *entry;
+	int next;
+
+	next = get_next_entry(list);
+	if (next == list->count) {
+		vgt_err("CMD_SCAN: no free post-handle entry\n");
+		return -ENOSPC;
+	}
+
+	entry = &list->handler[next];
+	/* two pages mapping are always valid */
+	memcpy(&entry->exec_state, s, sizeof(struct parser_exec_state));
+	entry->handler = handler;
+	entry->request_id = rs->request_id;
+
+	list->tail = next;
+	return 0;
+
+}
+
 static void apply_patch_entry(struct cmd_patch_info *patch)
 {
 	ASSERT(patch->addr);
@@ -188,6 +213,31 @@ void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id)
 			submission_id, next, (uint64_t)patch->addr,
 			patch->old_val, patch->new_val, patch->request_id);
 		apply_patch_entry(patch);
+		list->head = next;
+	}
+}
+
+/*
+ * Invoke all post-handle entries with request ID before or
+ * equal to the submission ID
+ */
+void apply_post_handle_list(vgt_state_ring_t *rs, uint64_t submission_id)
+{
+	int next;
+	struct cmd_general_info *list = &rs->handler_list;
+	struct cmd_handler_info *entry;
+
+	next = list->head;
+	while (next != list->tail) {
+		next++;
+		if (next == list->count)
+			next = 0;
+		entry = &list->handler[next];
+		/* TODO: handle id wrap */
+		if (entry->request_id > submission_id)
+			break;
+
+		entry->handler(&entry->exec_state);
 		list->head = next;
 	}
 }
@@ -965,7 +1015,7 @@ static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
 
 #endif
 static struct cmd_info cmd_info[] = {
-	{"MI_NOOP", OP_MI_NOOP, F_LEN_CONST, R_ALL, D_ALL, 0, 1, vgt_cmd_handler_mi_noop},
+	{"MI_NOOP", OP_MI_NOOP, F_LEN_CONST|F_POST_HANDLE, R_ALL, D_ALL, 0, 1, vgt_cmd_handler_mi_noop},
 
 	{"MI_SET_PREDICATE", OP_MI_SET_PREDICATE, F_LEN_CONST, R_ALL, D_HSW_PLUS,
 		0, 1, NULL},
@@ -1001,7 +1051,7 @@ static struct cmd_info cmd_info[] = {
 
 	{"MI_RS_CONTEXT", OP_MI_RS_CONTEXT, F_LEN_CONST, R_RCS, D_HSW_PLUS, 0, 1, NULL},
 
-	{"MI_DISPLAY_FLIP", OP_MI_DISPLAY_FLIP, F_LEN_VAR, R_ALL, D_ALL,
+	{"MI_DISPLAY_FLIP", OP_MI_DISPLAY_FLIP, F_LEN_VAR|F_POST_HANDLE, R_ALL, D_ALL,
 		ADDR_FIX_1(2), 8, vgt_cmd_handler_mi_display_flip},
 
 	{"MI_SEMAPHORE_MBOX", OP_MI_SEMAPHORE_MBOX, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL },
@@ -1688,9 +1738,12 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 			cmd_len, s->buf_type == RING_BUFFER_INSTRUCTION);
 
 	if (info->handler){
-		rc = info->handler(s);
+		if (info->flag & F_POST_HANDLE)
+			rc = add_post_handle_entry(s, info->handler);
+		else
+			rc = info->handler(s);
 		if (rc < 0){
-			vgt_err("%s: %s handler error", __func__, info->name);
+			vgt_err("%s handler error", info->name);
 			return rc;
 		}
 	}
@@ -1698,7 +1751,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 	if (!(info->flag & F_IP_ADVANCE_CUSTOM)){
 		rc = vgt_cmd_advance_default(s);
 		if (rc < 0){
-			vgt_err("%s: %s IP advance error", __func__, info->name);
+			vgt_err("%s IP advance error", info->name);
 			return rc;
 		}
 	}

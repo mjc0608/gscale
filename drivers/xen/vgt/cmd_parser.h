@@ -447,7 +447,7 @@ struct parser_exec_state{
 	uint32_t ip_advance_update;
 };
 
-#define CMD_HANDLER_NUM	128
+#define CMD_HANDLER_NUM	1024
 #define CMD_PATCH_NUM	CMD_HANDLER_NUM * 8
 /* a DW based structure to avoid cross-page trickiness */
 struct cmd_patch_info {

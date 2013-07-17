@@ -1961,6 +1961,7 @@ extern int vgt_klog_init(void);
 extern void vgt_klog_cleanup(void);
 extern void klog_printk(const char *fmt, ...);
 extern void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id);
+extern void apply_post_handle_list(vgt_state_ring_t *rs, uint64_t submission_id);
 
 typedef struct {
 	char *node_name;
