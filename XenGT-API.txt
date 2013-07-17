@@ -16,7 +16,7 @@ Index
 		3.1.5 Enable/disable rendering context switch (experimental)
 		3.1.6 Virtual events injection
 		3.1.7 Accessing physical MMIO registers
-		3.1.8 Remaining graphics memory size, aperture size
+		3.1.8 Remaining graphics memory size
 		      and the number of fence regs
 4 XenGT debugfs interface
 	4.1 Global statistics
@@ -154,7 +154,7 @@ int main (int argc, char **argv) {
 XenGT sysfs interfaces are located under /sys/kernel/vgt, the sub-directory
 "control" contains all the necessary switches for different purposes. After
 a VM is created, a new sub-directory "vmX" ("X" is the VM ID) will be
-created under /sys/kernel/vgt. This "vmX" includes the VM's aperture and
+created under /sys/kernel/vgt. This "vmX" includes the VM's
 graphics memory information. Detailed information for each entry(a.k.a node)
 is listed below.
 
@@ -174,10 +174,10 @@ appropriately -- this is the only way to figure out what kind of error occurs.
 3.1.1 vgt instance creation
 PATH:		/sys/kernel/vgt/control/create_vgt_instance
 
-SYNOPSIS:	echo <vm_id> <aperture_sz> <gm_sz> <fence_sz> <vgt_primary> \
+SYNOPSIS:	echo <vm_id> <low_gm_sz> <high_gm_sz> <fence_sz> <vgt_primary> \
 		> /sys/kernel/vgt/control/create_vgt_instance
 
-		echo <vm_id> <aperture_sz> <gm_sz> <fence_sz>	\
+		echo <vm_id> <low_gm_sz> <high_gm_sz> <fence_sz>	\
 		> /sys/kernel/vgt/control/create_vgt_instance
 
 		echo -<vm_id>  >  \
@@ -189,11 +189,11 @@ DESCRIPTION:	It is used by QEMU to create a vgt instance when a new VM is
 		uses the write() syscall, instead of "echo".
 PARAMETERS:
 vm_id		The new VM's ID. A valid value should be greater than 0.
-aperture_sz	The size of aperture allocated to this VM, in MB
-		(The default is 64MB. NOTES: The Windows7 graphics driver
+low_gm_sz	The size of CPU visible graphics memory allocated to this VM,
+		in MB (The default is 64MB. NOTES: The Windows7 graphics driver
 		for HSW requires a minimum value of 128MB)
-gm_sz		The size of graphics memory allocated to this VM, in MB
-		(The default is 512MB)
+high_gm_sz	The size of CPU invisible graphics memory allocated to this VM,
+                in MB	(The default is 448MB)
 fence_sz	The number of fence registers assigned to this VM
 		(The default is 4)
 
@@ -206,11 +206,11 @@ RETURNED CODE:	The 'errno' will be set to following values.
 EXAMPLES:	Three typical usage for this interface:
 		1) Create vgt instance of VM1 with XenGT as the primary
 		   VGA card.
-		   echo 1 128 512 4 1 >  \
+		   echo 1 128 384 4 1 >  \
 		   /sys/kernel/vgt/control/create_vgt_instance
 		2) Create vgt instance of VM1 with XenGT as the secondary
 		   VGA card.
-		   echo 1 128 512 4 0 >  \
+		   echo 1 128 384 4 0 >  \
 	           /sys/kernel/vgt/control/create_vgt_instance
 		3) Destroy vgt instance of VM 1.
 		   echo -1 > /sys/kernel/vgt/control/create_vgt_instance
@@ -364,33 +364,36 @@ RETURNED CODE:	The 'errno' will be set to following values
 		EIO:		Hypercall can't access the physical register.
 		0:		Succeed.
 
-3.1.8 Remaining graphics memory size, aperture size and the number of fence regs
+3.1.8 Remaining graphics memory size,the number of fence regs
 PATH:		/sys/kernel/vgt/control/available_resources
 
-DESCRIPTION:	This entry shows remaining free aperture size, graphics memory
-		size and available fence registers. It can be used to determine
-		how many VMs with VGT instance can still be created.
+DESCRIPTION:	This entry shows remaining free CPU visible graphics memory size,
+                available CPU invisible graphics memory size and available
+		fence registers.It can be used to determine how many VMs with
+		VGT instance can still be created.
 		The output consists of 3 lines in hexadecimal and looks like this:
 		(Using "\" to represent the continuing of the same line)
 
-		0x00000100, 0x00000080, 0x00000800, 0x00000780, 0x00000010, \
+		0x00000200, 0x00000180, 0x00000600, 0x00000480, 0x00000010, \
 		0x0000000c
-		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
-		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
-		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
-		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
-		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
-		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
-		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
-		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
-		ffffffff,ffffffff,00000000,00000000,00000000,00000000,ffffffff,\
-		ffffffff
-		000f
 
-		The first line shows 6 numbers: total aperture size, free
-		aperture size, toal graphics memory size, free graphics memory
-		size, total number of fence register and the number of free
-		fence registers. (Note: the first 4 are in 'MB').
+		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
+		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
+		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
+		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
+		00000000,00000000,00000000,00000000,00000000,00000000,00000000,\
+		00000000,ffffffff,ffffffff,ffffffff,ffffffff,ffffffff,ffffffff,\
+		ffffffff,ffffffff,ffffffff,ffffffff,ffffffff,ffffffff,ffffffff,\
+		ffffffff,00000000,00000000,00000000,00000000,00000000,00000000,\
+		00000000,00000000,00000000,00000000,00000000,00000000,ffffffff,\
+		ffffffff
+                000f
+
+
+		The first line shows 6 numbers: total CPU visible Graphics memory size,
+		free CPU visible graphics memory size, toal CPU invisible graphics memory size,
+		free CPU invisible graphics memory size, total number of fence register
+		and the number of free fence registers. (Note: the first 4 are in 'MB').
 		The second and third line show the bitmap of graphics memory and
 		fence register allocation. Bits of "1" mean the resources have
 		been taken.

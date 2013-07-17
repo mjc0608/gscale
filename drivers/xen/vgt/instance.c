@@ -108,8 +108,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	char *cfg_space;
 	int rc = -ENOMEM;
 
-	vgt_info("vm_id=%d, aperture_sz=%dMB, gm_sz=%dMB, fence_sz=%d, vgt_primary=%d\n",
-		vp.vm_id, vp.aperture_sz, vp.gm_sz, vp.fence_sz, vp.vgt_primary);
+	vgt_info("vm_id=%d, low_gm_sz=%dMB, high_gm_sz=%dMB, fence_sz=%d, vgt_primary=%d\n",
+		vp.vm_id, vp.aperture_sz, vp.gm_sz-vp.aperture_sz, vp.fence_sz, vp.vgt_primary);
 
 	vgt = kzalloc (sizeof(*vgt), GFP_KERNEL);
 	if (vgt == NULL) {

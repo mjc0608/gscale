@@ -93,19 +93,19 @@ int enable_video_switch = 1;
 module_param_named(enable_video_switch, enable_video_switch, int, 0600);
 
 /*
- * On HSW, the max aperture/GM sizes are 512MB/2GB.
+ * On HSW, the max low/high gm sizes are 512MB/1536MB.
  * If each VM takes 512MB GM, we can support 4VMs.
- * By default Dom0 has 512MB GM, including 64MB aperture used by i915 and
- * 64MB aperture used by vGT driver itself(see VGT_RSVD_APERTURE_SZ), and
- * (512-64-64)MB non-aperture GM space used by i915.
+ * By default Dom0 has 512MB GM, including 64MB low gm used by i915 and
+ * 64MB low gm used by vGT driver itself(see VGT_RSVD_APERTURE_SZ), and
+ * (512-64-64)MB high GM space used by i915.
  * We can reduce the GM space used by Dom0 i915, but remember: Dom0
  * render/display may not work properly without enough GM space.
  */
-int dom0_aperture_sz = 64;	//in MB.
-module_param_named(dom0_aperture_sz, dom0_aperture_sz, int, 0600);
+int dom0_low_gm_sz = 64;	//in MB.
+module_param_named(dom0_low_gm_sz, dom0_low_gm_sz, int, 0600);
 
-int dom0_gm_sz = 512 - 64;	//in MB, including dom0_aperture_sz.
-module_param_named(dom0_gm_sz, dom0_gm_sz, int, 0600);
+int dom0_high_gm_sz = 384;	//in MB.
+module_param_named(dom0_high_gm_sz, dom0_high_gm_sz, int, 0600);
 
 int dom0_fence_sz = 4;
 module_param_named(dom0_fence_sz, dom0_fence_sz, int, 0600);
@@ -486,8 +486,8 @@ int vgt_initialize(struct pci_dev *dev)
 
 	/* create domain 0 instance */
 	vp.vm_id = 0;
-	vp.aperture_sz = dom0_aperture_sz;
-	vp.gm_sz = dom0_gm_sz;
+	vp.aperture_sz = dom0_low_gm_sz;
+	vp.gm_sz = dom0_low_gm_sz + dom0_high_gm_sz;
 	vp.fence_sz = dom0_fence_sz;
 	vp.vgt_primary = 1; /* this isn't actually used for dom0 */
 	if (create_vgt_instance(pdev, &vgt_dom0, vp) < 0)
@@ -643,15 +643,12 @@ static void vgt_param_check(void)
 			 "Please use hvm_boot_foreground or hvm_display_owner instead!\n");
 	}
 
-	/* see the comment where dom0_aperture_sz is defined */
-	if (dom0_aperture_sz > 512 - 64)
-		dom0_aperture_sz = 512 - 64;
+	/* see the comment where dom0_low_gm_sz is defined */
+	if (dom0_low_gm_sz > 512 - 64)
+		dom0_low_gm_sz = 512 - 64;
 
-	if (dom0_gm_sz > 2048)
-		dom0_gm_sz = 2048;
-
-	if (dom0_gm_sz < dom0_aperture_sz)
-		dom0_gm_sz = dom0_aperture_sz;
+	if (dom0_low_gm_sz + dom0_high_gm_sz > 2048)
+		dom0_high_gm_sz = 2048 - dom0_low_gm_sz;
 
 	if (dom0_fence_sz > 16)
 		dom0_fence_sz = 16;

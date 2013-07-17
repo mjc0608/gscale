@@ -142,18 +142,24 @@ ssize_t get_avl_vm_aperture_gm_and_fence(struct pgt_device *pdev, char *buf,
 	unsigned long aperture_guard = phys_aperture_sz(pdev) / SIZE_1MB;
 	unsigned long gm_guard = gm_sz(pdev) / SIZE_1MB;
 	unsigned long fence_guard = VGT_FENCE_BITMAP_BITS;
+	unsigned long available_low_gm_sz = 0;
+	unsigned long available_high_gm_sz = 0;
 	int i;
 	ssize_t buf_len = 0;
 #define MAX_NR_RES 2
 	unsigned long *bitmap[MAX_NR_RES];
 	unsigned long bitmap_sz[MAX_NR_RES];
 
+	available_low_gm_sz = aperture_guard - bitmap_weight(pdev->gm_bitmap,
+	  aperture_guard);
+	available_high_gm_sz = gm_guard - bitmap_weight(pdev->gm_bitmap, gm_guard)
+	  - available_low_gm_sz;
 	buf_len = snprintf(buf, buf_sz, "0x%08lx, 0x%08lx, 0x%08lx, "
 			"0x%08lx, 0x%08lx, 0x%08lx\n",
 			aperture_guard,
-			aperture_guard - bitmap_weight(pdev->gm_bitmap, aperture_guard),
-			gm_guard,
-			gm_guard - bitmap_weight(pdev->gm_bitmap, gm_guard),
+			available_low_gm_sz,
+			gm_guard - aperture_guard,
+			available_high_gm_sz,
 			fence_guard,
 			fence_guard - bitmap_weight(pdev->fence_bitmap, fence_guard)
 			);

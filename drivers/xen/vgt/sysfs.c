@@ -42,14 +42,18 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
 	int param_cnt;
 	char param_str[64];
 	int rc;
+	int high_gm_sz;
+	int low_gm_sz;
 
 	/* We expect the param_str should be vmid,a,b,c (where the guest
 	* wants a MB aperture and b MB gm, and c fence registers) or -vmid
 	* (where we want to release the vgt instance).
 	*/
 	(void)sscanf(buf, "%63s", param_str);
-	param_cnt = sscanf(param_str, "%d,%d,%d,%d,%d", &vp.vm_id, &vp.aperture_sz,
-		&vp.gm_sz, &vp.fence_sz, &vp.vgt_primary);
+	param_cnt = sscanf(param_str, "%d,%d,%d,%d,%d", &vp.vm_id, &low_gm_sz,
+		&high_gm_sz, &vp.fence_sz, &vp.vgt_primary);
+	vp.aperture_sz = low_gm_sz;
+	vp.gm_sz = high_gm_sz + low_gm_sz;
 
 	if (param_cnt == 1) {
 		if (vp.vm_id >= 0)
