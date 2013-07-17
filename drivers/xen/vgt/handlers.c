@@ -1638,6 +1638,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x20dc, 4, F_PT, 0, D_ALL, NULL, NULL},
 
 	/* -------display regs---------- */
+{0x42080, 4, F_VIRT, 0, D_HSW, NULL, NULL},
 {_REG_DEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
 {_REG_DEIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
 {_REG_DEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
@@ -1773,7 +1774,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DVSAKEYMAXVAL, 4, F_DPY, 0, D_SNB, NULL, NULL},
 {_REG_DVSASCALE, 4, F_DPY, 0, D_SNB, NULL, NULL},
 {_REG_DVSBCNTR, 4, F_DPY, 0, D_SNB, NULL, NULL},
-{_REG_DVSBSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_SNB, NULL, NULL},
+{_REG_DVSBSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_DVSBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_SNB, NULL, NULL},
 {_REG_DVSBLINOFF, 4, F_DPY, 0, D_SNB, NULL, NULL},
 {_REG_DVSBPOS, 4, F_DPY, 0, D_SNB, NULL, NULL},
@@ -2216,6 +2217,7 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_SWF, 0x110, F_VIRT, 0, D_SNB, NULL, NULL},
 {_REG_SWF, 0x90, F_VIRT, 0, D_GEN7PLUS, NULL, NULL},
+{_REG_SWF00, 0x40, F_VIRT, 0, D_ALL, NULL, NULL},
 
 	/* -------un-categorized regs--------- */
 
