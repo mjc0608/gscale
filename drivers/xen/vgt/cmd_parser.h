@@ -1,5 +1,5 @@
 /*
- * vgt_cmd_parser.h: core header file for vGT command parser
+ * cmd_parser.h: core header file for vGT command parser
  *
  * Copyright(c) 2011-2013 Intel Corporation. All rights reserved.
  *
@@ -364,6 +364,7 @@ struct cmd_info{
 */
 #define F_IP_ADVANCE_CUSTOM (1<<1)
 
+#define F_POST_HANDLE	(1<<2)
 	uint32_t flag;
 
 #define R_RCS	(1 << RING_BUFFER_RCS )
@@ -444,6 +445,32 @@ struct parser_exec_state{
 
 	struct cmd_info* info;
 	uint32_t ip_advance_update;
+};
+
+#define CMD_HANDLER_NUM	128
+#define CMD_PATCH_NUM	CMD_HANDLER_NUM * 8
+/* a DW based structure to avoid cross-page trickiness */
+struct cmd_patch_info {
+	uint64_t request_id;
+	void *addr;
+	uint32_t old_val;
+	uint32_t new_val;
+};
+
+struct cmd_handler_info {
+	uint64_t request_id;
+	struct parser_exec_state exec_state;
+	parser_cmd_handler handler;
+};
+
+struct cmd_general_info {
+	union {
+		struct cmd_patch_info patch[CMD_PATCH_NUM];
+		struct cmd_handler_info handler[CMD_HANDLER_NUM];
+	};
+	int	head;
+	int	tail;
+	int	count;
 };
 
 extern uint32_t vgt_get_opcode(uint32_t cmd, int ring_id );

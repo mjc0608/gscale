@@ -28,7 +28,6 @@
 #include <linux/delay.h>
 
 #include "vgt.h"
-#include "cmd_parser.h"
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
 

@@ -45,6 +45,7 @@ typedef uint32_t vgt_reg_t;
 #include "reg.h"
 #include "devtable.h"
 #include "edid.h"
+#include "cmd_parser.h"
 
 struct pgt_device;
 struct vgt_device;
@@ -303,6 +304,7 @@ typedef struct {
 
 #define RB_DWORDS_TO_SAVE	32
 typedef	uint32_t	rb_dword;
+
 typedef struct {
 	vgt_ringbuffer_t	vring;		/* guest view ring */
 	vgt_ringbuffer_t	sring;		/* shadow ring */
@@ -316,10 +318,14 @@ typedef struct {
 	u8 has_ppgtt_base_set : 1;	/* Is PP dir base set? */
 	u8 has_ppgtt_mode_enabled : 1;	/* Is ring's mode reg PPGTT enable set? */
 
+	struct cmd_general_info	patch_list;
+	struct cmd_general_info	handler_list;
+
 	/* statistics */
 	uint64_t nr_cmd_ring; /* cmd issued in ring buffer*/
 	uint64_t nr_cmd_batch; /* cmd issued in batch buffer */
 	vgt_reg_t	last_scan_head;
+	uint64_t request_id;
 } vgt_state_ring_t;
 
 struct vgt_device;
@@ -1948,11 +1954,13 @@ extern int vgt_create_debugfs(struct vgt_device *vgt);
 extern int vgt_cmd_parser_init(struct pgt_device *pdev);
 extern void vgt_cmd_parser_exit(void);
 extern int vgt_scan_vring(struct vgt_device *vgt, int ring_id);
+extern void vgt_init_cmd_info(vgt_state_ring_t *rs);
 
 /* klog facility for buck printk */
 extern int vgt_klog_init(void);
 extern void vgt_klog_cleanup(void);
 extern void klog_printk(const char *fmt, ...);
+extern void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id);
 
 typedef struct {
 	char *node_name;

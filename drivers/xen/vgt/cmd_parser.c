@@ -25,8 +25,6 @@
 
 #include <linux/slab.h>
 #include "vgt.h"
-#include "cmd_parser.h"
-
 #include "trace.h"
 
 /* vgt uses below bits in NOOP_ID:
@@ -94,6 +92,105 @@ static int address_fixup(struct parser_exec_state *s, int index){
 #define address_fixup(s,index)	do{}while(0)
 
 #endif
+
+void vgt_init_cmd_info(vgt_state_ring_t *rs)
+{
+	memset(&rs->patch_list, 0, sizeof(struct cmd_general_info));
+	rs->patch_list.head = 0;
+	rs->patch_list.tail = 0;
+	rs->patch_list.count = CMD_PATCH_NUM;
+	memset(&rs->handler_list, 0, sizeof(struct cmd_general_info));
+	rs->handler_list.head = 0;
+	rs->handler_list.tail = 0;
+	rs->handler_list.count = CMD_HANDLER_NUM;
+}
+
+static int get_next_entry(struct cmd_general_info *list)
+{
+	int next;
+
+	next = list->tail + 1;
+	if (next == list->count)
+		next = 0;
+
+	if (next == list->head)
+		next = list->count;
+
+	return next;
+}
+
+/* TODO: support incremental patching */
+static int add_patch_entry(struct parser_exec_state *s,
+	void *addr, uint32_t val)
+{
+	vgt_state_ring_t* rs = &s->vgt->rb[s->ring_id];
+	struct cmd_general_info *list = &rs->patch_list;
+	struct cmd_patch_info *patch;
+	int next;
+
+	ASSERT(addr != NULL);
+
+	next = get_next_entry(list);
+	if (next == list->count) {
+		vgt_err("CMD_SCAN: no free patch entry\n");
+		return -ENOSPC;
+	}
+
+	vgt_dbg("VM(%d): Add patch entry-%d (addr: %llx, val: %x, id: %lld\n",
+		s->vgt->vm_id, next, (uint64_t)addr, val, rs->request_id);
+	patch = &list->patch[next];
+	patch->addr = addr;
+	patch->new_val = val;
+	patch->old_val = *(uint32_t *)addr;
+	patch->request_id = rs->request_id;
+
+	list->tail = next;
+	return 0;
+}
+
+static void apply_patch_entry(struct cmd_patch_info *patch)
+{
+	ASSERT(patch->addr);
+
+	*(uint32_t *)patch->addr = patch->new_val;
+}
+
+#if 0
+static void revert_batch_entry(struct batch_info *info)
+{
+	ASSERT(info->addr);
+
+	*(uint32_t *)info->addr = info->old_val;
+}
+#endif
+
+/*
+ * Apply all patch entries with request ID before or
+ * equal to the submission ID
+ */
+void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id)
+{
+	int next;
+	struct cmd_general_info *list = &rs->patch_list;
+	struct cmd_patch_info *patch;
+
+	next = list->head;
+	while (next != list->tail) {
+		next++;
+		if (next == list->count)
+			next = 0;
+		patch = &list->patch[next];
+		/* TODO: handle id wrap */
+		if (patch->request_id > submission_id)
+			break;
+
+		vgt_dbg("submission-%lld: apply patch entry-%d (addr: %llx, val: %x->%x, id: %lld\n",
+			submission_id, next, (uint64_t)patch->addr,
+			patch->old_val, patch->new_val, patch->request_id);
+		apply_patch_entry(patch);
+		list->head = next;
+	}
+}
 
 /* ring ALL, type = 0 */
 static struct sub_op_bits sub_op_mi[]={
@@ -466,7 +563,7 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 	enum vgt_pipe pipe;
 	enum vgt_plane_type plane;
 	bool async_flip;
-	int i, length;
+	int i, length, rc = 0;
 
 	opcode = *(cmd_ptr(s, 0));
 	stride_val = *(cmd_ptr(s, 1));
@@ -564,16 +661,18 @@ command_noop:
 	vgt_dbg("VM %d: mi_display_flip to be ignored\n",
 		s->vgt->vm_id);
 
-	for (i = 0; i < length; i ++) {
-		*(cmd_ptr(s, i)) = MI_NOOP |
-			(OP_MI_DISPLAY_FLIP << VGT_NOOP_ID_CMD_SHIFT);
+	for (i = 1; i < length; i ++) {
+		rc |= add_patch_entry(s, cmd_ptr(s, i), MI_NOOP |
+			(OP_MI_DISPLAY_FLIP << VGT_NOOP_ID_CMD_SHIFT));
 	}
 
-	*(cmd_ptr(s,0)) |= (plane_code << PLANE_INFO_SHIFT) |
-				(length & CMD_LENGTH_MASK);
+	rc |= add_patch_entry(s, cmd_ptr(s,0), MI_NOOP |
+			(OP_MI_DISPLAY_FLIP << VGT_NOOP_ID_CMD_SHIFT) |
+			(plane_code << PLANE_INFO_SHIFT) |
+			(length & CMD_LENGTH_MASK));
 	s->ip_advance_update = length;
 
-	return 0;
+	return rc;
 
 wrong_command:
 	vgt_warn("VM %d: wrong mi_display_flip command!\n", s->vgt->vm_id);
@@ -1716,6 +1815,7 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 		return 0;
 	}
 
+	rs->request_id++;
 	ret = __vgt_scan_vring (vgt, ring_id, rs->last_scan_head,
 		vring->tail & RB_TAIL_OFF_MASK,
 		vring->start, _RING_CTL_BUF_SIZE(vring->ctl));

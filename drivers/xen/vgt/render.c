@@ -296,12 +296,14 @@ void vgt_kick_ringbuffers(struct vgt_device *vgt)
 
 	for (i = 0; i < pdev->max_engines; i++) {
 		struct vgt_rsvd_ring *ring = &pdev->ring_buffer[i];
-		vgt_ringbuffer_t *srb = &vgt->rb[i].sring;
+		vgt_state_ring_t *rs = &vgt->rb[i];
+		vgt_ringbuffer_t *srb = &rs->sring;
 
 		if (!ring->need_switch)
 			continue;
 
 		start_ring(pdev, i);
+		apply_patch_list(rs, rs->request_id);
 		VGT_WRITE_TAIL(pdev, i, srb->tail);
 	}
 }
@@ -1765,8 +1767,11 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	 * now it's possible for dom0 to fill over than a full ring in a scheduled
 	 * quantum
 	 */
-	if (reg_hw_access(vgt, off))
+	if (reg_hw_access(vgt, off)) {
+		apply_patch_list(rs, rs->request_id);
 		VGT_MMIO_WRITE(pdev, off, *(vgt_reg_t*)((char *)sring + rel_off));
+	}
+
 	//ring_debug(vgt, ring_id);
 	return true;
 }

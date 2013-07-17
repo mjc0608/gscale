@@ -275,6 +275,8 @@ int alloc_vm_rsvd_aperture(struct vgt_device *vgt)
 			       (char *)v_aperture(pdev, ring->null_context),
 			       SZ_CONTEXT_AREA_PER_RING);
 		}
+
+		vgt_init_cmd_info(rb);
 	}
 
 	return 0;
