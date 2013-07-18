@@ -1785,7 +1785,6 @@ static inline bool gma_out_of_range(unsigned long gma, unsigned long gma_head, u
 
 static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head, vgt_reg_t tail, vgt_reg_t base, vgt_reg_t size)
 {
-	static int error_count=0;
 	unsigned long gma_head, gma_tail, gma_bottom;
 	struct parser_exec_state s;
 	int rc=0;
@@ -1834,15 +1833,8 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 
 		rc = vgt_cmd_parser_exec(&s);
 		if (rc < 0){
-			error_count++;
-			vgt_err("error_count=%d\n", error_count);
-#if 0
-			if (error_count >= MAX_PARSER_ERROR_NUM){
-				vgt_err("Reach max error number,stop parsing\n");
-			}
-			klog_printk("error_count=%d\n", error_count);
+			vgt_err("cmd parser error\n");
 			break;
-#endif
 		}
 	}
 	klog_printk("ring buffer scan end on ring %d\n", ring_id);
@@ -1874,6 +1866,9 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 		vring->start, _RING_CTL_BUF_SIZE(vring->ctl));
 
 	rs->last_scan_head = vring->tail;
+
+	/* FIXME: destroy VM  later */
+	ASSERT(!rc);
 	return ret;
 }
 
