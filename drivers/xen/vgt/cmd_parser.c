@@ -36,6 +36,7 @@
  */
 #define VGT_NOOP_ID_CMD_SHIFT	16
 #define VGT_NOOP_ID_CMD_MASK	(0x3f << VGT_NOOP_ID_CMD_SHIFT)
+#define CMD_LENGTH_MASK		0xff
 
 /*
  * new cmd parser
@@ -512,8 +513,22 @@ static inline int cmd_length(struct parser_exec_state *s)
 {
 	struct cmd_info *info = s->info;
 
-	if ((info->flag & F_LEN_MASK) == F_LEN_CONST)
-	{
+	/*
+	 * MI_NOOP is special as the replacement elements. It's fixed
+	 * length in definition, but variable length when using for
+	 * replacement purpose. Instead of having the same handler
+	 * invoke twice (may be postponed), special case length
+	 * handling for MI_NOOP.
+	 */
+	if (info->opcode == OP_MI_NOOP) {
+		unsigned int cmd, length = info->len;
+		cmd = (cmd_val(s,0) & VGT_NOOP_ID_CMD_MASK) >>
+			VGT_NOOP_ID_CMD_SHIFT;
+		if (cmd)
+			length = cmd_val(s,0) & CMD_LENGTH_MASK;
+
+		return length;
+	} else if ((info->flag & F_LEN_MASK) == F_LEN_CONST) {
 		return info->len;
 	}
 	else /* F_LEN_VAR */{
@@ -535,13 +550,7 @@ static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
 
 static int vgt_cmd_advance_default(struct parser_exec_state *s)
 {
-	int rc;
-	if (unlikely(s->ip_advance_update)) {
-		rc = ip_gma_advance(s, s->ip_advance_update);
-		s->ip_advance_update = 0;
-		return rc;
-	} else
-		return ip_gma_advance(s, cmd_length(s));
+	return ip_gma_advance(s, cmd_length(s));
 }
 
 
@@ -602,7 +611,6 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
  */
 #define PLANE_INFO_SHIFT	8
 #define PLANE_INFO_MASK		(0x7 << PLANE_INFO_SHIFT)
-#define CMD_LENGTH_MASK		0xff
 
 static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmitted)
 {
@@ -720,7 +728,6 @@ command_noop:
 			(OP_MI_DISPLAY_FLIP << VGT_NOOP_ID_CMD_SHIFT) |
 			(plane_code << PLANE_INFO_SHIFT) |
 			(length & CMD_LENGTH_MASK));
-	s->ip_advance_update = length;
 
 	return rc;
 
@@ -1004,16 +1011,6 @@ static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
 	return 0;
 }
 
-#if 0
-	{"", OP_, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
-
-	{"", OP_, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL},
-
-	{"", OP_, F_LEN_VAR, R_BCS, D_ALL, 0, 8, NULL},
-
-	{"", OP_, F_LEN_VAR, R_RCS, D_ALL, 0, 8, NULL},
-
-#endif
 static struct cmd_info cmd_info[] = {
 	{"MI_NOOP", OP_MI_NOOP, F_LEN_CONST|F_POST_HANDLE, R_ALL, D_ALL, 0, 1, vgt_cmd_handler_mi_noop},
 
@@ -1789,11 +1786,6 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	struct parser_exec_state s;
 	int rc=0;
 
-#if 0
-	if (error_count >= MAX_PARSER_ERROR_NUM)
-		return 0;
-#endif
-
 	/* ring base is page aligned */
 	ASSERT((base & (PAGE_SIZE-1)) == 0);
 
@@ -1809,13 +1801,10 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	s.ring_size = size;
 	s.ring_head = gma_head;
 	s.ring_tail = gma_tail;
-	s.ip_advance_update = 0;
 
 	rc = ip_gma_set(&s, base + head);
-	if (rc < 0){
-		error_count++;
+	if (rc < 0)
 		return rc;
-	}
 
 	klog_printk("ring buffer scan start on ring %d\n", ring_id);
 	vgt_dbg("scan_start: start=%lx end=%lx\n", gma_head, gma_tail);
@@ -1823,7 +1812,6 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		if (s.buf_type == RING_BUFFER_INSTRUCTION){
 			ASSERT((s.ip_gma >= base) && (s.ip_gma < gma_bottom));
 			if (gma_out_of_range(s.ip_gma, gma_head, gma_tail)){
-				error_count++;
 				vgt_err("ERROR: ip_gma %lx out of range\n", s.ip_gma);
 				break;
 			}
@@ -1868,7 +1856,7 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 	rs->last_scan_head = vring->tail;
 
 	/* FIXME: destroy VM  later */
-	ASSERT(!rc);
+	ASSERT(!ret);
 	return ret;
 }
 

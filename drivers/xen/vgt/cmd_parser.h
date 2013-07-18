@@ -444,7 +444,6 @@ struct parser_exec_state{
 	gtt_addr_t saved_buf_addr_type;
 
 	struct cmd_info* info;
-	uint32_t ip_advance_update;
 };
 
 #define CMD_HANDLER_NUM	1024
