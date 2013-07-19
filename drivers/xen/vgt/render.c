@@ -93,9 +93,6 @@ static bool ring_is_empty(struct pgt_device *pdev,
 static bool ring_is_idle(struct pgt_device *pdev,
 	int id)
 {
-	if (!is_ring_enabled(pdev, id))
-		return true;
-
 	if (pdev->ring_idle_check &&
 	    !(VGT_MMIO_READ(pdev, pdev->ring_idle[id]) &
 		      (1 << pdev->ring_idle_bit[id])))
