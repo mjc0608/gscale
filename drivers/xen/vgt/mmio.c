@@ -366,6 +366,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	unsigned int offset;
 	unsigned long flags;
 	vgt_reg_t old_vreg=0, old_sreg=0;
+	bool rc;
 
 	/* PPGTT PTE WP comes here too. */
 	if (pdev->enable_ppgtt && vgt->vm_id != 0 && vgt->ppgtt_initialized) {
@@ -381,8 +382,8 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
 	/* FENCE registers / GTT entries(sometimes) are accessed in 8 bytes. */
-	ASSERT (bytes <= 8);
-	ASSERT (!(offset & (bytes - 1)));
+	if (bytes > 8 || (offset & (bytes - 1)))
+		goto err_common_chk;
 
 	if (bytes > 4)
 		vgt_dbg("vGT: capture >4 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
@@ -398,12 +399,13 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	raise_ctx_sched(vgt);
 
 	if (reg_is_gtt(pdev, offset)) {
-		gtt_mmio_write(vgt, offset, p_data, bytes);
+		rc = gtt_mmio_write(vgt, offset, p_data, bytes);
 		spin_unlock_irqrestore(&pdev->lock, flags);
-		return true;
+		return rc;
 	}
 
-	ASSERT (reg_is_mmio(pdev, offset + bytes));
+	if (!reg_is_mmio(pdev, offset + bytes))
+		goto err_mmio;
 
 	if (reg_mode_ctl(pdev, offset)) {
 		old_vreg = __vreg(vgt, offset);
@@ -420,11 +422,13 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 
 	mht = vgt_find_mmio_entry(offset);
 	if ( mht && mht->write ) {
-		ASSERT(valid_mmio_alignment(mht, offset, bytes));
-		mht->write(vgt, offset, p_data, bytes);
-	} else {
-		default_mmio_write(vgt, offset, p_data, bytes);
-	}
+		if (!valid_mmio_alignment(mht, offset, bytes))
+			goto err_mmio;
+		if (!mht->write(vgt, offset, p_data, bytes))
+			goto err_mmio;
+	} else
+		if (!default_mmio_write(vgt, offset, p_data, bytes))
+			goto err_mmio;
 
 	/* higher 16bits of mode ctl regs are mask bits for change */
 	if (reg_mode_ctl(pdev, offset)) {
@@ -453,6 +457,12 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	trace_vgt_mmio_rw(VGT_TRACE_WRITE, vgt->vm_id, offset, p_data, bytes);
 	return true;
+err_mmio:
+	spin_unlock_irqrestore(&pdev->lock, flags);
+err_common_chk:
+	vgt_err("VM(%d): invalid MMIO offset(%08x),"
+		"bytes(%d)!\n", vgt->vm_id, offset, bytes);
+	return false;
 }
 
 u64 mmio_rcnt=0;
