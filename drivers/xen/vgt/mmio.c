@@ -291,12 +291,13 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	struct pgt_device *pdev = vgt->pdev;
 	unsigned int offset;
 	unsigned long flags;
+	bool rc;
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
 	/* FENCE registers / GTT entries(sometimes) are accessed in 8 bytes. */
-	ASSERT (bytes <= 8);
-	ASSERT (!(offset & (bytes - 1)));
+	if (bytes > 8 || (offset & (bytes - 1)))
+		goto err_common_chk;
 
 	if (bytes > 4)
 		vgt_dbg("vGT: capture >4 bytes read to %x\n", offset);
@@ -306,20 +307,23 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	raise_ctx_sched(vgt);
 
 	if (reg_is_gtt(pdev, offset)) {
-		gtt_mmio_read(vgt, offset, p_data, bytes);
+		rc = gtt_mmio_read(vgt, offset, p_data, bytes);
 		spin_unlock_irqrestore(&pdev->lock, flags);
-		return true;
+		return rc;
 	}
 
-	ASSERT (reg_is_mmio(pdev, offset + bytes));
+	if (!reg_is_mmio(pdev, offset + bytes))
+		goto err_mmio;
 
 	mht = vgt_find_mmio_entry(offset);
 	if ( mht && mht->read ) {
-		ASSERT(valid_mmio_alignment(mht, offset, bytes));
-		mht->read(vgt, offset, p_data, bytes);
-	} else {
-		default_mmio_read(vgt, offset, p_data, bytes);
-	}
+		if (!valid_mmio_alignment(mht, offset, bytes))
+			goto err_mmio;
+		if (!mht->read(vgt, offset, p_data, bytes))
+			goto err_mmio;
+	} else
+		if (!default_mmio_read(vgt, offset, p_data, bytes))
+			goto err_mmio;
 
 	if (!reg_is_tracked(pdev, offset) && vgt->warn_untrack) {
 		vgt_warn("vGT: untracked MMIO read: vm_id(%d), offset=0x%x,"
@@ -342,6 +346,12 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	trace_vgt_mmio_rw(VGT_TRACE_READ, vgt->vm_id, offset, p_data, bytes);
 	return true;
+err_mmio:
+	spin_unlock_irqrestore(&pdev->lock, flags);
+err_common_chk:
+	vgt_err("VM(%d): invalid MMIO offset(%08x), bytes(%d)!\n",
+		vgt->vm_id, offset, bytes);
+	return false;
 }
 
 /*
