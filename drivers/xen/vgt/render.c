@@ -93,6 +93,9 @@ static bool ring_is_empty(struct pgt_device *pdev,
 static bool ring_is_idle(struct pgt_device *pdev,
 	int id)
 {
+	if (!is_ring_enabled(pdev, id))
+		return true;
+
 	if (pdev->ring_idle_check &&
 	    !(VGT_MMIO_READ(pdev, pdev->ring_idle[id]) &
 		      (1 << pdev->ring_idle_bit[id])))
@@ -208,11 +211,17 @@ static inline void disable_ring(struct pgt_device *pdev, int id)
 	VGT_POST_READ_CTL(pdev, id);
 }
 
+static inline void restore_ring_ctl(struct pgt_device *pdev, int id,
+		vgt_reg_t val)
+{
+	VGT_WRITE_CTL(pdev, id, val);
+	VGT_POST_READ_CTL(pdev, id);
+}
+
 static inline void enable_ring(struct pgt_device *pdev, int id, vgt_reg_t val)
 {
 	ASSERT(val & _RING_CTL_ENABLE);
-	VGT_WRITE_CTL(pdev, id, val);
-	VGT_POST_READ_CTL(pdev, id);
+	restore_ring_ctl(pdev, id, val);
 }
 
 bool vgt_vrings_empty(struct vgt_device *vgt)
@@ -253,13 +262,6 @@ static void vgt_restore_ringbuffer(struct vgt_device *vgt, int id)
 		VGT_READ_HEAD(pdev, id),
 		VGT_READ_TAIL(pdev, id));
 
-	if (!(srb->ctl & _RING_CTL_ENABLE)) {
-		vgt_dbg("vGT/switch-%lld: ring (%d) not enabled. skip\n",
-			vgt_ctx_switch(pdev), id);
-		VGT_WRITE_CTL(pdev, id, 0);
-		return;
-	}
-
 	disable_ring(pdev, id);
 
 	VGT_WRITE_START(pdev, id, srb->start);
@@ -268,8 +270,7 @@ static void vgt_restore_ringbuffer(struct vgt_device *vgt, int id)
 	VGT_WRITE_HEAD(pdev, id, srb->head);
 	VGT_WRITE_TAIL(pdev, id, srb->head);
 
-	enable_ring(pdev, id, srb->ctl);
-
+	restore_ring_ctl(pdev, id, srb->ctl);
 	/*
 	 * FIXME: One weird issue observed when switching between dom0
 	 * and win8 VM. The video ring #1 is not used by both dom0 and
