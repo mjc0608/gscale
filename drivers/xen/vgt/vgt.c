@@ -329,7 +329,8 @@ bool initial_phys_states(struct pgt_device *pdev)
 	 */
 	{
 		u32 val = VGT_MMIO_READ(pdev, 0xc5108);
-		printk("vGT: GMBUS2 init value: %x, %x\n", pdev->initial_mmio_state[REG_INDEX(0xc5100)], val);
+		pdev->initial_mmio_state[REG_INDEX(0xc5108)] &= ~0x8000;
+		printk("vGT: GMBUS2 init value: %x, %x\n", pdev->initial_mmio_state[REG_INDEX(0xc5108)], val);
 		VGT_MMIO_WRITE(pdev, 0xc5108, val | 0x8000);
 	}
 
