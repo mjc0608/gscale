@@ -1481,6 +1481,45 @@ static bool sbi_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+static bool pvinfo_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	vgt_reg_t min;
+	bool rc = default_mmio_write(vgt, offset, p_data, bytes);
+	if (rc) {
+		min = *(vgt_reg_t *)p_data;
+		switch (offset) {
+			case vgt_info_off(min_low_gmadr):
+				if (vgt->aperture_sz < min) {
+					vgt_err("VM(%d): aperture size(%llx) is less than"
+						"its driver's minimum requirement(%x)!\n",
+						vgt->vm_id, vgt->aperture_sz, min);
+					rc = false;
+				}
+				break;
+			case vgt_info_off(min_high_gmadr):
+				if (vgt->gm_sz - vgt->aperture_sz < min) {
+					vgt_err("VM(%d): hiden gm size(%llx) is less than"
+						"its driver's minimum requirement(%x)!\n",
+						vgt->vm_id, vgt->gm_sz - vgt->aperture_sz,
+					        min);
+					rc = false;
+				}
+				break;
+			case vgt_info_off(min_fence_num):
+				if (vgt->fence_sz < min) {
+					vgt_err("VM(%d): fence size(%x) is less than"
+						"its drivers minimum requirement(%x)!\n",
+						vgt->vm_id, vgt->fence_sz, min);
+					rc = false;
+				}
+				break;
+			default:
+				break;
+		}
+	}
+	return rc;
+}
 /*
  * Track policies of all captured registers
  *
@@ -2222,7 +2261,7 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_GEN6_GDRST, 4, F_VIRT, 0, D_ALL, NULL, gen6_gdrst_mmio_write},
 {_REG_FENCE_0_LOW, 0x80, F_VIRT, 0, D_ALL, fence_mmio_read, fence_mmio_write},
-{VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, F_VIRT, 0, D_ALL, NULL, NULL},
+{VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, F_VIRT, 0, D_ALL, NULL, pvinfo_mmio_write},
 {_REG_CPU_VGACNTRL, 4, F_DOM0, 0, D_ALL, vga_control_r, vga_control_w},
 
 /* TODO: MCHBAR, suppose read-only */
