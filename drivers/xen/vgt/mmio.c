@@ -657,6 +657,12 @@ void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 
 static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
 {
+	if (!ioreq->is_vgt) {
+		vgt_info("Recieved a non-VGT ioreq (addr: %lx).\n", (long)ioreq->addr);
+		vgt_info("Possible a false request from event binding\n");
+		return 0;
+	}
+
 	switch (ioreq->type) {
 		case IOREQ_TYPE_PIO:	/* PIO */
 			if ((ioreq->addr & ~7) != 0xcf8)
@@ -699,6 +705,8 @@ static irqreturn_t vgt_hvm_io_req_handler(int irq, void* dev)
 	}
 	if (vcpu == info->nr_vcpu){
 		/*opps, irq is not the registered one*/
+		vgt_info("Received a IOREQ w/o vcpu target\n");
+		vgt_info("Possible a false request from event binding\n");
 		return IRQ_NONE;
 	}
 
@@ -785,6 +793,8 @@ int vgt_hvm_info_init(struct vgt_device *vgt)
 	}
 	info->iopage = info->iopage_vma->addr;
 
+	init_waitqueue_head(&info->io_event_wq);
+
 	info->nr_vcpu = xen_get_nr_vcpu(vgt->vm_id);
 	ASSERT(info->nr_vcpu > 0);
 	ASSERT(info->nr_vcpu <= MAX_HVM_VCPUS_SUPPORTED);
@@ -810,7 +820,6 @@ int vgt_hvm_info_init(struct vgt_device *vgt)
 		info->evtchn_irq[vcpu] = irq;
 	}
 
-	init_waitqueue_head(&info->io_event_wq);
 	thread = kthread_run(vgt_emulation_thread, vgt, "vgt_emulation");
 	if(IS_ERR(thread))
 		goto err;
