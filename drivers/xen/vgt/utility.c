@@ -476,6 +476,30 @@ void free_gtt(struct pgt_device *pdev)
 	vgt_free_gtt_pages(pdev);
 }
 
+void vgt_save_gtt(struct pgt_device *pdev)
+{
+	int i;
+	uint32_t *entry = pdev->saved_gtt;
+
+	ASSERT(pdev->saved_gtt);
+	vgt_info("Save GTT table...\n");
+	for (i = 0; i < gm_pages(pdev); i++)
+		*(entry + i) = vgt_read_gtt(pdev, i);
+
+}
+
+void vgt_restore_gtt(struct pgt_device *pdev)
+{
+	int i;
+	uint32_t *entry = pdev->saved_gtt;
+
+	ASSERT(pdev->saved_gtt);
+	vgt_info("Restore GTT table...\n");
+	for (i = 0; i < gm_pages(pdev); i++)
+		vgt_write_gtt(pdev, i, *(entry + i));
+
+}
+
 void vgt_print_dpcd(struct vgt_dpcd_data *dpcd)
 {
 	int idx;

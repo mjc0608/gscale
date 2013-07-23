@@ -1033,10 +1033,12 @@ static void __vgt_initial_mmio_space (struct pgt_device *pdev,
 
 bool vgt_initial_mmio_setup (struct pgt_device *pdev)
 {
-	pdev->initial_mmio_state = vzalloc(pdev->mmio_size);
 	if (!pdev->initial_mmio_state) {
-		printk("vGT: failed to allocate initial_mmio_state\n");
-		return false;
+		pdev->initial_mmio_state = vzalloc(pdev->mmio_size);
+		if (!pdev->initial_mmio_state) {
+			printk("vGT: failed to allocate initial_mmio_state\n");
+			return false;
+		}
 	}
 
 	__vgt_initial_mmio_space(pdev, vgt_base_reg_info, vgt_get_base_reg_num());

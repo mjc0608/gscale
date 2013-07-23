@@ -68,6 +68,8 @@ extern int xen_register_vgt_driver(vgt_ops_t *ops);
 extern int xen_start_vgt(struct pci_dev *pdev);
 extern void xen_vgt_dom0_ready(struct vgt_device *vgt);
 extern void xen_deregister_vgt_device(struct vgt_device *vgt);
+extern int vgt_suspend(struct pci_dev *pdev);
+extern int vgt_resume(struct pci_dev *pdev);
 
 extern int hcall_mmio_read(
         unsigned long port,

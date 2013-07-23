@@ -279,6 +279,9 @@ bool initial_phys_states(struct pgt_device *pdev)
 
 	pdev->gtt_size = vgt_get_gtt_size(pdev->pbus);
 	gm_sz(pdev) = vgt_get_gtt_size(pdev->pbus) * 1024;
+	pdev->saved_gtt = vzalloc(pdev->gtt_size);
+	if (!pdev->saved_gtt)
+		return false;
 
 	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4)
 		pci_read_config_dword(dev, i,
@@ -597,6 +600,8 @@ void vgt_destroy(void)
 
 	vgt_destroy_sysfs();
 
+	if (pdev->saved_gtt)
+		vfree(pdev->saved_gtt);
 	free_gtt(pdev);
 
 	if (pdev->gmadr_va)
@@ -623,6 +628,84 @@ void vgt_destroy(void)
 		}
 	}
 	vgt_cmd_parser_exit();
+}
+
+int vgt_suspend(struct pci_dev *pdev)
+{
+	struct pgt_device *node, *pgt = NULL;
+
+	if (!xen_initial_domain() || !vgt_enabled)
+		return 0;
+
+	if (list_empty(&pgt_devices)) {
+		printk("vGT: no valid pgt_device registered at suspend\n");
+		return 0;
+	}
+
+	list_for_each_entry(node, &pgt_devices, list) {
+		if (node->pdev == pdev) {
+			pgt = node;
+			break;
+		}
+	}
+
+	if (!pgt) {
+		printk("vGT: no matching pgt_device at suspend\n");
+		return 0;
+	}
+
+	vgt_info("Suspending vGT driver...\n");
+
+	/* TODO: check vGT instance state */
+	/* ... */
+
+	/* save GTT information */
+	vgt_save_gtt(pgt);
+
+	return 0;
+}
+
+int vgt_resume(struct pci_dev *pdev)
+{
+	struct pgt_device *node, *pgt = NULL;
+
+	if (!xen_initial_domain() || !vgt_enabled)
+		return 0;
+
+	if (list_empty(&pgt_devices)) {
+		printk("vGT: no valid pgt_device registered at resume\n");
+		return 0;
+	}
+
+	list_for_each_entry(node, &pgt_devices, list) {
+		if (node->pdev == pdev) {
+			pgt = node;
+			break;
+		}
+	}
+
+	if (!pgt) {
+		printk("vGT: no matching pgt_device at resume\n");
+		return 0;
+	}
+
+	vgt_info("Resuming vGT driver...\n");
+
+	/* restore GTT table */
+	vgt_restore_gtt(pgt);
+
+	/* redo the MMIO snapshot */
+	vgt_initial_mmio_setup(pgt);
+
+	/*
+	 * TODO: need a better place to sync vmmio state
+	 * for now, force override dom0's vmmio only. other
+	 * VMs are supposed to be paused.
+	 */
+	state_sreg_init(vgt_dom0);
+	state_vreg_init(vgt_dom0);
+	/* TODO, GMBUS inuse bit? */
+	return 0;
 }
 
 /* for GFX driver */
