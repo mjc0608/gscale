@@ -783,6 +783,8 @@ int i915_resume_legacy(struct drm_device *dev)
 	if (dev->switch_power_state == DRM_SWITCH_POWER_OFF)
 		return 0;
 
+	set_gen_pci_cfg_space_pt(0);
+
 	ret = i915_drm_resume_early(dev);
 	if (ret)
 		return ret;
@@ -943,6 +945,8 @@ static int i915_pm_suspend(struct device *dev)
 
 	if (drm_dev->switch_power_state == DRM_SWITCH_POWER_OFF)
 		return 0;
+
+	set_gen_pci_cfg_space_pt(1);
 
 	return i915_drm_suspend(drm_dev);
 }

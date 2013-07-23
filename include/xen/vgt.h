@@ -37,6 +37,19 @@ typedef struct {
     bool initialized;	/* whether vgt_ops can be referenced */
 } vgt_ops_t;
 extern vgt_ops_t *vgt_ops;
+
+/* pass through the GEN dev's pci config to Dom0 temporarily ?
+ * HVM Linux DomU's invoking this function has no effect.
+ */
+static inline void set_gen_pci_cfg_space_pt(int enable)
+{
+	/* HVM Linux DomU should do nothing */
+	if (vgt_ops == NULL)
+		return;
+
+	vgt_ops->boot_time = !!enable;
+}
+
 #define vgt_is_dom0(id)	(id == 0)
 
 /* get the bits high:low of the data, high and low is starting from zero*/
