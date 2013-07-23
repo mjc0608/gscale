@@ -1695,6 +1695,15 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x20dc, 4, F_PT, 0, D_ALL, NULL, NULL},
 
 	/* -------display regs---------- */
+{_REG_VGA_CR_INDEX_MDA, 1, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_VGA_ST01_MDA, 1, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_VGA_AR_INDEX, 1, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_VGA_DACMASK, 1, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_VGA_MSR_READ, 1, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_VGA0, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_VGA1, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_VGA_PD, 4, F_DPY, 0, D_ALL, NULL, NULL},
+
 {0x42080, 4, F_VIRT, 0, D_HSW, NULL, NULL},
 {_REG_DEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
 {_REG_DEIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
@@ -1710,6 +1719,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIPEADSL, 4, F_DPY, 0, D_ALL, pipe_dsl_mmio_read, NULL},
 {_REG_PIPEACONF, 4, F_DPY, 0, D_ALL, NULL, pipe_conf_mmio_write},
 {_REG_PIPEASTAT, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_DSPARB, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PIPEA_FRMCOUNT, 4, F_DPY, 0, D_ALL, pipe_frmcount_mmio_read, NULL},
 
 {_REG_PIPEBDSL, 4, F_DPY, 0, D_ALL, pipe_dsl_mmio_read, NULL},
@@ -2259,6 +2269,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_HSW_PWR_WELL_CTL3, 4, F_DOM0, 0, D_HSW, NULL, NULL},
 {_REG_HSW_PWR_WELL_CTL4, 4, F_DOM0, 0, D_HSW, NULL, NULL},
 
+{_REG_RSTDBYCTL, 4, F_DOM0, 0, D_ALL, NULL, NULL},
+
 {_REG_GEN6_GDRST, 4, F_VIRT, 0, D_ALL, NULL, gen6_gdrst_mmio_write},
 {_REG_FENCE_0_LOW, 0x80, F_VIRT, 0, D_ALL, fence_mmio_read, fence_mmio_write},
 {VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, F_VIRT, 0, D_ALL, NULL, pvinfo_mmio_write},
@@ -2275,6 +2287,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_SWF, 0x110, F_VIRT, 0, D_SNB, NULL, NULL},
 {_REG_SWF, 0x90, F_VIRT, 0, D_GEN7PLUS, NULL, NULL},
 {_REG_SWF00, 0x40, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_SWF10, 4*16, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_SWF30, 4*3, F_VIRT, 0, D_ALL, NULL, NULL},
 
 	/* -------un-categorized regs--------- */
 
