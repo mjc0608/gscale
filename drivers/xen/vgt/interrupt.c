@@ -1085,4 +1085,43 @@ void vgt_install_irq(struct pci_dev *pdev)
 	printk("vGT: allocate virq (%d) for i915, while keep original irq (%d) for vgt\n",
 		hstate->i915_irq, hstate->pirq);
 }
+
+void vgt_uninstall_irq(struct pci_dev *pdev)
+{
+	struct pgt_device *node, *pgt = NULL;
+	struct vgt_irq_host_state *hstate;
+
+	if (!xen_initial_domain() || !vgt_enabled)
+		return;
+
+	if (list_empty(&pgt_devices)) {
+		printk("vGT: no valid pgt_device registered when installing irq\n");
+		return;
+	}
+
+	list_for_each_entry(node, &pgt_devices, list) {
+		if (node->pdev == pdev) {
+			pgt = node;
+			break;
+		}
+	}
+
+	if (!pgt) {
+		printk("vGT: no matching pgt_device when registering irq\n");
+		return;
+	}
+
+	/* Mask all GEN interrupts */
+	VGT_MMIO_WRITE(pgt, _REG_DEIER,
+		VGT_MMIO_READ(pgt, _REG_DEIER) & ~_REGBIT_MASTER_INTERRUPT);
+
+	hstate = pgt->irq_hstate;
+
+	free_irq(hstate->pirq, pgt);
+	//unbind_from_irq(hstate->pirq);
+
+	pdev->irq = hstate->pirq; /* needed by __pci_restore_msi_state() */
+}
+
 EXPORT_SYMBOL(vgt_install_irq);
+EXPORT_SYMBOL(vgt_uninstall_irq);
