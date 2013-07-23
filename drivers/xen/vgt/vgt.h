@@ -408,7 +408,7 @@ extern int vgt_hvm_opregion_init(struct vgt_device *vgt, uint32_t gpa);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
 extern int vgt_hvm_enable(struct vgt_device *vgt);
 extern int vgt_pause_domain(struct vgt_device *vgt);
-extern void vgt_crash_domain(struct vgt_device *vgt);
+extern void vgt_shutdown_domain(struct vgt_device *vgt);
 extern void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs);
 
 struct vgt_irq_virt_state;
@@ -2085,7 +2085,7 @@ int vgt_fb_notifier_call_chain(unsigned long val, void *data);
 				break;					\
 			vgt_warn("Killing VM%d\n", (vgt)->vm_id);	\
 			if (!vgt_pause_domain((vgt)))			\
-				vgt_crash_domain((vgt));		\
+				vgt_shutdown_domain((vgt));		\
 		}							\
 	} while (0)
 

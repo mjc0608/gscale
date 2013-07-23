@@ -86,7 +86,7 @@ int vgt_pause_domain(struct vgt_device *vgt)
 	return rc;
 }
 
-void vgt_crash_domain(struct vgt_device *vgt)
+void vgt_shutdown_domain(struct vgt_device *vgt)
 {
 	int rc;
 	struct sched_remote_shutdown r;
