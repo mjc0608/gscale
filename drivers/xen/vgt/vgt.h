@@ -1959,6 +1959,7 @@ extern bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_e
 extern void vgt_ppgtt_switch(struct vgt_device *vgt);
 extern void vgt_try_setup_ppgtt(struct vgt_device *vgt);
 extern int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode);
+extern void vgt_reset_dom0_ppgtt_state(void);
 
 extern struct dentry *vgt_init_debugfs(struct pgt_device *pdev);
 extern int vgt_create_debugfs(struct vgt_device *vgt);

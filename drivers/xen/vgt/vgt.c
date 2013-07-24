@@ -662,6 +662,8 @@ int vgt_suspend(struct pci_dev *pdev)
 	/* save GTT information */
 	vgt_save_gtt(pgt);
 
+	vgt_reset_dom0_ppgtt_state();
+
 	return 0;
 }
 EXPORT_SYMBOL(vgt_suspend);

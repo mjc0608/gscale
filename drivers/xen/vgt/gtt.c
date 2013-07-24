@@ -122,6 +122,8 @@ static unsigned long vgt_gma_2_shadow_gpa(struct vgt_device *vgt, unsigned long 
 	vgt_ppgtt_pte_t *p;
 	u32 *e, pte;
 
+	ASSERT(vgt->vm_id != 0);
+
 	p = &vgt->shadow_pte_table[((gma >> 22) & 0x3ff)];
 
 	/* gpa is physical pfn from shadow page table, we need VM's
@@ -264,6 +266,8 @@ int vgt_ppgtt_shadow_pte_init(struct vgt_device *vgt, int idx, dma_addr_t virt_p
 	u32 *shadow_ent;
 	dma_addr_t addr, s_addr;
 	struct pgt_device *pdev = vgt->pdev;
+
+	ASSERT(vgt->vm_id != 0);
 
 	if (!p->pte_page) {
 		vgt_err("Uninitialized shadow PTE page at index %d?\n", idx);
@@ -512,6 +516,8 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e
 	u32 *pte;
 	unsigned long g_val = 0, g_addr = 0, h_addr = 0;
 
+	ASSERT(vgt->vm_id != 0);
+
 	vgt_dbg("PTE WP handler: offset 0x%x data 0x%lx bytes %d\n", offset, *(unsigned long *)p_data, bytes);
 
 	i = e->idx;
@@ -618,6 +624,9 @@ bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 	vgt_ppgtt_pte_t *p;
 	dma_addr_t dma_addr;
 
+	/* only hvm guest needs shadowed PT pages */
+	ASSERT(vgt->vm_id != 0);
+
 	vgt_dbg("vgt_init_shadow_ppgtt for vm %d\n", vgt->vm_id);
 
 	/* each PDE entry has one shadow PTE page */
@@ -646,6 +655,9 @@ void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt)
 	int i;
 	vgt_ppgtt_pte_t *p;
 
+	/* only hvm guest needs shadowed PT pages */
+	ASSERT(vgt->vm_id != 0);
+
 	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
 		p = &vgt->shadow_pte_table[i];
 
@@ -653,6 +665,19 @@ void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt)
 			vgt_unset_wp_page(vgt, vgt->shadow_pde_table[i].virtual_phyaddr >> PAGE_SHIFT);
 		}
 		__free_page(p->pte_page);
+	}
+}
+
+void vgt_reset_dom0_ppgtt_state(void)
+{
+	int i;
+	struct vgt_device *vgt = vgt_dom0;
+
+	vgt->ppgtt_initialized = false;
+
+	for (i = 0; i < MAX_ENGINES; i++) {
+		vgt->rb[i].has_ppgtt_mode_enabled = 0;
+		vgt->rb[i].has_ppgtt_base_set = 0;
 	}
 }
 
