@@ -105,6 +105,10 @@ void vgt_init_cmd_info(vgt_state_ring_t *rs)
 	rs->handler_list.head = 0;
 	rs->handler_list.tail = 0;
 	rs->handler_list.count = CMD_HANDLER_NUM;
+	memset(&rs->tail_list, 0, sizeof(struct cmd_general_info));
+	rs->tail_list.head = 0;
+	rs->tail_list.tail = 0;
+	rs->tail_list.count = CMD_TAIL_NUM;
 }
 
 static int get_next_entry(struct cmd_general_info *list)
@@ -175,6 +179,31 @@ static int add_post_handle_entry(struct parser_exec_state *s,
 
 }
 
+static int add_tail_entry(struct parser_exec_state *s,
+	uint32_t tail, uint32_t cmd_nr, uint32_t flags)
+{
+	vgt_state_ring_t* rs = &s->vgt->rb[s->ring_id];
+	struct cmd_general_info *list = &rs->tail_list;
+	struct cmd_tail_info *entry;
+	int next;
+
+	next = get_next_entry(list);
+	if (next == list->count) {
+		vgt_err("CMD_SCAN: no free tail entry\n");
+		return -ENOSPC;
+	}
+
+	entry = &list->cmd[next];
+	entry->request_id = rs->request_id;
+	entry->tail = tail;
+	entry->cmd_nr = cmd_nr;
+	entry->flags = flags;
+
+	list->tail = next;
+	return 0;
+
+}
+
 static void apply_patch_entry(struct cmd_patch_info *patch)
 {
 	ASSERT(patch->addr);
@@ -195,7 +224,7 @@ static void revert_batch_entry(struct batch_info *info)
  * Apply all patch entries with request ID before or
  * equal to the submission ID
  */
-void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id)
+static void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id)
 {
 	int next;
 	struct cmd_general_info *list = &rs->patch_list;
@@ -223,7 +252,7 @@ void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id)
  * Invoke all post-handle entries with request ID before or
  * equal to the submission ID
  */
-void apply_post_handle_list(vgt_state_ring_t *rs, uint64_t submission_id)
+static void apply_post_handle_list(vgt_state_ring_t *rs, uint64_t submission_id)
 {
 	int next;
 	struct cmd_general_info *list = &rs->handler_list;
@@ -240,6 +269,33 @@ void apply_post_handle_list(vgt_state_ring_t *rs, uint64_t submission_id)
 			break;
 
 		entry->handler(&entry->exec_state);
+		list->head = next;
+	}
+}
+
+/* submit tails according to submission id */
+void apply_tail_list(struct vgt_device *vgt, int ring_id,
+	uint64_t submission_id)
+{
+	int next;
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_state_ring_t *rs = &vgt->rb[ring_id];
+	struct cmd_general_info *list = &rs->tail_list;
+	struct cmd_tail_info *entry;
+
+	next = list->head;
+	while (next != list->tail) {
+		next++;
+		if (next == list->count)
+			next = 0;
+		entry = &list->cmd[next];
+		/* TODO: handle id wrap */
+		if (entry->request_id > submission_id)
+			break;
+
+		apply_post_handle_list(rs, entry->request_id);
+		apply_patch_list(rs, entry->request_id);
+		VGT_WRITE_TAIL(pdev, ring_id, entry->tail);
 		list->head = next;
 	}
 }
@@ -1777,19 +1833,6 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 	return rc;
 }
 
-static inline void stat_nr_cmd_inc(struct parser_exec_state *s)
-{
-	vgt_state_ring_t* rs;
-
-	rs = &s->vgt->rb[s->ring_id];
-
-	if (s->buf_type == RING_BUFFER_INSTRUCTION)
-		rs->nr_cmd_ring++;
-	else
-		rs->nr_cmd_batch++;
-	return;
-}
-
 static inline bool gma_out_of_range(unsigned long gma, unsigned long gma_head, unsigned gma_tail)
 {
 	if ( gma_tail >= gma_head)
@@ -1806,6 +1849,8 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	unsigned long gma_head, gma_tail, gma_bottom;
 	struct parser_exec_state s;
 	int rc=0;
+	uint64_t cmd_nr = 0;
+	vgt_state_ring_t *rs = &vgt->rb[ring_id];
 
 	/* ring base is page aligned */
 	ASSERT((base & (PAGE_SIZE-1)) == 0);
@@ -1838,7 +1883,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 			}
 		}
 
-		stat_nr_cmd_inc(&s);
+		cmd_nr++;
 
 		rc = vgt_cmd_parser_exec(&s);
 		if (rc < 0){
@@ -1846,6 +1891,12 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 			break;
 		}
 	}
+
+	if (!rc) {
+		add_tail_entry(&s, tail, cmd_nr, 0);
+		rs->cmd_nr++;
+	}
+
 	klog_printk("ring buffer scan end on ring %d\n", ring_id);
 	vgt_dbg("scan_end\n");
 	return rc;

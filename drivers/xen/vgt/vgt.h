@@ -320,10 +320,9 @@ typedef struct {
 
 	struct cmd_general_info	patch_list;
 	struct cmd_general_info	handler_list;
+	struct cmd_general_info	tail_list;
 
-	/* statistics */
-	uint64_t nr_cmd_ring; /* cmd issued in ring buffer*/
-	uint64_t nr_cmd_batch; /* cmd issued in batch buffer */
+	uint64_t cmd_nr;
 	vgt_reg_t	last_scan_head;
 	uint64_t request_id;
 } vgt_state_ring_t;
@@ -1955,13 +1954,13 @@ extern int vgt_cmd_parser_init(struct pgt_device *pdev);
 extern void vgt_cmd_parser_exit(void);
 extern int vgt_scan_vring(struct vgt_device *vgt, int ring_id);
 extern void vgt_init_cmd_info(vgt_state_ring_t *rs);
+extern void apply_tail_list(struct vgt_device *vgt, int ring_id,
+	uint64_t submission_id);
 
 /* klog facility for buck printk */
 extern int vgt_klog_init(void);
 extern void vgt_klog_cleanup(void);
 extern void klog_printk(const char *fmt, ...);
-extern void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id);
-extern void apply_post_handle_list(vgt_state_ring_t *rs, uint64_t submission_id);
 
 typedef struct {
 	char *node_name;

@@ -446,6 +446,7 @@ struct parser_exec_state{
 	struct cmd_info* info;
 };
 
+#define CMD_TAIL_NUM	1024
 #define CMD_HANDLER_NUM	1024
 #define CMD_PATCH_NUM	CMD_HANDLER_NUM * 8
 /* a DW based structure to avoid cross-page trickiness */
@@ -462,10 +463,18 @@ struct cmd_handler_info {
 	parser_cmd_handler handler;
 };
 
+struct cmd_tail_info {
+	uint64_t request_id;
+	uint32_t tail;
+	uint32_t cmd_nr;
+	uint32_t flags;
+};
+
 struct cmd_general_info {
 	union {
 		struct cmd_patch_info patch[CMD_PATCH_NUM];
 		struct cmd_handler_info handler[CMD_HANDLER_NUM];
+		struct cmd_tail_info cmd[CMD_TAIL_NUM];
 	};
 	int	head;
 	int	tail;

@@ -515,8 +515,7 @@ static void vgt_create_cmdstat_per_ring(struct vgt_device *vgt, int ring_id, str
 	if (!ring_dir_entry)
 		printk(KERN_ERR "vGT(%d): failed to create debugfs directory: %s\n", vgt->vgt_id, ring_name);
 	else {
-		debugfs_create_u64_node("ring_cmd_nr", 0444, ring_dir_entry, &(vgt->rb[ring_id].nr_cmd_ring));
-		debugfs_create_u64_node("batch_cmd_nr", 0444, ring_dir_entry, &(vgt->rb[ring_id].nr_cmd_batch));
+		debugfs_create_u64_node("cmd_nr", 0444, ring_dir_entry, &(vgt->rb[ring_id].cmd_nr));
 	}
 }
 
