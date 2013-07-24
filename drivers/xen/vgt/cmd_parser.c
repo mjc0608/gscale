@@ -26,6 +26,7 @@
 #include <linux/slab.h>
 #include "vgt.h"
 #include "trace.h"
+#include <xen/fb_decoder.h>
 
 /* vgt uses below bits in NOOP_ID:
  *	    bit 21 - 16 is command type.
@@ -622,6 +623,7 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 	enum vgt_plane_type plane;
 	bool async_flip;
 	int i, length, rc = 0;
+	struct fb_notify_msg msg;
 
 	opcode = *(cmd_ptr(s, 0));
 	stride_val = *(cmd_ptr(s, 1));
@@ -710,6 +712,10 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 				(~SURF_MASK)) | (surf_val & SURF_MASK);
 		__sreg(s->vgt, surf_reg) = __vreg(s->vgt, surf_reg);
 	}
+
+	msg.vm_id = s->vgt->vm_id;
+	msg.pipe_id = pipe;
+	vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 
 	if ((s->vgt == current_foreground_vm(s->vgt->pdev)) && !resubmitted) {
 		return 0;

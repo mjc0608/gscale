@@ -59,7 +59,7 @@ struct vgt_cursor_plane_format {
 	u32	drm_format;	/* format in DRM definition */
 	u32	base;		/* cursor base in graphics memory */
 	u32	x_pos;		/* in pixels */
-	u32	y_pos ;		/* in lines */
+	u32	y_pos;		/* in lines */
 	u8	x_sign;		/* X Position Sign */
 	u8	y_sign;		/* Y Position Sign */
 	u32	width;		/* in pixels */
@@ -77,6 +77,17 @@ struct vgt_fb_format{
 	struct vgt_pipe_format	pipes[MAX_INTEL_PIPES];
 };
 
+typedef enum {
+	FB_MODE_SET_START = 1,
+	FB_MODE_SET_END,
+	FB_DISPLAY_FLIP,
+}fb_event_t;
+
+struct fb_notify_msg {
+	unsigned vm_id;
+	unsigned pipe_id; /* id starting from 0 */
+};
+
 /*
  * Decode framebuffer information from raw vMMIO
  *
@@ -85,7 +96,19 @@ struct vgt_fb_format{
  * OUTPUT:
  *   [format] - contain the decoded format info
  *
- * NOTE: The caller is expected to poll this interface, and reconstruct
- * previous reference to the new format information
  */
 int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb);
+
+/*
+ * Register callback to get notification of frame buffer changes
+ * "struct fb_notify_msg" will be the argument to the call back
+ * function, from which user could get the changed frame buffer
+ * information.
+ *
+ */
+int vgt_register_fb_notifier(struct notifier_block *nb);
+
+/*
+ * Unregister the callback for notification
+ */
+int vgt_unregister_fb_notifier(struct notifier_block *nb);

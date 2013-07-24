@@ -27,6 +27,7 @@
 #include <linux/acpi.h>
 
 #include <xen/interface/hvm/hvm_op.h>
+#include <xen/fb_decoder.h>
 
 #include "vgt.h"
 
@@ -1054,6 +1055,34 @@ static bool dpy_plane_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static bool pri_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	struct fb_notify_msg msg;
+
+	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
+
+	msg.vm_id = vgt->vm_id;
+	msg.pipe_id = VGT_DSPSURFPIPE(offset);
+	vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
+
+	return true;
+}
+
+static bool spr_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	struct fb_notify_msg msg;
+
+	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
+
+	msg.vm_id = vgt->vm_id;
+	msg.pipe_id = VGT_SPRSURFPIPE(offset);
+	vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
+
+	return true;
+}
+
 static bool dpy_modeset_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -1714,7 +1743,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DSPACNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
 							dpy_plane_mmio_write},
 {_REG_DSPASURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
-							dpy_plane_mmio_write},
+							pri_surf_mmio_write},
 {_REG_DSPASURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, pri_surflive_mmio_read,
 							surflive_mmio_write},
 {_REG_DSPALINOFF, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
@@ -1731,7 +1760,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DSPBCNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
 							dpy_plane_mmio_write},
 {_REG_DSPBSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
-							dpy_plane_mmio_write},
+							pri_surf_mmio_write},
 {_REG_DSPBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, pri_surflive_mmio_read,
 							surflive_mmio_write},
 {_REG_DSPBLINOFF, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
@@ -1748,7 +1777,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DSPCCNTR, 4, F_DPY, 0, D_HSW, dpy_plane_mmio_read,
 							dpy_plane_mmio_write},
 {_REG_DSPCSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_HSW, dpy_plane_mmio_read,
-							dpy_plane_mmio_write},
+							pri_surf_mmio_write},
 {_REG_DSPCSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_HSW, pri_surflive_mmio_read,
 							surflive_mmio_write},
 {_REG_DSPCLINOFF, 4, F_DPY, 0, D_HSW, dpy_plane_mmio_read,
@@ -1786,17 +1815,17 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DVSBSCALE, 4, F_DPY, 0, D_SNB, NULL, NULL},
 
 {_REG_SPRASURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_HSW,
-			dpy_plane_mmio_read, dpy_plane_mmio_write},
+			dpy_plane_mmio_read, spr_surf_mmio_write},
 {_REG_SPRASURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_HSW,
 			spr_surflive_mmio_read, surflive_mmio_write},
 
 {_REG_SPRBSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_HSW,
-			dpy_plane_mmio_read, dpy_plane_mmio_write},
+			dpy_plane_mmio_read, spr_surf_mmio_write},
 {_REG_SPRBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_HSW,
 			spr_surflive_mmio_read, surflive_mmio_write},
 
 {_REG_SPRCSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_HSW,
-			dpy_plane_mmio_read, dpy_plane_mmio_write},
+			dpy_plane_mmio_read, spr_surf_mmio_write},
 {_REG_SPRCSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_HSW,
 			spr_surflive_mmio_read, surflive_mmio_write},
 

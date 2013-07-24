@@ -2074,6 +2074,7 @@ void vgt_vmem_destroy(struct vgt_device *vgt);
 void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 struct vgt_device *vmid_2_vgt_device(int vmid);
 extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);
+int vgt_fb_notifier_call_chain(unsigned long val, void *data);
 
 #define ASSERT_VM(x, vgt)						\
 	do {								\

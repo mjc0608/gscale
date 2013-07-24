@@ -380,3 +380,23 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(vgt_decode_fb_format);
+
+static ATOMIC_NOTIFIER_HEAD(vgt_fb_notifier_list);
+
+int vgt_register_fb_notifier(struct notifier_block *nb)
+{
+	return atomic_notifier_chain_register(&vgt_fb_notifier_list, nb);
+}
+EXPORT_SYMBOL_GPL(vgt_register_fb_notifier);
+
+int vgt_unregister_fb_notifier(struct notifier_block *nb)
+{
+	return atomic_notifier_chain_unregister(&vgt_fb_notifier_list, nb);
+}
+EXPORT_SYMBOL_GPL(vgt_unregister_fb_notifier);
+
+int vgt_fb_notifier_call_chain(unsigned long val, void *data)
+{
+	return atomic_notifier_call_chain(&vgt_fb_notifier_list, val, data);
+}
+EXPORT_SYMBOL_GPL(vgt_fb_notifier_call_chain);
