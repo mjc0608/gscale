@@ -25,6 +25,7 @@
 
 #include <linux/module.h>
 #include <linux/kthread.h>
+#include <linux/freezer.h>
 #include <asm/xen/hypercall.h>
 #include <xen/interface/vcpu.h>
 
@@ -216,14 +217,28 @@ static int vgt_thread(void *priv)
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
 
+	set_freezable();
 	while (!kthread_should_stop()) {
-		ret = wait_event_interruptible(pdev->event_wq, pdev->request);
+		ret = wait_event_interruptible(pdev->event_wq,
+			pdev->request || freezing(current));
+
 		if (ret)
 			vgt_warn("Main thread waken up by unexpected signal!\n");
 
-		if (!pdev->request) {
+		if (!pdev->request && !freezing(current)) {
 			vgt_warn("Main thread waken up by unknown reasons!\n");
 			continue;
+		}
+
+		if (freezing(current)) {
+			if (current_render_owner(pdev) == vgt_dom0)
+				try_to_freeze();
+			else {
+				spin_lock_irq(&pdev->lock);
+				pdev->next_sched_vgt = vgt_dom0;
+				vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+				spin_unlock_irq(&pdev->lock);
+			}
 		}
 
 		/* forward physical GPU events to VMs */

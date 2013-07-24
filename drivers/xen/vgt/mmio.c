@@ -25,6 +25,7 @@
 
 #include <linux/acpi.h>
 #include <linux/kthread.h>
+#include <linux/freezer.h>
 
 #include <xen/events.h>
 #include <xen/xen-ops.h>
@@ -492,8 +493,9 @@ static int vgt_emulation_thread(void *priv)
 
 	ASSERT(info->nr_vcpu <= MAX_HVM_VCPUS_SUPPORTED);
 
+	set_freezable();
 	while (1) {
-		ret = wait_event_interruptible(info->io_event_wq,
+		ret = wait_event_freezable(info->io_event_wq,
 			kthread_should_stop() ||
 			bitmap_weight(info->ioreq_pending, nr_vcpus));
 		if (ret)
