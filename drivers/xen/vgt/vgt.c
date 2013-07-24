@@ -664,6 +664,7 @@ int vgt_suspend(struct pci_dev *pdev)
 
 	return 0;
 }
+EXPORT_SYMBOL(vgt_suspend);
 
 int vgt_resume(struct pci_dev *pdev)
 {
@@ -697,6 +698,8 @@ int vgt_resume(struct pci_dev *pdev)
 	/* redo the MMIO snapshot */
 	vgt_initial_mmio_setup(pgt);
 
+	/* XXX: need redo the PCI config space snapshot too? */
+
 	/*
 	 * TODO: need a better place to sync vmmio state
 	 * for now, force override dom0's vmmio only. other
@@ -707,6 +710,7 @@ int vgt_resume(struct pci_dev *pdev)
 	/* TODO, GMBUS inuse bit? */
 	return 0;
 }
+EXPORT_SYMBOL(vgt_resume);
 
 /* for GFX driver */
 int xen_start_vgt(struct pci_dev *pdev)

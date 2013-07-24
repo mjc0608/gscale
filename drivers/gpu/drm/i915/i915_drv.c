@@ -677,6 +677,7 @@ int i915_suspend_legacy(struct drm_device *dev, pm_message_t state)
 static int i915_drm_resume(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
+	int ret = 0;
 
 	if (drm_core_check_feature(dev, DRIVER_MODESET)) {
 		mutex_lock(&dev->struct_mutex);
@@ -735,6 +736,10 @@ static int i915_drm_resume(struct drm_device *dev)
 	mutex_unlock(&dev_priv->modeset_restore_lock);
 
 	intel_opregion_notify_adapter(dev, PCI_D0);
+
+	ret = vgt_resume(dev->pdev);
+	if (ret)
+		return ret;
 
 	drm_kms_helper_poll_enable(dev);
 
@@ -937,6 +942,7 @@ static int i915_pm_suspend(struct device *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct drm_device *drm_dev = pci_get_drvdata(pdev);
+	int error;
 
 	if (!drm_dev || !drm_dev->dev_private) {
 		dev_err(dev, "DRM not initialized, aborting suspend.\n");
@@ -948,7 +954,15 @@ static int i915_pm_suspend(struct device *dev)
 
 	set_gen_pci_cfg_space_pt(1);
 
-	return i915_drm_suspend(drm_dev);
+	error = i915_drm_suspend(drm_dev);
+	if (error)
+		return error;
+
+	error = vgt_suspend(pdev);
+	if (error)
+		return error;
+
+	return 0;
 }
 
 static int i915_pm_suspend_late(struct device *dev)
