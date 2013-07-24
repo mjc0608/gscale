@@ -364,7 +364,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 		printk("vgt(%d) is current owner, request reschedule\n",
 			vgt->vgt_id);
 		vgt->force_removal = 1;
-		next_sched_vgt = vgt_dom0;
+		pdev->next_sched_vgt = vgt_dom0;
 		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 		wmb();
 	}

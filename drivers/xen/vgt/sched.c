@@ -111,7 +111,7 @@ static enum hrtimer_restart vgt_tbs_timer_fn(struct hrtimer *data)
 	if (vgt_nr_in_runq(pdev) < 2)
 		goto reload_timer;
 
-	next_sched_vgt = tbs_next_vgt(&pdev->rendering_runq_head,
+	pdev->next_sched_vgt = tbs_next_vgt(&pdev->rendering_runq_head,
 			current_render_owner(pdev));
 
 	if (vgt_chk_raised_request(pdev, VGT_REQUEST_CTX_SWITCH))
@@ -448,7 +448,7 @@ static void ondemand_sched_ctx(struct pgt_device *pdev)
 
 	/* set next vgt for ctx switch */
 	vgt_rb_tailq_commit_num_stail(next_vgt, tails_per_ring);
-	next_sched_vgt = next_vgt;
+	pdev->next_sched_vgt = next_vgt;
 	vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 }
 
@@ -541,9 +541,6 @@ void vgt_cleanup_ctx_scheduler(struct pgt_device *pdev)
 	if (shadow_tail_based_qos || timer_based_qos)
 		vgt_hrtimer_exit(pdev);
 }
-
-/* Global variable, used by context switch */
-struct vgt_device *next_sched_vgt;
 
 /* internal facilities */
 #if 0
@@ -739,7 +736,7 @@ void vgt_sched_ctx(struct pgt_device *pdev)
 				ctx_rb_empty_delay(cur_vgt));
 
 		/* set Global varaible next_sched_vgt for context switch */
-		next_sched_vgt = next_vgt;
+		pdev->next_sched_vgt = next_vgt;
 		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 	} else {
 		/* setup countdown of cur_vgt for next round */

@@ -796,6 +796,7 @@ struct pgt_device {
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
 	struct vgt_device *foreground_vm;		/* current visible domain on display. */
+	struct vgt_device *next_sched_vgt;
 	struct list_head rendering_runq_head; /* reuse this for context scheduler */
 	struct list_head rendering_idleq_head; /* reuse this for context scheduler */
 	spinlock_t lock;
@@ -1523,7 +1524,6 @@ static inline unsigned long __REG_READ(struct pgt_device *pdev,
 	(((head) & RB_HEAD_OFF_MASK) == ((tail) & RB_TAIL_OFF_MASK))
 
 extern bool event_based_qos;
-extern struct vgt_device *next_sched_vgt;
 extern bool vgt_vrings_empty(struct vgt_device *vgt);
 
 /* context scheduler facilities functions */
@@ -1651,7 +1651,7 @@ static inline void vgt_disable_ring(struct vgt_device *vgt, int ring_id)
 	if (bitmap_empty(vgt->enabled_rings, MAX_ENGINES)) {
 		ASSERT(spin_is_locked(&pdev->lock));
 		if (current_render_owner(pdev) == vgt) {
-			next_sched_vgt = vgt_dom0;
+			pdev->next_sched_vgt = vgt_dom0;
 			vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 		} else
 			vgt_disable_render(vgt);

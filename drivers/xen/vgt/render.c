@@ -1436,8 +1436,8 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	 */
 	spin_lock_irq(&pdev->lock);
 
-	ASSERT(next_sched_vgt);
-	next = next_sched_vgt;
+	ASSERT(pdev->next_sched_vgt);
+	next = pdev->next_sched_vgt;
 	prev = current_render_owner(pdev);
 
 	if (next == prev)
