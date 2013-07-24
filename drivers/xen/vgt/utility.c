@@ -184,7 +184,8 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	char *p_contents;
 	int i;
 	struct vgt_device *vgt = current_render_owner(pdev);
-	u32* cur, ring_len, off;
+	u32* cur;
+	u32 ring_len, off;
 
 	p_tail = VGT_MMIO_READ(pdev, RB_TAIL(pdev, ring_id));
 	p_head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
@@ -196,17 +197,30 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 		VGT_MMIO_READ(pdev, pdev->ring_idle[ring_id]) & (1 << pdev->ring_idle_bit[ring_id]),
 		VGT_MMIO_READ(pdev, pdev->ring_mi_mode[ring_id]) & _REGBIT_MI_RINGS_IDLE);
 
+	if (!(p_ctl & _RING_CTL_ENABLE)) {
+		printk("<NO CONTENT>\n");
+		return;
+	}
+
 	p_head &= RB_HEAD_OFF_MASK;
 	ring_len = _RING_CTL_BUF_SIZE(p_ctl);
 	p_contents = phys_aperture_vbase(pdev) + p_start;
 
+#define WRAP_OFF(off, size)			\
+	({					\
+		u32 val = off;			\
+		if ((int32_t)val < 0)		\
+			val += size;	\
+		if (val >= size)		\
+			val -= size;	\
+		(val);				\
+	})
 	printk("p_contents(%lx)\n", (unsigned long)p_contents);
 	/* length should be 4 bytes aligned */
 	bytes &= ~0x3;
 	for (i = -bytes; i < bytes; i += 4) {
 		off = (p_head + i) % ring_len;
-		if ((int32_t)off < 0)
-			off += ring_len;
+		off = WRAP_OFF(off, ring_len);
 		/* print offset within the ring every 8 Dword */
 		if (!((i + bytes) % 32))
 			printk("\n[%08x]:", off);
@@ -216,7 +230,8 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	}
 	printk("\n");
 
-	cur = (u32*)(p_contents + p_head) - 2;
+	off = WRAP_OFF(p_head - 8, ring_len);
+	cur = (u32*)(p_contents + off);
 	if ((*cur & 0xfffff000) == 0x18800000 && vgt) {
 		u32 val, h_val;
 		u64 mfn;
