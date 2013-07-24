@@ -758,3 +758,66 @@ void __raise_ctx_sched(struct vgt_device *vgt)
 	 */
 	vgt_sched_ctx(pdev);
 }
+
+static int calculate_budget(struct vgt_device *vgt)
+{
+#if 0
+	int budget;
+
+	budget = vgt->allocated_cmds - vgt->submitted_cmds;
+	/* call scheduler when budget is not enough */
+	if (budget <= 0) {
+		vgt_schedule(pdev);
+		if (ctx_switch_requested(pdev))
+			return;
+	}
+#endif
+
+	return MAX_CMD_BUDGET;
+}
+
+void vgt_submit_commands(struct vgt_device *vgt, int ring_id)
+{
+	int cmd_nr;
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_state_ring_t	*rs = &vgt->rb[ring_id];
+	int budget;
+	uint64_t submission_id;
+
+	/*
+	 * No commands submision when context switch is in
+	 * progress. Current owner is prevented from further
+	 * submission to ensure quantum control, and new owner
+	 * request will be recovered at end of ctx switch.
+	 */
+	if (ctx_switch_requested(pdev)) {
+		vgt_info("<%d>: Hold commands in render ctx switch (%d->%d)\n",
+			vgt->vm_id, current_render_owner(pdev)->vm_id,
+			pdev->next_sched_vgt->vm_id);
+		return;
+	}
+
+	/* kicks scheduler for non-owner write. */
+	if (!is_current_render_owner(vgt)) {
+		//vgt_schedule(pdev);
+		return;
+	}
+
+	budget = calculate_budget(vgt);
+	if (!budget)
+		return;
+
+	cmd_nr = get_submission_id(rs, budget, &submission_id);
+	/* no valid cmd queued */
+	if (cmd_nr == MAX_CMD_BUDGET)
+		return;
+
+	/*
+	 * otherwise submit to GPU, even when cmd_nr is ZERO.
+	 8 this is necessary, because sometimes driver may write
+	 * old tail which must take real effect.
+	 */
+	apply_tail_list(vgt, ring_id, submission_id);
+	vgt->total_cmds += cmd_nr;
+	vgt->submitted_cmds += cmd_nr;
+}

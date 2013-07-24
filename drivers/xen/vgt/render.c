@@ -294,13 +294,12 @@ void vgt_kick_ringbuffers(struct vgt_device *vgt)
 
 	for (i = 0; i < pdev->max_engines; i++) {
 		struct vgt_rsvd_ring *ring = &pdev->ring_buffer[i];
-		vgt_state_ring_t *rs = &vgt->rb[i];
 
 		if (!ring->need_switch)
 			continue;
 
 		start_ring(pdev, i);
-		apply_tail_list(vgt, i, rs->request_id);
+		vgt_submit_commands(vgt, i);
 	}
 }
 
@@ -1765,7 +1764,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	 */
 	if (reg_hw_access(vgt, off)) {
 		if (rel_off == RB_OFFSET_TAIL)
-			apply_tail_list(vgt, ring_id, rs->request_id);
+			vgt_submit_commands(vgt, ring_id);
 		else
 			VGT_MMIO_WRITE(pdev, off,
 				*(vgt_reg_t*)((char *)sring + rel_off));

@@ -601,6 +601,10 @@ struct vgt_device {
 	uint8_t hvm_boot_foreground_visible:1;
 	uint8_t warn_untrack:1;
 	atomic_t crashing;
+
+	uint64_t total_cmds;		/* total CMDs since VM is started */
+	uint64_t submitted_cmds;	/* CMDs submitted in current slice */
+	uint64_t allocated_cmds;	/* CMDs allocated in current slice */
 };
 
 enum vgt_owner_type {
@@ -848,6 +852,9 @@ struct pgt_device {
 #define is_current_render_owner(vgt)	(vgt && vgt == current_render_owner(vgt->pdev))
 #define is_current_display_owner(vgt)	(vgt && vgt == current_display_owner(vgt->pdev))
 #define is_current_config_owner(vgt)	(vgt && vgt == current_config_owner(vgt->pdev))
+#define ctx_switch_requested(d)		\
+	(d->next_sched_vgt &&		\
+	 (d->next_sched_vgt != current_render_owner(pdev)))
 #define vgt_ctx_check(d)		(d->ctx_check)
 #define vgt_ctx_switch(d)		(d->ctx_switch)
 extern void do_vgt_fast_display_switch(struct vgt_device *pdev);
@@ -1950,12 +1957,16 @@ extern struct dentry *vgt_init_debugfs(struct pgt_device *pdev);
 extern int vgt_create_debugfs(struct vgt_device *vgt);
 
 /* command parser interface */
+#define MAX_CMD_BUDGET  0x7fffffff
 extern int vgt_cmd_parser_init(struct pgt_device *pdev);
 extern void vgt_cmd_parser_exit(void);
 extern int vgt_scan_vring(struct vgt_device *vgt, int ring_id);
 extern void vgt_init_cmd_info(vgt_state_ring_t *rs);
 extern void apply_tail_list(struct vgt_device *vgt, int ring_id,
 	uint64_t submission_id);
+extern int get_submission_id(vgt_state_ring_t *rs, int budget, uint64_t *submission_id);
+
+extern void vgt_submit_commands(struct vgt_device *vgt, int ring_id);
 
 /* klog facility for buck printk */
 extern int vgt_klog_init(void);

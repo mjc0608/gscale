@@ -300,6 +300,34 @@ void apply_tail_list(struct vgt_device *vgt, int ring_id,
 	}
 }
 
+/* find allowable tail info based on cmd budget */
+int get_submission_id(vgt_state_ring_t *rs, int budget,
+	uint64_t *submission_id)
+{
+	int next, cmd_nr = 0;
+	struct cmd_general_info *list = &rs->tail_list;
+	struct cmd_tail_info *entry, *target = NULL;
+
+	next = list->head;
+	while (next != list->tail) {
+		next++;
+		if (next == list->count)
+			next = 0;
+		entry = &list->cmd[next];
+		budget -= entry->cmd_nr;
+		if (budget < 0)
+			break;
+		target = entry;
+		cmd_nr += entry->cmd_nr;
+	}
+
+	if (target) {
+		*submission_id = target->request_id;
+		return cmd_nr;
+	} else
+		return MAX_CMD_BUDGET;
+}
+
 /* ring ALL, type = 0 */
 static struct sub_op_bits sub_op_mi[]={
 	{31, 29},
