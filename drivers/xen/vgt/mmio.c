@@ -451,6 +451,11 @@ u64 mmio_rcycles=0;
 u64 mmio_wcycles=0;
 
 static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq);
+static void vgt_crash_domain(struct vgt_device *vgt)
+{
+	vgt_pause_domain(vgt);
+	vgt_shutdown_domain(vgt);
+}
 
 static int vgt_emulation_thread(void *priv)
 {
@@ -485,7 +490,9 @@ static int vgt_emulation_thread(void *priv)
 
 			ioreq = vgt_get_hvm_ioreq(vgt, vcpu);
 
-			vgt_hvm_do_ioreq(vgt, ioreq);
+			ret = vgt_hvm_do_ioreq(vgt, ioreq);
+			if (unlikely(ret))
+				vgt_crash_domain(vgt);
 
 			ioreq->state = STATE_IORESP_READY;
 
@@ -498,7 +505,7 @@ static int vgt_emulation_thread(void *priv)
 	return 0;
 }
 
-void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
+int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 {
 	int i, sign;
 	void *gva;
@@ -511,7 +518,7 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 	if (vgt->vmem_vma == NULL && vgt_hvm_vmem_init(vgt) < 0) {
 		vgt_err("can not map the memory of VM%d!!!\n", vgt->vm_id);
 		ASSERT_VM(vgt->vmem_vma != NULL, vgt);
-		return;
+		return -EINVAL;
 	}
 
 	sign = req->df ? -1 : 1;
@@ -521,22 +528,26 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 		mmio_rcnt++;
 		/* MMIO READ */
 		if (!req->data_is_ptr) {
-			ASSERT (req->count == 1);
+			if (req->count != 1)
+				goto err_ioreq_count;
 
 			//vgt_dbg("HVM_MMIO_read: target register (%lx).\n",
 			//	(unsigned long)req->addr);
-			vgt_emulate_read(vgt, req->addr, &req->data, req->size);
+			if (!vgt_emulate_read(vgt, req->addr, &req->data, req->size))
+				return -EINVAL;
 		}
 		else {
-			ASSERT (req->addr + sign * req->count * req->size >= base);
-			ASSERT (req->addr + sign * req->count * req->size <
-				base + vgt->state.bar_size[0]);
+			if ((req->addr + sign * req->count * req->size < base)
+			   || (req->addr + sign * req->count * req->size >=
+				base + vgt->state.bar_size[0]))
+				goto err_ioreq_range;
 			//vgt_dbg("HVM_MMIO_read: rep %d target memory %lx, slow!\n",
 			//	req->count, (unsigned long)req->addr);
 
 			for (i = 0; i < req->count; i++) {
-				vgt_emulate_read(vgt, req->addr + sign * i * req->size,
-					&tmp, req->size);
+				if (!vgt_emulate_read(vgt, req->addr + sign * i * req->size,
+					&tmp, req->size))
+					return -EINVAL;
 				gpa = req->data + sign * i * req->size;
 				gva = vgt_vmem_gpa_2_va(vgt, gpa);
 				// On the SNB laptop, writing tmp to gva can
@@ -555,14 +566,17 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 		t0 = get_cycles();
 		mmio_wcnt++;
 		if (!req->data_is_ptr) {
-			ASSERT (req->count == 1);
+			if (req->count != 1)
+				goto err_ioreq_count;
 			//vgt_dbg("HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
-			vgt_emulate_write(vgt, req->addr, &req->data, req->size);
+			if (!vgt_emulate_write(vgt, req->addr, &req->data, req->size))
+				return -EINVAL;
 		}
 		else {
-			ASSERT (req->addr + sign * req->count * req->size >= base);
-			ASSERT (req->addr + sign * req->count * req->size <
-				base + vgt->state.bar_size[0]);
+			if ((req->addr + sign * req->count * req->size < base)
+			    || (req->addr + sign * req->count * req->size >=
+				base + vgt->state.bar_size[0]))
+				goto err_ioreq_range;
 			//vgt_dbg("HVM_MMIO_write: rep %d target memory %lx, slow!\n",
 			//	req->count, (unsigned long)req->addr);
 
@@ -575,16 +589,30 @@ void _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 					tmp = 0;
 					vgt_dbg("vGT: can not read gpa = 0x%lx!!!\n", gpa);
 				}
-				vgt_emulate_write(vgt, req->addr + sign * i * req->size, &tmp, req->size);
+				if (!vgt_emulate_write(vgt, req->addr + sign * i * req->size, &tmp, req->size))
+					return -EINVAL;
 			}
 		}
 		t1 = get_cycles();
 		t1 -= t0;
 		mmio_wcycles += (u64) t1;
 	}
+	return 0;
+
+err_ioreq_count:
+	vgt_err("VM(%d): Unexpected %s request count(%d)\n",
+		vgt->vm_id, req->dir == IOREQ_READ ? "read" : "write",
+		req->count);
+	return -EINVAL;
+
+err_ioreq_range:
+	vgt_err("VM(%d): Invalid %s request addr end(%016llx)\n",
+		vgt->vm_id, req->dir == IOREQ_READ ? "read" : "write",
+		req->addr + sign * req->count * req->size);
+	return -ERANGE;
 }
 
-void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
+int _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 {
 	int sign;
 	//char *pdata;
@@ -594,22 +622,16 @@ void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 	if (ioreq->dir == IOREQ_READ) {
 		/* PIO READ */
 		if (!ioreq->data_is_ptr) {
-			vgt_hvm_read_cf8_cfc(vgt,
+			if(!vgt_hvm_read_cf8_cfc(vgt,
 				ioreq->addr,
 				ioreq->size,
-				(unsigned long*) &ioreq->data);
+				(unsigned long*) &ioreq->data))
+				return -EINVAL;
 		}
 		else {
 			vgt_dbg("VGT: _hvm_pio_emulation read data_ptr %lx\n",
 			(long)ioreq->data);
-			/*
-			 * The data pointer of emulation is guest physical address
-			 * so far, which is godo to Qemu emulation, but hard for
-			 * vGT driver which doesn't know gpn_2_mfn translation.
-			 * We may ask hypervisor to use mfn for vGT driver.
-			 * We keep assert here to see if guest really use it.
-			 */
-			ASSERT(0);
+			goto err_data_ptr;
 #if 0
 			pdata = (char *)ioreq->data;
 			for (i=0; i < ioreq->count; i++) {
@@ -625,22 +647,16 @@ void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 	else {
 		/* PIO WRITE */
 		if (!ioreq->data_is_ptr) {
-			vgt_hvm_write_cf8_cfc(vgt,
+			if (!vgt_hvm_write_cf8_cfc(vgt,
 				ioreq->addr,
 				ioreq->size,
-				(unsigned long) ioreq->data);
+				(unsigned long) ioreq->data))
+				return -EINVAL;
 		}
 		else {
 			vgt_dbg("VGT: _hvm_pio_emulation write data_ptr %lx\n",
 			(long)ioreq->data);
-			/*
-			 * The data pointer of emulation is guest physical address
-			 * so far, which is godo to Qemu emulation, but hard for
-			 * vGT driver which doesn't know gpn_2_mfn translation.
-			 * We may ask hypervisor to use mfn for vGT driver.
-			 * We keep assert here to see if guest really use it.
-			 */
-			ASSERT(0);
+			goto err_data_ptr;
 #if 0
 			pdata = (char *)ioreq->data;
 
@@ -653,6 +669,18 @@ void _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 #endif
 		}
 	}
+	return 0;
+err_data_ptr:
+	/* The data pointer of emulation is guest physical address
+	 * so far, which goes to Qemu emulation, but hard for
+	 * vGT driver which doesn't know gpn_2_mfn translation.
+	 * We may ask hypervisor to use mfn for vGT driver.
+	 * We mark it as unsupported in case guest really it.
+	 */
+	vgt_err("VM(%d): Unsupported %s data_ptr(%lx)\n",
+		vgt->vm_id, ioreq->dir == IOREQ_READ ? "read" : "write",
+		(long)ioreq->data);
+	return -EINVAL;
 }
 
 static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
@@ -665,18 +693,19 @@ static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
 
 	switch (ioreq->type) {
 		case IOREQ_TYPE_PIO:	/* PIO */
-			if ((ioreq->addr & ~7) != 0xcf8)
+			if ((ioreq->addr & ~7) != 0xcf8) {
 				printk(KERN_ERR "vGT: Unexpected PIO %lx emulation\n",
 					(long) ioreq->addr);
-			else
-				_hvm_pio_emulation(vgt, ioreq);
+				return -EINVAL;
+			} else
+				return _hvm_pio_emulation(vgt, ioreq);
 			break;
 		case IOREQ_TYPE_COPY:	/* MMIO */
-			_hvm_mmio_emulation(vgt, ioreq);
+			return _hvm_mmio_emulation(vgt, ioreq);
 			break;
 		default:
 			printk(KERN_ERR "vGT: Unknown ioreq type %x\n", ioreq->type);
-			break;
+			return -EINVAL;
 	}
 	return 0;
 }

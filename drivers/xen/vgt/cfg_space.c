@@ -351,7 +351,7 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 	return rc;
 }
 
-void vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
+bool vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
 	unsigned int port, unsigned int bytes, unsigned long val)
 {
 	vgt_dbg("vgt_hvm_write_cf8_cfc %x %d %lx\n", port, bytes, val);
@@ -368,9 +368,10 @@ void vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
 			(vgt->last_cf8 & 0xfc) + (port & 3),
 			&val, bytes);
 	}
+	return true;
 }
 
-void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
+bool vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
 	unsigned int port, unsigned int bytes, unsigned long *val)
 {
 	unsigned long data;
@@ -388,4 +389,5 @@ void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
 	}
 	vgt_dbg("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
 			port, bytes, *val);
+	return true;
 }

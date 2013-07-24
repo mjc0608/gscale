@@ -2052,9 +2052,9 @@ extern reg_list_t vgt_sticky_regs[];
 extern int vgt_get_base_reg_num(void);
 extern int vgt_get_sticky_reg_num(void);
 
-void vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
+bool vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
 	unsigned int port, unsigned int bytes, unsigned long val);
-void vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
+bool vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
 	unsigned int port, unsigned int bytes, unsigned long *val);
 
 int vgt_hvm_opregion_map(struct vgt_device *vgt, int map);
