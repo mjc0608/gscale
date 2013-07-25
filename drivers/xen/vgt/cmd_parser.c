@@ -1734,12 +1734,27 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 	trace_vgt_command(s->vgt->vm_id, s->ring_id, s->ip_gma, cmd_trace_buf,
 			cmd_len, s->buf_type == RING_BUFFER_INSTRUCTION);
 
-	if (info->handler){
-		if (info->flag & F_POST_HANDLE)
-			rc = add_post_handle_entry(s, info->handler);
-		else
+	if (info->handler) {
+		int post_handle = 0;
+
+		if (info->flag & F_POST_HANDLE) {
+			post_handle = 1;
+
+			/* Post handle special case.*/
+			/*
+			 * OP_MI_NOOP: only handles nooped MI_DISPLAY_FILP
+			 * to prevent the heavy usage of patch list.
+			 */
+			if (info->opcode == OP_MI_NOOP && cmd_len == 1)
+				post_handle = 0;
+		}
+
+		if (!post_handle)
 			rc = info->handler(s);
-		if (rc < 0){
+		else
+			rc = add_post_handle_entry(s, info->handler);
+
+		if (rc < 0) {
 			vgt_err("%s handler error", info->name);
 			return rc;
 		}
