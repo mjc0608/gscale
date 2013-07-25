@@ -592,3 +592,7 @@ DESCRIPTION:	Total time vmX allocated to use rendering engines.
 
 PATH:		/sys/kernel/debug/vgt/vmX/schedule_in_time
 DESCRIPTION:	Timestamp of the start of last context switch
+
+PATH:		/sys/kernel/debug/vgt/vmX/frame_buffer_format
+DESCRIPTION:	cat this node will dump all the frame buffer format information
+		for the vm.
