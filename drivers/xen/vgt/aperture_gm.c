@@ -34,7 +34,7 @@
 vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_value)
 {
 	struct pgt_device *pdev = vgt->pdev;
-	vgt_reg_t h_value;
+	uint64_t h_value;
 	vgt_reg_t mask;
 
 	if (!reg_addr_fix(pdev, reg))
@@ -57,8 +57,9 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 			  (g_value & ~mask);
 	}
 
-	h_value = g2h_gm(vgt, g_value & mask);
-	vgt_dbg("....(g)%x->(h)%x\n", g_value, (h_value & mask) | (g_value & ~mask));
+	h_value = g_value & mask;
+	g2h_gm(vgt, &h_value);
+	vgt_dbg("....(g)%x->(h)%llx\n", g_value, (h_value & mask) | (g_value & ~mask));
 
 	return (h_value & mask) | (g_value & ~mask);
 }

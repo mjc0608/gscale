@@ -1351,23 +1351,25 @@ static inline uint64_t h_gm_hidden_offset(struct vgt_device *vgt, uint64_t h_add
 }
 
 /* translate a guest gm address to host gm address */
-static inline uint64_t g2h_gm(struct vgt_device *vgt, uint64_t g_addr)
+static inline int g2h_gm(struct vgt_device *vgt, uint64_t *addr)
 {
-	uint64_t h_addr;
+	ASSERT(addr);
 
 	if (vgt->bypass_addr_check)
-		return g_addr;
+		return 0;
 
-	ASSERT_NUM(g_gm_is_valid(vgt, g_addr), g_addr);
+	if (!g_gm_is_valid(vgt, *addr)) {
+		vgt_err("VM(%d): invalid g_addr(0x%llx)\n", vgt->vm_id, *addr);
+		return -EACCES;
+	}
 
-	if (g_gm_is_visible(vgt, g_addr))	/* aperture */
-		h_addr = vgt_visible_gm_base(vgt) +
-			g_gm_visible_offset(vgt, g_addr);
+	if (g_gm_is_visible(vgt, *addr))	/* aperture */
+		*addr = vgt_visible_gm_base(vgt) +
+			g_gm_visible_offset(vgt, *addr);
 	else	/* hidden GM space */
-		h_addr = vgt_hidden_gm_base(vgt) +
-			g_gm_hidden_offset(vgt, g_addr);
-
-	return h_addr;
+		*addr = vgt_hidden_gm_base(vgt) +
+			g_gm_hidden_offset(vgt, *addr);
+	return 0;
 }
 
 /* translate a host gm address to guest gm address */
@@ -1432,9 +1434,11 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 
 static inline uint32_t g2h_gtt_index(struct vgt_device *vgt, uint32_t g_index)
 {
-	uint64_t g_addr = g_index << GTT_PAGE_SHIFT;
+	uint64_t addr = g_index << GTT_PAGE_SHIFT;
 
-	return (uint32_t)(g2h_gm(vgt, g_addr) >> GTT_PAGE_SHIFT);
+	g2h_gm(vgt, &addr);
+
+	return (uint32_t)(addr >> GTT_PAGE_SHIFT);
 }
 
 static inline uint32_t h2g_gtt_index(struct vgt_device *vgt, uint32_t h_index)
