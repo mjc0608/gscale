@@ -1967,6 +1967,8 @@ extern void apply_tail_list(struct vgt_device *vgt, int ring_id,
 extern int get_submission_id(vgt_state_ring_t *rs, int budget, uint64_t *submission_id);
 
 extern void vgt_submit_commands(struct vgt_device *vgt, int ring_id);
+extern void vgt_sched_update_prev(struct vgt_device *vgt, cycles_t time);
+extern void vgt_sched_update_next(struct vgt_device *vgt);
 
 /* klog facility for buck printk */
 extern int vgt_klog_init(void);

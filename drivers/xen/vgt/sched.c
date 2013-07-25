@@ -117,7 +117,11 @@ static enum hrtimer_restart vgt_tbs_timer_fn(struct hrtimer *data)
 	if (vgt_chk_raised_request(pdev, VGT_REQUEST_CTX_SWITCH))
 		vgt_dbg("Warning: last request for ctx_switch not handled yet!\n");
 
-	vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+	if (pdev->next_sched_vgt != current_render_owner(pdev)) {
+		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+		spin_unlock_irqrestore(&pdev->lock, flags);
+		return HRTIMER_NORESTART;
+	}
 
 reload_timer:
 	spin_unlock_irqrestore(&pdev->lock, flags);
@@ -759,6 +763,34 @@ void __raise_ctx_sched(struct vgt_device *vgt)
 	vgt_sched_ctx(pdev);
 }
 
+/* cleanup for previous vgt instance */
+void vgt_sched_update_prev(struct vgt_device *vgt, cycles_t time)
+{
+	/* cancel timer to avoid including context switch time */
+	if (timer_based_qos)
+		hrtimer_cancel(&vgt_hrtimer.timer);
+
+	/* Records actual tsc when all rendering engines
+	 * are stopped */
+	if (event_based_qos) {
+		ctx_actual_end_time(current_render_owner(vgt->pdev)) = time;
+	}
+}
+
+/* prepare for next vgt instance */
+void vgt_sched_update_next(struct vgt_device *vgt)
+{
+	if (timer_based_qos)
+		hrtimer_start(&vgt_hrtimer.timer,
+			ktime_add_ns(ktime_get(), vgt_hrtimer.period),
+			HRTIMER_MODE_ABS);
+
+	/* setup countdown for next vgt context */
+	if (event_based_qos) {
+		vgt_setup_countdown(vgt);
+	}
+}
+
 static int calculate_budget(struct vgt_device *vgt)
 {
 #if 0
@@ -791,7 +823,7 @@ void vgt_submit_commands(struct vgt_device *vgt, int ring_id)
 	 * request will be recovered at end of ctx switch.
 	 */
 	if (ctx_switch_requested(pdev)) {
-		vgt_info("<%d>: Hold commands in render ctx switch (%d->%d)\n",
+		vgt_dbg("<%d>: Hold commands in render ctx switch (%d->%d)\n",
 			vgt->vm_id, current_render_owner(pdev)->vm_id,
 			pdev->next_sched_vgt->vm_id);
 		return;
@@ -809,8 +841,11 @@ void vgt_submit_commands(struct vgt_device *vgt, int ring_id)
 
 	cmd_nr = get_submission_id(rs, budget, &submission_id);
 	/* no valid cmd queued */
-	if (cmd_nr == MAX_CMD_BUDGET)
+	if (cmd_nr == MAX_CMD_BUDGET) {
+		vgt_dbg("VM(%d): tail write w/o cmd to submit\n",
+			vgt->vm_id);
 		return;
+	}
 
 	/*
 	 * otherwise submit to GPU, even when cmd_nr is ZERO.

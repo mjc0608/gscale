@@ -1459,11 +1459,8 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	/* variable exported by debugfs */
 	context_switch_num ++;
 	t0 = vgt_get_cycles();
-	/* Records actual tsc when all rendering engines
-	 * are stopped */
-	if (event_based_qos) {
-		ctx_actual_end_time(current_render_owner(pdev)) = t0;
-	}
+
+	vgt_sched_update_prev(prev, t0);
 
 	if ( prev )
 		prev->stat.allocated_cycles +=
@@ -1562,10 +1559,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 
 	next->stat.schedule_in_time = vgt_get_cycles();
 
-	/* setup countdown for next vgt context */
-	if (event_based_qos) {
-		vgt_setup_countdown(next);
-	}
+	vgt_sched_update_next(next);
 
 	t1 = vgt_get_cycles();
 	context_switch_cost += (t1-t0);
