@@ -24,6 +24,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/debugfs.h>
 #include "vgt.h"
 #include <xen/fb_decoder.h>
 #include <uapi/drm/drm_fourcc.h>
@@ -240,96 +241,112 @@ static int vgt_decode_sprite_plane_format(struct vgt_device *vgt,
 	return 0;
 }
 
-static void vgt_show_primary_plane_format(
+static void vgt_dump_primary_plane_format(struct dump_buffer *buf,
 	struct vgt_primary_plane_format *plane)
 {
-	printk("Primary Plane: [%s]\n",
+	dump_string(buf, "Primary Plane: [%s]\n",
 		plane->enabled ? "Enabled" : "Disabled");
 	if (!plane->enabled)
 		return;
 
-	printk("  tiled: %s\n", plane->tiled ? "yes" : "no");
+	dump_string(buf, "  tiled: %s\n", plane->tiled ? "yes" : "no");
 	if (!plane->bpp) {
-		printk("  BROKEN FORMAT (ZERO bpp)\n");
+		dump_string(buf, "  BROKEN FORMAT (ZERO bpp)\n");
 		return;
 	}
 
-	printk("  bpp: %d\n", plane->bpp);
-	printk("  drm_format: 0x%08x: %s\n", plane->drm_format,
+	dump_string(buf, "  bpp: %d\n", plane->bpp);
+	dump_string(buf, "  drm_format: 0x%08x: %s\n", plane->drm_format,
 		hsw_pixel_formats[plane->hw_format].desc);
-	printk("  base: 0x%x\n", plane->base);
-	printk("  x-off: %d\n", plane->x_offset);
-	printk("  y-off: %d\n", plane->y_offset);
-	printk("  width: %d\n", plane->width);
-	printk("  height: %d\n", plane->height);
+	dump_string(buf, "  base: 0x%x\n", plane->base);
+	dump_string(buf, "  x-off: %d\n", plane->x_offset);
+	dump_string(buf, "  y-off: %d\n", plane->y_offset);
+	dump_string(buf, "  width: %d\n", plane->width);
+	dump_string(buf, "  height: %d\n", plane->height);
 }
 
-static void vgt_show_cursor_plane_format(
+static void vgt_dump_cursor_plane_format(struct dump_buffer *buf,
 	struct vgt_cursor_plane_format *plane)
 {
-	printk("Cursor Plane: [%s]\n",
+	dump_string(buf, "Cursor Plane: [%s]\n",
 		plane->enabled ? "Enabled" : "Disabled");
 	if (!plane->enabled)
 		return;
 
 	if (!plane->bpp) {
-		printk("  BROKEN FORMAT (ZERO bpp)\n");
+		dump_string(buf, "  BROKEN FORMAT (ZERO bpp)\n");
 		return;
 	}
 
-	printk("  bpp: %d\n", plane->bpp);
-	printk("  mode: 0x%08x: %s\n", plane->mode,
+	dump_string(buf, "  bpp: %d\n", plane->bpp);
+	dump_string(buf, "  mode: 0x%08x: %s\n", plane->mode,
 		hsw_cursor_mode_formats[plane->mode].desc);
-	printk("  drm_format: 0x%08x\n", plane->drm_format);
-	printk("  base: 0x%x\n", plane->base);
-	printk("  x-pos: %d\n", plane->x_pos);
-	printk("  y-pos: %d\n", plane->y_pos);
-	printk("  x-sign: %d\n", plane->x_sign);
-	printk("  y-sign: %d\n", plane->y_sign);
-	printk("  width: %d\n", plane->width);
-	printk("  height: %d\n", plane->height);
+	dump_string(buf, "  drm_format: 0x%08x\n", plane->drm_format);
+	dump_string(buf, "  base: 0x%x\n", plane->base);
+	dump_string(buf, "  x-pos: %d\n", plane->x_pos);
+	dump_string(buf, "  y-pos: %d\n", plane->y_pos);
+	dump_string(buf, "  x-sign: %d\n", plane->x_sign);
+	dump_string(buf, "  y-sign: %d\n", plane->y_sign);
+	dump_string(buf, "  width: %d\n", plane->width);
+	dump_string(buf, "  height: %d\n", plane->height);
 }
 
-static void vgt_show_sprite_plane_format(
+static void vgt_dump_sprite_plane_format(struct dump_buffer *buf,
 	struct vgt_sprite_plane_format *plane)
 {
-	printk("Sprite Plane: [%s]\n",
+	dump_string(buf, "Sprite Plane: [%s]\n",
 		plane->enabled ? "Enabled" : "Disabled");
 	if (!plane->enabled)
 		return;
 
-	printk("  tiled: %s\n", plane->tiled ? "yes" : "no");
+	dump_string(buf, "  tiled: %s\n", plane->tiled ? "yes" : "no");
 	if (!plane->bpp) {
-		printk("  BROKEN FORMAT (ZERO bpp)\n");
+		dump_string(buf, "  BROKEN FORMAT (ZERO bpp)\n");
 		return;
 	}
 
-	printk("  bpp: %d\n", plane->bpp);
-	printk("  drm_format: 0x%08x: %s\n", plane->drm_format,
+	dump_string(buf, "  bpp: %d\n", plane->bpp);
+	dump_string(buf, "  drm_format: 0x%08x: %s\n",
+		plane->drm_format,
 		hsw_pixel_formats_sprite[plane->hw_format].desc);
-	printk("  base: 0x%x\n", plane->base);
-	printk("  x-off: %d\n", plane->x_offset);
-	printk("  y-off: %d\n", plane->y_offset);
-	printk("  x-pos: %d\n", plane->x_pos);
-	printk("  y-pos: %d\n", plane->y_pos);
-	printk("  width: %d\n", plane->width);
-	printk("  height: %d\n", plane->height);
+	dump_string(buf, "  base: 0x%x\n", plane->base);
+	dump_string(buf, "  x-off: %d\n", plane->x_offset);
+	dump_string(buf, "  y-off: %d\n", plane->y_offset);
+	dump_string(buf, "  x-pos: %d\n", plane->x_pos);
+	dump_string(buf, "  y-pos: %d\n", plane->y_pos);
+	dump_string(buf, "  width: %d\n", plane->width);
+	dump_string(buf, "  height: %d\n", plane->height);
 }
 
-/* Debug facility */
-static void vgt_show_fb_format(int vmid, struct vgt_fb_format *fb)
+
+int vgt_dump_fb_format(struct dump_buffer *buf, struct vgt_fb_format *fb)
 {
 	int i;
 
-	printk("-----------FB format (VM-%d)--------\n", vmid);
+
 	for (i = 0; i < MAX_INTEL_PIPES; i++) {
 		struct vgt_pipe_format *pipe = &fb->pipes[i];
-		printk("[PIPE-%d]:\n", i);
-		vgt_show_primary_plane_format(&pipe->primary);
-		vgt_show_cursor_plane_format(&pipe->cursor);
-		vgt_show_sprite_plane_format(&pipe->sprite);
+		dump_string(buf, "[PIPE-%d]:\n", i);
+		vgt_dump_primary_plane_format(buf, &pipe->primary);
+		vgt_dump_cursor_plane_format(buf, &pipe->cursor);
+		vgt_dump_sprite_plane_format(buf, &pipe->sprite);
 	}
-	printk("\n");
+	dump_string(buf, "\n");
+	return 0;
+}
+
+/* Debug facility */
+
+static void vgt_show_fb_format(int vmid, struct vgt_fb_format *fb)
+{
+	struct dump_buffer buf;
+	if (create_dump_buffer(&buf, 2048) < 0)
+		return;
+
+	vgt_dump_fb_format(&buf, fb);
+	printk("-----------FB format (VM-%d)--------\n", vmid);
+	printk("%s", buf.buffer);
+	destroy_dump_buffer(&buf);
 }
 
 /*

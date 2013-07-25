@@ -23,8 +23,75 @@
 #include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/debugfs.h>
+#include <xen/fb_decoder.h>
 
 #include "vgt.h"
+
+/*
+ * Dump buffer
+ *
+ * dump buffer provides users the ability to dump contents into a text
+ * buffer first, so that the contents could be later printed by various
+ * ways, like printk to stdout, or seq_printf to files.
+ *
+ * buffer overflow is handled inside.
+ */
+#define MAX_DUMP_BUFFER_SIZE 4096
+
+int create_dump_buffer(struct dump_buffer *buf, int buf_size)
+{
+	buf->buffer = NULL;
+	buf->buf_len = buf->buf_size = 0;
+
+	if ((buf_size > MAX_DUMP_BUFFER_SIZE) || (buf_size <= 0)) {
+		vgt_err ("Invalid dump buffer size!\n");
+		return -EINVAL;
+	}
+
+	buf->buffer = vzalloc(buf_size);
+	if (!buf->buffer) {
+		vgt_err(
+		"Buffer allocation failed for frame buffer format dump!\n");
+		return -EINVAL;
+	}
+
+	buf->buf_size = buf_size;
+	return 0;
+}
+
+void destroy_dump_buffer(struct dump_buffer *buf)
+{
+	if (buf->buffer)
+		vfree(buf->buffer);
+
+	buf->buffer = NULL;
+	buf->buf_len = buf->buf_size = 0;
+}
+
+void dump_string(struct dump_buffer *buf, const char *fmt, ...)
+{
+	va_list args;
+	int n;
+
+	if (buf->buf_len >= buf->buf_size - 1) {
+		vgt_warn("dump buffer is full! Contents will be ignored!\n");
+		return;
+	}
+
+	va_start(args, fmt);
+	n = vsnprintf(&buf->buffer[buf->buf_len],
+			buf->buf_size - buf->buf_len, fmt, args);
+	va_end(args);
+
+	if (buf->buf_len + n >= buf->buf_size) {
+		buf->buf_len = buf->buf_size - 1;
+		vgt_warn("dump buffer is full! Content is truncated!\n");
+	} else {
+		buf->buf_len += n;
+	}
+}
+
+/*************** end of dump buffer implementation **************/
 
 /* Maximum lenth of stringlized integer is 10 */
 #define MAX_VM_NAME_LEN (3 + 10)
@@ -38,6 +105,7 @@ enum vgt_debugfs_entry_t
 	VGT_DEBUGFS_SURFC_BASE,
 	VGT_DEBUGFS_VIRTUAL_MMIO,
 	VGT_DEBUGFS_SHADOW_MMIO,
+	VGT_DEBUGFS_FB_FORMAT,
 	VGT_DEBUGFS_ENTRY_MAX
 };
 
@@ -448,6 +516,42 @@ static const struct file_operations irqinfo_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
+
+int vgt_dump_fb_format(struct dump_buffer *buf, struct vgt_fb_format *fb);
+static int vgt_show_fbinfo(struct seq_file *m, void *data)
+{
+	struct vgt_device *vgt =  (struct vgt_device *)m->private;
+	struct vgt_fb_format fb;
+	int rc;
+
+	rc = vgt_decode_fb_format(vgt->vm_id, &fb);
+	if (rc != 0) {
+		seq_printf(m, "Failed to get frame buffer information!\n");
+	} else {
+		struct dump_buffer buf;
+		if ((rc = create_dump_buffer(&buf, 2048) < 0))
+			return rc;
+		vgt_dump_fb_format(&buf, &fb);
+		seq_printf(m, "-----------FB format (VM-%d)--------\n",
+					vgt->vm_id);
+		seq_printf(m, "%s", buf.buffer);
+		destroy_dump_buffer(&buf);
+	}
+
+	return 0;
+}
+
+static int vgt_fbinfo_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vgt_show_fbinfo, inode->i_private);
+}
+
+static const struct file_operations fbinfo_fops = {
+	.open = vgt_fbinfo_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
 /* initialize vGT debufs top directory */
 struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 {
@@ -565,7 +669,6 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	else
 		printk("vGT(%d): create debugfs node: virtual_mmio_space\n", vgt_id);
 
-
 	p = &vgt_debugfs_data[vgt_id][VGT_DEBUGFS_SHADOW_MMIO];
 	p->array = (u32 *)(vgt->state.sReg);
 	p->elements = pdev->reg_num;
@@ -578,6 +681,14 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		printk(KERN_ERR "vGT(%d): failed to create debugfs node: shadow_mmio_space\n", vgt_id);
 	else
 		printk("vGT(%d): create debugfs node: shadow_mmio_space\n", vgt_id);
+
+	d_debugfs_entry[vgt_id][VGT_DEBUGFS_FB_FORMAT] = debugfs_create_file("frame_buffer_format",
+			0444, d_per_vgt[vgt_id], vgt, &fbinfo_fops);
+
+	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_FB_FORMAT])
+		printk(KERN_ERR "vGT(%d): failed to create debugfs node: frame_buffer_format\n", vgt_id);
+	else
+		printk("vGT(%d): create debugfs node: frame_buffer_format\n", vgt_id);
 
 	/* surface B is not used for boot, empty framebuffer cannot be used for debugfs */
 #if 0

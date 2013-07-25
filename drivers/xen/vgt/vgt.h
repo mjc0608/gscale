@@ -2088,6 +2088,16 @@ struct vgt_device *vmid_2_vgt_device(int vmid);
 extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);
 int vgt_fb_notifier_call_chain(unsigned long val, void *data);
 
+struct dump_buffer {
+	char *buffer;
+	int buf_len;
+	int buf_size;
+};
+
+int create_dump_buffer(struct dump_buffer *buf, int buf_size);
+void destroy_dump_buffer(struct dump_buffer *buf);
+void dump_string(struct dump_buffer *buf, const char *fmt, ...);
+
 #define ASSERT_VM(x, vgt)						\
 	do {								\
 		if (!(x)) {						\
