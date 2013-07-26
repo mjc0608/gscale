@@ -1955,8 +1955,7 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 
 	rs->last_scan_head = vring->tail;
 
-	/* FIXME: destroy VM  later */
-	ASSERT(!ret);
+	ASSERT_VM(!ret, vgt);
 	return ret;
 }
 
