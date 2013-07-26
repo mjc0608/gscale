@@ -952,6 +952,8 @@ static int i915_pm_suspend(struct device *dev)
 	if (drm_dev->switch_power_state == DRM_SWITCH_POWER_OFF)
 		return 0;
 
+#ifdef DRM_I915_VGT_SUPPORT
+	/* need cleanup for the native case */
 	set_gen_pci_cfg_space_pt(1);
 
 	error = i915_drm_suspend(drm_dev);
