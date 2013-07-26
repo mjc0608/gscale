@@ -804,19 +804,6 @@ static bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	new = *(vgt_reg_t *)p_data;
 	old = __vreg(vgt, offset);
 
-	/* This can verify that bspec was wrong that: channel status
-	 * can be cleared by writing back the status bits
-	 * */
-#if 0
-	if ((new & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK)) {
-		vgt_reg_t pdata;
-		VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, new);
-		pdata = VGT_MMIO_READ(pdev, _REG_PCH_ADPA);
-		if ((pdata & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK))
-			printk("vGT: xuanhua failed to clear channel status\n");
-	}
-#endif
-
 	/* Clear the bits of 'force hotplug trigger' and status because they
 	 * will be fully virtualized. Other bits will be written to hardware.
 	 */
@@ -840,7 +827,9 @@ static bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		else
 			new &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 	} else {
-		old &= ~(_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK & new);
+		/* ignore the status bits in new value
+		 * since they are read only actually
+		 */
 		new = (new & ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) |
 			(old & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK);
 	}
