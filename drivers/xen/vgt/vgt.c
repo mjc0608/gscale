@@ -659,8 +659,8 @@ int vgt_suspend(struct pci_dev *pdev)
 	/* TODO: check vGT instance state */
 	/* ... */
 
-	/* save GTT information */
-	vgt_save_gtt(pgt);
+	/* save GTT and FENCE information */
+	vgt_save_gtt_and_fence(pgt);
 
 	vgt_reset_dom0_ppgtt_state();
 
@@ -694,8 +694,8 @@ int vgt_resume(struct pci_dev *pdev)
 
 	vgt_info("Resuming vGT driver...\n");
 
-	/* restore GTT table */
-	vgt_restore_gtt(pgt);
+	/* restore GTT table and FENCE regs */
+	vgt_restore_gtt_and_fence(pgt);
 
 	/* redo the MMIO snapshot */
 	vgt_initial_mmio_setup(pgt);

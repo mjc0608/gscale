@@ -766,6 +766,7 @@ struct pgt_device {
 	u32 gtt_size;
 	int reg_num;
 	uint32_t *saved_gtt;
+	uint64_t saved_fences[VGT_MAX_NUM_FENCES];
 
 	int max_engines;	/* supported max engines */
 	u32 ring_mmio_base[MAX_ENGINES];
@@ -2086,8 +2087,8 @@ int vgt_hvm_map_apperture (struct vgt_device *vgt, int map);
 int setup_gtt(struct pgt_device *pdev);
 void check_gtt(struct pgt_device *pdev);
 void free_gtt(struct pgt_device *pdev);
-void vgt_save_gtt(struct pgt_device *pdev);
-void vgt_restore_gtt(struct pgt_device *pdev);
+void vgt_save_gtt_and_fence(struct pgt_device *pdev);
+void vgt_restore_gtt_and_fence(struct pgt_device *pdev);
 uint64_t vgt_get_gtt_size(struct pci_bus *bus);
 uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off);
 int vgt_get_hvm_max_gpfn(int vm_id);
