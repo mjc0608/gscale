@@ -871,7 +871,8 @@ int vgt_hvm_info_init(struct vgt_device *vgt)
 		info->evtchn_irq[vcpu] = irq;
 	}
 
-	thread = kthread_run(vgt_emulation_thread, vgt, "vgt_emulation");
+	thread = kthread_run(vgt_emulation_thread, vgt,
+			"vgt_emulation:%d", vgt->vm_id);
 	if(IS_ERR(thread))
 		goto err;
 	info->emulation_thread = thread;

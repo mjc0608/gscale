@@ -547,7 +547,7 @@ int vgt_initialize(struct pci_dev *dev)
 	init_waitqueue_head(&pdev->event_wq);
 	init_waitqueue_head(&pdev->destroy_wq);
 
-	p_thread = kthread_run(vgt_thread, pdev, "vgt_thread");
+	p_thread = kthread_run(vgt_thread, pdev, "vgt_main");
 	if (!p_thread) {
 		goto err;
 	}
