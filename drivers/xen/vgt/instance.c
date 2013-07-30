@@ -111,7 +111,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt_info("vm_id=%d, low_gm_sz=%dMB, high_gm_sz=%dMB, fence_sz=%d, vgt_primary=%d\n",
 		vp.vm_id, vp.aperture_sz, vp.gm_sz-vp.aperture_sz, vp.fence_sz, vp.vgt_primary);
 
-	vgt = kzalloc (sizeof(*vgt), GFP_KERNEL);
+	vgt = vzalloc(sizeof(*vgt));
 	if (vgt == NULL) {
 		printk("Insufficient memory for vgt_device in %s\n", __FUNCTION__);
 		return rc;
@@ -316,7 +316,7 @@ err:
 	vfree(vgt->state.sReg);
 	if (vgt->vgt_id >= 0)
 		free_vgt_id(vgt->vgt_id);
-	kfree(vgt);
+	vfree(vgt);
 	return rc;
 }
 
@@ -403,6 +403,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	vfree(vgt->state.vReg);
 	vfree(vgt->state.sReg);
 	free_vgt_id(vgt->vgt_id);
-	kfree(vgt);
+	vfree(vgt);
 	printk("vGT: vgt_release_instance done\n");
 }
+
