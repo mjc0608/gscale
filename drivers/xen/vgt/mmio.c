@@ -293,6 +293,11 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	unsigned int offset;
 	unsigned long flags;
 	bool rc;
+	cycles_t t0, t1;
+	struct vgt_statistics *stat = &vgt->stat;
+
+	t0 = get_cycles();
+	stat->mmio_rcnt++;
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
@@ -346,6 +351,9 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	trace_vgt_mmio_rw(VGT_TRACE_READ, vgt->vm_id, offset, p_data, bytes);
+
+	t1 = get_cycles();
+	stat->mmio_rcycles += t1 - t0;
 	return true;
 err_mmio:
 	spin_unlock_irqrestore(&pdev->lock, flags);
@@ -368,6 +376,11 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	unsigned long flags;
 	vgt_reg_t old_vreg=0, old_sreg=0;
 	bool rc;
+	cycles_t t0, t1;
+	struct vgt_statistics *stat = &vgt->stat;
+
+	t0 = get_cycles();
+	stat->mmio_wcnt++;
 
 	/* PPGTT PTE WP comes here too. */
 	if (pdev->enable_ppgtt && vgt->vm_id != 0 && vgt->ppgtt_initialized) {
@@ -457,6 +470,9 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	reg_set_accessed(pdev, offset);
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	trace_vgt_mmio_rw(VGT_TRACE_WRITE, vgt->vm_id, offset, p_data, bytes);
+
+	t1 = get_cycles();
+	stat->mmio_wcycles += t1 - t0;
 	return true;
 err_mmio:
 	spin_unlock_irqrestore(&pdev->lock, flags);
@@ -465,11 +481,6 @@ err_common_chk:
 		"bytes(%d)!\n", vgt->vm_id, offset, bytes);
 	return false;
 }
-
-u64 mmio_rcnt=0;
-u64 mmio_wcnt=0;
-u64 mmio_rcycles=0;
-u64 mmio_wcycles=0;
 
 static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq);
 static void vgt_crash_domain(struct vgt_device *vgt)
@@ -535,7 +546,6 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint64_t base = * (uint64_t *) (cfg_space + VGT_REG_CFG_SPACE_BAR0);
 	uint64_t tmp;
-	cycles_t t0, t1;
 
 	if (vgt->vmem_vma == NULL && vgt_hvm_vmem_init(vgt) < 0) {
 		vgt_err("can not map the memory of VM%d!!!\n", vgt->vm_id);
@@ -546,8 +556,6 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 	sign = req->df ? -1 : 1;
 
 	if (req->dir == IOREQ_READ) {
-		t0 = get_cycles();
-		mmio_rcnt++;
 		/* MMIO READ */
 		if (!req->data_is_ptr) {
 			if (req->count != 1)
@@ -580,13 +588,8 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 					vgt_dbg("vGT: can not write gpa = 0x%lx!!!\n", gpa);
 			}
 		}
-		t1 = get_cycles();
-		t1 -= t0;
-		mmio_rcycles += (u64) t1;
 	}
 	else { /* MMIO Write */
-		t0 = get_cycles();
-		mmio_wcnt++;
 		if (!req->data_is_ptr) {
 			if (req->count != 1)
 				goto err_ioreq_count;
@@ -615,9 +618,6 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 					return -EINVAL;
 			}
 		}
-		t1 = get_cycles();
-		t1 -= t0;
-		mmio_wcycles += (u64) t1;
 	}
 	return 0;
 

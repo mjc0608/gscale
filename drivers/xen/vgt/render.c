@@ -1603,18 +1603,14 @@ static inline int tail_to_ring_id(struct pgt_device *pdev, unsigned int tail_off
 	return 0;
 }
 
-u64 ring_mmio_rcnt=0;
-u64 ring_mmio_wcnt=0;
-u64 ring_tail_mmio_wcnt=0;
-u64 ring_tail_mmio_wcycles=0;
-
 bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ring_id, rel_off;
 	vgt_ringbuffer_t	*vring;
+	struct vgt_statistics *stat = &vgt->stat;
 
-	ring_mmio_rcnt++;
+	stat->ring_mmio_rcnt++;
 
 	if ((hvm_render_owner && (vgt->vm_id != 0)) || reg_hw_access(vgt, off)){
 		unsigned long data;
@@ -1643,8 +1639,11 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	vgt_reg_t	oval;
 	cycles_t	t0, t1;
 	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_statistics *stat = &vgt->stat;
 
-	ring_mmio_wcnt++;
+	t0 = get_cycles();
+	stat->ring_mmio_wcnt++;
+
 	vgt_dbg("vGT:ring_mmio_write (0x%x) with val (0x%x)\n", off, *((u32 *)p_data));
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 
@@ -1664,8 +1663,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 	switch (rel_off) {
 	case RB_OFFSET_TAIL:
-		t0 = get_cycles();
-		ring_tail_mmio_wcnt++;
+		stat->ring_tail_mmio_wcnt++;
 
 		/* enable hvm tailq after the ring enabled */
 		if (shadow_tail_based_qos) {
@@ -1688,8 +1686,9 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 		if ( !bypass_scan )
 			vgt_scan_vring(vgt, ring_id);
+
 		t1 = get_cycles();
-		ring_tail_mmio_wcycles += (t1-t0);
+		stat->ring_tail_mmio_wcycles += (t1-t0);
 
 		if (shadow_tail_based_qos) {
 			if (vgt_tailq_last_stail(tailq)

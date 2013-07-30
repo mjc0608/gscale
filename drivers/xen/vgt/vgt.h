@@ -442,6 +442,20 @@ struct vgt_statistics {
 	u64	last_propagation;
 	u64	last_blocked_propagation;
 	u64	last_injection;
+
+	/* mmio statistics */
+	u64	gtt_mmio_rcnt;
+	u64	gtt_mmio_wcnt;
+	u64	gtt_mmio_wcycles;
+	u64	gtt_mmio_rcycles;
+	u64	mmio_rcnt;
+	u64	mmio_wcnt;
+	u64	mmio_wcycles;
+	u64	mmio_rcycles;
+	u64	ring_mmio_rcnt;
+	u64	ring_mmio_wcnt;
+	u64	ring_tail_mmio_wcnt;
+	u64	ring_tail_mmio_wcycles;
 };
 
 /* per-VM structure */
@@ -1989,18 +2003,6 @@ typedef struct {
 	u64 *stat;
 } debug_statistics_t;
 
-extern u64 gtt_mmio_rcnt;
-extern u64 gtt_mmio_wcnt;
-extern u64 gtt_mmio_wcycles;
-extern u64 gtt_mmio_rcycles;
-extern u64 mmio_rcnt;
-extern u64 mmio_wcnt;
-extern u64 mmio_wcycles;
-extern u64 mmio_rcycles;
-extern u64 ring_mmio_rcnt;
-extern u64 ring_mmio_wcnt;
-extern u64 ring_tail_mmio_wcnt;
-extern u64 ring_tail_mmio_wcycles;
 extern u64 context_switch_cost;
 extern u64 context_switch_num;
 extern u64 ring_0_idle;

@@ -32,11 +32,6 @@
 
 #include "vgt.h"
 
-u64 gtt_mmio_rcnt=0;
-u64 gtt_mmio_wcnt=0;
-u64 gtt_mmio_wcycles=0;
-u64 gtt_mmio_rcycles=0;
-
 unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
 {
 	u64 addr = 0;
@@ -391,12 +386,9 @@ static bool gtt_mmio_read32(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t g_gtt_index;
-		cycles_t t0, t1;
 
 	ASSERT(bytes == 4);
 
-	t0 = get_cycles();
-	gtt_mmio_rcnt++;
 	off -= vgt->pdev->mmio_size;
 	if (off >= vgt->vgtt_sz) {
 		vgt_dbg("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
@@ -405,9 +397,6 @@ static bool gtt_mmio_read32(struct vgt_device *vgt, unsigned int off,
 
 	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
 	*(uint32_t*)p_data = vgt->vgtt[g_gtt_index];
-	t1 = get_cycles();
-	t1 -= t0;
-	gtt_mmio_rcycles += (u64) t1;
 	return true;
 }
 
@@ -415,12 +404,20 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ret;
+	cycles_t t0, t1;
+	struct vgt_statistics *stat = &vgt->stat;
+
+	t0 = get_cycles();
+	stat->gtt_mmio_rcnt++;
+
 	ASSERT(bytes == 4 || bytes == 8);
 
 	ret = gtt_mmio_read32(vgt, off, p_data, 4);
 	if (ret && bytes == 8)
 		ret = gtt_mmio_read32(vgt, off + 4, (char*)p_data + 4, 4);
 
+	t1 = get_cycles();
+	stat->gtt_mmio_rcycles += (u64) (t1 - t0);
 	return ret;
 }
 
@@ -432,12 +429,9 @@ static bool gtt_mmio_write32(struct vgt_device *vgt, unsigned int off,
 	uint32_t g_gtt_val, h_gtt_val, g_gtt_index, h_gtt_index;
 	int rc;
 	uint64_t g_addr;
-		cycles_t t0, t1;
 
 	ASSERT(bytes == 4);
 
-	t0 = get_cycles();
-	gtt_mmio_wcnt++;
 	off -= vgt->pdev->mmio_size;
 
 	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
@@ -481,10 +475,6 @@ static bool gtt_mmio_write32(struct vgt_device *vgt, unsigned int off,
 	}
 #endif
 out:
-	t1 = get_cycles();
-	t1 -= t0;
-	gtt_mmio_wcycles += (u64) t1;
-
 	return true;
 }
 
@@ -492,12 +482,20 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ret;
+	cycles_t t0, t1;
+	struct vgt_statistics *stat = &vgt->stat;
+
+	t0 = get_cycles();
+	stat->gtt_mmio_wcnt++;
+
 	ASSERT(bytes == 4 || bytes == 8);
 
 	ret = gtt_mmio_write32(vgt, off, p_data, 4);
 	if (ret && bytes == 8)
 		ret = gtt_mmio_write32(vgt, off + 4, (char*)p_data + 4, 4);
 
+	t1 = get_cycles();
+	stat->gtt_mmio_wcycles += (u64) (t1 - t0);
 	return ret;
 }
 

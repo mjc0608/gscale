@@ -110,18 +110,6 @@ enum vgt_debugfs_entry_t
 };
 
 static debug_statistics_t  stat_info [] = {
-	{ "gtt_mmio_rcnt", &gtt_mmio_rcnt },
-	{ "gtt_mmio_wcnt", &gtt_mmio_wcnt },
-	{ "gtt_mmio_wcycles", &gtt_mmio_wcycles },
-	{ "gtt_mmio_rcycles", &gtt_mmio_rcycles },
-	{ "mmio_rcnt", &mmio_rcnt },
-	{ "mmio_wcnt", &mmio_wcnt },
-	{ "mmio_wcycles", &mmio_wcycles },
-	{ "mmio_rcycles", &mmio_rcycles },
-	{ "ring_mmio_rcnt", &ring_mmio_rcnt },
-	{ "ring_mmio_wcnt", &ring_mmio_wcnt },
-	{ "ring_tail_mmio_wcnt", &ring_tail_mmio_wcnt },
-	{ "ring_tail_mmio_wcycles", &ring_tail_mmio_wcycles },
 	{ "context_switch_cycles", &context_switch_cost },
 	{ "context_switch_num", &context_switch_num },
 	{ "ring_0_busy", &ring_0_busy },
@@ -739,6 +727,19 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		debugfs_create_u64_node ("schedule_in_time", 0444, perf_dir_entry, &(vgt->stat.schedule_in_time));
 		debugfs_create_u64_node ("allocated_cycles", 0444, perf_dir_entry, &(vgt->stat.allocated_cycles));
 		//debugfs_create_u64_node ("used_cycles", 0444, perf_dir_entry, &(vgt->stat.used_cycles));
+
+		debugfs_create_u64_node ("gtt_mmio_rcnt", 0444, perf_dir_entry, &(vgt->stat.gtt_mmio_rcnt));
+		debugfs_create_u64_node ("gtt_mmio_wcnt", 0444, perf_dir_entry, &(vgt->stat.gtt_mmio_wcnt));
+		debugfs_create_u64_node ("gtt_mmio_wcycles", 0444, perf_dir_entry, &(vgt->stat.gtt_mmio_wcycles));
+		debugfs_create_u64_node ("gtt_mmio_rcycles", 0444, perf_dir_entry, &(vgt->stat.gtt_mmio_rcycles));
+		debugfs_create_u64_node ("mmio_rcnt", 0444, perf_dir_entry, &(vgt->stat.mmio_rcnt));
+		debugfs_create_u64_node ("mmio_wcnt", 0444, perf_dir_entry, &(vgt->stat.mmio_wcnt));
+		debugfs_create_u64_node ("mmio_wcycles", 0444, perf_dir_entry, &(vgt->stat.mmio_wcycles));
+		debugfs_create_u64_node ("mmio_rcycles", 0444, perf_dir_entry, &(vgt->stat.mmio_rcycles));
+		debugfs_create_u64_node ("ring_mmio_rcnt", 0444, perf_dir_entry, &(vgt->stat.ring_mmio_rcnt));
+		debugfs_create_u64_node ("ring_mmio_wcnt", 0444, perf_dir_entry, &(vgt->stat.ring_mmio_wcnt));
+		debugfs_create_u64_node ("ring_tail_mmio_wcnt", 0444, perf_dir_entry, &(vgt->stat.ring_tail_mmio_wcnt));
+		debugfs_create_u64_node ("ring_tail_mmio_wcycles", 0444, perf_dir_entry, &(vgt->stat.ring_tail_mmio_wcycles));
 
 		/* cmd statistics for ring/batch buffers */
 		cmdstat_dir_entry = debugfs_create_dir("ring", perf_dir_entry);
