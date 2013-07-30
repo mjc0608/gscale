@@ -456,6 +456,8 @@ struct vgt_statistics {
 	u64	ring_mmio_wcnt;
 	u64	ring_tail_mmio_wcnt;
 	u64	ring_tail_mmio_wcycles;
+	u64	vring_scan_cnt;
+	u64	vring_scan_cycles;
 };
 
 /* per-VM structure */
