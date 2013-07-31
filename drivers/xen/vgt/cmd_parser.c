@@ -958,7 +958,7 @@ static unsigned int constant_buffer_address_offset_disable(struct parser_exec_st
 	  1 - use as graphics address
 	 */
 
-	return VGT_MMIO_READ(s->vgt->pdev,_REG_RCS_INSTPM) & INSTPM_CONS_BUF_ADDR_OFFSET_DIS;
+	return __vreg(s->vgt,_REG_RCS_INSTPM) & INSTPM_CONS_BUF_ADDR_OFFSET_DIS;
 }
 
 static int vgt_cmd_handler_3dstate_constant_gs(struct parser_exec_state *s)
