@@ -338,11 +338,6 @@ void vgt_init_reserved_aperture(struct pgt_device *pdev)
 	printk("ctx_switch_rb_page is allocated at gm(0x%llx)\n",
 		pdev->ctx_switch_rb_page);
 
-	/* one page for mapping batch buffer when PPGTT is disabled */
-	pdev->batch_buffer_page = aperture_2_gm(pdev, rsvd_aperture_alloc(pdev, PAGE_SIZE));
-	printk("batch_buffer_page is allocated at gm(0x%llx)\n",
-		pdev->batch_buffer_page);
-
 	pdev->dummy_area = aperture_2_gm(pdev, rsvd_aperture_alloc(pdev, SZ_CONTEXT_AREA_PER_RING));
 	printk("dummy_area is allocated at gm(0x%llx)\n", pdev->dummy_area);
 }

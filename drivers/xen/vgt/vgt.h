@@ -54,7 +54,6 @@ extern struct pgt_device *perf_pgt;
 extern struct list_head pgt_devices;
 extern struct pgt_device default_device;
 extern void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes);
-extern void show_batchbuffer(struct pgt_device *pdev, u32 addr, bool in_ppgtt);
 extern void show_mode_settings(struct pgt_device *pdev);
 extern void show_debug(struct pgt_device *pdev, int ring_id);
 
@@ -814,7 +813,6 @@ struct pgt_device {
 	uint64_t rsvd_aperture_base;
 	uint64_t scratch_page;		/* page used for data written from GPU */
 	uint64_t ctx_switch_rb_page;	/* page used as ring buffer for context switch */
-	uint64_t batch_buffer_page;	/* page used to map batch buffer */
 	uint64_t dummy_area;
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */

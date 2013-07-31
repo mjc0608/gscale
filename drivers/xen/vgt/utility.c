@@ -128,51 +128,29 @@ void show_mode_settings(struct pgt_device *pdev)
 	SHOW_MODE(_REG_TILECTL);
 }
 
-void show_batchbuffer(struct pgt_device *pdev, u32 addr, bool in_ppgtt)
+static void show_batchbuffer(struct pgt_device *pdev, u32 addr,
+	int bytes, int ppgtt)
 {
-	int i, index1, index2, pte_val;
-	char *p_contents, *ip_va;
-	struct vgt_device *vgt;
-	u32 offset;
+	int i;
+	char *ip_va;
+	struct vgt_device *vgt = current_render_owner(pdev);
 
-	if (in_ppgtt) {
-		vgt = current_render_owner(pdev);
-		ip_va = vgt_gma_to_va(vgt, addr, true);
-		printk("Batch buffer contents: \n[%08x]: ", addr);
-		for (i = 0; i < 8; i++, ip_va += 4) {
-			if (i && (!((u64)ip_va & (GTT_PAGE_SIZE - 1))))
-				ip_va = vgt_gma_to_va(vgt, (addr + i * 4),
-						true);
-			printk("%08x ", *((u32 *)ip_va));
-		}
-		printk("\n");
+	if (!vgt) {
+		vgt_err("no render owner at hanging point\n");
 		return;
-
 	}
 
-	index1 = GTT_INDEX(pdev, pdev->batch_buffer_page);
-	index2 = GTT_INDEX(pdev, addr);
-	pte_val = vgt_read_gtt(pdev, index2);
-	vgt_write_gtt(pdev, index1, pte_val);
-
-	/* offset within page */
-	offset = (addr & (~GTT_PAGE_MASK));
-	p_contents = phys_aperture_vbase(pdev) +
-		pdev->batch_buffer_page;
-	printk("Batch buffer remaps to %x (p_contents: %llx)\n",
-			pte_val, (u64)p_contents);
-	printk("[%08x]:", offset);
-	for (i = 0; i < 8; i++, offset +=4) {
-		if (offset >= GTT_PAGE_SIZE) {
-			index2 = GTT_INDEX(pdev, addr + GTT_PAGE_SIZE);
-			pte_val = vgt_read_gtt(pdev, index2);
-			vgt_write_gtt(pdev, index1, pte_val);
-			offset = 0;
-		}
-		printk(" %08x", *((u32 *)(p_contents + offset)));
+	printk("Batch buffer contents: \n[%08x]: ", addr);
+	for (i = -bytes; i < bytes; i += 4) {
+		ip_va = vgt_gma_to_va(vgt, addr+i, ppgtt);
+		if (ip_va == NULL)
+			printk("%8s ", "N/A");
+		else
+			printk("%08x ", *((u32 *)ip_va));
+		if (!i)
+			printk("(*)");
 	}
 	printk("\n");
-
 }
 
 /*
@@ -233,35 +211,14 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	off = WRAP_OFF(p_head - 8, ring_len);
 	cur = (u32*)(p_contents + off);
 	if ((*cur & 0xfffff000) == 0x18800000 && vgt) {
-		u32 val, h_val;
-		u64 mfn;
-		int rc;
+		printk("Hang in (%s) batch buffer (%x)\n",
+			(*cur & _CMDBIT_BB_START_IN_PPGTT) ? "PPGTT" : "GTT",
+			*(cur + 1));
 
-		printk("Hang in batch buffer (%x)\n", *(cur + 1));
-
-		if (*cur & _CMDBIT_BB_START_IN_PPGTT) {
-			printk("Dumping batch buffer in PPGTT"
-					" is not supported yet!\n");
-			show_batchbuffer(pdev, VGT_MMIO_READ(pdev,
-						VGT_ACTHD(ring_id)), true);
-			return;
-		}
-
-		cur++;
-		val = vgt->vgtt[GTT_INDEX(pdev, *cur)];
-		printk("vGTT: %x\n", val);
-		rc = gtt_p2m(vgt, val, &h_val);
-		if (rc < 0) {
-			printk("failed to translate\n");
-		} else {
-			mfn = gtt_pte_get_pfn(pdev, h_val);
-			printk("MACH: %x %llx\n", h_val, mfn);
-		}
-		printk("Actual pGTT: %x\n",
-				vgt_read_gtt(pdev, GTT_INDEX(pdev, *cur)));
-		show_batchbuffer(pdev, VGT_MMIO_READ(pdev,
-					VGT_ACTHD(ring_id)), false);
-
+		show_batchbuffer(pdev,
+			VGT_MMIO_READ(pdev, VGT_ACTHD(ring_id)),
+			(*cur & _CMDBIT_BB_START_IN_PPGTT),
+			bytes);
 	}
 }
 
