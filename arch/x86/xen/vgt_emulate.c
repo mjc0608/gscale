@@ -75,7 +75,7 @@ void xen_vgt_dom0_ready(struct vgt_device *vgt)
 #define dprintk(fmt, a...)
 #endif
 
-static struct vcpu_io_forwarding_request trap_req;
+static struct xen_domctl_vgt_io_trap vgt_io_trap_data;
 
 static inline uint16_t get_selector(
 	enum x86_segment seg, struct cpu_user_regs *regs)
@@ -205,14 +205,15 @@ static int _un_write_cr(
 
 static int is_vgt_trap_pio(unsigned int port)
 {
+	struct xen_domctl_vgt_io_trap *info = &vgt_io_trap_data;
+
 	int i;
 
-	BUG_ON(trap_req.nr_pio_frags == -1 || trap_req.nr_pio_frags == 0);
-	for (i=0; i<trap_req.nr_pio_frags; i++) {
-		if ( port >= trap_req.pio_frags[i].s &&
-			port <= trap_req.pio_frags[i].e )
+	for (i = 0; i < info->n_pio; i++) {
+		if (port >= info->pio[i].s && port <= info->pio[i].e)
 			return 1;
 	}
+
 	return 0;
 }
 
@@ -581,17 +582,18 @@ printk("pmd %p val %lx\n", pmd, (long)(*pmd).pmd);
 
 static int is_vgt_trap_address(unsigned long pa)
 {
+	struct xen_domctl_vgt_io_trap *info = &vgt_io_trap_data;
+
 	int i;
 
 	/* Trap address is in page unit. */
 	pa &= PAGE_MASK;
-	BUG_ON(trap_req.nr_mmio_frags == -1 || trap_req.nr_mmio_frags == 0);
-	for (i=0; i<trap_req.nr_mmio_frags; i++)
-	{
-		if ( pa >= trap_req.mmio_frags[i].s &&
-			pa <= trap_req.mmio_frags[i].e )
+
+	for (i = 0; i < info->n_mmio; i++) {
+		if (pa >= info->mmio[i].s && pa <= info->mmio[i].e)
 			return 1;
 	}
+
 	return 0;
 }
 
@@ -895,28 +897,43 @@ static void init_per_cpu_context(void)
  */
 int xen_register_vgt_driver(vgt_ops_t *ops)
 {
+	struct xen_domctl domctl;
+	struct xen_domctl_vgt_io_trap *info = &domctl.u.vgt_io_trap;
+
+	int i;
+
 	init_per_cpu_context();
 
 	BUG_ON(register_gp_prehandler(xen_vgt_handler) != 0);
 
-	/* query the pio/mmio trapped ranges that are set by the vgt driver.
-	 * trap_req is needed by the emulator.
-	 */
-	trap_req.nr_pio_frags = -1;
-	trap_req.nr_mmio_frags = -1;
+        domctl.domain = 0;
 
-	BUG_ON(HYPERVISOR_vcpu_op(VCPUOP_start_io_forward, 0, &trap_req) != 0);
+	/*
+	 * Query the pio/mmio trapped ranges that are set by the vgt driver.
+	 */
+
+	info->n_pio = info->n_mmio = 0;
+
+	BUG_ON(vgt_io_trap(&domctl) != 0);
+
+	BUG_ON(info->n_pio == 0 || info->n_mmio == 0);
+
+	memcpy(&vgt_io_trap_data, info, sizeof(*info));
+
+	info = &vgt_io_trap_data;
+
 	vgt_ops = ops;
 
-	printk("vGT: trap_req.nr_pio_frags: pio %d %lx %lx\n",
-		trap_req.nr_pio_frags,
-		(long)trap_req.pio_frags[0].s,
-		(long)trap_req.pio_frags[0].e);
-	printk("vGT: trap_req.nr_mmio_frags: mmio %d %lx %lx\n",
-		trap_req.nr_mmio_frags,
-		(long)trap_req.mmio_frags[0].s,
-		(long)trap_req.mmio_frags[0].e);
-	printk("vGT: install GP handler successfully\n");
+	for (i = 0; i < info->n_pio; i++)
+		printk("VGT: vgt_io_trap: pio %d [ %llx - %llx ]\n",
+			i, info->pio[i].s, info->pio[i].e);
+
+	for (i = 0; i < info->n_mmio; i++)
+		printk("VGT: vgt_io_trap: mmio %d [ %llx - %llx ]\n",
+			i, info->mmio[i].s, info->mmio[i].e);
+
+	printk("VGT: install GP handler successfully\n");
+
 	return 0;
 }
 

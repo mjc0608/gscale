@@ -202,21 +202,6 @@ struct vcpu_emul_ioreq {
 };
 DEFINE_GUEST_HANDLE_STRUCT(vcpu_emul_ioreq);
 
-/* Activate I/O self-forwarding for the specified VCPU */
-#define VCPUOP_start_io_forward           15
-struct trap_frags {
-    uint64_t   s;   /* start address */
-    uint64_t   e;   /* end address */
-};
-
-#define MAX_TRAP_FRAGS	32
-struct vcpu_io_forwarding_request {
-    int16_t      nr_pio_frags;
-    struct trap_frags	  pio_frags[MAX_TRAP_FRAGS];
-    int16_t      nr_mmio_frags;  /* 0..max-1, -1 means let VMM fill */
-    struct trap_frags	  mmio_frags[MAX_TRAP_FRAGS];	/*s/e address */
-};
-
 #define VCPUOP_get_sysdata           16
 /* sub operations */
 #define VCPUOP_sysdata_get_segment   0

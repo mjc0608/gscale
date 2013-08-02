@@ -82,6 +82,8 @@ extern int hcall_mmio_write(
         unsigned long val);
 
 extern int hcall_vgt_ctrl(unsigned long ctrl_op);
+
+extern int vgt_io_trap(struct xen_domctl *ctl);
 /*
  * if this macro is defined, vgt will map GMA [0,64M] to the same page as [128M,192M] in GTT
  * this macro should be used together with DOM0_NON_IDENTICAL macro

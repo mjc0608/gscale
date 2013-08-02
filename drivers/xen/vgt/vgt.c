@@ -135,26 +135,27 @@ struct vgt_device *vgt_dom0;
 
 static bool vgt_start_io_forwarding(struct pgt_device *pdev)
 {
-	struct vcpu_io_forwarding_request trap_req;
+	struct xen_domctl domctl;
+	struct xen_domctl_vgt_io_trap *info = &domctl.u.vgt_io_trap;
+
 	uint64_t bar0; /* the MMIO BAR for regs(2MB) and GTT */
 
 	struct xen_platform_op xpop;
 
-
 	bar0 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
 	bar0 &= ~0xf;	/* bit0~3 of the bar is the attribution info */
 
-	trap_req.nr_pio_frags = 1;
-	trap_req.pio_frags[0].s = 0x3B0;
-	trap_req.pio_frags[0].e = 0x3DF;
-	trap_req.nr_mmio_frags = 1;
-	trap_req.mmio_frags[0].s = bar0;
-	trap_req.mmio_frags[0].e = (bar0 + pdev->bar_size[0] - 1) & PAGE_MASK;
+	domctl.domain = 0;
 
-	if (HYPERVISOR_vcpu_op(VCPUOP_start_io_forward, 0, &trap_req) < 0) {
-		vgt_err("vGT: failed to start I/O forwarding\n");
-		return false;
-	}
+	info->n_pio = 1;
+	info->pio[0].s = 0x3B0;
+	info->pio[0].e = 0x3DF;
+
+	info->n_mmio = 1;
+	info->mmio[0].s = bar0;
+	info->mmio[0].e = (bar0 + pdev->bar_size[0] - 1) & PAGE_MASK;
+
+	BUG_ON(vgt_io_trap(&domctl) != 0);
 
 	if (xen_register_vgt_driver(&vgt_xops) != 0)
 		return false;

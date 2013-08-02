@@ -795,13 +795,32 @@ DEFINE_GUEST_HANDLE_STRUCT(xen_domctl_getdomaininfo);
 #define XEN_DOMCTL_INTERFACE_VERSION 0x00000009
 #define XEN_DOMCTL_pausedomain                    3
 #define XEN_DOMCTL_getdomaininfo                  5
+
+#define XEN_DOMCTL_vgt_io_trap			  700
+
+#define MAX_VGT_IO_TRAP_INFO 4
+
+struct vgt_io_trap_info {
+        uint64_t s;
+        uint64_t e;
+};
+
+struct xen_domctl_vgt_io_trap {
+        uint32_t n_pio;
+        struct vgt_io_trap_info pio[MAX_VGT_IO_TRAP_INFO];
+
+        uint32_t n_mmio;
+        struct vgt_io_trap_info mmio[MAX_VGT_IO_TRAP_INFO];
+};
+
 struct xen_domctl {
 	uint32_t cmd;
 	uint32_t interface_version; /* XEN_DOMCTL_INTERFACE_VERSION */
 	domid_t  domain;
 	union {
 		struct xen_domctl_getdomaininfo     getdomaininfo;
-		uint8_t                             pad[128];
+		struct xen_domctl_vgt_io_trap       vgt_io_trap;
+		uint8_t                             pad[256];
 	}u;
 };
 DEFINE_GUEST_HANDLE_STRUCT(xen_domctl);

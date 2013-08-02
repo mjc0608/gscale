@@ -56,17 +56,6 @@ struct xen_hvm_inject_msi {
 typedef struct xen_hvm_inject_msi xen_hvm_inject_msi_t;
 DEFINE_GUEST_HANDLE_STRUCT(xen_hvm_inject_msi_t);
 
-#include <xen/interface/vcpu.h>
-#define HVMOP_vgt_set_trap_io       17
-struct xen_hvm_vgt_set_trap_io {
-	uint16_t domid;
-    uint16_t nr_pio_frags;
-    struct trap_frags	pio_frags[MAX_TRAP_FRAGS];
-    uint16_t nr_mmio_frags;
-    struct trap_frags	mmio_frags[MAX_TRAP_FRAGS];
-};
-typedef struct xen_hvm_vgt_set_trap_io xen_hvm_vgt_set_trap_io_t;
-
 #define HVMOP_vgt_map_mmio           18
 struct xen_hvm_vgt_map_mmio {
 	uint16_t  domid;

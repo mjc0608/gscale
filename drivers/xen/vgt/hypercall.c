@@ -172,25 +172,47 @@ int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 	return r;
 }
 
+int vgt_io_trap(struct xen_domctl *ctl)
+{
+	int r;
+
+	ctl->cmd = XEN_DOMCTL_vgt_io_trap;
+	ctl->interface_version = XEN_DOMCTL_INTERFACE_VERSION;
+
+	r = HYPERVISOR_domctl(ctl);
+	if (r) {
+		printk(KERN_ERR "%s(): HYPERVISOR_domctl fail: %d\n", __func__, r);
+		return r;
+	}
+
+	return 0;
+}
+
 /*
  * Zap the GTTMMIO bar area for vGT trap and emulation.
  */
 int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 {
+	struct xen_domctl domctl;
+	struct xen_domctl_vgt_io_trap *info = &domctl.u.vgt_io_trap;
+
 	char *cfg_space = &vgt->state.cfg_space[0];
-	struct xen_hvm_vgt_set_trap_io trap;
 	uint64_t bar_s, bar_e;
+
 	int r;
 
 	if (!vgt_pci_mmio_is_enabled(vgt))
 		return 0;
 
-	trap.domid = vgt->vm_id;
-	trap.nr_pio_frags = 0;
-	trap.nr_mmio_frags = 1;
+	domctl.domain = vgt->vm_id;
+	domctl.cmd = XEN_DOMCTL_vgt_io_trap;
+	domctl.interface_version = XEN_DOMCTL_INTERFACE_VERSION;
+
+	info->n_pio = 0;
+	info->n_mmio = 1;
 
 	cfg_space += VGT_REG_CFG_SPACE_BAR0;
-	if (VGT_GET_BITS(*cfg_space, 2, 1) == 2){
+	if (VGT_GET_BITS(*cfg_space, 2, 1) == 2) {
 		/* 64 bits MMIO bar */
 		bar_s = * (uint64_t *) cfg_space;
 	} else {
@@ -201,15 +223,15 @@ int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 	bar_s &= ~0xF; /* clear the LSB 4 bits */
 	bar_e = bar_s + vgt->state.bar_size[0] - 1;
 
-	trap.mmio_frags[0].s = bar_s;
-	trap.mmio_frags[0].e = bar_e;
+	info->mmio[0].s = bar_s;
+	info->mmio[0].e = bar_e;
 
-	r = HYPERVISOR_hvm_op(HVMOP_vgt_set_trap_io, &trap);
-	if (r < 0) {
-		printk(KERN_ERR "HVMOP_vgt_set_trap_io %d!\n",
-			r);
+	r = HYPERVISOR_domctl(&domctl);
+	if (r) {
+		printk(KERN_ERR "VGT: %s(): fail to trap area: %d.\n", __func__, r);
 		return r;
 	}
+
 	return r;
 }
 

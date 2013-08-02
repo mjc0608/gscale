@@ -26,6 +26,7 @@
 #include <linux/delay.h>
 #include <linux/acpi.h>
 
+#include <xen/interface/vcpu.h>
 #include <xen/interface/hvm/hvm_op.h>
 #include <xen/fb_decoder.h>
 
