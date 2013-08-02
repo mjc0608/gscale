@@ -140,13 +140,17 @@ static void show_batchbuffer(struct pgt_device *pdev, u32 addr,
 		return;
 	}
 
-	printk("Batch buffer contents: \n[%08x]: ", addr);
+	printk("Batch buffer contents: \n");
 	for (i = -bytes; i < bytes; i += 4) {
 		ip_va = vgt_gma_to_va(vgt, addr+i, ppgtt);
+
+		if (!((i + bytes) % 32))
+			printk("\n[%08x]:", addr+i);
+
 		if (ip_va == NULL)
-			printk("%8s ", "N/A");
+			printk(" %8s", "N/A");
 		else
-			printk("%08x ", *((u32 *)ip_va));
+			printk(" %08x", *((u32 *)ip_va));
 		if (!i)
 			printk("(*)");
 	}
