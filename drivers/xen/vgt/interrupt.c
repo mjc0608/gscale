@@ -173,7 +173,7 @@ char *vgt_irq_name[EVENT_MAX] = {
  * as long as a VM wants it. This is safe because we still use a single
  * big lock for all critical paths, but not efficient.
  */
-static u32 vgt_recalculate_imr(struct pgt_device *pdev, unsigned int reg)
+u32 vgt_recalculate_mask_bits(struct pgt_device *pdev, unsigned int reg)
 {
 	int i;
 	u32 imr = 0xffffffff;
@@ -234,7 +234,7 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 	__vreg(vgt, reg) = imr;
 
 	if (changed) {
-		new_imr = vgt_recalculate_imr(pdev, reg);
+		new_imr = vgt_recalculate_mask_bits(pdev, reg);
 		/*
 		 * may optimize by caching the old imr, and then only update
 		 * pReg when AND-ed value changes. but that requires link to
