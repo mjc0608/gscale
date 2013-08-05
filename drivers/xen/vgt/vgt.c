@@ -659,6 +659,8 @@ int vgt_suspend(struct pci_dev *pdev)
 	/* TODO: check vGT instance state */
 	/* ... */
 
+	pgt->saved_rrmr = VGT_MMIO_READ(pgt, _REG_DE_RRMR);
+
 	/* save GTT and FENCE information */
 	vgt_save_gtt_and_fence(pgt);
 
@@ -696,6 +698,8 @@ int vgt_resume(struct pci_dev *pdev)
 
 	/* restore GTT table and FENCE regs */
 	vgt_restore_gtt_and_fence(pgt);
+
+	VGT_MMIO_WRITE(pgt, _REG_DE_RRMR, pgt->saved_rrmr);
 
 	/* redo the MMIO snapshot */
 	vgt_initial_mmio_setup(pgt);

@@ -783,6 +783,8 @@ struct pgt_device {
 	uint32_t *saved_gtt;
 	uint64_t saved_fences[VGT_MAX_NUM_FENCES];
 
+	uint32_t saved_rrmr;
+
 	int max_engines;	/* supported max engines */
 	u32 ring_mmio_base[MAX_ENGINES];
 	u32 ring_mi_mode[MAX_ENGINES];
