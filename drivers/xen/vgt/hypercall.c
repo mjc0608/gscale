@@ -285,7 +285,7 @@ struct vm_struct *map_hvm_iopage(struct vgt_device *vgt)
 
 int vgt_hvm_vmem_init(struct vgt_device *vgt)
 {
-	unsigned long i, j, count;
+	unsigned long i, j, gpfn, count;
 	unsigned long nr_low_1mb_bkt, nr_high_bkt, nr_high_4k_bkt;
 
 	/* Dom0 already has mapping for itself */
@@ -336,8 +336,9 @@ int vgt_hvm_vmem_init(struct vgt_device *vgt)
 	count = 0;
 	/* map the >1MB memory */
 	for (i = 1; i < nr_high_bkt; i++) {
+		gpfn = i << (VMEM_BUCK_SHIFT - PAGE_SHIFT);
 		vgt->vmem_vma[i] = xen_remap_domain_mfn_range_in_kernel(
-				i << (VMEM_BUCK_SHIFT - PAGE_SHIFT),
+				gpfn,
 				VMEM_BUCK_SIZE >> PAGE_SHIFT,
 				vgt->vm_id);
 
@@ -345,7 +346,13 @@ int vgt_hvm_vmem_init(struct vgt_device *vgt)
 			continue;
 
 
-		for (j = (i << (VMEM_BUCK_SHIFT - PAGE_SHIFT));
+		/* for <4G GPFNs: skip the hole after low_mem_max_gpfn */
+		if (gpfn < (1 << (32 - PAGE_SHIFT)) &&
+			vgt->low_mem_max_gpfn != 0 &&
+			gpfn > vgt->low_mem_max_gpfn)
+			continue;
+
+		for (j = gpfn;
 		     j < ((i + 1) << (VMEM_BUCK_SHIFT - PAGE_SHIFT));
 		     j++) {
 			vgt->vmem_vma_4k[j] =
@@ -456,8 +463,12 @@ void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
 
 	if (!vgt->vmem_vma[buck_index]) {
 		buck_4k_index = gpa >> PAGE_SHIFT;
-		if (!vgt->vmem_vma_4k[buck_4k_index])
+		if (!vgt->vmem_vma_4k[buck_4k_index]) {
+			if (buck_4k_index > vgt->low_mem_max_gpfn)
+				vgt_err("vGT failed to map gpa=0x%lx?\n", gpa);
 			return NULL;
+		}
+
 		return (char*)(vgt->vmem_vma_4k[buck_4k_index]->addr) +
 			(gpa & ~PAGE_MASK);
 	}

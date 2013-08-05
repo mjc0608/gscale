@@ -245,10 +245,23 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 	uint32_t *cfg_reg, new, size;
 	u8 old_cmd, cmd_changed; /* we don't care the high 8 bits */
 	bool rc = true;
+	uint32_t low_mem_max_gpfn;
 
 	ASSERT ((off + bytes) <= VGT_CFG_SPACE_SZ);
 	cfg_reg = (uint32_t*)(cfg_space + (off & ~3));
 	switch (off & ~3) {
+		case VGT_REG_CFG_VENDOR_ID:
+			low_mem_max_gpfn = *(uint32_t *)p_data;
+			vgt_info("low_mem_max_gpfn: 0x%x\n", low_mem_max_gpfn);
+			if (bytes != 4 ||
+				low_mem_max_gpfn >= (1UL << (32-PAGE_SHIFT))) {
+				vgt_warn("invalid low_mem_max_gpfn!\n");
+				break;
+			}
+			if (vgt->low_mem_max_gpfn == 0)
+				vgt->low_mem_max_gpfn = low_mem_max_gpfn;
+			break;
+
 		case VGT_REG_CFG_COMMAND:
 			old_cmd = vgt->state.cfg_space[off];
 			cmd_changed = old_cmd ^ (*(u8*)p_data);

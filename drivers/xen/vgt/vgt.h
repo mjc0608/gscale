@@ -574,6 +574,9 @@ struct vgt_device {
 	/* for >1MB memory of HVM: each vm_struct means 4KB */
 	struct vm_struct **vmem_vma_4k;
 
+	/* the max gpfn of the <4G memory */
+	unsigned long low_mem_max_gpfn;
+
 	uint64_t vgtt_sz; /* virtual GTT size in byte */
 	uint32_t *vgtt; /* virtual GTT table for guest to read */
 
