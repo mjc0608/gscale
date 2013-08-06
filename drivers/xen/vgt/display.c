@@ -246,7 +246,7 @@ static struct vgt_uevent_info vgt_default_uevent_info_table[UEVENT_MAX] = {
 	{"VGT disable VGA mode", -1, KOBJ_ADD, {"VGT_ENABLE_VGA=0", NULL, NULL}, vgt_vga_stat_uevent_handler},
 };
 
-void inline vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent)
+void vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent)
 {
 	struct vgt_uevent_info *entry;
 
