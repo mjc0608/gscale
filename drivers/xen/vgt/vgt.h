@@ -856,6 +856,9 @@ struct pgt_device {
 
 	uint32_t opregion_pa;
 	void *opregion_va;
+
+	bool dom0_irq_pending;
+	int dom0_irq_cpu;
 };
 
 /*

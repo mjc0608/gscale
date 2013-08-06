@@ -265,6 +265,12 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	vgt_dbg("IRQ: old vIER(%x), pIER(%x)\n",
 		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
 
+	if (__get_cpu_var(in_vgt) != 1) {
+		vgt_err("i915 virq happens in nested vgt context(%d)!!!\n",
+			__get_cpu_var(in_vgt));
+		ASSERT(0);
+	}
+
 	/* figure out newly enabled/disable bits */
 	changed = __vreg(vgt, reg) ^ ier;
 	enabled = (__vreg(vgt, reg) & changed) ^ changed;
@@ -317,16 +323,92 @@ bool vgt_reg_isr_handler(struct vgt_device *vgt, unsigned int reg,
 
 extern int resend_irq_on_evtchn(unsigned int i915_irq);
 
-static void inject_dom0_virtual_interrupt(struct vgt_device *vgt)
+/*
+ * dom0 virtual interrupt can only be pended here. Immediate
+ * injection at this point may cause race condition on nested
+ * lock, regardless of whether the target vcpu is the current
+ * or not.
+ */
+static void pend_dom0_virtual_interrupt(struct vgt_device *vgt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+
+	ASSERT(spin_is_locked(&pdev->lock));
+
+	if (pdev->dom0_irq_pending)
+		return;
+
+	/*
+	 * set current cpu to do delayed check, wchih may
+	 * trigger ipi call function but at this piont irq
+	 * may be disabled already.
+	 */
+	pdev->dom0_irq_cpu = smp_processor_id();
+	wmb();
+	pdev->dom0_irq_pending = true;
+}
+
+/*
+ * actual virq injection happens here. called in vgt_exit()
+ * or IPI handler
+ */
+void inject_dom0_virtual_interrupt(void *info)
 {
 	unsigned long flags;
-	int i915_irq = vgt->pdev->irq_hstate->i915_irq;
+	struct pgt_device *pdev = &default_device;
+	int i915_irq;
+	int this_cpu, target_cpu;
 
-	vgt_dbg("vGT: resend irq for dom0\n");
-	/* resend irq may unmask events which requires irq disabled */
-	local_irq_save(flags);
-	resend_irq_on_evtchn(i915_irq);
-	local_irq_restore(flags);
+	/* still in vgt. the injection will happen later */
+	if (__get_cpu_var(in_vgt))
+		return;
+
+	spin_lock_irqsave(&pdev->lock, flags);
+	if (!pdev->dom0_irq_pending) {
+		spin_unlock_irqrestore(&pdev->lock, flags);
+		return;
+	}
+
+	ASSERT(pdev->dom0_irq_cpu != -1);
+	this_cpu = smp_processor_id();
+	if (this_cpu != pdev->dom0_irq_cpu) {
+		spin_unlock_irqrestore(&pdev->lock, flags);
+		return;
+	}
+
+	i915_irq = pdev->irq_hstate->i915_irq;
+	target_cpu = xen_get_cpu_from_irq(i915_irq);
+
+	/*
+	 * If target cpu is the current, notify cpu by resending
+	 * evtchn. Later interrupt enable will make it fired
+	 *
+	 * Otherwise, we need check whether the target cpu is
+	 * in vgt core logic, which may have lock acquired. In
+	 * that case, no further action except adjusting target
+	 * cpu, because pending irq will be handled when target
+	 * vcpu does vgt_exit().
+	 *
+	 * the only case we need to kick the target cpu, is when
+	 * it's not in vgt code path. An IPI is sent to make the
+	 * target cpu note the pending irq;
+	 */
+	if (this_cpu == target_cpu) {
+		pdev->dom0_irq_pending = false;
+		wmb();
+		pdev->dom0_irq_cpu = -1;
+
+		resend_irq_on_evtchn(i915_irq);
+		spin_unlock_irqrestore(&pdev->lock, flags);
+	} else {
+		pdev->dom0_irq_cpu = target_cpu;
+		spin_unlock_irqrestore(&pdev->lock, flags);
+
+		if (!per_cpu(in_vgt, target_cpu)) {
+			smp_call_function_single(target_cpu,
+				inject_dom0_virtual_interrupt, NULL, 0);
+		}
+	}
 }
 
 #define MSI_CAP_OFFSET 0x90	/* FIXME. need to get from cfg emulation */
@@ -357,7 +439,7 @@ static int vgt_inject_virtual_interrupt(struct vgt_device *vgt)
 	if (vgt->vm_id)
 		inject_hvm_virtual_interrupt(vgt);
 	else
-		inject_dom0_virtual_interrupt(vgt);
+		pend_dom0_virtual_interrupt(vgt);
 
 	vgt->stat.irq_num++;
 	vgt->stat.last_injection = get_cycles();
@@ -1036,6 +1118,8 @@ int vgt_irq_init(struct pgt_device *pdev)
 	hstate->ops->init_irq(hstate);
 
 	pdev->irq_hstate = hstate;
+	pdev->dom0_irq_cpu = -1;
+	pdev->dom0_irq_pending = false;
 	vgt_dbg("Interrupt initialization completes\n");
 	return 0;
 }
