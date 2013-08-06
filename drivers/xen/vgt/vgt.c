@@ -132,6 +132,7 @@ struct pgt_device default_device = {
 };
 
 struct vgt_device *vgt_dom0;
+DEFINE_PER_CPU(u8, in_vgt);
 
 static bool vgt_start_io_forwarding(struct pgt_device *pdev)
 {
@@ -214,6 +215,7 @@ static int vgt_thread(void *priv)
 {
 	struct pgt_device *pdev = (struct pgt_device *)priv;
 	int ret;
+	int cpu;
 
 	//ASSERT(current_render_owner(pdev));
 	printk("vGT: start kthread for dev (%x, %x)\n", pdev->bus, pdev->devfn);
@@ -230,6 +232,8 @@ static int vgt_thread(void *priv)
 			vgt_warn("Main thread waken up by unknown reasons!\n");
 			continue;
 		}
+
+		cpu = vgt_enter();
 
 		if (freezing(current)) {
 			if (current_render_owner(pdev) == vgt_dom0)
@@ -262,9 +266,12 @@ static int vgt_thread(void *priv)
 				(void *)&pdev->request)) {
 			if (!vgt_do_render_context_switch(pdev)) {
 				vgt_err("Exiting thread!!!\n");
+				vgt_exit(cpu);
 				break;
 			}
 		}
+
+		vgt_exit(cpu);
 	}
 	return 0;
 }

@@ -500,6 +500,7 @@ static int vgt_emulation_thread(void *priv)
 
 	struct ioreq *ioreq;
 	int irq, ret;
+	int cpu;
 
 	vgt_info("start kthread for VM%d\n", vgt->vm_id);
 
@@ -517,6 +518,7 @@ static int vgt_emulation_thread(void *priv)
 		if (kthread_should_stop())
 			return 0;
 
+		cpu = vgt_enter();
 		for (vcpu = 0; vcpu < nr_vcpus; vcpu++) {
 			if (!test_and_clear_bit(vcpu,
 				&info->ioreq_pending[vcpu / sizeof(long)]))
@@ -533,6 +535,7 @@ static int vgt_emulation_thread(void *priv)
 			irq = info->evtchn_irq[vcpu];
 			notify_remote_via_irq(irq);
 		}
+		vgt_exit(cpu);
 	}
 
 	BUG(); /* It's actually impossible to reach here */

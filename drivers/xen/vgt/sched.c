@@ -103,9 +103,11 @@ static enum hrtimer_restart vgt_tbs_timer_fn(struct hrtimer *data)
 			struct vgt_hrtimer, timer);
 	struct pgt_device *pdev = vgt_hrtimer_pdev;
 	unsigned long flags;
+	int cpu;
 
 	ASSERT(pdev);
 
+	cpu = vgt_enter();
 	spin_lock_irqsave(&pdev->lock, flags);
 	/* TODO: if no more than 2 vgt in runqueue */
 	if (vgt_nr_in_runq(pdev) < 2)
@@ -120,12 +122,14 @@ static enum hrtimer_restart vgt_tbs_timer_fn(struct hrtimer *data)
 	if (pdev->next_sched_vgt != current_render_owner(pdev)) {
 		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 		spin_unlock_irqrestore(&pdev->lock, flags);
+		vgt_exit(cpu);
 		return HRTIMER_NORESTART;
 	}
 
 reload_timer:
 	spin_unlock_irqrestore(&pdev->lock, flags);
 	hrtimer_add_expires_ns(&hrtimer->timer, hrtimer->period);
+	vgt_exit(cpu);
 	return HRTIMER_RESTART;
 }
 
@@ -466,8 +470,11 @@ static enum hrtimer_restart vgt_poll_rb_tail(struct hrtimer *data)
 	struct vgt_hrtimer *hrtimer = container_of(data,
 			struct vgt_hrtimer, timer);
 	struct pgt_device *pdev = vgt_hrtimer_pdev;
+	int cpu;
+
 	ASSERT(pdev);
 
+	cpu = vgt_enter();
 	spin_lock_irqsave(&pdev->lock, flags);
 	/* TODO: if no more than 2 vgt in runqueue */
 	active_nr = vgt_nr_in_runq(pdev);
@@ -504,6 +511,8 @@ reload_timer:
 		hrtimer->period = VGT_TAILQ_RB_POLLING_PERIOD;
 
 	hrtimer_add_expires_ns(&hrtimer->timer, hrtimer->period);
+
+	vgt_exit(cpu);
 	return HRTIMER_RESTART;
 }
 

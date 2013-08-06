@@ -26,6 +26,8 @@
 #ifndef _VGT_H_
 #define _VGT_H_
 
+#include <linux/interrupt.h>
+
 // structures
 struct vgt_device;
 typedef struct {
@@ -96,6 +98,29 @@ extern int vgt_io_trap(struct xen_domctl *ctl);
 */
 #define VGT_ENABLE_ADDRESS_FIX_SAVE_RESTORE
 
+DECLARE_PER_CPU(u8, in_vgt);
+
+/*
+ * in_vgt flag is used to indicate whether current code
+ * path is in vgt core module, which is key for virtual
+ * irq delivery in de-privileged dom0 framework. So use
+ * get_cpu/put_cpu here to avoid preemption, otherwise
+ * this flag loses its intention.
+ */
+static inline int vgt_enter(void)
+{
+	int cpu = get_cpu();
+
+	per_cpu(in_vgt, cpu)++;
+	return cpu;
+}
+
+static inline void vgt_exit(int cpu)
+{
+	per_cpu(in_vgt, cpu)--;
+	put_cpu();
+}
+
 // MMIO definitions
 
-#endif /* _VGT_H */
+#endif	/* _VGT_H_ */

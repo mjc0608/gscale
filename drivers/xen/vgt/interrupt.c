@@ -892,6 +892,9 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
 	u32 de_ier;
 	irqreturn_t ret;
+	int cpu;
+
+	cpu = vgt_enter();
 
 	pdev->stat.irq_num++;
 	pdev->stat.last_pirq = get_cycles();
@@ -921,6 +924,8 @@ out:
 	spin_unlock(&pdev->lock);
 
 	pdev->stat.pirq_cycles += get_cycles() - pdev->stat.last_pirq;
+
+	vgt_exit(cpu);
 	return IRQ_HANDLED;
 }
 

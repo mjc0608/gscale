@@ -44,6 +44,7 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
 	int rc;
 	int high_gm_sz;
 	int low_gm_sz;
+	int cpu;
 
 	/* We expect the param_str should be vmid,a,b,c (where the guest
 	* wants a MB aperture and b MB gm, and c fence registers) or -vmid
@@ -73,9 +74,11 @@ static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attri
 	} else
 		return -EINVAL;
 
+	cpu = vgt_enter();
 	mutex_lock(&vgt_sysfs_lock);
 	rc = (vp.vm_id > 0) ? vgt_add_state_sysfs(vp) : vgt_del_state_sysfs(vp);
 	mutex_unlock(&vgt_sysfs_lock);
+	vgt_exit(cpu);
 
 	return rc < 0 ? rc : count;
 }
@@ -115,10 +118,12 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 	int vmid;
 	struct vgt_device *next_vgt;
 	struct pgt_device *pdev;
+	int cpu;
 
 	if (sscanf(buf, "%d", &vmid) != 1)
 		return -EINVAL;
 
+	cpu = vgt_enter();
 	mutex_lock(&vgt_sysfs_lock);
 
 	spin_lock_irqsave(&default_device.lock, flags);
@@ -141,6 +146,7 @@ out:
 
 	mutex_unlock(&vgt_sysfs_lock);
 
+	vgt_exit(cpu);
 	return ret;
 }
 
@@ -235,6 +241,9 @@ static ssize_t vgt_dpy_switch_show(struct kobject *kobj, struct kobj_attribute *
 {
 	struct pgt_device *pdev = &default_device;
 	ssize_t buf_len;
+	int cpu;
+
+	cpu = vgt_enter();
 
 	mutex_lock(&vgt_sysfs_lock);
 	spin_lock_irq(&pdev->lock);
@@ -243,6 +252,7 @@ static ssize_t vgt_dpy_switch_show(struct kobject *kobj, struct kobj_attribute *
 	spin_unlock_irq(&pdev->lock);
 	mutex_unlock(&vgt_sysfs_lock);
 
+	vgt_exit(cpu);
 	return buf_len;
 }
 
@@ -274,9 +284,13 @@ static ssize_t vgt_hot_plug_trigger(struct kobject *kobj,
 				const char *buf, size_t count)
 {
 	unsigned hotplug_cmd = 0;
+	int cpu;
+
 	if (sscanf(buf, "%i", &hotplug_cmd) != 1)
 		return -EINVAL;
+	cpu = vgt_enter();
 	vgt_trigger_display_hot_plug(&default_device, (vgt_hotplug_cmd_t)hotplug_cmd);
+	vgt_exit(cpu);
 	return count;
 }
 
@@ -442,10 +456,12 @@ igd_mmio_read(struct file *filp, struct kobject *kobj,
 	struct pgt_device *pdev = &default_device;
 	size_t init_count = count, len;
 	unsigned long data;
+	int cpu;
 
 	if (!count || off < 0 || off + count > bin_attr->size || (off & 0x3))
 		return -EINVAL;
 
+	cpu = vgt_enter();
 	spin_lock_irq(&pdev->lock);
 
 	while (count > 0) {
@@ -455,6 +471,7 @@ igd_mmio_read(struct file *filp, struct kobject *kobj,
 		if (hcall_mmio_read(_vgt_mmio_pa(pdev, off), len, &data) !=
 				X86EMUL_OKAY) {
 			spin_unlock_irq(&pdev->lock);
+			vgt_exit(cpu);
 			return -EIO;
 		}
 
@@ -464,6 +481,7 @@ igd_mmio_read(struct file *filp, struct kobject *kobj,
 	}
 
 	spin_unlock_irq(&pdev->lock);
+	vgt_exit(cpu);
 
 	return init_count;
 }
@@ -476,10 +494,12 @@ igd_mmio_write(struct file* filp, struct kobject *kobj,
 	struct pgt_device *pdev = &default_device;
 	size_t init_count = count, len;
 	unsigned long data;
+	int cpu;
 
 	if (!count || off < 0 || off + count > bin_attr->size || (off & 0x3))
 		return -EINVAL;
 
+	cpu = vgt_enter();
 	spin_lock_irq(&pdev->lock);
 
 	while (count > 0) {
@@ -490,6 +510,7 @@ igd_mmio_write(struct file* filp, struct kobject *kobj,
 		if (hcall_mmio_write(_vgt_mmio_pa(pdev, off), len, data) !=
 				X86EMUL_OKAY) {
 			spin_unlock_irq(&pdev->lock);
+			vgt_exit(cpu);
 			return -EIO;
 		}
 
@@ -498,7 +519,7 @@ igd_mmio_write(struct file* filp, struct kobject *kobj,
 	}
 
 	spin_unlock_irq(&pdev->lock);
-
+	vgt_exit(cpu);
 	return init_count;
 }
 

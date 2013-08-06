@@ -852,7 +852,7 @@ static void pt_regs_2_em_regs(
 static int vgt_emulate_ins(struct pt_regs *regs)
 {
 	int rc;
-	unsigned cpu = smp_processor_id();
+	unsigned cpu = vgt_enter();
 	struct x86_emulate_ctxt *pctx = &per_cpu(ctxt, cpu);
 	struct cpu_user_regs *p_regs = pctx->regs;
 
@@ -860,6 +860,7 @@ static int vgt_emulate_ins(struct pt_regs *regs)
 	rc = x86_emulate (pctx, &vgt_emu_ops);
 	em_regs_2_pt_regs(p_regs, regs);
 
+	vgt_exit(cpu);
 	return rc;
 }
 

@@ -788,7 +788,9 @@ int i915_resume_legacy(struct drm_device *dev)
 	if (dev->switch_power_state == DRM_SWITCH_POWER_OFF)
 		return 0;
 
+#ifdef DRM_I915_VGT_SUPPORT
 	set_gen_pci_cfg_space_pt(0);
+#endif
 
 	ret = i915_drm_resume_early(dev);
 	if (ret)
@@ -955,6 +957,7 @@ static int i915_pm_suspend(struct device *dev)
 #ifdef DRM_I915_VGT_SUPPORT
 	/* need cleanup for the native case */
 	set_gen_pci_cfg_space_pt(1);
+#endif
 
 	error = i915_drm_suspend(drm_dev);
 	if (error)
