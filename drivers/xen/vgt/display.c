@@ -153,9 +153,9 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 {
 	int i;
 	enum vgt_event_type event = EVENT_MAX;
-	enum vgt_port_type edid_idx = VGT_PORT_MAX;
+	enum vgt_port_type port_idx = VGT_PORT_MAX;
 
-	if (get_event_and_edid_info(hotplug_cmd, &event, &edid_idx) < 0)
+	if (get_event_and_edid_info(hotplug_cmd, &event, &port_idx) < 0)
 		return;
 
 	/* Default: send hotplug virtual interrupts to all VMs currently.
@@ -173,10 +173,12 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 
 		if (hotplug_cmd.action == 0x1) {
 			/* plug in */
-			vgt_propagate_edid(vgt, edid_idx);
+			vgt_propagate_edid(vgt, port_idx);
+			vgt_propagate_dpcd(vgt, port_idx);
 		} else {
 			/* pull out */
-			vgt_clear_edid(vgt, edid_idx);
+			vgt_clear_edid(vgt, port_idx);
+			vgt_clear_dpcd(vgt, port_idx);
 		}
 
 		vgt_trigger_virtual_event(vgt, event);
@@ -201,6 +203,7 @@ bool vgt_default_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt
 
 bool vgt_hotplug_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *pdev)
 {
+	vgt_probe_dpcd(pdev, -1);
 	vgt_probe_edid(pdev, -1);
 	return vgt_default_uevent_handler(uevent_entry, pdev);
 }

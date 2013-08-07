@@ -666,7 +666,7 @@ void vgt_propagate_dpcd(struct vgt_device *vgt, int index)
 	for (i = 0; i < DPCD_MAX; ++i) {
 		struct vgt_dpcd_data *dpcd = vgt->pdev->pdev_dpcds[i];
 
-		if (!vgt_port_equivalent(i, index))
+		if (!vgt_port_equivalent(VGT_DP_A + i, index))
 			continue;
 
 		if (!dpcd) {
@@ -706,7 +706,7 @@ void vgt_clear_dpcd(struct vgt_device *vgt, int index)
 	int i;
 
 	for (i = 0; i < DPCD_MAX; ++i) {
-		if (vgt_port_equivalent(i, index)) {
+		if (vgt_port_equivalent(VGT_DP_A + i, index)) {
 			if (vgt->vgt_dpcds[i]) {
 				vgt_dbg("DPCD clear: Clear DPCD[0x%x] of VM%d\n",
 					i, vgt->vm_id);
