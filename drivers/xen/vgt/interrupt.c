@@ -346,7 +346,13 @@ static void pend_dom0_virtual_interrupt(struct vgt_device *vgt)
 	pdev->dom0_irq_cpu = smp_processor_id();
 	wmb();
 	pdev->dom0_irq_pending = true;
+
+	/* TODO: may do a kick here */
 }
+
+static DEFINE_PER_CPU(struct call_single_data, vgt_call_data) = {
+	.func = inject_dom0_virtual_interrupt,
+};
 
 /*
  * actual virq injection happens here. called in vgt_exit()
@@ -404,9 +410,10 @@ void inject_dom0_virtual_interrupt(void *info)
 		pdev->dom0_irq_cpu = target_cpu;
 		spin_unlock_irqrestore(&pdev->lock, flags);
 
+		/* do this out of the lock */
 		if (!per_cpu(in_vgt, target_cpu)) {
-			smp_call_function_single(target_cpu,
-				inject_dom0_virtual_interrupt, NULL, 0);
+			smp_call_function_single_async(target_cpu,
+				&per_cpu(vgt_call_data, this_cpu));
 		}
 	}
 }
