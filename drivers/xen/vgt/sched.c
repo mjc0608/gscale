@@ -79,6 +79,9 @@ static struct vgt_device *tbs_next_vgt(
 	struct list_head *next = &vgt->list;
 	struct vgt_device *next_vgt = NULL;
 
+	if (vgt->force_removal)
+		return vgt_dom0;
+
 	do {
 		next = next->next;
 		/* wrap the list */
@@ -86,9 +89,7 @@ static struct vgt_device *tbs_next_vgt(
 			next = head->next;
 		next_vgt = list_entry(next, struct vgt_device, list);
 
-		if (vgt->force_removal ||
-			//!bitmap_empty(next_vgt->started_rings, MAX_ENGINES))
-			!vgt_vrings_empty(next_vgt))
+		if (!vgt_vrings_empty(next_vgt))
 			break;
 
 	} while (next_vgt != vgt);
@@ -96,40 +97,18 @@ static struct vgt_device *tbs_next_vgt(
 	return next_vgt;
 }
 
-
+/* safe to not use vgt_enter/vgt_exit, otherwise easily lead to deadlock */
 static enum hrtimer_restart vgt_tbs_timer_fn(struct hrtimer *data)
 {
 	struct vgt_hrtimer *hrtimer = container_of(data,
 			struct vgt_hrtimer, timer);
 	struct pgt_device *pdev = vgt_hrtimer_pdev;
-	unsigned long flags;
-	int cpu;
 
 	ASSERT(pdev);
 
-	cpu = vgt_enter();
-	spin_lock_irqsave(&pdev->lock, flags);
-	/* TODO: if no more than 2 vgt in runqueue */
-	if (vgt_nr_in_runq(pdev) < 2)
-		goto reload_timer;
-
-	pdev->next_sched_vgt = tbs_next_vgt(&pdev->rendering_runq_head,
-			current_render_owner(pdev));
-
-	if (vgt_chk_raised_request(pdev, VGT_REQUEST_CTX_SWITCH))
-		vgt_dbg("Warning: last request for ctx_switch not handled yet!\n");
-
-	if (pdev->next_sched_vgt != current_render_owner(pdev)) {
+	if (vgt_nr_in_runq(pdev) > 1)
 		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
-		spin_unlock_irqrestore(&pdev->lock, flags);
-		vgt_exit(cpu);
-		return HRTIMER_NORESTART;
-	}
-
-reload_timer:
-	spin_unlock_irqrestore(&pdev->lock, flags);
 	hrtimer_add_expires_ns(&hrtimer->timer, hrtimer->period);
-	vgt_exit(cpu);
 	return HRTIMER_RESTART;
 }
 
@@ -799,6 +778,18 @@ void vgt_sched_update_next(struct vgt_device *vgt)
 		vgt_setup_countdown(vgt);
 	}
 }
+
+void vgt_schedule(struct pgt_device *pdev)
+{
+	ASSERT(spin_is_locked(&pdev->lock));
+
+	if (vgt_nr_in_runq(pdev) < 2)
+		return;
+
+	pdev->next_sched_vgt = tbs_next_vgt(&pdev->rendering_runq_head,
+			current_render_owner(pdev));
+}
+
 
 static int calculate_budget(struct vgt_device *vgt)
 {

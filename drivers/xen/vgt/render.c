@@ -1435,12 +1435,15 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	 */
 	spin_lock_irq(&pdev->lock);
 
-	ASSERT(pdev->next_sched_vgt);
+	vgt_schedule(pdev);
+
+	if (!ctx_switch_requested(pdev))
+		goto out;
+
 	next = pdev->next_sched_vgt;
 	prev = current_render_owner(pdev);
-
-	if (next == prev)
-		goto out;
+	ASSERT(pdev->next_sched_vgt);
+	ASSERT(next != prev);
 
 	if (!idle_rendering_engines(pdev, &i)) {
 		int j;
