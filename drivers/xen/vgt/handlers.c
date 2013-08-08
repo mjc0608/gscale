@@ -596,9 +596,9 @@ static bool ddi_buf_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 	reg_val = *(vgt_reg_t *)p_data;
 
-	// set the RO bit with its original value
+	// set the fully virtualized RO bit with its original value
 	reg_val = (reg_val & ~_DDI_BUFCTL_DETECT_MASK)
-		| (__sreg(vgt, offset) & _DDI_BUFCTL_DETECT_MASK);
+		| (__vreg(vgt, offset) & _DDI_BUFCTL_DETECT_MASK);
 
 	rc = default_mmio_write(vgt, offset, &reg_val, bytes);
 
@@ -861,141 +861,19 @@ static bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-static bool dp_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
-			void *p_data, unsigned int bytes)
-{
-	unsigned int reg;
-	vgt_reg_t reg_data;
-	bool rc;
-	struct pgt_device *pdev = vgt->pdev;
-
-	reg = offset & ~(bytes - 1);
-
-	rc = default_mmio_read(vgt, offset, p_data, bytes);
-	if (reg_hw_access(vgt, reg)) {
-		reg_data = *(vgt_reg_t *)p_data;
-		if (reg_data & _REGBIT_DP_PORT_DETECTED) {
-			switch (reg) {
-				case _REG_DP_B_CTL:
-					set_bit(VGT_DP_B, pdev->detected_ports);
-					break;
-				case _REG_DP_C_CTL:
-					set_bit(VGT_DP_C, pdev->detected_ports);
-					break;
-				case _REG_DP_D_CTL:
-					set_bit(VGT_DP_D, pdev->detected_ports);
-					break;
-				default:
-					BUG();
-			}
-			vgt_set_all_vreg_bit(pdev, _REGBIT_DP_PORT_DETECTED, reg);
-		} else {
-			switch (reg) {
-				case _REG_DP_B_CTL:
-					clear_bit(VGT_DP_B, pdev->detected_ports);
-					break;
-				case _REG_DP_C_CTL:
-					clear_bit(VGT_DP_C, pdev->detected_ports);
-					break;
-				case _REG_DP_D_CTL:
-					clear_bit(VGT_DP_D, pdev->detected_ports);
-					break;
-				default:
-					BUG();
-			}
-			vgt_clear_all_vreg_bit(pdev, _REGBIT_DP_PORT_DETECTED, reg);
-		}
-	}
-
-	return rc;
-}
-
 static bool dp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	unsigned int reg;
 	vgt_reg_t vreg_data;
 	bool rc;
-	struct pgt_device *pdev = vgt->pdev;
 
-	reg = offset & ~(bytes - 1);
 	vreg_data = *(vgt_reg_t *)p_data;
 
+	// Keep the fully virtualized RO bit with its original value
+	vreg_data = (vreg_data & ~_REGBIT_DP_PORT_DETECTED)
+			| (__vreg(vgt, offset) & _REGBIT_DP_PORT_DETECTED);
+
 	rc = default_mmio_write(vgt, offset, p_data, bytes);
-	/* Read only bit should be keeped coherent with intended hardware status */
-	switch (reg) {
-		case _REG_DP_B_CTL:
-			if (test_bit(VGT_DP_B, pdev->detected_ports))
-				vreg_data |= _REGBIT_DP_PORT_DETECTED;
-			else
-				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
-			break;
-		case _REG_DP_C_CTL:
-			if (test_bit(VGT_DP_C, pdev->detected_ports))
-				vreg_data |= _REGBIT_DP_PORT_DETECTED;
-			else
-				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
-			break;
-		case _REG_DP_D_CTL:
-			if (test_bit(VGT_DP_D, pdev->detected_ports))
-				vreg_data |= _REGBIT_DP_PORT_DETECTED;
-			else
-				vreg_data &= ~_REGBIT_DP_PORT_DETECTED;
-			break;
-		default:
-			BUG();
-	}
-
-	__vreg(vgt, reg) = vreg_data;
-
-	return rc;
-}
-
-static bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
-			void *p_data, unsigned int bytes)
-{
-	unsigned int reg;
-	vgt_reg_t reg_data;
-	bool rc;
-	struct pgt_device *pdev = vgt->pdev;
-
-	reg = offset & ~(bytes - 1);
-
-	rc = default_mmio_read(vgt, offset, p_data, bytes);
-	if (reg_hw_access(vgt, reg)) {
-		reg_data = *(vgt_reg_t *)p_data;
-		if (reg_data & _REGBIT_HDMI_PORT_DETECTED) {
-			switch (reg) {
-				case _REG_HDMI_B_CTL:
-					set_bit(VGT_HDMI_B, pdev->detected_ports);
-					break;
-				case _REG_HDMI_C_CTL:
-					set_bit(VGT_HDMI_C, pdev->detected_ports);
-					break;
-				case _REG_HDMI_D_CTL:
-					set_bit(VGT_HDMI_D, pdev->detected_ports);
-					break;
-				default:
-					BUG();
-			}
-			vgt_set_all_vreg_bit(pdev, _REGBIT_HDMI_PORT_DETECTED, reg);
-		} else {
-			switch (reg) {
-				case _REG_HDMI_B_CTL:
-					clear_bit(VGT_HDMI_B, pdev->detected_ports);
-					break;
-				case _REG_HDMI_C_CTL:
-					clear_bit(VGT_HDMI_C, pdev->detected_ports);
-					break;
-				case _REG_HDMI_D_CTL:
-					clear_bit(VGT_HDMI_D, pdev->detected_ports);
-					break;
-				default:
-					BUG();
-			}
-			vgt_clear_all_vreg_bit(pdev, _REGBIT_HDMI_PORT_DETECTED, reg);
-		}
-	}
 
 	return rc;
 }
@@ -1003,40 +881,16 @@ static bool hdmi_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 static bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	unsigned int reg;
 	vgt_reg_t vreg_data;
 	bool rc;
-	struct pgt_device *pdev = vgt->pdev;
 
-	reg = offset & ~(bytes - 1);
 	vreg_data = *(vgt_reg_t *)p_data;
 
-	rc = default_mmio_write(vgt, offset, p_data, bytes);
-	/* Read only bit should be keeped coherent with intended hardware status */
-	switch (reg) {
-		case _REG_HDMI_B_CTL:
-			if (test_bit(VGT_HDMI_B, pdev->detected_ports))
-				vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
-			else
-				vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
-			break;
-		case _REG_HDMI_C_CTL:
-			if (test_bit(VGT_HDMI_C, pdev->detected_ports))
-				vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
-			else
-				vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
-			break;
-		case _REG_HDMI_D_CTL:
-			if (test_bit(VGT_HDMI_D, pdev->detected_ports))
-				vreg_data |= _REGBIT_HDMI_PORT_DETECTED;
-			else
-				vreg_data &= ~_REGBIT_HDMI_PORT_DETECTED;
-			break;
-		default:
-			BUG();
-	}
+	// Keep the fully virtualized RO bit with its original value
+	vreg_data = (vreg_data & ~_REGBIT_HDMI_PORT_DETECTED)
+			| (__vreg(vgt, offset) & _REGBIT_HDMI_PORT_DETECTED);
 
-	__vreg(vgt, reg) = vreg_data;
+	rc = default_mmio_write(vgt, offset, p_data, bytes);
 
 	return rc;
 }
@@ -2015,12 +1869,12 @@ reg_attr_t vgt_base_reg_info[] = {
 	dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
 
 {_REG_PCH_ADPA, 4, F_DPY, 0, D_ALL, pch_adpa_mmio_read, pch_adpa_mmio_write},
-{_REG_DP_B_CTL, 4, F_DPY, 0, D_ALL, dp_ctl_mmio_read, dp_ctl_mmio_write},
-{_REG_DP_C_CTL, 4, F_DPY, 0, D_ALL, dp_ctl_mmio_read, dp_ctl_mmio_write},
-{_REG_DP_D_CTL, 4, F_DPY, 0, D_ALL, dp_ctl_mmio_read, dp_ctl_mmio_write},
-{_REG_HDMI_B_CTL, 4, F_DPY, 0, D_ALL, hdmi_ctl_mmio_read, hdmi_ctl_mmio_write},
-{_REG_HDMI_C_CTL, 4, F_DPY, 0, D_ALL, hdmi_ctl_mmio_read, hdmi_ctl_mmio_write},
-{_REG_HDMI_D_CTL, 4, F_DPY, 0, D_ALL, hdmi_ctl_mmio_read, hdmi_ctl_mmio_write},
+{_REG_DP_B_CTL, 4, F_DPY, 0, D_SNB|D_IVB, NULL, dp_ctl_mmio_write},
+{_REG_DP_C_CTL, 4, F_DPY, 0, D_SNB|D_IVB, NULL, dp_ctl_mmio_write},
+{_REG_DP_D_CTL, 4, F_DPY, 0, D_SNB|D_IVB, NULL, dp_ctl_mmio_write},
+{_REG_HDMI_B_CTL, 4, F_DPY, 0, D_SNB|D_IVB, NULL, hdmi_ctl_mmio_write},
+{_REG_HDMI_C_CTL, 4, F_DPY, 0, D_SNB|D_IVB, NULL, hdmi_ctl_mmio_write},
+{_REG_HDMI_D_CTL, 4, F_DPY, 0, D_SNB|D_IVB, NULL, hdmi_ctl_mmio_write},
 {_REG_TRANSACONF, 4, F_DPY, 0, D_ALL, NULL, transaconf_mmio_write},
 {_REG_TRANSBCONF, 4, F_DPY, 0, D_ALL, NULL, transaconf_mmio_write},
 {_REG_FDI_RXA_IIR, 4, F_DPY, 0, D_ALL, NULL, fdi_rx_iir_mmio_write},
