@@ -120,13 +120,6 @@ static inline void vgt_exit(int cpu)
 {
 	per_cpu(in_vgt, cpu)--;
 
-	/* only interrupt can be recursive */
-	if (per_cpu(in_vgt, cpu) && !in_interrupt()) {
-		printk("XXXX: wrong in_vgt counting\n");
-		printk("XXXX: may result irq lost\n");
-		dump_stack();
-	}
-
 	/* check for delayed virq injection */
 	inject_dom0_virtual_interrupt(NULL);
 

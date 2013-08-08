@@ -33,9 +33,12 @@
 
 void show_debug(struct pgt_device *pdev)
 {
-	int i;
+	int i, cpu;
 
 	printk("========vGT DEBUG INFO==========\n");
+	for_each_online_cpu(cpu)
+		printk("CPU[%d]: %s\n", cpu,
+			per_cpu(in_vgt, cpu) ? "in vgt" : "out of vgt");
 
 	printk("-----------render info-------------\n");
 	for (i = 0; i < pdev->max_engines; i++) {
