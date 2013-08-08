@@ -1898,6 +1898,8 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	unsigned int reg, void *p_data, unsigned int bytes);
 bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 	void *p_data, unsigned int bytes);
+bool vgt_reg_isr_handler(struct vgt_device *vgt, unsigned int reg,
+	void *p_data, unsigned int bytes);
 void vgt_reg_watchdog_handler(struct vgt_device *state,
 	uint32_t reg, uint32_t val, bool write, ...);
 extern char *vgt_irq_name[EVENT_MAX];
@@ -1937,6 +1939,7 @@ extern void vgt_clear_edid(struct vgt_device *vgt, int index);
 extern void vgt_probe_dpcd(struct pgt_device *pdev, int index);
 extern void vgt_propagate_dpcd(struct vgt_device *vgt, int index);
 extern void vgt_clear_dpcd(struct vgt_device *vgt, int index);
+void vgt_update_monitor_status(struct vgt_device *vgt);
 
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);
 bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes);

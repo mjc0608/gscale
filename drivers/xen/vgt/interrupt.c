@@ -304,6 +304,15 @@ bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 	return true;
 }
 
+bool vgt_reg_isr_handler(struct vgt_device *vgt, unsigned int reg,
+	void *p_data, unsigned int bytes)
+{
+	vgt_dbg("IRQ: capture ISR write on reg (%x) with val (%x)." \
+		" Will be ignored!\n", reg, *(vgt_reg_t *)p_data);
+
+	return true;
+}
+
 /* =======================vEvent injection===================== */
 
 extern int resend_irq_on_evtchn(unsigned int i915_irq);

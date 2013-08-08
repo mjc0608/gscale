@@ -181,6 +181,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 			vgt_clear_dpcd(vgt, port_idx);
 		}
 
+		vgt_update_monitor_status(vgt);
 		vgt_trigger_virtual_event(vgt, event);
 	}
 
@@ -279,5 +280,25 @@ void vgt_signal_uevent(struct pgt_device *pdev)
 		if (rc == false)
 			printk("%s: %d: vGT: failed to send uevent [%s]!\n",
 					__func__, __LINE__, info_entry->uevent_name);
+	}
+}
+
+void vgt_update_monitor_status(struct vgt_device *vgt)
+{
+	__vreg(vgt, _REG_SDEISR) &= ~(_REGBIT_DP_B_HOTPLUG |
+					_REGBIT_DP_C_HOTPLUG |
+					_REGBIT_DP_D_HOTPLUG);
+
+	if (test_bit(VGT_DP_B, vgt->presented_ports) ||
+		test_bit(VGT_HDMI_B, vgt->presented_ports)) {
+		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_B_HOTPLUG;
+	}
+	if (test_bit(VGT_DP_C, vgt->presented_ports) ||
+		test_bit(VGT_HDMI_C, vgt->presented_ports)) {
+		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_C_HOTPLUG;
+	}
+	if (test_bit(VGT_DP_D, vgt->presented_ports) ||
+		test_bit(VGT_HDMI_D, vgt->presented_ports)) {
+		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_D_HOTPLUG;
 	}
 }

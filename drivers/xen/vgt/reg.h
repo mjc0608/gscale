@@ -1447,8 +1447,7 @@ enum vgt_port_type {
 #define    _REG_SDEISR	0xC4000
 #define    _REG_SDEIMR	0xC4004
 #define    _REG_SDEIIR	0xC4008
-#define    _REGBIT_CRT_HOTPLUG			(1 << 19)
-#define        _REGBIT_SDVO_B_HOTPLUG		(1 << 18)
+#define        _REGBIT_CRT_HOTPLUG		(1 << 19)
 #define        _REGBIT_DP_B_HOTPLUG		(1 << 21)
 #define        _REGBIT_DP_C_HOTPLUG		(1 << 22)
 #define        _REGBIT_DP_D_HOTPLUG		(1 << 23)
