@@ -265,7 +265,7 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	vgt_dbg("IRQ: old vIER(%x), pIER(%x)\n",
 		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
 
-	if (__get_cpu_var(in_vgt) != 1) {
+	if (!vgt->vgt_id && __get_cpu_var(in_vgt) != 1) {
 		vgt_err("i915 virq happens in nested vgt context(%d)!!!\n",
 			__get_cpu_var(in_vgt));
 		ASSERT(0);
