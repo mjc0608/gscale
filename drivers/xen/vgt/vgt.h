@@ -560,7 +560,6 @@ struct vgt_device {
 	int			fence_base;
 	int			fence_sz;
 
-	bool		bypass_addr_check;
 
 #define VMEM_1MB		(1ULL << 20)	/* the size of the first 1MB */
 #define VMEM_BUCK_SHIFT		20
@@ -620,6 +619,8 @@ struct vgt_device {
 	 */
 	uint8_t hvm_boot_foreground_visible:1;
 	uint8_t warn_untrack:1;
+	uint8_t bypass_addr_check:1;
+
 	atomic_t crashing;
 
 	uint64_t total_cmds;		/* total CMDs since VM is started */
