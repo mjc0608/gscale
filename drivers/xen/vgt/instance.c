@@ -335,7 +335,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	vgt_destroy_debugfs(vgt);
 
-	spin_lock_irq(&pdev->lock);
+	spin_lock(&pdev->lock);
 	printk("check display ownership...\n");
 
 	if (!hvm_super_owner && (current_display_owner(pdev) == vgt)) {
@@ -370,7 +370,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 		wmb();
 	}
 
-	spin_unlock_irq(&pdev->lock);
+	spin_unlock(&pdev->lock);
 	if (vgt->force_removal)
 		/* wait for removal completion */
 		wait_event(pdev->destroy_wq, !vgt->force_removal);

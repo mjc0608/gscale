@@ -443,8 +443,6 @@ static void ondemand_sched_ctx(struct pgt_device *pdev)
 //bool enable_tailq = false;
 static enum hrtimer_restart vgt_poll_rb_tail(struct hrtimer *data)
 {
-
-	unsigned long flags;
 	int active_nr;
 	struct vgt_hrtimer *hrtimer = container_of(data,
 			struct vgt_hrtimer, timer);
@@ -454,7 +452,7 @@ static enum hrtimer_restart vgt_poll_rb_tail(struct hrtimer *data)
 	ASSERT(pdev);
 
 	cpu = vgt_enter();
-	spin_lock_irqsave(&pdev->lock, flags);
+	spin_lock(&pdev->lock);
 	/* TODO: if no more than 2 vgt in runqueue */
 	active_nr = vgt_nr_in_runq(pdev);
 
@@ -479,7 +477,7 @@ static enum hrtimer_restart vgt_poll_rb_tail(struct hrtimer *data)
 		ondemand_sched_ctx(pdev);
 
 reload_timer:
-	spin_unlock_irqrestore(&pdev->lock, flags);
+	spin_unlock(&pdev->lock);
 	/* Slow down the polling as 16 ms to prevent the starvation
 	 * of vgt_thread
 	 */

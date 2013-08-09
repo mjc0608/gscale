@@ -239,19 +239,19 @@ static int vgt_thread(void *priv)
 			if (current_render_owner(pdev) == vgt_dom0)
 				try_to_freeze();
 			else {
-				spin_lock_irq(&pdev->lock);
+				spin_lock(&pdev->lock);
 				pdev->next_sched_vgt = vgt_dom0;
 				vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
-				spin_unlock_irq(&pdev->lock);
+				spin_unlock(&pdev->lock);
 			}
 		}
 
 		/* forward physical GPU events to VMs */
 		if (test_and_clear_bit(VGT_REQUEST_IRQ,
 					(void *)&pdev->request)) {
-			spin_lock_irq(&pdev->lock);
+			spin_lock(&pdev->lock);
 			vgt_forward_events(pdev);
-			spin_unlock_irq(&pdev->lock);
+			spin_unlock(&pdev->lock);
 		}
 
 		/* Send uevent to userspace */
