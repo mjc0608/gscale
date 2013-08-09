@@ -791,9 +791,9 @@ struct pgt_device {
 	int max_engines;	/* supported max engines */
 	u32 ring_mmio_base[MAX_ENGINES];
 	u32 ring_mi_mode[MAX_ENGINES];
-	u32 ring_idle[MAX_ENGINES];
-	u8 ring_idle_bit[MAX_ENGINES];
-	u8 ring_idle_check;
+	u32 ring_xxx[MAX_ENGINES];
+	u8 ring_xxx_bit[MAX_ENGINES];
+	u8 ring_xxx_valid;
 
 	vgt_edid_data_t		*pdev_edids[VGT_PORT_MAX];	/* per display EDID information */
 	struct vgt_dpcd_data	*pdev_dpcds[DPCD_MAX];	/* per display DPCD information */

@@ -406,28 +406,28 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	pdev->ring_mi_mode[RING_BUFFER_VCS] = _REG_VCS_MI_MODE;
 	pdev->ring_mi_mode[RING_BUFFER_BCS] = _REG_BCS_MI_MODE;
 
-	pdev->ring_idle[RING_BUFFER_RCS] = 0x2050;
-	pdev->ring_idle[RING_BUFFER_VCS] = 0x12050;
-	pdev->ring_idle[RING_BUFFER_BCS] = 0x22050;
-	pdev->ring_idle_bit[RING_BUFFER_RCS] = _SNB_IDLE_BIT;
-	pdev->ring_idle_bit[RING_BUFFER_VCS] = _SNB_IDLE_BIT;
-	pdev->ring_idle_bit[RING_BUFFER_BCS] = _SNB_IDLE_BIT;
+	pdev->ring_xxx[RING_BUFFER_RCS] = 0x2050;
+	pdev->ring_xxx[RING_BUFFER_VCS] = 0x12050;
+	pdev->ring_xxx[RING_BUFFER_BCS] = 0x22050;
+	pdev->ring_xxx_bit[RING_BUFFER_RCS] = 3;
+	pdev->ring_xxx_bit[RING_BUFFER_VCS] = 3;
+	pdev->ring_xxx_bit[RING_BUFFER_BCS] = 3;
 	/* this check is broken on SNB */
-	pdev->ring_idle_check = 0;
+	pdev->ring_xxx_valid = 0;
 
 	if (IS_HSW(pdev)) {
 		pdev->max_engines = 4;
 		pdev->ring_mmio_base[RING_BUFFER_VECS] = _REG_VECS_TAIL;
 		pdev->ring_mi_mode[RING_BUFFER_VECS] = _REG_VECS_MI_MODE;
-		pdev->ring_idle[RING_BUFFER_RCS] = 0x8000;
-		pdev->ring_idle[RING_BUFFER_VCS] = 0x8000;
-		pdev->ring_idle[RING_BUFFER_BCS] = 0x8000;
-		pdev->ring_idle[RING_BUFFER_VECS] = 0x8008;
-		pdev->ring_idle_bit[RING_BUFFER_RCS] = _RCS_IDLE_BIT;
-		pdev->ring_idle_bit[RING_BUFFER_VCS] = _VCS_IDLE_BIT;
-		pdev->ring_idle_bit[RING_BUFFER_BCS] = _BCS_IDLE_BIT;
-		pdev->ring_idle_bit[RING_BUFFER_VECS] = _VECS_IDLE_BIT;
-		pdev->ring_idle_check = 1;
+		pdev->ring_xxx[RING_BUFFER_RCS] = 0x8000;
+		pdev->ring_xxx[RING_BUFFER_VCS] = 0x8000;
+		pdev->ring_xxx[RING_BUFFER_BCS] = 0x8000;
+		pdev->ring_xxx[RING_BUFFER_VECS] = 0x8008;
+		pdev->ring_xxx_bit[RING_BUFFER_RCS] = 0;
+		pdev->ring_xxx_bit[RING_BUFFER_VCS] = 1;
+		pdev->ring_xxx_bit[RING_BUFFER_BCS] = 2;
+		pdev->ring_xxx_bit[RING_BUFFER_VECS] = 10;
+		pdev->ring_xxx_valid = 1;
 	}
 
 	/* clean port status, 0 means not plugged in */

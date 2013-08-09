@@ -90,12 +90,12 @@ static bool ring_is_empty(struct pgt_device *pdev,
 	return true;
 }
 
-static bool ring_is_idle(struct pgt_device *pdev,
+static bool ring_is_xxx(struct pgt_device *pdev,
 	int id)
 {
-	if (pdev->ring_idle_check &&
-	    !(VGT_MMIO_READ(pdev, pdev->ring_idle[id]) &
-		      (1 << pdev->ring_idle_bit[id])))
+	if (pdev->ring_xxx_valid &&
+	    !(VGT_MMIO_READ(pdev, pdev->ring_xxx[id]) &
+		      (1 << pdev->ring_xxx_bit[id])))
 		return false;
 
 	return true;
@@ -143,8 +143,8 @@ static bool idle_render_engine(struct pgt_device *pdev, int id)
 
 	/* may do some jobs here to make sure ring idle */
 
-	if (wait_for_atomic(ring_is_idle(pdev, id), VGT_RING_TIMEOUT) != 0) {
-		vgt_err("Timeout wait %d ms for ring(%d) idle\n",
+	if (wait_for_atomic(ring_is_xxx(pdev, id), VGT_RING_TIMEOUT) != 0) {
+		vgt_err("Timeout wait %d ms for ring(%d) xxx\n",
 			VGT_RING_TIMEOUT, id);
 		return false;
 	}
