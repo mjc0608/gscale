@@ -359,6 +359,36 @@ static bool transaconf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static bool shotplug_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	vgt_reg_t val = *(vgt_reg_t *)p_data;
+	vgt_reg_t sticky_mask = _REGBIT_DP_B_STATUS |
+				_REGBIT_DP_C_STATUS |
+				_REGBIT_DP_D_STATUS;
+
+	__vreg(vgt, offset) = (val & ~sticky_mask) |
+				(__vreg(vgt, offset) & sticky_mask);
+	__vreg(vgt, offset) &= ~(val & sticky_mask);
+
+	__sreg(vgt, offset) = val;
+
+	if (reg_hw_access(vgt, offset)) {
+		vgt_reg_t enable_mask = _REGBIT_DP_B_ENABLE |
+					_REGBIT_DP_C_ENABLE |
+					_REGBIT_DP_D_ENABLE;
+
+		if (~(val & enable_mask) & enable_mask) {
+			vgt_warn("vGT(%d): Is trying to disable HOTPLUG"
+			" with writing 0x%x to SHOTPLUG_CTL!\n",
+			vgt->vgt_id, val);
+		}
+		VGT_MMIO_WRITE(vgt->pdev, offset, val);
+	}
+
+	return true;
+}
+
 /* Pipe Frame Count */
 static bool pipe_frmcount_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
@@ -1961,7 +1991,7 @@ reg_attr_t vgt_base_reg_info[] = {
 	dpy_reg_mmio_read_2, NULL},
 {0xE6E1C, 4, F_DPY, 0, D_ALL,
 	dpy_reg_mmio_read_3, NULL},
-{_REG_SHOTPLUG_CTL, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_SHOTPLUG_CTL, 4, F_DPY, 0, D_ALL, NULL, shotplug_ctl_mmio_write},
 {_REG_LCPLL_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_HSW_FUSE_STRAP, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_DP_A_HOTPLUG_CNTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
