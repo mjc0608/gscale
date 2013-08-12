@@ -752,10 +752,13 @@ static bool dp_tp_status_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	vgt_reg_t sticky_mask;
 
 	reg_val = *((vgt_reg_t *)p_data);
-	sticky_mask = ((1 << BIT_27) | (1 << BIT_26) | (1 << BIT_24)) & reg_val;
+	sticky_mask = (1 << BIT_27) | (1 << BIT_26) | (1 << BIT_24);
 
-	__vreg(vgt, offset) &= ~sticky_mask;
-	__sreg(vgt, offset) &= __vreg(vgt, offset);
+	__vreg(vgt, offset) = (reg_val & ~sticky_mask) |
+				(__vreg(vgt, offset) & sticky_mask);
+	__vreg(vgt, offset) &= ~(reg_val & sticky_mask);
+
+	__sreg(vgt, offset) = reg_val;
 
 	if (reg_hw_access(vgt, offset)) {
 		VGT_MMIO_WRITE(vgt->pdev, offset, reg_val);
