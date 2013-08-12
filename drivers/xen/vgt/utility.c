@@ -214,7 +214,7 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 
 	off = WRAP_OFF(p_head - 8, ring_len);
 	cur = (u32*)(p_contents + off);
-	if ((*cur & 0xfffff000) == 0x18800000 && vgt) {
+	if ((*cur & 0xfff00000) == 0x18800000 && vgt) {
 		printk("Hang in (%s) batch buffer (%x)\n",
 			(*cur & _CMDBIT_BB_START_IN_PPGTT) ? "PPGTT" : "GTT",
 			*(cur + 1));
