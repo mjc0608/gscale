@@ -361,6 +361,7 @@ err_mmio:
 err_common_chk:
 	vgt_err("VM(%d): invalid MMIO offset(%08x), bytes(%d)!\n",
 		vgt->vm_id, offset, bytes);
+	show_debug(pdev);
 	return false;
 }
 
@@ -480,6 +481,7 @@ err_mmio:
 err_common_chk:
 	vgt_err("VM(%d): invalid MMIO offset(%08x),"
 		"bytes(%d)!\n", vgt->vm_id, offset, bytes);
+	show_debug(pdev);
 	return false;
 }
 

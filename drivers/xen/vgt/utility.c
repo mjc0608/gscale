@@ -40,8 +40,8 @@ void show_debug(struct pgt_device *pdev)
 		printk("CPU[%d]: %s\n", cpu,
 			per_cpu(in_vgt, cpu) ? "in vgt" : "out of vgt");
 
-	printk("-----------render info-------------\n");
 	for (i = 0; i < pdev->max_engines; i++) {
+		printk("-----------ring-%d info-------------\n", i);
 		show_ring_debug(pdev, i);
 		show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
 	}
@@ -56,9 +56,28 @@ void show_debug(struct pgt_device *pdev)
 void show_ring_debug(struct pgt_device *pdev, int ring_id)
 {
 	vgt_reg_t reg;
+	int i;
 
-	printk("debug registers(ring-%d),reg maked with <*>"
-			" may not apply to every ring):\n", ring_id);
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		struct vgt_device *vgt;
+		if (pdev->device[i]) {
+			vgt = pdev->device[i];
+			if (vgt == current_render_owner(pdev))
+				printk("VM%d(*):", vgt->vm_id);
+			else
+				printk("VM%d   :", vgt->vm_id);
+
+			printk("head(%x), tail(%x), start(%x), ctl(%x), uhptr(%x)\n",
+				vgt->rb[ring_id].sring.head,
+				vgt->rb[ring_id].sring.tail,
+				vgt->rb[ring_id].sring.start,
+				vgt->rb[ring_id].sring.ctl,
+				__vreg(vgt, VGT_UHPTR(ring_id)));
+		}
+	}
+
+	printk("debug registers,reg maked with <*>"
+		" may not apply to every ring):\n");
 	printk("....RING_EIR: %08x\n", VGT_MMIO_READ(pdev, RING_EIR(ring_id)));
 	printk("....RING_EMR: %08x\n", VGT_MMIO_READ(pdev, RING_EMR(ring_id)));
 	printk("....RING_ESR: %08x\n", VGT_MMIO_READ(pdev, RING_ESR(ring_id)));
