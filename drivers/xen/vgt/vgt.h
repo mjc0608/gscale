@@ -55,7 +55,8 @@ extern struct list_head pgt_devices;
 extern struct pgt_device default_device;
 extern void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes);
 extern void show_mode_settings(struct pgt_device *pdev);
-extern void show_debug(struct pgt_device *pdev, int ring_id);
+extern void show_ring_debug(struct pgt_device *pdev, int ring_id);
+extern void show_debug(struct pgt_device *pdev);
 
 extern bool hvm_render_owner;
 extern bool hvm_display_owner;
@@ -910,13 +911,9 @@ extern void do_vgt_fast_display_switch(struct vgt_device *pdev);
  */
 static inline void vgt_panic(void)
 {
-	int i;
 	struct pgt_device *pdev = &default_device;
 
-	for (i = 0; i < pdev->max_engines; i++) {
-		show_debug(pdev, i);
-		show_ringbuffer(pdev, i, 64);
-	}
+	show_debug(pdev);
 
 	dump_stack();
 	printk("________end of stack dump_________\n");

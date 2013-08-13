@@ -31,13 +31,26 @@
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
 
+void show_debug(struct pgt_device *pdev)
+{
+	int i;
+
+	printk("========vGT DEBUG INFO==========\n");
+
+	printk("-----------render info-------------\n");
+	for (i = 0; i < pdev->max_engines; i++) {
+		show_ring_debug(pdev, i);
+		show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
+	}
+}
+
 /*
  * Print debug registers for CP
  *
  * Hope to introduce a sysfs interface to dump this information on demand
  * in the future
  */
-void show_debug(struct pgt_device *pdev, int ring_id)
+void show_ring_debug(struct pgt_device *pdev, int ring_id)
 {
 	vgt_reg_t reg;
 
