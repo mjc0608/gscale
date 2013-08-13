@@ -345,6 +345,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 		}
 
 		//WARN_ON(vgt->vm_id == 0); /* The call stack is meaningless for HVM */
+		show_debug(pdev);
 	}
 
 	reg_set_accessed(pdev, offset);
