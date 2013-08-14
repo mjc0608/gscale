@@ -950,6 +950,8 @@ static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
 	vgt_event_phys_handler_t handler;
 	struct pgt_device *pdev = hstate->pdev;
 
+	ASSERT(spin_is_locked(&pdev->lock));
+
 	for_each_set_bit(bit, iir, VGT_IRQ_BITWIDTH) {
 		event = info->bit_to_event[bit];
 		pdev->stat.events[event]++;
@@ -986,6 +988,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	pdev->stat.irq_num++;
 	pdev->stat.last_pirq = get_cycles();
 
+	spin_lock(&pdev->lock);
 	vgt_dbg("IRQ: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
 		VGT_MMIO_READ(pdev, _REG_DEIIR),
 		VGT_MMIO_READ(pdev, _REG_GTIIR),
@@ -1007,6 +1010,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 out:
 	/* re-enable master interrupt */
 	VGT_MMIO_WRITE(pdev, _REG_DEIER, de_ier);
+	spin_unlock(&pdev->lock);
 
 	pdev->stat.pirq_cycles += get_cycles() - pdev->stat.last_pirq;
 

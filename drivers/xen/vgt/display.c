@@ -164,7 +164,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 	 * we need to use vmid_2_vgt_device() to map vmid to vgt_device if
 	 * we need to send these hotplug virtual interrupts to a specific vm
 	 */
-	spin_lock(&dev->lock);
+	spin_lock_irq(&dev->lock);
 	for (i = 0; i < VGT_MAX_VMS; ++ i) {
 		struct vgt_device *vgt = dev->device[i];
 
@@ -185,7 +185,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 		vgt_trigger_virtual_event(vgt, event);
 	}
 
-	spin_unlock(&dev->lock);
+	spin_unlock_irq(&dev->lock);
 	return;
 }
 

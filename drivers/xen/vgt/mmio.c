@@ -291,6 +291,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	struct vgt_mmio_entry *mht;
 	struct pgt_device *pdev = vgt->pdev;
 	unsigned int offset;
+	unsigned long flags;
 	bool rc;
 	cycles_t t0, t1;
 	struct vgt_statistics *stat = &vgt->stat;
@@ -307,13 +308,13 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	if (bytes > 4)
 		vgt_dbg("vGT: capture >4 bytes read to %x\n", offset);
 
-	spin_lock(&pdev->lock);
+	spin_lock_irqsave(&pdev->lock, flags);
 
 	raise_ctx_sched(vgt);
 
 	if (reg_is_gtt(pdev, offset)) {
 		rc = gtt_mmio_read(vgt, offset, p_data, bytes);
-		spin_unlock(&pdev->lock);
+		spin_unlock_irqrestore(&pdev->lock, flags);
 		return rc;
 	}
 
@@ -349,14 +350,14 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 
 	reg_set_accessed(pdev, offset);
 
-	spin_unlock(&pdev->lock);
+	spin_unlock_irqrestore(&pdev->lock, flags);
 	trace_vgt_mmio_rw(VGT_TRACE_READ, vgt->vm_id, offset, p_data, bytes);
 
 	t1 = get_cycles();
 	stat->mmio_rcycles += t1 - t0;
 	return true;
 err_mmio:
-	spin_unlock(&pdev->lock);
+	spin_unlock_irqrestore(&pdev->lock, flags);
 err_common_chk:
 	vgt_err("VM(%d): invalid MMIO offset(%08x), bytes(%d)!\n",
 		vgt->vm_id, offset, bytes);
@@ -373,6 +374,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_mmio_entry *mht;
 	unsigned int offset;
+	unsigned long flags;
 	vgt_reg_t old_vreg=0, old_sreg=0;
 	bool rc;
 	cycles_t t0, t1;
@@ -407,13 +409,13 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	}
 */
 
-	spin_lock(&pdev->lock);
+	spin_lock_irqsave(&pdev->lock, flags);
 
 	raise_ctx_sched(vgt);
 
 	if (reg_is_gtt(pdev, offset)) {
 		rc = gtt_mmio_write(vgt, offset, p_data, bytes);
-		spin_unlock(&pdev->lock);
+		spin_unlock_irqrestore(&pdev->lock, flags);
 		return rc;
 	}
 
@@ -467,14 +469,14 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 		vgt_dbg("vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
 
 	reg_set_accessed(pdev, offset);
-	spin_unlock(&pdev->lock);
+	spin_unlock_irqrestore(&pdev->lock, flags);
 	trace_vgt_mmio_rw(VGT_TRACE_WRITE, vgt->vm_id, offset, p_data, bytes);
 
 	t1 = get_cycles();
 	stat->mmio_wcycles += t1 - t0;
 	return true;
 err_mmio:
-	spin_unlock(&pdev->lock);
+	spin_unlock_irqrestore(&pdev->lock, flags);
 err_common_chk:
 	vgt_err("VM(%d): invalid MMIO offset(%08x),"
 		"bytes(%d)!\n", vgt->vm_id, offset, bytes);
