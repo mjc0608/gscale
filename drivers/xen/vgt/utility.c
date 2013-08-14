@@ -39,6 +39,7 @@ void show_debug(struct pgt_device *pdev)
 	for_each_online_cpu(cpu)
 		printk("CPU[%d]: %s\n", cpu,
 			per_cpu(in_vgt, cpu) ? "in vgt" : "out of vgt");
+	printk("DE_RRMR: %x\n", VGT_MMIO_READ(pdev, _REG_DE_RRMR));
 
 	for (i = 0; i < pdev->max_engines; i++) {
 		printk("-----------ring-%d info-------------\n", i);

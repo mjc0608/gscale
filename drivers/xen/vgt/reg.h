@@ -169,6 +169,7 @@
 #define _REG_VCS_UHPTR		0x12134
 #define _REG_BCS_UHPTR		0x22134
 #define _REG_VECS_UHPTR		0x1A134
+#define 	_REGBIT_UHPTR_VALID	(1 << 0)
 #define VGT_UHPTR(ring_id) __RING_REG(ring_id, _REG_RCS_UHPTR, _REG_VCS_UHPTR, _REG_VECS_UHPTR)
 
 #define _REG_RCS_ACTHD		0x2074

@@ -325,6 +325,9 @@ typedef struct {
 	uint64_t cmd_nr;
 	vgt_reg_t	last_scan_head;
 	uint64_t request_id;
+
+	vgt_reg_t uhptr;
+	uint64_t uhptr_id;
 } vgt_state_ring_t;
 
 struct vgt_device;
@@ -1951,6 +1954,9 @@ bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
 bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes);
+
+bool ring_uhptr_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
 extern bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,

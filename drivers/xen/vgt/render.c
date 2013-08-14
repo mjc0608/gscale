@@ -1786,3 +1786,40 @@ void vgt_gpu_perf_sample(void)
 	}
 }
 EXPORT_SYMBOL_GPL(vgt_gpu_perf_sample);
+
+bool ring_uhptr_write(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes)
+{
+	int ring_id;
+	vgt_state_ring_t	*rs;
+	vgt_reg_t val = *(vgt_reg_t *)p_data;
+
+	switch (off) {
+	case _REG_RCS_UHPTR:
+		ring_id = RING_BUFFER_RCS;
+		break;
+	case _REG_VCS_UHPTR:
+		ring_id = RING_BUFFER_VCS;
+		break;
+	case _REG_BCS_UHPTR:
+		ring_id = RING_BUFFER_BCS;
+		break;
+	case _REG_VECS_UHPTR:
+		ring_id = RING_BUFFER_VECS;
+		break;
+	default:
+		ASSERT(0);
+		break;
+	}
+
+	rs = &vgt->rb[ring_id];
+
+	/* only cache the latest value */
+	if (rs->uhptr & _REGBIT_UHPTR_VALID)
+		vgt_info("VM(%d)-r%d: overwrite a valid uhptr (o:%x, n:%x)\n",
+			vgt->vm_id, ring_id, rs->uhptr, info);
+
+	rs->uhptr = *(vgt_reg_t*)p_data;
+	rs->uhptr_id = rs->request_id;
+	return true;
+}
