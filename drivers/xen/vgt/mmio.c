@@ -341,10 +341,10 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 			printk("Disable untracked MMIO warning for VM(%d)\n", vgt->vm_id);
 			printk("------------------------------------------\n");
 			vgt->warn_untrack = 0;
+			show_debug(pdev);
 		}
 
 		//WARN_ON(vgt->vm_id == 0); /* The call stack is meaningless for HVM */
-		show_debug(pdev);
 	}
 
 	reg_set_accessed(pdev, offset);
