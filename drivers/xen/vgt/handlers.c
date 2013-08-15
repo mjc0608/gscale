@@ -283,7 +283,7 @@ static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-static bool rmrr_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool rrmr_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t old_rrmr, new_rrmr, new_physical_rrmr;
@@ -1586,7 +1586,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_SDEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
 {_REG_SDEISR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_isr_handler},
 
-{_REG_DE_RRMR, 4, F_VIRT, 0, D_ALL, NULL, rmrr_mmio_write},
+{_REG_DE_RRMR, 4, F_VIRT, 0, D_ALL, NULL, rrmr_mmio_write},
 
 {_REG_PIPEADSL, 4, F_DPY, 0, D_ALL, pipe_dsl_mmio_read, NULL},
 {_REG_PIPEACONF, 4, F_DPY, 0, D_ALL, NULL, pipe_conf_mmio_write},
