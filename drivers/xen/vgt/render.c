@@ -1817,9 +1817,9 @@ bool ring_uhptr_write(struct vgt_device *vgt, unsigned int off,
 	/* only cache the latest value */
 	if (rs->uhptr & _REGBIT_UHPTR_VALID)
 		vgt_info("VM(%d)-r%d: overwrite a valid uhptr (o:%x, n:%x)\n",
-			vgt->vm_id, ring_id, rs->uhptr, info);
+			vgt->vm_id, ring_id, rs->uhptr, val);
 
-	rs->uhptr = *(vgt_reg_t*)p_data;
+	rs->uhptr = val;
 	rs->uhptr_id = rs->request_id;
 	return true;
 }
