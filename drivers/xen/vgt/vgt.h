@@ -2103,7 +2103,7 @@ struct vm_struct *map_hvm_iopage(struct vgt_device *vgt);
 int hvm_get_parameter_by_dom(domid_t domid, int idx, uint64_t *value);
 int xen_get_nr_vcpu(int vm_id);
 int vgt_hvm_set_trap_area(struct vgt_device *vgt);
-int vgt_hvm_map_apperture (struct vgt_device *vgt, int map);
+int vgt_hvm_map_aperture (struct vgt_device *vgt, int map);
 int setup_gtt(struct pgt_device *pdev);
 void check_gtt(struct pgt_device *pdev);
 void free_gtt(struct pgt_device *pdev);

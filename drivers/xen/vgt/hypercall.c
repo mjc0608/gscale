@@ -124,9 +124,9 @@ int vgt_hvm_opregion_map(struct vgt_device *vgt, int map)
 }
 
 /*
- * Map the apperture space (BAR1) of vGT device for direct access.
+ * Map the aperture space (BAR1) of vGT device for direct access.
  */
-int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
+int vgt_hvm_map_aperture (struct vgt_device *vgt, int map)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint64_t bar_s;
@@ -165,7 +165,7 @@ int vgt_hvm_map_apperture (struct vgt_device *vgt, int map)
 	r = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
 
 	if (r != 0)
-		printk(KERN_ERR "vgt_hvm_map_apperture fail with %d!\n", r);
+		printk(KERN_ERR "vgt_hvm_map_aperture fail with %d!\n", r);
 	else
 		vgt->state.bar_mapped[1] = map;
 
