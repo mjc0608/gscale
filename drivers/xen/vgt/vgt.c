@@ -236,8 +236,11 @@ static int vgt_thread(void *priv)
 		cpu = vgt_enter();
 
 		if (freezing(current)) {
-			if (current_render_owner(pdev) == vgt_dom0)
+			if (current_render_owner(pdev) == vgt_dom0) {
+				vgt_exit(cpu);
 				try_to_freeze();
+				cpu = vgt_enter();
+			}
 			else {
 				spin_lock_irq(&pdev->lock);
 				pdev->next_sched_vgt = vgt_dom0;

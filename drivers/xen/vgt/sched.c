@@ -78,9 +78,14 @@ static struct vgt_device *tbs_next_vgt(
 {
 	struct list_head *next = &vgt->list;
 	struct vgt_device *next_vgt = NULL;
+	struct pgt_device *pdev;
 
 	if (vgt->force_removal)
 		return vgt_dom0;
+
+	pdev = vgt->pdev;
+	if (ctx_switch_requested(pdev))
+		return pdev->next_sched_vgt;
 
 	do {
 		next = next->next;
