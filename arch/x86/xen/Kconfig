@@ -20,7 +20,7 @@ config XEN_DOM0
 	depends on X86_LOCAL_APIC && X86_IO_APIC && ACPI && PCI
 
 config XEN_PVHVM
-	def_bool n
+	def_bool y
 	depends on XEN && PCI && X86_LOCAL_APIC
 
 config XEN_MAX_DOMAIN_MEMORY
