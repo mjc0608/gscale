@@ -561,11 +561,21 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint64_t base = * (uint64_t *) (cfg_space + VGT_REG_CFG_SPACE_BAR0);
 	uint64_t tmp;
+	int pvinfo_page;
 
-	if (vgt->vmem_vma == NULL && vgt_hvm_vmem_init(vgt) < 0) {
-		vgt_err("can not map the memory of VM%d!!!\n", vgt->vm_id);
-		ASSERT_VM(vgt->vmem_vma != NULL, vgt);
-		return -EINVAL;
+	if (vgt->vmem_vma == NULL) {
+		tmp = vgt_pa_to_mmio_offset(vgt, req->addr);
+		pvinfo_page = (tmp >= VGT_PVINFO_PAGE
+				&& tmp < (VGT_PVINFO_PAGE + VGT_PVINFO_SIZE));
+		/*
+		 * hvmloader will read PVINFO to identify if HVM is in VGT
+		 * or VTD. So we don't trigger HVM mapping logic here.
+		 */
+		if (!pvinfo_page && vgt_hvm_vmem_init(vgt) < 0) {
+			vgt_err("can not map the memory of VM%d!!!\n", vgt->vm_id);
+			ASSERT_VM(vgt->vmem_vma != NULL, vgt);
+			return -EINVAL;
+		}
 	}
 
 	sign = req->df ? -1 : 1;
