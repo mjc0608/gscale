@@ -400,6 +400,13 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	if (!vgt_set_device_type(pdev))
 		return false;
 
+	if (!IS_HSW(pdev)) {
+		vgt_err("Unsupported gen_dev_type(%s)!\n",
+			IS_IVB(pdev) ?
+			"IVB" : "SNB(or unknown GEN types)");
+		return false;
+	}
+
 	/* check PPGTT enabling. */
 	if (IS_IVB(pdev) || IS_HSW(pdev))
 		pdev->enable_ppgtt = 1;
@@ -496,7 +503,7 @@ int vgt_initialize(struct pci_dev *dev)
 	spin_lock_init(&pdev->lock);
 
 	if (!vgt_initialize_pgt_device(dev, pdev))
-		goto err;
+		return -EINVAL;
 
 	if (vgt_cmd_parser_init(pdev) < 0)
 		goto err;
