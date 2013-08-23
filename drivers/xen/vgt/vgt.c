@@ -397,15 +397,15 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	pdev->pdev = dev;
 	pdev->pbus = dev->bus;
 
-	if (!vgt_set_device_type(pdev))
-		return false;
-
 	if (!IS_HSW(pdev)) {
 		vgt_err("Unsupported gen_dev_type(%s)!\n",
-			IS_IVB(pdev) ?
+			pdev->gen_dev_type == XEN_IGD_IVB ?
 			"IVB" : "SNB(or unknown GEN types)");
 		return false;
 	}
+
+	if (!vgt_set_device_type(pdev))
+		return false;
 
 	/* check PPGTT enabling. */
 	if (IS_IVB(pdev) || IS_HSW(pdev))
