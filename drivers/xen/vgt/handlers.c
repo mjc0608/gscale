@@ -580,7 +580,7 @@ static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		vgt->hvm_boot_foreground_visible = 1;
 		do_vgt_fast_display_switch(vgt);
 	}
-
+	vgt_manage_emul_dpy_events(vgt->pdev);
 	return rc;
 }
 

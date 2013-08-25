@@ -274,6 +274,13 @@ static int vgt_thread(void *priv)
 			}
 		}
 
+		if (test_and_clear_bit(VGT_REQUEST_EMUL_DPY_EVENTS,
+				(void *)&pdev->request)) {
+			spin_lock_irq(&pdev->lock);
+			vgt_emulate_dpy_events(pdev);
+			spin_unlock_irq(&pdev->lock);
+		}
+
 		vgt_exit(cpu);
 	}
 	return 0;

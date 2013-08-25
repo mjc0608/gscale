@@ -937,6 +937,42 @@ void vgt_forward_events(struct pgt_device *pdev)
 	pdev->stat.virq_cycles += get_cycles() - pdev->stat.last_virq;
 }
 
+#define NEED_VIRT_INT_FOR_PIPE(vgt, pipe)		\
+	(vgt_has_pipe_enabled(vgt, pipe) &&		\
+	!pdev_has_pipe_enabled(vgt->pdev, pipe))
+
+/*TODO
+ * In vgt_emulate_dpy_events(), so far only one virtual virtual
+ * event is injected into VM. If more than one events are injected, we
+ * should use a new function other than vgt_trigger_virtual_event(),
+ * that new one can combine multiple virtual events into a single
+ * virtual interrupt.
+ */
+void vgt_emulate_dpy_events(struct pgt_device *pdev)
+{
+	int i;
+
+	ASSERT(spin_is_locked(&pdev->lock));
+	for (i = 0; i < VGT_MAX_VMS && pdev->device[i]; i ++) {
+		struct vgt_device *vgt = pdev->device[i];
+
+		if (is_current_display_owner(vgt))
+			continue;
+
+		if (NEED_VIRT_INT_FOR_PIPE(vgt, PIPE_A)) {
+			vgt_trigger_virtual_event(vgt, PIPE_A_VBLANK);
+		}
+
+		if (NEED_VIRT_INT_FOR_PIPE(vgt, PIPE_B)) {
+			vgt_trigger_virtual_event(vgt, PIPE_B_VBLANK);
+		}
+
+		if (NEED_VIRT_INT_FOR_PIPE(vgt, PIPE_C)) {
+			vgt_trigger_virtual_event(vgt, PIPE_C_VBLANK);
+		}
+	}
+}
+
 /*
  * Scan all pending events in the specified category, and then invoke
  * registered handler accordingly
@@ -1095,12 +1131,29 @@ static void vgt_init_events(
 	SET_POLICY_NONE(hstate, GMBUS);
 }
 
+static enum hrtimer_restart vgt_dpy_timer_fn(struct hrtimer *data)
+{
+	struct vgt_emul_timer *dpy_timer;
+	struct vgt_irq_host_state *hstate;
+	struct pgt_device *pdev;
+
+	dpy_timer = container_of(data, struct vgt_emul_timer, timer);
+	hstate = container_of(dpy_timer, struct vgt_irq_host_state, dpy_timer);
+	pdev = hstate->pdev;
+
+	vgt_raise_request(pdev, VGT_REQUEST_EMUL_DPY_EVENTS);
+
+	hrtimer_add_expires_ns(&dpy_timer->timer, dpy_timer->period);
+	return HRTIMER_RESTART;
+}
+
 /*
  * Do interrupt initialization for vGT driver
  */
 int vgt_irq_init(struct pgt_device *pdev)
 {
 	struct vgt_irq_host_state *hstate;
+	struct vgt_emul_timer *dpy_timer;
 
 	hstate = kzalloc(sizeof(struct vgt_irq_host_state), GFP_KERNEL);
 	if (hstate == NULL)
@@ -1127,13 +1180,53 @@ int vgt_irq_init(struct pgt_device *pdev)
 	pdev->irq_hstate = hstate;
 	pdev->dom0_irq_cpu = -1;
 	pdev->dom0_irq_pending = false;
-	vgt_dbg("Interrupt initialization completes\n");
+
+	dpy_timer = &hstate->dpy_timer;
+	hrtimer_init(&dpy_timer->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+	dpy_timer->timer.function = vgt_dpy_timer_fn;
+	dpy_timer->period = VGT_DPY_EMUL_PERIOD;
+
 	return 0;
+}
+
+void vgt_manage_emul_dpy_events(struct pgt_device *pdev)
+{
+	int i;
+	enum vgt_pipe pipe;
+	unsigned hw_enabled_pipes, hvm_enabled_pipes;
+	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
+
+
+	ASSERT(spin_is_locked(&pdev->lock));
+	hw_enabled_pipes = hvm_enabled_pipes = 0;
+
+	for (i = 0; i < VGT_MAX_VMS && pdev->device[i]; i ++) {
+		struct vgt_device *vgt = pdev->device[i];
+		for (pipe = PIPE_A; pipe < I915_MAX_PIPES; pipe ++) {
+			vgt_reg_t pipeconf = __vreg(vgt, VGT_PIPECONF(pipe));
+			if (pipeconf & _REGBIT_PIPE_ENABLE) {
+				if (is_current_display_owner(vgt)) {
+					hw_enabled_pipes |= (1 << pipe);
+				} else {
+					hvm_enabled_pipes |= (1 << pipe);
+				}
+			}
+		}
+	}
+
+	hrtimer_cancel(&hstate->dpy_timer.timer);
+	if (hvm_enabled_pipes & ~hw_enabled_pipes) {
+		/*there is hvm enabled pipe which is not enabled on hardware */
+		hrtimer_start(&hstate->dpy_timer.timer,
+			ktime_add_ns(ktime_get(), hstate->dpy_timer.period),
+			HRTIMER_MODE_ABS);
+	}
 }
 
 void vgt_irq_exit(struct pgt_device *pdev)
 {
 	free_irq(pdev->irq_hstate->pirq, pdev);
+	hrtimer_cancel(&pdev->irq_hstate->dpy_timer.timer);
 
 	/* TODO: recover i915 handler? */
 	//unbind_from_irq(vgt_i915_irq(pdev));

@@ -888,6 +888,14 @@ struct pgt_device {
 	 (d->next_sched_vgt != current_render_owner(pdev)))
 #define vgt_ctx_check(d)		(d->ctx_check)
 #define vgt_ctx_switch(d)		(d->ctx_switch)
+#define vgt_has_pipe_enabled(vgt, pipe)						\
+		(vgt && ((pipe) >= PIPE_A) && ((pipe) < I915_MAX_PIPES) &&	\
+		(__vreg((vgt), VGT_PIPECONF(pipe)) & _REGBIT_PIPE_ENABLE))
+#define pdev_has_pipe_enabled(pdev, pipe)					\
+		(pdev && ((pipe) >= PIPE_A) && ((pipe) < I915_MAX_PIPES) &&	\
+		(__vreg(current_display_owner(pdev),				\
+			VGT_PIPECONF(pipe)) & _REGBIT_PIPE_ENABLE))
+
 extern void do_vgt_fast_display_switch(struct vgt_device *pdev);
 
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
@@ -1041,6 +1049,7 @@ static inline void reg_update_handlers(struct pgt_device *pdev,
 #define VGT_REQUEST_IRQ		0	/* a new irq pending from device */
 #define VGT_REQUEST_UEVENT	1
 #define VGT_REQUEST_CTX_SWITCH	2	/* immediate reschedule(context switch) requested */
+#define VGT_REQUEST_EMUL_DPY_EVENTS	3
 
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {
@@ -1766,6 +1775,8 @@ static inline int vgt_pci_mmio_is_enabled(struct vgt_device *vgt)
 		_REGBIT_CFG_COMMAND_MEMORY;
 }
 
+#define VGT_DPY_EMUL_PERIOD	16000000	// 16 ms for now
+
 struct vgt_irq_host_state;
 typedef void (*vgt_event_phys_handler_t)(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event);
@@ -1824,6 +1835,11 @@ struct vgt_event_info {
 	vgt_event_virt_handler_t	v_handler;	/* for v_event */
 };
 
+struct vgt_emul_timer {
+	struct hrtimer timer;
+	u64 period;
+};
+
 /* structure containing device specific IRQ state */
 struct vgt_irq_host_state {
 	struct pgt_device *pdev;
@@ -1833,6 +1849,7 @@ struct vgt_irq_host_state {
 	struct vgt_irq_info	*info[IRQ_INFO_MAX];
 	struct vgt_event_info	events[EVENT_MAX];
 	DECLARE_BITMAP(pending_events, EVENT_MAX);
+	struct vgt_emul_timer dpy_timer;
 };
 
 #define vgt_get_event_phys_handler(h, e)	(h->events[e].p_handler)
@@ -1883,6 +1900,8 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 
 
 void vgt_forward_events(struct pgt_device *pdev);
+void vgt_emulate_dpy_events(struct pgt_device *pdev);
+void vgt_manage_emul_dpy_events(struct pgt_device *pdev);
 void vgt_install_irq(struct pci_dev *pdev);
 int vgt_irq_init(struct pgt_device *pgt);
 void vgt_irq_exit(struct pgt_device *pgt);
