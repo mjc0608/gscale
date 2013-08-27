@@ -140,6 +140,12 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 		goto out;
 	}
 
+	if (!__vreg(next_vgt, vgt_info_off(display_ready))) {
+		printk("VGT %d: Display is not ready.\n", vmid);
+		ret = -EAGAIN;
+		goto out;
+	}
+
 	do_vgt_fast_display_switch(next_vgt);
 out:
 	spin_unlock_irqrestore(&default_device.lock, flags);

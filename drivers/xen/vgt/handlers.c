@@ -603,17 +603,6 @@ static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	}
 
 	rc = default_mmio_write(vgt, offset, &wr_data, bytes);
-
-	if (hvm_boot_foreground == true
-		&& !vgt->hvm_boot_foreground_visible
-		&& (wr_data & _REGBIT_PIPE_ENABLE)) {
-		/*
-		 * Guest have enabled PIPEx on virtual PIPExCONF.
-		 * So at this point, guest had a vaild surface to show.
-		 */
-		vgt->hvm_boot_foreground_visible = 1;
-		do_vgt_fast_display_switch(vgt);
-	}
 	vgt_manage_emul_dpy_events(vgt->pdev);
 	return rc;
 }
@@ -1421,6 +1410,17 @@ static bool pvinfo_mmio_write(struct vgt_device *vgt, unsigned int offset,
 						"its drivers minimum requirement(%x)!\n",
 						vgt->vm_id, vgt->fence_sz, min);
 					rc = false;
+				}
+				break;
+			case vgt_info_off(display_ready):
+				if (vgt->vm_id
+					&& hvm_boot_foreground == true
+					&& !vgt->hvm_boot_foreground_visible) {
+					/*
+					 * Guest had a vaild surface to show.
+					 */
+					vgt->hvm_boot_foreground_visible = 1;
+					do_vgt_fast_display_switch(vgt);
 				}
 				break;
 			default:
