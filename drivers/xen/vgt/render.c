@@ -136,13 +136,54 @@ static bool ring_wait_for_completion(struct pgt_device *pdev, int id)
 static bool idle_render_engine(struct pgt_device *pdev, int id)
 {
 	if (wait_for_atomic(ring_is_empty(pdev, id), VGT_RING_TIMEOUT) != 0) {
-		vgt_err("Timeout wait %d ms for ring(%d) empty\n",
+		int i, busy = 1;
+		vgt_reg_t acthd1, acthd2;
+		vgt_warn("Timeout wait %d ms for ring(%d) empty\n",
 			VGT_RING_TIMEOUT, id);
-		return false;
+
+		/*
+		 * TODO:
+		 * The timeout value may be not big enough, for some specific
+		 * workloads in the VM, if they submit a big trunk of commands
+		 * in a batch. The problem in current implementation is, ctx
+		 * switch request is made asynchronous to the cmd submission.
+		 * it's possible to have a request handled right after the
+		 * current owner submits a big trunk of commands, and thus
+		 * need to wait for a long time for completion.
+		 *
+		 * a better way is to detect ring idle in a delayed fashion,
+		 * e.g. in interrupt handler. That should remove this tricky
+		 * multi-iteration logic simpler
+		 */
+		acthd1 = VGT_MMIO_READ(pdev, VGT_ACTHD(id));
+		busy = wait_for_atomic(ring_is_empty(pdev, id), 50);
+		for (i = 0; i < 3; i++) {
+			if (!busy)
+				break;
+
+			vgt_info("(%d) check whether ring actually stops\n", i);
+			acthd2 = VGT_MMIO_READ(pdev, VGT_ACTHD(id));
+			if (acthd1 == acthd2)
+				break;
+
+			vgt_info("ring still moves (%x->%x)\n",
+				acthd1, acthd2);
+			acthd1 = acthd2;
+
+			vgt_info("trigger another wait...\n");
+			busy = wait_for_atomic(ring_is_empty(pdev, id),
+				VGT_RING_TIMEOUT);
+		}
+
+		if (busy) {
+			vgt_err("Ugh...it's a real hang!!!\n");
+			return false;
+		} else {
+			vgt_warn("ring idle now... after extra wait\n");
+		}
 	}
 
 	/* may do some jobs here to make sure ring idle */
-
 	if (wait_for_atomic(ring_is_xxx(pdev, id), VGT_RING_TIMEOUT) != 0) {
 		vgt_err("Timeout wait %d ms for ring(%d) xxx\n",
 			VGT_RING_TIMEOUT, id);
