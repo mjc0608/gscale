@@ -1394,54 +1394,101 @@ static bool sbi_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
-static bool pvinfo_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool pvinfo_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	vgt_reg_t min;
-	bool rc = default_mmio_write(vgt, offset, p_data, bytes);
-	if (rc) {
-		min = *(vgt_reg_t *)p_data;
-		switch (offset) {
-			case vgt_info_off(min_low_gmadr):
-				if (vgt->aperture_sz < min) {
-					vgt_err("VM(%d): aperture size(%llx) is less than"
-						"its driver's minimum requirement(%x)!\n",
-						vgt->vm_id, vgt->aperture_sz, min);
-					rc = false;
-				}
-				break;
-			case vgt_info_off(min_high_gmadr):
-				if (vgt->gm_sz - vgt->aperture_sz < min) {
-					vgt_err("VM(%d): hiden gm size(%llx) is less than"
-						"its driver's minimum requirement(%x)!\n",
-						vgt->vm_id, vgt->gm_sz - vgt->aperture_sz,
-					        min);
-					rc = false;
-				}
-				break;
-			case vgt_info_off(min_fence_num):
-				if (vgt->fence_sz < min) {
-					vgt_err("VM(%d): fence size(%x) is less than"
-						"its drivers minimum requirement(%x)!\n",
-						vgt->vm_id, vgt->fence_sz, min);
-					rc = false;
-				}
-				break;
-			case vgt_info_off(display_ready):
-				if (vgt->vm_id
-					&& hvm_boot_foreground == true
-					&& !vgt->hvm_boot_foreground_visible) {
-					/*
-					 * Guest had a vaild surface to show.
-					 */
-					vgt->hvm_boot_foreground_visible = 1;
-					do_vgt_fast_display_switch(vgt);
-				}
-				break;
-			default:
-				break;
-		}
+	bool rc = default_mmio_read(vgt, offset, p_data, bytes);
+	bool invalid_read = false;
+
+	switch (offset) {
+		case vgt_info_off(magic) ... vgt_info_off(vgt_id):
+			if (offset + bytes > vgt_info_off(vgt_id) + 4)
+				invalid_read = true;
+			break;
+
+		case vgt_info_off(avail_rs.low_gmadr.my_base) ...
+			vgt_info_off(avail_rs.fence_num):
+			if (offset + bytes >
+				vgt_info_off(avail_rs.fence_num) + 4)
+				invalid_read = true;
+			break;
+
+		case vgt_info_off(drv_version_major) ...
+			vgt_info_off(min_fence_num):
+			if (offset + bytes > vgt_info_off(min_fence_num) + 4)
+				invalid_read = true;
+			break;
+		default:
+			invalid_read = false;
+			break;
 	}
+
+	if (invalid_read)
+		vgt_warn("invalid pvinfo read: [%x:%x] = %x!!!\n",
+			offset, bytes, *(vgt_reg_t *)p_data);
+
+	return rc;
+}
+
+static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	vgt_reg_t val = *(vgt_reg_t *)p_data;
+	vgt_reg_t min;
+	bool rc = true;
+
+	switch (offset) {
+		case vgt_info_off(min_low_gmadr):
+			min = val;
+			if (vgt->aperture_sz < min) {
+				vgt_err("VM(%d): aperture size(%llx) is less than"
+					"its driver's minimum requirement(%x)!\n",
+					vgt->vm_id, vgt->aperture_sz, min);
+				rc = false;
+			}
+			break;
+		case vgt_info_off(min_high_gmadr):
+			min = val;
+			if (vgt->gm_sz - vgt->aperture_sz < min) {
+				vgt_err("VM(%d): hiden gm size(%llx) is less than"
+					"its driver's minimum requirement(%x)!\n",
+					vgt->vm_id, vgt->gm_sz - vgt->aperture_sz,
+				        min);
+				rc = false;
+			}
+			break;
+		case vgt_info_off(min_fence_num):
+			min = val;
+			if (vgt->fence_sz < min) {
+				vgt_err("VM(%d): fence size(%x) is less than"
+					"its drivers minimum requirement(%x)!\n",
+					vgt->vm_id, vgt->fence_sz, min);
+				rc = false;
+			}
+			break;
+		case vgt_info_off(display_ready):
+			if (vgt->vm_id
+				&& hvm_boot_foreground == true
+				&& !vgt->hvm_boot_foreground_visible) {
+				/*
+				 * Guest had a vaild surface to show.
+				 */
+				vgt->hvm_boot_foreground_visible = 1;
+				do_vgt_fast_display_switch(vgt);
+			}
+			break;
+		default:
+			/* keep rc's default value: true.
+			 * NOTE: returning false will crash the VM.
+			 */
+			vgt_warn("invalid pvinfo write: [%x:%x] = %x!!!\n",
+				offset, bytes, val);
+			break;
+	}
+
+	if (rc == true)
+		 rc = default_mmio_write(vgt, offset, p_data, bytes);
+
 	return rc;
 }
 /*
@@ -2199,7 +2246,7 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_GEN6_GDRST, 4, F_VIRT, 0, D_ALL, NULL, gen6_gdrst_mmio_write},
 {_REG_FENCE_0_LOW, 0x80, F_VIRT, 0, D_ALL, fence_mmio_read, fence_mmio_write},
-{VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, F_VIRT, 0, D_ALL, NULL, pvinfo_mmio_write},
+{VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, F_VIRT, 0, D_ALL, pvinfo_read, pvinfo_write},
 {_REG_CPU_VGACNTRL, 4, F_DOM0, 0, D_ALL, vga_control_r, vga_control_w},
 
 /* TODO: MCHBAR, suppose read-only */

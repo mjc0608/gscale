@@ -135,7 +135,17 @@ bool vgt_register_mmio_handler(unsigned int start, int bytes,
 			return false;
 		}
 		mht->base = i;
-		mht->align_bytes = 4;
+
+		/*
+		 * Win7 GFX driver uses memcpy to access the vgt PVINFO regs,
+		 * hence align_bytes can be 1.
+		 */
+		if (start >= VGT_PVINFO_PAGE &&
+			start < VGT_PVINFO_PAGE + VGT_PVINFO_SIZE)
+			mht->align_bytes = 1;
+		else
+			mht->align_bytes = 4;
+
 		mht->read = read;
 		mht->write = write;
 		INIT_HLIST_NODE(&mht->hlist);
