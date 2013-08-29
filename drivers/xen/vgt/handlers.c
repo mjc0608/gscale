@@ -1656,6 +1656,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIPECSTAT, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_PIPEC_FRMCOUNT, 4, F_DPY, 0, D_HSW, pipe_frmcount_mmio_read, NULL},
 
+{_REG_PIPE_EDP_CONF, 4, F_DPY, 0, D_HSW, NULL, pipe_conf_mmio_write},
+
 {_REG_CURABASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
 						dpy_plane_mmio_write},
 {_REG_CURACNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read, dpy_plane_mmio_write},

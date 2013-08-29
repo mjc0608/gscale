@@ -29,7 +29,12 @@
 
 /* Reserve 32KB for vGT shared infor: 0x78000-0x7FFFF */
 #define VGT_PVINFO_PAGE	0x78000
-#define VGT_PVINFO_SIZE	0x8000
+
+/* XXX: the 32KB range conflicts with PIPE_EDP_CONF: 0x7f008, so let's change
+ * to reserve only 4KB for now.
+ */
+//#define VGT_PVINFO_SIZE	0x8000
+#define VGT_PVINFO_SIZE	0x1000
 
 /*
  * The following structure pages are defined in GEN MMIO space for virtualization.

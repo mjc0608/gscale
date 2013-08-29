@@ -243,6 +243,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 			vgt_visible_gm_base(vgt), vgt_aperture_sz(vgt),
 			vgt_hidden_gm_base(vgt), vgt_hidden_gm_sz(vgt),
 			vgt->fence_base, vgt->fence_sz);
+
+		ASSERT(sizeof(struct vgt_if) == VGT_PVINFO_SIZE);
 	}
 
 	vgt->bypass_addr_check = bypass_dom0_addr_check && (vgt->vm_id == 0);

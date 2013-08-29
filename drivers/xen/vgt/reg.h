@@ -1132,6 +1132,9 @@ union _TRANS_CONFIG
 #define _REG_PIPECSTAT		0x72024
 #define _REG_PIPEC_FRMCOUNT 	0x72040
 
+/* eDP */
+#define _REG_PIPE_EDP_CONF	0x7f008
+
 /* bit fields of pipeconf */
 #define _REGBIT_PIPE_ENABLE		(1 << 31)
 #define _REGBIT_PIPE_STAT_ENABLED	(1 << 30)
