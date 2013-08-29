@@ -180,6 +180,14 @@ enum vgt_event_type {
 	EVENT_MAX,
 };
 
+
+enum transcoder {
+	TRANSCODER_A = 0,
+	TRANSCODER_B,
+	TRANSCODER_C,
+	TRANSCODER_EDP = 0xF,
+};
+
 #define vgt_info(fmt, s...)	\
 	do { printk(KERN_INFO "vGT info:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
 
@@ -541,6 +549,7 @@ enum dpcd_index {
 /* DPCD end */
 
 struct vgt_device {
+	enum vgt_pipe pipe_mapping[I915_MAX_PIPES];
 	int vgt_id;		/* 0 is always for dom0 */
 	int vm_id;		/* domain ID per hypervisor */
 	struct pgt_device *pdev;	/* the pgt device where the GT device registered. */
@@ -1949,6 +1958,8 @@ int alloc_vm_rsvd_aperture(struct vgt_device *vgt);
 void free_vm_rsvd_aperture(struct vgt_device *vgt);
 void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev);
 void vgt_init_reserved_aperture(struct pgt_device *pdev);
+bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p_real_offset);
+bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_data);
 
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp);
 void vgt_release_instance(struct vgt_device *vgt);

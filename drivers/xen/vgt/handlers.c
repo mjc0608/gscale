@@ -584,6 +584,21 @@ static bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+static bool dpy_trans_ddi_ctl_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	uint32_t wr_data;
+
+	default_mmio_write(vgt, offset, p_data, bytes);
+
+	wr_data = *((uint32_t *)p_data);
+
+	// if it is to enable this pipe, then rebuild the mapping for this pipe
+	rebuild_pipe_mapping(vgt,  offset, wr_data);
+
+	return true;
+}
+
 static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
@@ -2118,10 +2133,10 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x6661c, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {0x66C00, 8, F_DPY, 0, D_HSW, NULL, NULL},
 
-{_REG_TRANS_DDI_FUNC_CTL_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_TRANS_DDI_FUNC_CTL_B, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_TRANS_DDI_FUNC_CTL_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_TRANS_DDI_FUNC_CTL_EDP, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_TRANS_DDI_FUNC_CTL_A, 4, F_DPY, 0, D_HSW, NULL, dpy_trans_ddi_ctl_write},
+{_REG_TRANS_DDI_FUNC_CTL_B, 4, F_DPY, 0, D_HSW, NULL, dpy_trans_ddi_ctl_write},
+{_REG_TRANS_DDI_FUNC_CTL_C, 4, F_DPY, 0, D_HSW, NULL, dpy_trans_ddi_ctl_write},
+{_REG_TRANS_DDI_FUNC_CTL_EDP, 4, F_DPY, 0, D_HSW, NULL, dpy_trans_ddi_ctl_write},
 
 {_REG_TRANS_MSA_MISC_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_TRANS_MSA_MISC_B, 4, F_DPY, 0, D_HSW, NULL, NULL},

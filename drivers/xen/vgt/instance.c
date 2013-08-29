@@ -93,6 +93,10 @@ static int create_state_instance(struct vgt_device *vgt)
 		state->sReg = state->vReg = NULL;
 		return -ENOMEM;
 	}
+	for (i = 0; i < I915_MAX_PIPES; i++)
+	{
+		vgt->pipe_mapping[i] = I915_MAX_PIPES;
+	}
 
 	for (i = 0; i < VGT_BAR_NUM; i++)
 		state->bar_mapped[i] = 0;
