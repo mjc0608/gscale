@@ -805,10 +805,11 @@ static bool vgt_flip_parameter_check(struct parser_exec_state *s,
 				uint32_t stride_val,
 				uint32_t surf_val)
 {
+	struct pgt_device *pdev = s->vgt->pdev;
 	enum vgt_pipe pipe;
 	enum vgt_plane_type plane;
 	uint32_t surf_reg, ctrl_reg;
-	uint32_t stride_reg, stride_mask;
+	uint32_t stride_reg, stride_mask, phys_stride;
 	uint32_t tile_para, tile_in_ctrl;
 	bool async_flip;
 
@@ -822,6 +823,16 @@ static bool vgt_flip_parameter_check(struct parser_exec_state *s,
 	tile_para = ((stride_val & TILE_PARA_MASK) >> TILE_PARA_SHIFT);
 	tile_in_ctrl = (__vreg(s->vgt, ctrl_reg) & PLANE_TILE_MASK)
 				>> PLANE_TILE_SHIFT;
+
+	phys_stride = __vreg(current_display_owner(pdev), stride_reg);
+	if ((s->vgt != current_display_owner(pdev)) &&
+		(plane == PRIMARY_PLANE) &&
+		((stride_val & PITCH_MASK) !=
+			(phys_stride & stride_mask))) {
+		vgt_dbg("Stride value may not match display timing! "
+			"MI_DISPLAY_FLIP will be ignored!\n");
+		return false;
+	}
 
 	if ((__vreg(s->vgt, stride_reg) & stride_mask)
 		!= (stride_val & PITCH_MASK)) {
