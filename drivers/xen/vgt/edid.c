@@ -1198,21 +1198,15 @@ void vgt_i2c_handle_aux_ch_read(vgt_i2c_bus_t *i2c_bus,
 				unsigned int offset,
 				VGT_DP_PORTS_IDX port_idx, void *p_data)
 {
-	bool auxch_emulate;
 	AUX_CH_REGISTERS reg;
 
 	if (!i2c_bus->aux_ch.i2c_over_aux_ch || !i2c_bus->aux_ch.aux_ch_mot) {
 		return;
 	}
 
-	auxch_emulate = (*pedid != NULL);
 	reg = vgt_get_aux_ch_reg(offset);
-
-	ASSERT(auxch_emulate);
-
 	*(unsigned int *)p_data = *i2c_bus->aux_ch.aux_registers[port_idx][reg];
-	EDID_MSG(VGT_EDID_INFO, auxch_emulate,
-	"read reg[0x%x] with value:0x%x\n", offset, *(unsigned int *)p_data);
+
 	return;
 }
 
