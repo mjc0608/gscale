@@ -695,6 +695,14 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
 #define PLANE_TILE_MASK		(0x1 << PLANE_TILE_SHIFT)
 #define FLIP_TYPE_MASK		0x3
 
+#define DISPLAY_FLIP_PLANE_A  0x0
+#define DISPLAY_FLIP_PLANE_B  0x1
+#define DISPLAY_FLIP_SPRITE_A  0x2
+#define DISPLAY_FLIP_SPRITE_B  0x3
+#define DISPLAY_FLIP_PLANE_C  0x4
+#define DISPLAY_FLIP_SPRITE_C  0x5
+
+
 /* The NOOP for MI_DISPLAY_FLIP has below information stored in NOOP_ID:
  *
  *	bit 21 - bit 16 is 0x14, opcode of MI_DISPLAY_FLIP;
@@ -704,17 +712,90 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
 #define PLANE_INFO_SHIFT	8
 #define PLANE_INFO_MASK		(0x7 << PLANE_INFO_SHIFT)
 
+static bool display_flip_decode_plane_info(uint32_t  plane_code, enum vgt_pipe *pipe, enum vgt_plane_type *plane )
+{
+	switch (plane_code) {
+		case DISPLAY_FLIP_PLANE_A:
+			*pipe = PIPE_A;
+			*plane = PRIMARY_PLANE;
+			break;
+		case DISPLAY_FLIP_PLANE_B:
+			*pipe = PIPE_B;
+			*plane = PRIMARY_PLANE;
+			break;
+		case DISPLAY_FLIP_SPRITE_A:
+			*pipe = PIPE_A;
+			*plane = SPRITE_PLANE;
+			break;
+		case DISPLAY_FLIP_SPRITE_B:
+			*pipe = PIPE_B;
+			*plane = SPRITE_PLANE;
+			break;
+		case DISPLAY_FLIP_PLANE_C:
+			*pipe = PIPE_C;
+			*plane = PRIMARY_PLANE;
+			break;
+		case DISPLAY_FLIP_SPRITE_C:
+			*pipe = PIPE_C;
+			*plane = SPRITE_PLANE;
+			break;
+		default:
+			return false;
+	}
+
+	return true;
+
+}
+
+static bool display_flip_encode_plane_info(enum vgt_pipe pipe, enum vgt_plane_type plane, uint32_t * plane_code)
+{
+
+	if(pipe == PIPE_A && plane == PRIMARY_PLANE)
+	{
+		*plane_code = DISPLAY_FLIP_PLANE_A;
+	}
+	else if (pipe == PIPE_B && plane == PRIMARY_PLANE)
+	{
+		*plane_code = DISPLAY_FLIP_PLANE_B;
+	}
+	else if (pipe == PIPE_A && plane == SPRITE_PLANE)
+	{
+		*plane_code = DISPLAY_FLIP_SPRITE_A;
+	}
+	else if (pipe == PIPE_B && plane == SPRITE_PLANE)
+	{
+		*plane_code = DISPLAY_FLIP_SPRITE_B;
+	}
+	else if (pipe == PIPE_C && plane == PRIMARY_PLANE)
+	{
+		*plane_code = DISPLAY_FLIP_PLANE_C;
+	}
+	else if (pipe == PIPE_C && plane == SPRITE_PLANE)
+	{
+		*plane_code = DISPLAY_FLIP_SPRITE_C;
+	}
+	else
+	{
+		return false;
+	}
+
+	return true;
+
+}
+
 static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmitted)
 {
 	uint32_t surf_reg, surf_val, ctrl_reg;
 	uint32_t stride_reg, stride_val, stride_mask;
 	uint32_t tile_para, tile_in_ctrl;
-	uint32_t opcode, plane_code;
+	uint32_t opcode, plane_code, real_plane_code;
 	enum vgt_pipe pipe;
+	enum vgt_pipe real_pipe;
 	enum vgt_plane_type plane;
 	bool async_flip;
 	int i, length, rc = 0;
 	struct fb_notify_msg msg;
+	uint32_t value;
 
 	opcode = *(cmd_ptr(s, 0));
 	stride_val = *(cmd_ptr(s, 1));
@@ -728,22 +809,13 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 		length = cmd_length(s);
 	}
 
-	switch (plane_code) {
-		case 0:
-			pipe = PIPE_A; plane = PRIMARY_PLANE; break;
-		case 1:
-			pipe = PIPE_B; plane = PRIMARY_PLANE; break;
-		case 2:
-			pipe = PIPE_A; plane = SPRITE_PLANE; break;
-		case 3:
-			pipe = PIPE_B; plane = SPRITE_PLANE; break;
-		case 4:
-			pipe = PIPE_C; plane = PRIMARY_PLANE; break;
-		case 5:
-			pipe = PIPE_C; plane = SPRITE_PLANE; break;
-		default:
-			goto wrong_command;
+
+	if(!display_flip_decode_plane_info(plane_code, &pipe, &plane)){
+		goto wrong_command;
 	}
+
+	real_pipe = s->vgt->pipe_mapping[pipe];
+
 
 	if (plane == PRIMARY_PLANE) {
 		ctrl_reg = VGT_DSPCNTR(pipe);
@@ -809,6 +881,13 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 	vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 
 	if ((s->vgt == current_foreground_vm(s->vgt->pdev)) && !resubmitted) {
+		if(!display_flip_encode_plane_info(real_pipe, plane, &real_plane_code))
+		{
+			goto wrong_command;
+		}
+
+		value = *(cmd_ptr(s, 0));
+		add_patch_entry(s, cmd_ptr(s,0), (value & ~PLANE_SELECT_MASK) |  (real_plane_code << PLANE_SELECT_SHIFT));
 		return 0;
 	}
 
