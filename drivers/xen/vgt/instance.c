@@ -95,7 +95,7 @@ static int create_state_instance(struct vgt_device *vgt)
 	}
 	for (i = 0; i < I915_MAX_PIPES; i++)
 	{
-		vgt->pipe_mapping[i] = I915_MAX_PIPES;
+		vgt->pipe_mapping[i] = vgt->vm_id == 0 ? i: I915_MAX_PIPES;
 	}
 
 	for (i = 0; i < VGT_BAR_NUM; i++)

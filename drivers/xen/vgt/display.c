@@ -30,10 +30,15 @@
 #include <linux/delay.h>
 #include "vgt.h"
 
-#define vgt_restore_sreg(reg)	\
-	do {	\
-		VGT_MMIO_WRITE(vgt->pdev, (reg), __sreg(vgt, (reg))); \
-	} while (0);
+static void vgt_restore_sreg(struct vgt_device *vgt,unsigned int reg)
+{
+	unsigned int real_reg;
+	if(vgt_map_plane_reg(vgt, reg, &real_reg))
+	{
+		VGT_MMIO_WRITE(vgt->pdev, real_reg, __sreg(vgt, (reg)));
+	}
+
+}
 
 static int vgt_restore_state(struct vgt_device *vgt, enum vgt_pipe pipe)
 {
@@ -42,15 +47,15 @@ static int vgt_restore_state(struct vgt_device *vgt, enum vgt_pipe pipe)
 	if (pipe_ctrl & _REGBIT_PIPE_ENABLE) {
 #endif
 		vgt_dbg ("start to restore pipe %d.\n", pipe + 1);
-		vgt_restore_sreg(VGT_DSPCNTR(pipe));
-		vgt_restore_sreg(VGT_DSPSTRIDE(pipe));
-		vgt_restore_sreg(VGT_DSPSURF(pipe));
-		vgt_restore_sreg(VGT_DSPTILEOFF(pipe));
-		vgt_restore_sreg(VGT_DSPLINOFF(pipe));
+		vgt_restore_sreg(vgt, VGT_DSPCNTR(pipe));
+		vgt_restore_sreg(vgt, VGT_DSPSTRIDE(pipe));
+		vgt_restore_sreg(vgt, VGT_DSPSURF(pipe));
+		vgt_restore_sreg(vgt, VGT_DSPTILEOFF(pipe));
+		vgt_restore_sreg(vgt, VGT_DSPLINOFF(pipe));
 
-		vgt_restore_sreg(VGT_CURPOS(pipe));
-		vgt_restore_sreg(VGT_CURCNTR(pipe));
-		vgt_restore_sreg(VGT_CURBASE(pipe));
+		vgt_restore_sreg(vgt, VGT_CURPOS(pipe));
+		vgt_restore_sreg(vgt, VGT_CURCNTR(pipe));
+		vgt_restore_sreg(vgt, VGT_CURBASE(pipe));
 		vgt_dbg ("finished pipe %d restore.\n", pipe + 1);
 #if 0
 	} else {
@@ -306,7 +311,7 @@ void vgt_update_monitor_status(struct vgt_device *vgt)
 
 static bool is_same_port(vgt_reg_t trans_coder_ctl1, vgt_reg_t trans_coder_ctl2)
 {
-	return (( trans_coder_ctl1 ^ trans_coder_ctl2 ) & ( _REGBIT_TRANS_DDI_PORT_MASK | _REGBIT_TRANS_DDI_MODE_SELECT_MASK ));
+	return !(( trans_coder_ctl1 ^ trans_coder_ctl2 ) & ( _REGBIT_TRANS_DDI_PORT_MASK | _REGBIT_TRANS_DDI_MODE_SELECT_MASK ));
 }
 
 static enum vgt_pipe get_edp_input(uint32_t wr_data)
@@ -344,6 +349,12 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 		return false;
 	}
 
+	if(vgt->vm_id == 0)
+	{
+		//dom0 always has a 1:1 mapping
+		return true;
+	}
+
 	if(reg == _REG_TRANS_DDI_FUNC_CTL_A)
 	{
 		virtual_pipe = PIPE_A;
@@ -378,6 +389,8 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 	}
 
 	vgt->pipe_mapping[virtual_pipe] = physical_pipe;
+
+	vgt_restore_state(vgt, virtual_pipe);
 
 	return true;
 

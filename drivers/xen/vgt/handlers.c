@@ -932,11 +932,89 @@ static bool hdmi_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p_real_reg)
+{
+	enum vgt_pipe virtual_pipe;
+	enum vgt_pipe real_pipe ;
+
+	switch (reg)
+	{
+	case _REG_CURABASE:
+	case _REG_CURACNTR:
+	case _REG_CURAPOS:
+	case _REG_DSPACNTR:
+	case _REG_DSPASURF:
+	case _REG_DSPASURFLIVE:
+	case _REG_DSPALINOFF:
+	case _REG_DSPASTRIDE:
+	case _REG_DSPAPOS:
+	case _REG_DSPASIZE:
+	case _REG_DSPATILEOFF:
+	case _REG_SPRASURF:
+		real_pipe = vgt->pipe_mapping[0];
+		virtual_pipe = PIPE_A;
+		break;
+
+	case _REG_CURBBASE_SNB:
+	case _REG_CURBCNTR_SNB:
+	case _REG_CURBPOS_SNB:
+	case _REG_CURBBASE:
+	case _REG_CURBCNTR:
+	case _REG_CURBPOS:
+	case _REG_DSPBCNTR:
+	case _REG_DSPBSURF:
+	case _REG_DSPBSURFLIVE:
+	case _REG_DSPBLINOFF:
+	case _REG_DSPBSTRIDE:
+	case _REG_DSPBPOS:
+	case _REG_DSPBSIZE:
+	case _REG_DSPBTILEOFF:
+	case _REG_SPRBSURF:
+		real_pipe = vgt->pipe_mapping[1];
+		virtual_pipe = PIPE_B;
+		break;
+
+	case _REG_CURCBASE:
+	case _REG_CURCCNTR:
+	case _REG_CURCPOS:
+	case _REG_DSPCCNTR:
+	case _REG_DSPCSURF:
+	case _REG_DSPCSURFLIVE:
+	case _REG_DSPCLINOFF:
+	case _REG_DSPCSTRIDE:
+	case _REG_DSPCPOS:
+	case _REG_DSPCSIZE:
+	case _REG_DSPCTILEOFF:
+	case _REG_SPRCSURF:
+		real_pipe = vgt->pipe_mapping[2];
+		virtual_pipe = PIPE_C;
+		break;
+
+	default:
+		vgt_warn("try to map mmio that is not plane related! reg = %x\n", reg);
+		ASSERT(0);
+	}
+
+	if(real_pipe == I915_MAX_PIPES)
+	{
+		vgt_warn("the pipe mapping is not ready or created!\n");
+		return false;
+	}
+
+	*p_real_reg = reg + 0x1000 * real_pipe - 0x1000 * virtual_pipe;
+
+	return true;
+
+}
+
 static bool dpy_plane_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes)
 {
-	if (current_foreground_vm(vgt->pdev) == vgt) {
-		__sreg(vgt, offset) = VGT_MMIO_READ(vgt->pdev, offset);
+	unsigned int real_offset;
+
+	if (current_foreground_vm(vgt->pdev) == vgt &&
+		vgt_map_plane_reg(vgt, offset, &real_offset)) {
+		__sreg(vgt, offset) = VGT_MMIO_READ(vgt->pdev, real_offset);
 		__vreg(vgt, offset) = mmio_h2g_gmadr(vgt, offset,
 							__sreg(vgt, offset));
 	}
@@ -949,10 +1027,13 @@ static bool dpy_plane_mmio_read(struct vgt_device *vgt, unsigned int offset,
 static bool dpy_plane_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
+	unsigned int real_offset;
+
 	memcpy ((char *)vgt->state.vReg + offset, p_data, bytes);
 	memcpy ((char *)vgt->state.sReg + offset, p_data, bytes);
-	if (current_foreground_vm(vgt->pdev) == vgt) {
-		VGT_MMIO_WRITE(vgt->pdev, offset, __sreg(vgt, offset));
+	if (current_foreground_vm(vgt->pdev) == vgt &&
+		vgt_map_plane_reg(vgt, offset, &real_offset)) {
+		VGT_MMIO_WRITE(vgt->pdev, real_offset, __sreg(vgt, offset));
 	}
 	return true;
 }
