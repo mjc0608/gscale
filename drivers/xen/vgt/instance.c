@@ -81,8 +81,8 @@ static int create_state_instance(struct vgt_device *vgt)
 
 	vgt_dbg("create_state_instance\n");
 	state = &vgt->state;
-	state->vReg = vmalloc(vgt->pdev->mmio_size);
-	state->sReg = vmalloc(vgt->pdev->mmio_size);
+	state->vReg = vzalloc(vgt->pdev->mmio_size);
+	state->sReg = vzalloc(vgt->pdev->mmio_size);
 	if ( state->vReg == NULL || state->sReg == NULL )
 	{
 		printk("VGT: insufficient memory allocation at %s\n", __FUNCTION__);

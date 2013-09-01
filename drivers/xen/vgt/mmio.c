@@ -1065,8 +1065,20 @@ bool vgt_initial_mmio_setup (struct pgt_device *pdev)
 
 void state_vreg_init(struct vgt_device *vgt)
 {
-	memcpy (vgt->state.vReg, vgt->pdev->initial_mmio_state,
-		vgt->pdev->mmio_size);
+	int i;
+	struct pgt_device *pdev = vgt->pdev;
+
+	for (i = 0; i < pdev->mmio_size; i += sizeof(vgt_reg_t)) {
+		/*
+		 * skip the area of VGT PV INFO PAGE because we need keep
+		 * its content across Dom0 S3.
+		*/
+		if (i >= VGT_PVINFO_PAGE &&
+			i < VGT_PVINFO_PAGE + VGT_PVINFO_SIZE)
+			continue;
+
+		__vreg(vgt, i) = pdev->initial_mmio_state[i/sizeof(vgt_reg_t)];
+	}
 
 	/* set the bit 0:2 (Thread C-State) to C0
 	 * TODO: consider other bit 3:31
