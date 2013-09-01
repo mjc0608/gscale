@@ -1500,7 +1500,7 @@ static bool pvinfo_read(struct vgt_device *vgt, unsigned int offset,
 				invalid_read = true;
 			break;
 		default:
-			invalid_read = false;
+			invalid_read = true;
 			break;
 	}
 
