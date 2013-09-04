@@ -390,7 +390,10 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 
 	vgt->pipe_mapping[virtual_pipe] = physical_pipe;
 
-	vgt_restore_state(vgt, virtual_pipe);
+	if(current_foreground_vm(vgt->pdev) == vgt)
+	{
+		vgt_restore_state(vgt, virtual_pipe);
+	}
 
 	return true;
 
