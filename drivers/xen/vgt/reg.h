@@ -1405,7 +1405,8 @@ enum vgt_port {
 enum vgt_plane_type {
 	PRIMARY_PLANE = 0,
 	CURSOR_PLANE,
-	SPRITE_PLANE
+	SPRITE_PLANE,
+	MAX_PLANE
 };
 
 enum vgt_port_type {

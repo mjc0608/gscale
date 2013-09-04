@@ -783,16 +783,75 @@ static bool display_flip_encode_plane_info(enum vgt_pipe pipe, enum vgt_plane_ty
 
 }
 
+#define GET_INFO_FOR_FLIP(pipe, plane, 					\
+			ctrl_reg, surf_reg, stride_reg, stride_mask)	\
+do{									\
+	if (plane == PRIMARY_PLANE) {					\
+		ctrl_reg = VGT_DSPCNTR(pipe);				\
+		surf_reg = VGT_DSPSURF(pipe);				\
+		stride_reg = VGT_DSPSTRIDE(pipe);			\
+		stride_mask = _PRI_PLANE_STRIDE_MASK;			\
+	} else {							\
+		ASSERT (plane == SPRITE_PLANE);				\
+		ctrl_reg = VGT_SPRCTL(pipe);				\
+		surf_reg = VGT_SPRSURF(pipe);				\
+		stride_reg = VGT_SPRSTRIDE(pipe);			\
+		stride_mask = _SPRITE_STRIDE_MASK;			\
+	}								\
+}while(0);
+
+static bool vgt_flip_parameter_check(struct parser_exec_state *s,
+				uint32_t plane_code,
+				uint32_t stride_val,
+				uint32_t surf_val)
+{
+	enum vgt_pipe pipe;
+	enum vgt_plane_type plane;
+	uint32_t surf_reg, ctrl_reg;
+	uint32_t stride_reg, stride_mask;
+	uint32_t tile_para, tile_in_ctrl;
+	bool async_flip;
+
+	if (display_flip_decode_plane_info(plane_code, &pipe, &plane))
+		return false;
+
+	GET_INFO_FOR_FLIP(pipe, plane,
+			ctrl_reg, surf_reg, stride_reg, stride_mask);
+
+	async_flip = ((surf_val & FLIP_TYPE_MASK) == 0x1);
+	tile_para = ((stride_val & TILE_PARA_MASK) >> TILE_PARA_SHIFT);
+	tile_in_ctrl = (__vreg(s->vgt, ctrl_reg) & PLANE_TILE_MASK)
+				>> PLANE_TILE_SHIFT;
+
+	if ((__vreg(s->vgt, stride_reg) & stride_mask)
+		!= (stride_val & PITCH_MASK)) {
+
+		if (async_flip) {
+			vgt_warn("Cannot change stride in async flip!\n");
+			return false;
+		}
+	}
+
+	if (tile_para != tile_in_ctrl) {
+
+		if (async_flip) {
+			vgt_warn("Cannot change tiling in async flip!\n");
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmitted)
 {
 	uint32_t surf_reg, surf_val, ctrl_reg;
 	uint32_t stride_reg, stride_val, stride_mask;
-	uint32_t tile_para, tile_in_ctrl;
+	uint32_t tile_para;
 	uint32_t opcode, plane_code, real_plane_code;
 	enum vgt_pipe pipe;
 	enum vgt_pipe real_pipe;
 	enum vgt_plane_type plane;
-	bool async_flip;
 	int i, length, rc = 0;
 	struct fb_notify_msg msg;
 	uint32_t value;
@@ -816,20 +875,6 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 
 	real_pipe = s->vgt->pipe_mapping[pipe];
 
-
-	if (plane == PRIMARY_PLANE) {
-		ctrl_reg = VGT_DSPCNTR(pipe);
-		surf_reg = VGT_DSPSURF(pipe);
-		stride_reg = VGT_DSPSTRIDE(pipe);
-		stride_mask = _PRI_PLANE_STRIDE_MASK;
-	} else {
-		ASSERT (plane == SPRITE_PLANE);
-		ctrl_reg = VGT_SPRCTL(pipe);
-		surf_reg = VGT_SPRSURF(pipe);
-		stride_reg = VGT_SPRSTRIDE(pipe);
-		stride_mask = _SPRITE_STRIDE_MASK;
-	}
-
 	if (length == 4) {
 		vgt_warn("Page flip of Stereo 3D is not supported!\n");
 		goto wrong_command;
@@ -838,41 +883,28 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 		goto wrong_command;
 	}
 
-	if (!resubmitted) {
-		async_flip = ((surf_val & FLIP_TYPE_MASK) == 0x1);
-		tile_para = ((stride_val & TILE_PARA_MASK) >> TILE_PARA_SHIFT);
-		tile_in_ctrl = (__vreg(s->vgt, ctrl_reg) & PLANE_TILE_MASK)
-					>> PLANE_TILE_SHIFT;
-
-		if ((__vreg(s->vgt, stride_reg) & stride_mask)
-			!= (stride_val & PITCH_MASK)) {
-
-			if (async_flip) {
-				vgt_warn("Cannot change stride in async flip!\n");
-				goto wrong_command;
-			}
-			__vreg(s->vgt, stride_reg) = (__vreg(s->vgt, stride_reg) &
-							(~stride_mask)) |
-					(stride_val & stride_mask);
-			__sreg(s->vgt, stride_reg) = __vreg(s->vgt, stride_reg);
-		}
-
-		if (tile_para != tile_in_ctrl) {
-
-			if (async_flip) {
-				vgt_warn("Cannot change tiling in async flip!\n");
-				goto wrong_command;
-			}
-			__vreg(s->vgt, ctrl_reg) =
-				(__vreg(s->vgt, ctrl_reg) & (~PLANE_TILE_MASK)) |
-					(tile_para << PLANE_TILE_SHIFT);
-			__sreg(s->vgt, ctrl_reg) = __vreg(s->vgt, ctrl_reg);
-		}
+	if ((pipe == I915_MAX_PIPES) || (plane == MAX_PLANE)) {
+		vgt_warn("Invalid pipe/plane in MI_DISPLAY_FLIP!\n");
+		goto wrong_command;
 	}
 
-	if (!(resubmitted && ((surf_val & SURF_MASK) == 0))) {
-		__vreg(s->vgt, surf_reg) = (__vreg(s->vgt, surf_reg) &
-				(~SURF_MASK)) | (surf_val & SURF_MASK);
+	if (!resubmitted) {
+		if (!vgt_flip_parameter_check(s, plane_code, stride_val, surf_val)) {
+			goto wrong_command;
+		}
+
+		GET_INFO_FOR_FLIP(pipe, plane,
+			ctrl_reg, surf_reg, stride_reg, stride_mask);
+		tile_para = ((stride_val & TILE_PARA_MASK) >> TILE_PARA_SHIFT);
+
+		__vreg(s->vgt, stride_reg) = (stride_val & stride_mask) |
+				(__vreg(s->vgt, stride_reg) & (~stride_mask));
+		__vreg(s->vgt, ctrl_reg) = (tile_para << PLANE_TILE_SHIFT) |
+				(__vreg(s->vgt, ctrl_reg) & (~PLANE_TILE_MASK));
+		__vreg(s->vgt, surf_reg) = (surf_val & SURF_MASK) |
+				(__vreg(s->vgt, surf_reg) & (~SURF_MASK));
+		__sreg(s->vgt, stride_reg) = __vreg(s->vgt, stride_reg);
+		__sreg(s->vgt, ctrl_reg) = __vreg(s->vgt, ctrl_reg);
 		__sreg(s->vgt, surf_reg) = __vreg(s->vgt, surf_reg);
 	}
 
@@ -891,7 +923,6 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 		return 0;
 	}
 
-command_noop:
 	vgt_dbg("VM %d: mi_display_flip to be ignored\n",
 		s->vgt->vm_id);
 
@@ -908,8 +939,9 @@ command_noop:
 	return rc;
 
 wrong_command:
-	vgt_warn("VM %d: wrong mi_display_flip command!\n", s->vgt->vm_id);
-	goto command_noop;
+	for (i = 0; i < length; i ++)
+		rc |= add_patch_entry(s, cmd_ptr(s, i), MI_NOOP);
+	return rc;
 }
 
 static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
