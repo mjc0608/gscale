@@ -806,8 +806,8 @@ static bool vgt_flip_parameter_check(struct parser_exec_state *s,
 				uint32_t surf_val)
 {
 	struct pgt_device *pdev = s->vgt->pdev;
-	enum vgt_pipe pipe;
-	enum vgt_plane_type plane;
+	enum vgt_pipe pipe = I915_MAX_PIPES;
+	enum vgt_plane_type plane = MAX_PLANE;
 	uint32_t surf_reg, ctrl_reg;
 	uint32_t stride_reg, stride_mask, phys_stride;
 	uint32_t tile_para, tile_in_ctrl;
