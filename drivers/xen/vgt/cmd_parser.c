@@ -813,7 +813,7 @@ static bool vgt_flip_parameter_check(struct parser_exec_state *s,
 	uint32_t tile_para, tile_in_ctrl;
 	bool async_flip;
 
-	if (display_flip_decode_plane_info(plane_code, &pipe, &plane))
+	if (!display_flip_decode_plane_info(plane_code, &pipe, &plane))
 		return false;
 
 	GET_INFO_FOR_FLIP(pipe, plane,
