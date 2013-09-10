@@ -709,18 +709,20 @@ static void vgt_base_check_pending_irq(struct vgt_device *vgt)
 	}
 }
 
+#define IIR_WRITE_MAX	5
+
 /* base interrupt handler, for snb/ivb/hsw */
 static irqreturn_t vgt_base_irq_handler(struct vgt_irq_host_state *hstate)
 {
 	u32 gt_iir, pm_iir, de_iir, pch_iir, de_iir_tmp;
 	int pch_bit;
+	int count = 0;
 	struct pgt_device *pdev = hstate->pdev;
 
 	/* read physical IIRs */
 	gt_iir = VGT_MMIO_READ(pdev, _REG_GTIIR);
 	de_iir = VGT_MMIO_READ(pdev, _REG_DEIIR);
 	pm_iir = VGT_MMIO_READ(pdev, _REG_PMIIR);
-	pch_iir = VGT_MMIO_READ(pdev, _REG_SDEIIR);
 
 	if (!gt_iir && !de_iir && !pm_iir)
 		return IRQ_NONE;
@@ -735,8 +737,14 @@ static irqreturn_t vgt_base_irq_handler(struct vgt_irq_host_state *hstate)
 	vgt_handle_events(hstate, &pm_iir, IRQ_INFO_PM);
 
 	if (de_iir & (1 << pch_bit)) {
+		pch_iir = VGT_MMIO_READ(pdev, _REG_SDEIIR);
 		vgt_handle_events(hstate, &pch_iir, IRQ_INFO_PCH);
-		VGT_MMIO_WRITE(pdev, _REG_SDEIIR, pch_iir);
+
+		while((count < IIR_WRITE_MAX) && (pch_iir != 0)) {
+			VGT_MMIO_WRITE(pdev, _REG_SDEIIR, pch_iir);
+			pch_iir = VGT_MMIO_READ(pdev, _REG_SDEIIR);
+			count ++;
+		}
 	}
 
 	VGT_MMIO_WRITE(pdev, _REG_GTIIR, gt_iir);
