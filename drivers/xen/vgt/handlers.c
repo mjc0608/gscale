@@ -1832,6 +1832,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x700D8, 4, F_DPY, 0, D_SNB, NULL, NULL},
 {0x700DC, 4, F_DPY, 0, D_SNB, NULL, NULL},
 
+{0x701b0, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+
 {_REG_DSPACNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
 							dpy_plane_mmio_write},
 {_REG_DSPASURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
