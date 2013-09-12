@@ -961,10 +961,10 @@ void vgt_emulate_dpy_events(struct pgt_device *pdev)
 	int i;
 
 	ASSERT(spin_is_locked(&pdev->lock));
-	for (i = 0; i < VGT_MAX_VMS && pdev->device[i]; i ++) {
+	for (i = 0; i < VGT_MAX_VMS; i ++) {
 		struct vgt_device *vgt = pdev->device[i];
 
-		if (is_current_display_owner(vgt))
+		if (!vgt || is_current_display_owner(vgt))
 			continue;
 
 		if (NEED_VIRT_INT_FOR_PIPE(vgt, PIPE_A)) {
