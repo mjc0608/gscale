@@ -639,6 +639,8 @@ struct vgt_device {
 	uint64_t total_cmds;		/* total CMDs since VM is started */
 	uint64_t submitted_cmds;	/* CMDs submitted in current slice */
 	uint64_t allocated_cmds;	/* CMDs allocated in current slice */
+
+	uint32_t pipe_last_vblank[I915_MAX_PIPES];	/* used for vblank virtualization*/
 };
 
 enum vgt_owner_type {

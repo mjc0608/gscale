@@ -397,7 +397,19 @@ static bool shotplug_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 static bool pipe_frmcount_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	return default_passthrough_mmio_read(vgt, offset, p_data, bytes);
+	enum vgt_pipe pipe;
+	bool rc = default_passthrough_mmio_read(vgt, offset, p_data, bytes);
+
+	if (rc && !is_current_display_owner(vgt)) {
+		vgt_reg_t count = *(vgt_reg_t *)p_data;
+		pipe = VGT_FRMCOUNTPIPE(offset);
+		ASSERT(pipe >= PIPE_A && pipe < I915_MAX_PIPES);
+		if ((vgt->pipe_last_vblank[pipe] != 0) && (count < vgt->pipe_last_vblank[pipe])) {
+			*(vgt_reg_t *)p_data = vgt->pipe_last_vblank[pipe] + 1;
+		}
+		vgt->pipe_last_vblank[pipe] = *(vgt_reg_t *)p_data;
+	}
+	return rc;
 }
 
 /* Pipe Display Scan Line*/
