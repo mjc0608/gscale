@@ -344,10 +344,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 	enum vgt_pipe virtual_pipe = PIPE_A;
 	enum vgt_pipe physical_pipe = PIPE_A ;
 
-	if((_REGBIT_TRANS_DDI_FUNC_ENABLE & wr_data) == 0)
-	{
-		return false;
-	}
+
 
 	if(vgt->vm_id == 0)
 	{
@@ -366,6 +363,12 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 	else if(reg == _REG_TRANS_DDI_FUNC_CTL_C)
 	{
 		virtual_pipe = PIPE_C;
+	}
+
+	if((_REGBIT_TRANS_DDI_FUNC_ENABLE & wr_data) == 0)
+	{
+		vgt->pipe_mapping[virtual_pipe] = I915_MAX_PIPES;
+		return true;
 	}
 
 

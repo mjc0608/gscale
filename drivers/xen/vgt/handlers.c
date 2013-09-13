@@ -1022,14 +1022,6 @@ bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p
 static bool dpy_plane_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes)
 {
-	unsigned int real_offset;
-
-	if (current_foreground_vm(vgt->pdev) == vgt &&
-		vgt_map_plane_reg(vgt, offset, &real_offset)) {
-		__sreg(vgt, offset) = VGT_MMIO_READ(vgt->pdev, real_offset);
-		__vreg(vgt, offset) = mmio_h2g_gmadr(vgt, offset,
-							__sreg(vgt, offset));
-	}
 
 	*(vgt_reg_t *)p_data = __vreg(vgt, offset);
 
