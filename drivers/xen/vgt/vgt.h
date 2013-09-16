@@ -698,6 +698,8 @@ enum vgt_owner_type {
 #define VGT_REG_SAVED		(1 << 12)
 /* Policies not impacted by the superowner mode */
 #define VGT_REG_STICKY		(1 << 13)
+/* Accessed through GPU commands */
+#define VGT_REG_CMD_ACCESS	(1 << 14)
 /* index into another auxillary table. Maximum 256 entries now */
 #define VGT_REG_INDEX_SHIFT	16
 #define VGT_REG_INDEX_MASK	(0xFFFF << VGT_REG_INDEX_SHIFT)
@@ -1069,6 +1071,13 @@ static inline void reg_set_sticky(struct pgt_device *pdev,
 	vgt_reg_t reg)
 {
 	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_STICKY;
+}
+
+static inline void reg_set_cmd_access(struct pgt_device *pdev,
+	vgt_reg_t reg)
+{
+	pdev->reg_info[REG_INDEX(reg)] |= VGT_REG_CMD_ACCESS;
+	reg_set_accessed(pdev, reg);
 }
 
 static inline void reg_update_handlers(struct pgt_device *pdev,

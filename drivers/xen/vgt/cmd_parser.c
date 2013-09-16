@@ -642,6 +642,69 @@ static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
 	return 0;
 }
 
+#define BIT_RANGE_MASK(a,b)	\
+	((1UL << ((a) + 1)) - (1UL << (b)))
+static int vgt_cmd_handler_lri(struct parser_exec_state *s)
+{
+	unsigned int offset;
+	struct pgt_device *pdev = s->vgt->pdev;
+
+	offset = cmd_val(s, 1) & BIT_RANGE_MASK(22, 2);
+	reg_set_cmd_access(pdev, offset);
+
+	return 0;
+}
+
+static int vgt_cmd_handler_lrr(struct parser_exec_state *s)
+{
+	unsigned int offset;
+	struct pgt_device *pdev = s->vgt->pdev;
+
+	offset = cmd_val(s, 1) & BIT_RANGE_MASK(22, 2);
+	reg_set_cmd_access(pdev, offset);
+
+	offset = cmd_val(s, 2) & BIT_RANGE_MASK(22, 2);
+	reg_set_cmd_access(pdev, offset);
+	return 0;
+}
+
+static int vgt_cmd_handler_lrm(struct parser_exec_state *s)
+{
+	unsigned int offset;
+	struct pgt_device *pdev = s->vgt->pdev;
+
+	offset = cmd_val(s, 1) & BIT_RANGE_MASK(22, 2);
+	reg_set_cmd_access(pdev, offset);
+
+	return 0;
+}
+
+static int vgt_cmd_handler_srm(struct parser_exec_state *s)
+{
+	unsigned int offset;
+	struct pgt_device *pdev = s->vgt->pdev;
+
+	offset = cmd_val(s, 1) & BIT_RANGE_MASK(22, 2);
+	reg_set_cmd_access(pdev, offset);
+
+	return 0;
+}
+
+static int vgt_cmd_handler_pipe_control(struct parser_exec_state *s)
+{
+	unsigned int offset;
+	struct pgt_device *pdev = s->vgt->pdev;
+	if (cmd_val(s, 1) & PIPE_CONTROL_POST_SYNC) {
+		offset = cmd_val(s, 2) & BIT_RANGE_MASK(22, 2);
+		reg_set_cmd_access(pdev, offset);
+	} else if (cmd_val(s, 1) & (2 << 14))
+		reg_set_cmd_access(pdev, 0x2350);
+	else if (cmd_val(s, 1) & (3 << 14))
+		reg_set_cmd_access(pdev, _REG_RCS_TIMESTAMP);
+
+	return 0;
+}
+
 static int vgt_cmd_advance_default(struct parser_exec_state *s)
 {
 	return ip_gma_advance(s, cmd_length(s));
@@ -1367,7 +1430,7 @@ static struct cmd_info cmd_info[] = {
 	{"MI_STORE_DATA_INDEX", OP_MI_STORE_DATA_INDEX, F_LEN_VAR, R_ALL, D_ALL,
 		0, 8, NULL},
 
-	{"MI_LOAD_REGISTER_IMM", OP_MI_LOAD_REGISTER_IMM, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL},
+	{"MI_LOAD_REGISTER_IMM", OP_MI_LOAD_REGISTER_IMM, F_LEN_VAR, R_ALL, D_ALL, 0, 8, vgt_cmd_handler_lri},
 
 	{"MI_UPDATE_GTT", OP_MI_UPDATE_GTT, F_LEN_VAR, R_RCS, D_ALL,
 		0, 8, vgt_cmd_handler_mi_update_gtt},
@@ -1376,7 +1439,7 @@ static struct cmd_info cmd_info[] = {
 		0, 6, vgt_cmd_handler_mi_update_gtt},
 
 	{"MI_STORE_REGISTER_MEM", OP_MI_STORE_REGISTER_MEM, F_LEN_VAR, R_ALL, D_ALL,
-		ADDR_FIX_1(2), 8, NULL},
+		ADDR_FIX_1(2), 8, vgt_cmd_handler_srm},
 
 	{"MI_FLUSH_DW", OP_MI_FLUSH_DW, F_LEN_VAR, R_ALL, D_ALL,
 		0, 6, vgt_cmd_handler_mi_flush_dw},
@@ -1388,10 +1451,10 @@ static struct cmd_info cmd_info[] = {
 		ADDR_FIX_1(1), 6, NULL},
 
 	{"MI_LOAD_REGISTER_MEM", OP_MI_LOAD_REGISTER_MEM, F_LEN_VAR, R_ALL, D_GEN7PLUS,
-		ADDR_FIX_1(2), 8, NULL},
+		ADDR_FIX_1(2), 8, vgt_cmd_handler_lrm},
 
 	{"MI_LOAD_REGISTER_REG", OP_MI_LOAD_REGISTER_REG, F_LEN_VAR, R_ALL, D_HSW_PLUS,
-		0, 8, NULL},
+		0, 8, vgt_cmd_handler_lrr},
 
 	{"MI_RS_STORE_DATA_IMM", OP_MI_RS_STORE_DATA_IMM, F_LEN_VAR, R_RCS, D_HSW_PLUS,
 		0, 8, NULL},
@@ -1750,7 +1813,7 @@ static struct cmd_info cmd_info[] = {
 		F_LEN_VAR, R_RCS, D_GEN75PLUS, 0, 8, vgt_cmd_handler_3dstate_dx9_constant_buffer_pool_alloc},
 
 	{"PIPE_CONTROL", OP_PIPE_CONTROL, F_LEN_VAR, R_RCS, D_ALL,
-		ADDR_FIX_1(2), 8, NULL},
+		ADDR_FIX_1(2), 8, vgt_cmd_handler_pipe_control},
 
 	{"3DPRIMITIVE", OP_3DPRIMITIVE, F_LEN_VAR, R_RCS, D_ALL, 0, 8, NULL},
 
