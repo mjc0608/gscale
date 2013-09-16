@@ -35,6 +35,8 @@ parser.add_option("-s", "--sdiff", dest="sdiff", action="store_true",
 		   help="show the list of registers with different sreg values among VMs")
 parser.add_option("-p", "--preg", dest="preg", action="store_true",
 		   help="dump the physical HW registers with --vdiff and --sdiff")
+parser.add_option("-g", "--gpuaccess", dest="gpuaccess", action="store_true",
+		   help="show the list of gpu-accessed registers")
 parser.add_option("-c", "--ctxswitch", dest="ctxswitch", action="store_true",
 		   help="show the list of registers saved/restored at ctx switch time")
 parser.add_option("-v", "--verbose", dest="verbose",
@@ -108,10 +110,8 @@ for line in info.split("\n"):
 	reginfo[reg]["Type"] = "N/A"
 	if (flags & 0xf != 0):
 		reginfo[reg]["Type"] = "MPT"
-	elif (flags & (1 << 12)):
-		reginfo[reg]["Type"] = "Boot"
 	elif (flags & (1 << 4)):
-		reginfo[reg]["Type"] = "WA"
+		reginfo[reg]["Type"] = "PT"
 	elif (flags & (1 << 7)):
 		reginfo[reg]["Type"] = "Virt"
 
@@ -123,8 +123,10 @@ for line in info.split("\n"):
 		reginfo[reg]["ModeMask"] = True;
 	if (flags & (1 << 10) == 0):
 		reginfo[reg]["Untracked"] = True;
-	if (flags & (1 << 13)):
+	if (flags & (1 << 12)):
 		reginfo[reg]["Saved"] = True;
+	if (flags & (1 << 14)):
+		reginfo[reg]["CmdAccess"] = True;
 	reginfo[reg]["Flags"] = flags;
 
 def get_reg_attr(reg):
@@ -141,6 +143,8 @@ def get_reg_state(reg):
 	out = ""
 	if "Untracked" in reg:
 		out += " U"
+	if "CmdAccess" in reg:
+		out += " G"
 	return out
 
 def show_reginfo():
@@ -150,7 +154,7 @@ def show_reginfo():
 	print "Type:"
 	print "\tVIRT - default virtualized"
 	print "\tMPT - Mediated Pass-Through based on owner type"
-	print "\tWA - workaround regs pass-through to any VM"
+	print "\tPT - Pass-through to any VM, for read-only access"
 	print "\tBOOT - pass-through to dom0 at boot time. Otherwise virtualized"
 	print "Attributes:"
 	print "\tAF - Address check required"
@@ -159,6 +163,7 @@ def show_reginfo():
 	print "State:"
 	print "\tU - Untracked"
 	print "\tD - Different value among VMs"
+	print "\tG - Accessed by GPU CMDs"
 
 	print "\n%10s: %5s|%5s|%12s|%8s|%-8s" % ("Reg", "Owner", "Type", "Attributes", "State", "Name")
 	print "------------------------------------"
@@ -196,6 +201,19 @@ def show_untracked():
 
 		if "Untracked" in reginfo[reg]:
 			print "%10s: %s" %(hex(reg), reginfo[reg]["name"])
+			i += 1
+	print "Total %d registers" % i
+	print "===================================="
+
+def show_gpu_access():
+	print "===========GPU-accessed Regs==========="
+	i = 0
+	for reg in sorted(reginfo):
+		if not "Accessed" in reginfo[reg]:
+			continue;
+
+		if "CmdAccess" in reginfo[reg]:
+			print "%10s: %20s" %(hex(reg), reginfo[reg]["name"])
 			i += 1
 	print "Total %d registers" % i
 	print "===================================="
@@ -318,5 +336,7 @@ elif options.sdiff:
 	show_diff(path_sreg)
 elif options.ctxswitch:
 	show_saved()
+elif options.gpuaccess:
+	show_gpu_access()
 else:
 	show_reginfo()
