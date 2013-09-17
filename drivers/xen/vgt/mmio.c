@@ -532,8 +532,7 @@ static int vgt_emulation_thread(void *priv)
 
 		cpu = vgt_enter();
 		for (vcpu = 0; vcpu < nr_vcpus; vcpu++) {
-			if (!test_and_clear_bit(vcpu,
-				&info->ioreq_pending[vcpu / sizeof(long)]))
+			if (!test_and_clear_bit(vcpu, info->ioreq_pending))
 				continue;
 
 			ioreq = vgt_get_hvm_ioreq(vgt, vcpu);
@@ -752,7 +751,7 @@ static inline void vgt_raise_emulation_request(struct vgt_device *vgt,
 	int vcpu)
 {
 	struct vgt_hvm_info *info = vgt->hvm_info;
-	set_bit(vcpu, &info->ioreq_pending[vcpu / sizeof(long)]);
+	set_bit(vcpu, info->ioreq_pending);
 	if (waitqueue_active(&info->io_event_wq))
 		wake_up(&info->io_event_wq);
 }
