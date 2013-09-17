@@ -341,27 +341,20 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 	vgt_reg_t hw_value;
 	int i = 0;
 
-	enum vgt_pipe virtual_pipe = PIPE_A;
-	enum vgt_pipe physical_pipe = PIPE_A ;
+	enum vgt_pipe virtual_pipe = I915_MAX_PIPES;
+	enum vgt_pipe physical_pipe = I915_MAX_PIPES ;
 
-
-
-	if(vgt->vm_id == 0)
-	{
-		//dom0 always has a 1:1 mapping
+	if(vgt->vm_id == 0) {
 		return true;
 	}
 
-	if(reg == _REG_TRANS_DDI_FUNC_CTL_A)
-	{
+	if(reg == _REG_TRANS_DDI_FUNC_CTL_A) {
 		virtual_pipe = PIPE_A;
 	}
-	else if(reg == _REG_TRANS_DDI_FUNC_CTL_B)
-	{
+	else if(reg == _REG_TRANS_DDI_FUNC_CTL_B) {
 		virtual_pipe = PIPE_B;
 	}
-	else if(reg == _REG_TRANS_DDI_FUNC_CTL_C)
-	{
+	else if(reg == _REG_TRANS_DDI_FUNC_CTL_C) {
 		virtual_pipe = PIPE_C;
 	}
 
@@ -383,7 +376,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 		for(i = 0; i <= TRANSCODER_C; i++)
 		{
 			hw_value = VGT_MMIO_READ(vgt->pdev, _VGT_TRANS_DDI_FUNC_CTL(i));
-			if(is_same_port(wr_data,hw_value) )
+			if(is_same_port(wr_data,hw_value) && ( _REGBIT_TRANS_DDI_FUNC_ENABLE & hw_value))
 			{
 				physical_pipe = i;
 				break;
@@ -391,6 +384,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 		}
 	}
 
+	ASSERT(virtual_pipe != I915_MAX_PIPES);
 	vgt->pipe_mapping[virtual_pipe] = physical_pipe;
 
 	if(current_foreground_vm(vgt->pdev) == vgt)
@@ -400,4 +394,61 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 
 	return true;
 
+}
+
+
+
+bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint32_t physical_wr_data)
+{
+	int i = 0;
+	uint32_t virtual_wr_data;
+	enum vgt_pipe virtual_pipe = I915_MAX_PIPES;
+	enum vgt_pipe physical_pipe = I915_MAX_PIPES ;
+
+	if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_A) {
+		physical_pipe = PIPE_A;
+	}
+	else if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_B) {
+		physical_pipe = PIPE_B;
+	}
+	else if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_C) {
+		physical_pipe = PIPE_C;
+	}
+
+	if((_REGBIT_TRANS_DDI_FUNC_ENABLE & physical_wr_data) == 0) {
+		if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_EDP ){
+			virtual_pipe = get_edp_input( __vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP));
+			vgt->pipe_mapping[virtual_pipe] = I915_MAX_PIPES;
+		}else{
+			for(i = 0; i < I915_MAX_PIPES; i ++){
+				if(vgt->pipe_mapping[i] == physical_pipe){
+					vgt->pipe_mapping[i] = I915_MAX_PIPES;
+				}
+			}
+		}
+		return true;
+	}
+
+	/*enable case*/
+
+	if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_EDP)	{
+		physical_pipe = get_edp_input(physical_wr_data);
+		virtual_wr_data= __vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP);
+		virtual_pipe = get_edp_input(virtual_wr_data);
+	} else {
+		for(i = 0; i <= TRANSCODER_C; i++)	{
+			virtual_wr_data = __vreg(vgt, _VGT_TRANS_DDI_FUNC_CTL(i));
+			if(is_same_port(virtual_wr_data,physical_wr_data) &&
+				(_REGBIT_TRANS_DDI_FUNC_ENABLE & virtual_wr_data ) )	{
+				virtual_pipe = i;
+				break;
+			}
+		}
+	}
+
+	if(virtual_pipe != I915_MAX_PIPES){
+			vgt->pipe_mapping[virtual_pipe] = physical_pipe;
+	}
+
+	return true;
 }

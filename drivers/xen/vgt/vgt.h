@@ -1962,6 +1962,7 @@ void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev);
 void vgt_init_reserved_aperture(struct pgt_device *pdev);
 bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p_real_offset);
 bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_data);
+bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint32_t physical_wr_data);
 
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp);
 void vgt_release_instance(struct vgt_device *vgt);
