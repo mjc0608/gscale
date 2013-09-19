@@ -720,6 +720,8 @@ enum vgt_uevent_type {
 	UEVENT_MAX
 };
 
+#define HOTPLUG_VMID_FOR_ALL_VMS	0xff
+
 #define VGT_MAX_UEVENT_VARS 20
 struct vgt_uevent_info {
 	char *uevent_name;

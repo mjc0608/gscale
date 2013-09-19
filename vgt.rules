@@ -26,9 +26,9 @@
 # bit field definition of the hot_plug trigger value:
 #
 # bit 31 - bit 16	: Reserved;
-# bit 15 - bit 8	: vmid; Warning since vmid can be used out if you keep on destory & recreate the same VM or you create so many VMs
-#					  Now we only use 0 as vmid in our command  and by default forward virtual_event for all other live VMs.
-#					  In future, we will redesign this command to avoid vmid out of range.
+# bit 15 - bit 8	: vmid; Warning: vmid can be used out if you keep on destory & recreate VMs.
+#					Right now the maximum vmid supported in hotplug is 254(0xfe)
+#					vmid 255 (0xff) has special meaning to send interrupt for all VMs including dom0.
 # bit 7 - bit 4		: Reserved;
 # bit 3 - bit 1		: Port/monitor selection:
 # 		0	-	CRT
@@ -47,15 +47,15 @@
 #KERNEL=="control", RUN+="/bin/sh -c 'echo inserted >> /tmp/hotplug'"
 #
 #write 0x0f1(241) for plug in; 0x0f0(240) for pull out.
-ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xf0 > /sys/kernel/vgt/control/virtual_event'"
-ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xf1 > /sys/kernel/vgt/control/virtual_event'"
-ACTION=="remove", KERNEL=="control", ENV{PORT_A_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xf2 > /sys/kernel/vgt/control/virtual_event'"
-ACTION=="add", KERNEL=="control", ENV{PORT_A_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xf3 > /sys/kernel/vgt/control/virtual_event'"
-ACTION=="remove", KERNEL=="control", ENV{PORT_B_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xf4 > /sys/kernel/vgt/control/virtual_event'"
-ACTION=="add", KERNEL=="control", ENV{PORT_B_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xf5 > /sys/kernel/vgt/control/virtual_event'"
-ACTION=="remove", KERNEL=="control", ENV{PORT_C_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xf6 > /sys/kernel/vgt/control/virtual_event'"
-ACTION=="add", KERNEL=="control", ENV{PORT_C_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xf7 > /sys/kernel/vgt/control/virtual_event'"
-ACTION=="remove", KERNEL=="control", ENV{PORT_D_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xf8 > /sys/kernel/vgt/control/virtual_event'"
-ACTION=="add", KERNEL=="control", ENV{PORT_D_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xf9 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="remove", KERNEL=="control", ENV{CRT_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xfff0 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="add", KERNEL=="control", ENV{CRT_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xfff1 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="remove", KERNEL=="control", ENV{PORT_A_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xfff2 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="add", KERNEL=="control", ENV{PORT_A_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xfff3 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="remove", KERNEL=="control", ENV{PORT_B_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xfff4 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="add", KERNEL=="control", ENV{PORT_B_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xfff5 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="remove", KERNEL=="control", ENV{PORT_C_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xfff6 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="add", KERNEL=="control", ENV{PORT_C_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xfff7 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="remove", KERNEL=="control", ENV{PORT_D_REMOVE}=="1", RUN+="/bin/sh -c 'echo 0xfff8 > /sys/kernel/vgt/control/virtual_event'"
+ACTION=="add", KERNEL=="control", ENV{PORT_D_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xfff9 > /sys/kernel/vgt/control/virtual_event'"
 ACTION=="add", KERNEL=="control", ENV{VGT_ENABLE_VGA}=="1", RUN+="/bin/sh -c 'echo VM_$env{VMID}_enable_VGA_mode >> /tmp/vgt-log'"
 ACTION=="add", KERNEL=="control", ENV{VGT_ENABLE_VGA}=="0", RUN+="/bin/sh -c 'echo VM_$env{VMID}_disable_VGA_mode >> /tmp/vgt-log'"

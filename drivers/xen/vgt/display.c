@@ -163,18 +163,17 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 	if (get_event_and_edid_info(hotplug_cmd, &event, &port_idx) < 0)
 		return;
 
-	/* Default: send hotplug virtual interrupts to all VMs currently.
-	 * Since 'vmid' has no concern with vgt_id, e.g.  if you have a HVM
-	 * with vmid = 1 and after destroy & recreate it, its vmid become 2
-	 * we need to use vmid_2_vgt_device() to map vmid to vgt_device if
-	 * we need to send these hotplug virtual interrupts to a specific vm
-	 */
 	spin_lock_irq(&dev->lock);
 	for (i = 0; i < VGT_MAX_VMS; ++ i) {
 		struct vgt_device *vgt = dev->device[i];
 
 		if (!vgt)
 			continue;
+
+		if (hotplug_cmd.vmid != HOTPLUG_VMID_FOR_ALL_VMS) {
+			if (vgt != vmid_2_vgt_device(hotplug_cmd.vmid))
+				continue;
+		}
 
 		if (hotplug_cmd.action == 0x1) {
 			/* plug in */

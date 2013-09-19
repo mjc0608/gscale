@@ -327,9 +327,10 @@ vec		This is a 32-bit vector to indicate which virtual event
 
 		The field definition:
 		bit 31 - bit 16	: Reserved;
-		bit 15 - bit 8	: Receiver; Now the only legal value is 0,
-				  it means forwarding the virtual_event
-				  for all live VMs.
+		bit 15 - bit 8	: VM id of receiver
+				  Maximum ID supported by hotplug is 254(0xfe)
+				  vmid 255(0xff) has special meaning to
+				  forward the virtual_event to all live VMs.
 		bit 7 - bit 4	: Reserved;
 		bit 3 - bit 1	: Port/monitor selection:
 			0	-	CRT
