@@ -400,10 +400,6 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_VCS_HWS_PGA,
 	_REG_VECS_HWS_PGA,
 
-	_REG_GT_MODE_IVB,
-	_REG_CACHE_MODE_0_IVB,
-	_REG_CACHE_MODE_1_IVB,
-
 	_REG_BCS_MI_MODE,
 	_REG_BCS_BLT_MODE_IVB,
 	_REG_BCS_INSTPM,
@@ -414,11 +410,8 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_BVSYNC,
 	_REG_BVESYNC,
 
-	_REG_RCS_MI_MODE,
 	_REG_RCS_GFX_MODE_IVB,
-	_REG_RCS_INSTPM,
 	_REG_RCS_HWSTAM,
-	_REG_RCS_EXCC,
 	_REG_RCS_UHPTR,
 	_REG_RBSYNC,
 	_REG_RVSYNC,
@@ -443,10 +436,9 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_VEBSYNC,
 	_REG_VEVSYNC,
 
-	_REG_TILECTL,
-
 	_REG_RCS_BB_PREEMPT_ADDR,
 
+	/* more check for this group later */
 	0x23bc,
 	0x2448,
 	0x244c,
@@ -475,6 +467,18 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	//_REG_SUPER_QUEUE_CONFIG,
 	_REG_ECOCHK,
 	//_REG_MISC_CLOCK_GATING,
+
+	0x2450,
+	0x20dc,
+	_REG_3D_CHICKEN3,
+	0x2088,
+	0x20e4,
+	_REG_GEN7_COMMON_SLICE_CHICKEN1,
+	_REG_GEN7_L3CNTLREG1,
+	_REG_GEN7_L3_CHICKEN_MODE_REGISTER,
+	_REG_GEN7_SQ_CHICKEN_MBCUNIT_CONFIG,
+	0x20a0,
+	0x20e8,
 };
 
 static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *regs)

@@ -2032,7 +2032,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_CXT_SIZE, 4, F_PT, 0, D_SNB, NULL, NULL},
 {_REG_GEN7_CXT_SIZE, 4, F_PT, 0, D_ALL, NULL, NULL},
 
-{_REG_RCS_FBC_RT_BASE_ADDR, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_RCS_TAIL, 4, F_RDR, 0, D_ALL, ring_mmio_read, ring_mmio_write},
 {_REG_RCS_HEAD, 4, F_RDR, 0, D_ALL, ring_mmio_read, ring_mmio_write},
 {_REG_RCS_START, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL,
