@@ -292,7 +292,7 @@ static int vgt_show_regs(struct seq_file *m, void *data)
 	seq_printf(m, "%8s: %8s (%-8s %-4s)\n",
 			"Reg", "Flags", "Owner", "Type");
 	for (i = 0; i < pdev->mmio_size; i +=  REG_SIZE) {
-		if (!reg_is_accessed(pdev, i))
+		if (!reg_is_accessed(pdev, i) && !reg_is_tracked(pdev, i))
 			continue;
 
 		tot++;
