@@ -2110,19 +2110,13 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_VERSYNC, 4, F_RDR, 0, D_HSW, NULL, NULL},
 {_REG_VEVSYNC, 4, F_RDR, 0, D_HSW, NULL, NULL},
 
-{0x23bc, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x2448, 8, F_RDR, 0, D_HSW, NULL, NULL},
 {0x2450, 8, F_RDR, 0, D_HSW, NULL, NULL},
-{0x7034, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x2b00, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x91b8, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x91bc, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x91c0, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x91c4, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x9150, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x9154, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x9160, 4, F_RDR, 0, D_HSW, NULL, NULL},
-{0x9164, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{0x91b8, 4, F_VIRT, 0, D_HSW, NULL, NULL},
+{0x91c0, 4, F_VIRT, 0, D_HSW, NULL, NULL},
+{0x9150, 4, F_VIRT, 0, D_HSW, NULL, NULL},
+{0x9154, 4, F_VIRT, 0, D_HSW, NULL, NULL},
+{0x9160, 4, F_VIRT, 0, D_HSW, NULL, NULL},
+{0x9164, 4, F_VIRT, 0, D_HSW, NULL, NULL},
 
 {0x4040, 4, F_RDR, 0, D_HSW, NULL, NULL},
 {0xb010, 4, F_RDR, 0, D_HSW, NULL, NULL},
@@ -2796,17 +2790,12 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {0x3c, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 {0x860, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_3D_CHICKEN1, 4, F_PT, 0, D_ALL, NULL, NULL},
-{_REG_3D_CHICKEN2, 4, F_PT, 0, D_ALL, NULL, NULL},
-{0x20d4, 4, F_PT, 0, D_ALL, NULL, NULL},
 /* no definition on this. from Linux */
 {_REG_GEN3_MI_ARB_STATE, 4, F_PT, 0, D_SNB, NULL, NULL},
 {_REG_RCS_ECOSKPD, 4, F_PT, 0, D_ALL, NULL, NULL},
 {0x121d0, 4, F_PT, 0, D_ALL, NULL, NULL},
 {_REG_BCS_ECOSKPD, 4, F_PT, 0, D_ALL, NULL, NULL},
 {0x41d0, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{0x22ac, 4, F_PT, 0, D_ALL, NULL, NULL},
-{0x2700, 4, F_PT, 0, D_SNB, NULL, NULL},
 {_REG_GAC_ECOCHK, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_2D_CG_DIS, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_3D_CG_DIS, 4, F_VIRT, 0, D_ALL, NULL, NULL},
@@ -2870,7 +2859,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {0xfd034, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
 /* HSW */
-{0x2020, 4, F_PT, 0, D_ALL, NULL, NULL},
 {0x2214, 4, F_PT, 0, D_HSW, NULL, NULL},
 
 {0x8000, 4, F_PT, 0, D_HSW, NULL, NULL},
