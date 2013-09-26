@@ -1963,6 +1963,21 @@ void free_vm_rsvd_aperture(struct vgt_device *vgt);
 void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev);
 void vgt_init_reserved_aperture(struct pgt_device *pdev);
 bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p_real_offset);
+
+
+static inline void vgt_set_pipe_mapping(struct vgt_device *vgt,
+	unsigned int v_pipe, unsigned int p_pipe)
+{
+	/* p_pipe == I915_MAX_PIPES means an invalid p_pipe */
+	if (v_pipe < I915_MAX_PIPES && p_pipe <= I915_MAX_PIPES) {
+		vgt->pipe_mapping[v_pipe] = p_pipe;
+	}
+	else {
+		vgt_err("v_pipe=%d, p_pipe=%d!\n", v_pipe, p_pipe);
+		WARN_ON(1);
+	}
+}
+
 bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_data);
 bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint32_t physical_wr_data);
 

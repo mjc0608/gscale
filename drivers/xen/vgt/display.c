@@ -359,7 +359,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 
 	if((_REGBIT_TRANS_DDI_FUNC_ENABLE & wr_data) == 0)
 	{
-		vgt->pipe_mapping[virtual_pipe] = I915_MAX_PIPES;
+		vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
 		return true;
 	}
 
@@ -383,8 +383,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 		}
 	}
 
-	ASSERT(virtual_pipe != I915_MAX_PIPES);
-	vgt->pipe_mapping[virtual_pipe] = physical_pipe;
+	vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
 
 	if(current_foreground_vm(vgt->pdev) == vgt)
 	{
@@ -417,11 +416,11 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 	if((_REGBIT_TRANS_DDI_FUNC_ENABLE & physical_wr_data) == 0) {
 		if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_EDP ){
 			virtual_pipe = get_edp_input( __vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP));
-			vgt->pipe_mapping[virtual_pipe] = I915_MAX_PIPES;
+			vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
 		}else{
 			for(i = 0; i < I915_MAX_PIPES; i ++){
 				if(vgt->pipe_mapping[i] == physical_pipe){
-					vgt->pipe_mapping[i] = I915_MAX_PIPES;
+					vgt_set_pipe_mapping(vgt, i, I915_MAX_PIPES);
 				}
 			}
 		}
@@ -446,7 +445,7 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 	}
 
 	if(virtual_pipe != I915_MAX_PIPES){
-			vgt->pipe_mapping[virtual_pipe] = physical_pipe;
+		vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
 	}
 
 	return true;
