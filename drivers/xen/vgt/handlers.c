@@ -664,6 +664,15 @@ static bool ddi_buf_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 	rc = default_mmio_write(vgt, offset, &reg_val, bytes);
 
+	// clear the auto_training done bit
+	if ((offset == _REG_DDI_BUF_CTL_E) &&
+		(!(reg_val & _REGBIT_DDI_BUF_ENABLE))) {
+		if (!reg_hw_access(vgt, offset)) {
+			__vreg(vgt, _REG_DP_TP_STATUS_E) &=
+				~_REGBIT_DP_TP_STATUS_AUTOTRAIN_DONE;
+		}
+	}
+
 	return rc;
 }
 
@@ -694,6 +703,24 @@ static bool fdi_rx_iir_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 #define FDI_LINK_TRAIN_PATTERN_1	0
 #define FDI_LINK_TRAIN_PATTERN_2	1
+
+static bool fdi_auto_training_started(struct vgt_device *vgt)
+{
+	bool rc = false;
+	vgt_reg_t ddi_buf_ctl = __vreg(vgt, _REG_DDI_BUF_CTL_E);
+	vgt_reg_t rx_ctl = __vreg(vgt, _REG_FDI_RXA_CTL);
+	vgt_reg_t tx_ctl = __vreg(vgt, _REG_DP_TP_CTL_E);
+
+	if ((ddi_buf_ctl & _REGBIT_DDI_BUF_ENABLE) &&
+		(rx_ctl & _REGBIT_FDI_RX_ENABLE) &&
+		(rx_ctl & _REGBIT_FDI_RX_FDI_AUTO_TRAIN_ENABLE) &&
+		(tx_ctl & _REGBIT_DP_TP_ENABLE) &&
+		(tx_ctl & _REGBIT_DP_TP_FDI_AUTO_TRAIN_ENABLE)) {
+			rc = true;
+	}
+
+	return rc;
+}
 
 /* FIXME: this function is highly platform-dependent (SNB + CPT) */
 static bool check_fdi_rx_train_status(struct vgt_device *vgt,
@@ -774,9 +801,15 @@ static bool update_fdi_rx_iir_status(struct vgt_device *vgt, unsigned int offset
 			__vreg(vgt, fdi_rx_iir) |= _REGBIT_FDI_RX_BIT_LOCK;
 		if (check_fdi_rx_train_status(vgt, pipe, FDI_LINK_TRAIN_PATTERN_2))
 			__vreg(vgt, fdi_rx_iir) |= _REGBIT_FDI_RX_SYMBOL_LOCK;
+		if (offset == _REG_FDI_RXA_CTL) {
+			if (fdi_auto_training_started(vgt))
+				__vreg(vgt, _REG_DP_TP_STATUS_E) |=
+					_REGBIT_DP_TP_STATUS_AUTOTRAIN_DONE;
+		}
 	}
 	return rc;
 }
+
 #define DP_TP_CTL_10_8_MASK	0x00000700
 #define DP_TP_CTL_8_SHIFT	0x8
 #define DP_TP_STATUS_25_SHIFT	25
@@ -2262,19 +2295,19 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DDI_BUF_CTL_B, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
 {_REG_DDI_BUF_CTL_C, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
 {_REG_DDI_BUF_CTL_D, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
-{0x64400, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
+{_REG_DDI_BUF_CTL_E, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
 
 {_REG_DP_TP_CTL_A, 4, F_DPY, 0, D_HSW, NULL, dp_tp_ctl_mmio_write},
 {_REG_DP_TP_CTL_B, 4, F_DPY, 0, D_HSW, NULL, dp_tp_ctl_mmio_write},
 {_REG_DP_TP_CTL_C, 4, F_DPY, 0, D_HSW, NULL, dp_tp_ctl_mmio_write},
 {_REG_DP_TP_CTL_D, 4, F_DPY, 0, D_HSW, NULL, dp_tp_ctl_mmio_write},
-{0x64440, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DP_TP_CTL_E, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
 {_REG_DP_TP_STATUS_A, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
 {_REG_DP_TP_STATUS_B, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
 {_REG_DP_TP_STATUS_C, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
 {_REG_DP_TP_STATUS_D, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
-{0x64444, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_DP_TP_STATUS_E, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_DDI_BUF_TRANS_A, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
 {0x64E60, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
 {0x64Ec0, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
