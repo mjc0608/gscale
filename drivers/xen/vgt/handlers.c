@@ -809,17 +809,6 @@ static bool dp_tp_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 #define BIT_27		27
 #define BIT_26		26
 #define BIT_24		24
-#define BIT_12		12
-
-static bool vgt_64444_mmio_read(struct vgt_device *vgt, unsigned int offset,
-		void *p_data, unsigned int bytes)
-{
-	if (!reg_hw_access(vgt, offset)) {
-		__vreg(vgt, offset) |= (1 << BIT_12);
-	}
-
-	return default_mmio_read(vgt, offset, p_data, bytes);
-}
 
 static bool dp_tp_status_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
@@ -2285,7 +2274,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DP_TP_STATUS_B, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
 {_REG_DP_TP_STATUS_C, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
 {_REG_DP_TP_STATUS_D, 4, F_DPY, 0, D_HSW, NULL, dp_tp_status_mmio_write},
-{0x64444, 4, F_DPY, 0, D_HSW, vgt_64444_mmio_read, NULL},
+{0x64444, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_DDI_BUF_TRANS_A, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
 {0x64E60, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
 {0x64Ec0, 0x50, F_DPY, 0, D_HSW, NULL, NULL},
