@@ -100,6 +100,7 @@ enum vgt_debugfs_entry_t
 	VGT_DEBUGFS_VIRTUAL_MMIO = 0,
 	VGT_DEBUGFS_SHADOW_MMIO,
 	VGT_DEBUGFS_FB_FORMAT,
+	VGT_DEBUGFS_DPY_INFO,
 	VGT_DEBUGFS_ENTRY_MAX
 };
 
@@ -511,6 +512,170 @@ static const struct file_operations fbinfo_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
+
+static int vgt_show_dpyinfo(struct seq_file *m, void *data)
+{
+	struct vgt_device *vgt =  (struct vgt_device *)m->private;
+	enum vgt_pipe pipe;
+	int port;
+	const char *str;
+	unsigned int reg;
+	vgt_reg_t val;
+	bool enabled;
+
+	seq_printf(m, "----------DPY info (VM-%d)----------\n", vgt->vm_id);
+
+	seq_printf(m, "----plane:\n");
+	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; ++ pipe) {
+		char P = VGT_PIPE_CHAR(pipe);
+		reg = VGT_DSPCNTR(pipe);
+		val = __vreg(vgt, reg);
+		enabled = !!(val & _PRI_PLANE_ENABLE);
+		seq_printf(m, "\tDSPCTL_%c(0x%x): 0x%08x (%s)\n",
+			P, reg, val, (enabled ? "enabled" : "disabled"));
+		if (enabled) {
+			reg = VGT_DSPSURF(pipe);
+			seq_printf(m, "\tDSPSURF_%c(0x%x): 0x%08x\n",
+				P, reg, __vreg(vgt, reg));
+		}
+		seq_printf(m, "\n");
+	}
+
+	seq_printf(m, "----pipe:\n");
+	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; ++ pipe) {
+		char P = VGT_PIPE_CHAR(pipe);
+		reg = VGT_PIPECONF(pipe);
+		val = __vreg(vgt, reg);
+		enabled = !!(val & _REGBIT_PIPE_ENABLE);
+		seq_printf(m, "\tPIPECONF_%c(0x%x): 0x%08x (%s)\n",
+			P, reg, val, (enabled ? "enabled" : "disabled"));
+
+		reg = _VGT_TRANS_DDI_FUNC_CTL(pipe);
+		val = __vreg(vgt, reg);
+		enabled = !!(val & _REGBIT_TRANS_DDI_FUNC_ENABLE);
+		seq_printf(m, "\tPIPE_DDI_FUNC_CTL_%c(0x%x): 0x%08x (%s)\n",
+			P, reg, val, (enabled ? "enabled" : "disabled"));
+
+		if (enabled) {
+			vgt_reg_t ddi_select =
+					val & _REGBIT_TRANS_DDI_PORT_MASK;
+			vgt_reg_t mode_select =
+					val & _REGBIT_TRANS_DDI_MODE_SELECT_MASK;
+			switch (ddi_select >> _TRANS_DDI_PORT_SHIFT) {
+				case 0:
+					str = "No Port Connected"; break;
+				case 1:
+					str = "DDI_B"; break;
+				case 2:
+					str = "DDI_C"; break;
+				case 3:
+					str = "DDI_D"; break;
+				case 4:
+					str = "DDI_E"; break;
+				default:
+					str = "Port INV";
+			}
+			seq_printf(m, "\t\tmapping to port: %s\n", str);
+
+			switch (mode_select >> _TRANS_DDI_MODE_SELECT_HIFT) {
+				case 0:
+					str = "HDMI"; break;
+				case 1:
+					str = "DVI"; break;
+				case 2:
+					str = "DP SST"; break;
+				case 3:
+					str = "DP MST"; break;
+				case 4:
+					str = "FDI"; break;
+				default:
+					str = "Mode INV";
+			}
+			seq_printf(m, "\t\tMode type: %s\n", str);
+		}
+		seq_printf(m, "\n");
+	}
+
+	reg = _REG_PIPE_EDP_CONF;
+	val = __vreg(vgt, reg);
+	enabled = !!(val & _REGBIT_PIPE_ENABLE);
+	seq_printf(m, "\tPIPECONF_EDP(0x%x): 0x%08x (%s)\n",
+		reg, val, (enabled ? "enabled" : "disabled"));
+
+	reg = _REG_TRANS_DDI_FUNC_CTL_EDP;
+	val = __vreg(vgt, reg);
+	enabled = !!(val & _REGBIT_TRANS_DDI_FUNC_ENABLE);
+	seq_printf(m, "\tPIPE_DDI_FUNC_CTL_EDP(0x%x): 0x%08x (%s)\n",
+		reg, val, (enabled ? "enabled" : "disabled"));
+	if (enabled) {
+		vgt_reg_t edp_input = val &_REGBIT_TRANS_DDI_EDP_INPUT_MASK;
+		switch (edp_input >> _TRANS_DDI_EDP_INPUT_SHIFT) {
+			case 0:
+				str = "Plane A 0"; break;
+			case 4:
+				str = "Plane A 4"; break;
+			case 5:
+				str = "Plane B"; break;
+			case 6:
+				str = "Plane C"; break;
+			default:
+				str = "Plane INV";
+		}
+		seq_printf(m, "\t\teDP select: %s\n", str);
+	}
+
+	seq_printf(m, "----port:\n");
+	for_each_set_bit(port, vgt->presented_ports, VGT_PORT_MAX) {
+		switch (port) {
+			case VGT_CRT:
+				str = "Port CRT"; break;
+			case VGT_DP_A:
+				str = "Port A"; break;
+			case VGT_DP_B:
+				str = "Port B DP"; break;
+			case VGT_DP_C:
+				str = "Port C DP"; break;
+			case VGT_DP_D:
+				str = "Port D DP"; break;
+			case VGT_HDMI_B:
+				str = "Port B HDMI"; break;
+			case VGT_HDMI_C:
+				str = "Port C HDMI"; break;
+			case VGT_HDMI_D:
+				str = "Port D HDMI"; break;
+			case VGT_LVDS:
+				str = "LVDS"; break;
+			default:
+				str = "Port INV";
+		}
+		seq_printf(m, "\t%s connected to monitors.\n", str);
+	}
+	seq_printf(m, "\n");
+
+	seq_printf(m, "---- physical/virtual mapping:\n");
+	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; ++ pipe) {
+		enum vgt_pipe physical_pipe = vgt->pipe_mapping[pipe];
+		if (physical_pipe == I915_MAX_PIPES) {
+			seq_printf(m, "\t virtual pipe %d no mapping available yet\n", pipe);
+		} else {
+			seq_printf(m, "\t virtual pipe %d to physical pipe %d\n", pipe, physical_pipe);
+		}
+	}
+	return 0;
+}
+
+static int vgt_dpyinfo_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vgt_show_dpyinfo, inode->i_private);
+}
+
+static const struct file_operations dpyinfo_fops = {
+	.open = vgt_dpyinfo_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 /* initialize vGT debufs top directory */
 struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 {
@@ -634,6 +799,14 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 
 	d_debugfs_entry[vgt_id][VGT_DEBUGFS_FB_FORMAT] = debugfs_create_file("frame_buffer_format",
 			0444, d_per_vgt[vgt_id], vgt, &fbinfo_fops);
+
+	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_FB_FORMAT])
+		printk(KERN_ERR "vGT(%d): failed to create debugfs node: frame_buffer_format\n", vgt_id);
+	else
+		printk("vGT(%d): create debugfs node: frame_buffer_format\n", vgt_id);
+
+	d_debugfs_entry[vgt_id][VGT_DEBUGFS_DPY_INFO] = debugfs_create_file("dpyinfo",
+			0444, d_per_vgt[vgt_id], vgt, &dpyinfo_fops);
 
 	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_FB_FORMAT])
 		printk(KERN_ERR "vGT(%d): failed to create debugfs node: frame_buffer_format\n", vgt_id);
