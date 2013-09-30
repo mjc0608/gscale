@@ -1978,7 +1978,7 @@ static inline void vgt_set_pipe_mapping(struct vgt_device *vgt,
 	}
 }
 
-bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_data);
+bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new_data, uint32_t old_data);
 bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint32_t physical_wr_data);
 
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp);

@@ -315,9 +315,13 @@ static bool is_same_port(vgt_reg_t trans_coder_ctl1, vgt_reg_t trans_coder_ctl2)
 
 static enum vgt_pipe get_edp_input(uint32_t wr_data)
 {
-	enum vgt_pipe pipe;
-	switch (wr_data & _REGBIT_TRANS_DDI_EDP_INPUT_MASK)
-	{
+	enum vgt_pipe pipe = I915_MAX_PIPES;
+
+	if ((_REGBIT_TRANS_DDI_FUNC_ENABLE & wr_data) == 0) {
+		return I915_MAX_PIPES;
+	}
+
+	switch (wr_data & _REGBIT_TRANS_DDI_EDP_INPUT_MASK) {
 		case _REGBIT_TRANS_DDI_EDP_INPUT_A_ON:
 		case _REGBIT_TRANS_DDI_EDP_INPUT_A_ONOFF:
 			pipe = PIPE_A;
@@ -334,59 +338,74 @@ static enum vgt_pipe get_edp_input(uint32_t wr_data)
 	return pipe;
 }
 
+enum vgt_pipe get_pipe(unsigned int reg, uint32_t wr_data)
+{
+	enum vgt_pipe pipe = I915_MAX_PIPES;
 
-bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_data)
+	if (reg == _REG_TRANS_DDI_FUNC_CTL_A) {
+		pipe = PIPE_A;
+	}
+	else if (reg == _REG_TRANS_DDI_FUNC_CTL_B) {
+		pipe = PIPE_B;
+	}
+	else if (reg == _REG_TRANS_DDI_FUNC_CTL_C) {
+		pipe = PIPE_C;
+	}else if (reg == _REG_TRANS_DDI_FUNC_CTL_EDP) {
+		pipe = get_edp_input (wr_data);
+	}
+
+	return pipe;
+}
+
+bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new_data, uint32_t old_data)
 {
 	vgt_reg_t hw_value;
 	int i = 0;
 
 	enum vgt_pipe virtual_pipe = I915_MAX_PIPES;
-	enum vgt_pipe physical_pipe = I915_MAX_PIPES ;
+	enum vgt_pipe physical_pipe = I915_MAX_PIPES;
 
-	if(vgt->vm_id == 0) {
+	if (vgt->vm_id == 0) {
 		return true;
 	}
 
-	if(reg == _REG_TRANS_DDI_FUNC_CTL_A) {
-		virtual_pipe = PIPE_A;
-	}
-	else if(reg == _REG_TRANS_DDI_FUNC_CTL_B) {
-		virtual_pipe = PIPE_B;
-	}
-	else if(reg == _REG_TRANS_DDI_FUNC_CTL_C) {
-		virtual_pipe = PIPE_C;
-	}
+	virtual_pipe = get_pipe(reg, new_data);
 
-	if((_REGBIT_TRANS_DDI_FUNC_ENABLE & wr_data) == 0)
-	{
-		vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
+	/*disable pipe case*/
+	if ((_REGBIT_TRANS_DDI_FUNC_ENABLE & new_data) == 0) {
+		if (reg == _REG_TRANS_DDI_FUNC_CTL_EDP) {
+			/*for disable case, we need to get edp input from old value
+			since the new data does not contain the edp input*/
+			virtual_pipe = get_edp_input(old_data);
+		}
+		if (virtual_pipe != I915_MAX_PIPES) {
+			vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
+			vgt_info("vGT: delete pipe mapping %x\n", virtual_pipe);
+		}
 		return true;
 	}
 
+	/*enable pipe case*/
+	ASSERT((reg == _REG_TRANS_DDI_FUNC_CTL_EDP) || (new_data &  _REGBIT_TRANS_DDI_PORT_MASK) );
 
-	if(reg == _REG_TRANS_DDI_FUNC_CTL_EDP)
-	{
-		virtual_pipe = get_edp_input(wr_data);
+	if (reg == _REG_TRANS_DDI_FUNC_CTL_EDP) {
 		hw_value= VGT_MMIO_READ(vgt->pdev, _REG_TRANS_DDI_FUNC_CTL_EDP);
 		physical_pipe = get_edp_input(hw_value);
-	}
-	else
-	{
-		for(i = 0; i <= TRANSCODER_C; i++)
-		{
+	} else {
+		for (i = 0; i <= TRANSCODER_C; i++) {
 			hw_value = VGT_MMIO_READ(vgt->pdev, _VGT_TRANS_DDI_FUNC_CTL(i));
-			if(is_same_port(wr_data,hw_value) && ( _REGBIT_TRANS_DDI_FUNC_ENABLE & hw_value))
-			{
+			if (is_same_port(new_data,hw_value) && ( _REGBIT_TRANS_DDI_FUNC_ENABLE & hw_value)) {
 				physical_pipe = i;
 				break;
 			}
 		}
 	}
 
+	ASSERT(virtual_pipe != I915_MAX_PIPES);
 	vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
+	vgt_info("vGT: add pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
 
-	if(current_foreground_vm(vgt->pdev) == vgt)
-	{
+	if (current_foreground_vm(vgt->pdev) == vgt) {
 		vgt_restore_state(vgt, virtual_pipe);
 	}
 
@@ -394,33 +413,27 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t wr_
 
 }
 
-
-
 bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint32_t physical_wr_data)
 {
 	int i = 0;
 	uint32_t virtual_wr_data;
 	enum vgt_pipe virtual_pipe = I915_MAX_PIPES;
-	enum vgt_pipe physical_pipe = I915_MAX_PIPES ;
+	enum vgt_pipe physical_pipe = I915_MAX_PIPES;
 
-	if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_A) {
-		physical_pipe = PIPE_A;
-	}
-	else if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_B) {
-		physical_pipe = PIPE_B;
-	}
-	else if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_C) {
-		physical_pipe = PIPE_C;
-	}
+	physical_pipe = get_pipe(physical_reg, physical_wr_data);
 
-	if((_REGBIT_TRANS_DDI_FUNC_ENABLE & physical_wr_data) == 0) {
-		if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_EDP ){
-			virtual_pipe = get_edp_input( __vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP));
-			vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
-		}else{
-			for(i = 0; i < I915_MAX_PIPES; i ++){
-				if(vgt->pipe_mapping[i] == physical_pipe){
+	/*disable pipe case*/
+	if ((_REGBIT_TRANS_DDI_FUNC_ENABLE & physical_wr_data) == 0) {
+		if (physical_reg == _REG_TRANS_DDI_FUNC_CTL_EDP ) {
+			virtual_pipe = get_edp_input(__vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP));
+			if (virtual_pipe != I915_MAX_PIPES) {
+				vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
+			}
+		} else {
+			for (i = 0; i < I915_MAX_PIPES; i ++) {
+				if(vgt->pipe_mapping[i] == physical_pipe) {
 					vgt_set_pipe_mapping(vgt, i, I915_MAX_PIPES);
+					vgt_info("vGT: Update mapping: delete pipe %x  \n", i);
 				}
 			}
 		}
@@ -428,25 +441,24 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 	}
 
 	/*enable case*/
-
-	if(physical_reg == _REG_TRANS_DDI_FUNC_CTL_EDP)	{
-		physical_pipe = get_edp_input(physical_wr_data);
-		virtual_wr_data= __vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP);
-		virtual_pipe = get_edp_input(virtual_wr_data);
+	if (physical_reg == _REG_TRANS_DDI_FUNC_CTL_EDP) {
+		virtual_pipe = get_edp_input(__vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP));
 	} else {
-		for(i = 0; i <= TRANSCODER_C; i++)	{
+		for (i = 0; i <= TRANSCODER_C; i++) {
 			virtual_wr_data = __vreg(vgt, _VGT_TRANS_DDI_FUNC_CTL(i));
-			if(is_same_port(virtual_wr_data,physical_wr_data) &&
-				(_REGBIT_TRANS_DDI_FUNC_ENABLE & virtual_wr_data ) )	{
+			if (is_same_port(virtual_wr_data,physical_wr_data) &&
+				(_REGBIT_TRANS_DDI_FUNC_ENABLE & virtual_wr_data ) ) {
 				virtual_pipe = i;
 				break;
 			}
 		}
 	}
 
-	if(virtual_pipe != I915_MAX_PIPES){
+	if (virtual_pipe != I915_MAX_PIPES) {
 		vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
+		vgt_info("vGT: Update pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
 	}
 
 	return true;
 }
+

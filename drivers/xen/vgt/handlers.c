@@ -599,27 +599,28 @@ static bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 static bool dpy_trans_ddi_ctl_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	uint32_t wr_data;
+	uint32_t new_data;
+	uint32_t old_data;
 	int i;
 
+	old_data = __vreg(vgt, offset);
 	default_mmio_write(vgt, offset, p_data, bytes);
 
-	wr_data = *((uint32_t *)p_data);
+	new_data = *((uint32_t *)p_data);
 
 	/* if it is to enable this pipe, then rebuild the mapping for this pipe*/
-	if(vgt->vm_id == 0) {
+	if (vgt->vm_id == 0) {
 		/*when dom0 change the physical pipe/port connection,
 		we need to rebuild pipe mapping for the vgt device.*/
 		for (i = 0; i < VGT_MAX_VMS; ++ i) {
 			struct vgt_device *vgt_virtual = vgt->pdev->device[i];
 			if (!vgt_virtual || vgt_virtual->vm_id == 0)
 				continue;
-			update_pipe_mapping(vgt_virtual, offset, wr_data);
+			update_pipe_mapping(vgt_virtual, offset, new_data);
 		}
 
-	}
-	else	{
-		rebuild_pipe_mapping(vgt,  offset, wr_data);
+	} else {
+		rebuild_pipe_mapping(vgt,  offset, new_data, old_data);
 	}
 
 
