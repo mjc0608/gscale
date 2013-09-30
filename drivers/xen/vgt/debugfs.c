@@ -97,13 +97,7 @@ void dump_string(struct dump_buffer *buf, const char *fmt, ...)
 #define MAX_VM_NAME_LEN (3 + 10)
 enum vgt_debugfs_entry_t
 {
-	VGT_DEBUGFS_SURFA_FB = 0,
-	VGT_DEBUGFS_SURFB_FB,
-	VGT_DEBUGFS_SURFC_FB,
-	VGT_DEBUGFS_SURFA_BASE,
-	VGT_DEBUGFS_SURFB_BASE,
-	VGT_DEBUGFS_SURFC_BASE,
-	VGT_DEBUGFS_VIRTUAL_MMIO,
+	VGT_DEBUGFS_VIRTUAL_MMIO = 0,
 	VGT_DEBUGFS_SHADOW_MMIO,
 	VGT_DEBUGFS_FB_FORMAT,
 	VGT_DEBUGFS_ENTRY_MAX
@@ -133,12 +127,6 @@ static struct dentry *d_vgt_debug;
 static struct dentry *d_per_vgt[VGT_MAX_VMS];
 static struct dentry *d_debugfs_entry[VGT_MAX_VMS][VGT_DEBUGFS_ENTRY_MAX];
 static char vm_dir_name[VGT_MAX_VMS][MAX_VM_NAME_LEN];
-
-/* TODO: sometimes domain will change their framebuffer like from fbconsole to X mode,
- * and at this time, */
-void *dsp_surf_base[VGT_MAX_VMS][I915_MAX_PIPES];
-unsigned int dsp_surf_size[VGT_MAX_VMS][I915_MAX_PIPES];
-enum vgt_pipe surf_used_pipe;
 
 struct array_data
 {
@@ -244,23 +232,6 @@ static const struct file_operations u32_array_fops = {
 	.read	= u32_array_read,
 	.llseek = no_llseek,
 };
-
-#if 0
-static struct dentry *vgt_debugfs_create_u32_array(const char *name, mode_t mode,
-					struct dentry *parent,
-					u32 *array, unsigned elements)
-{
-	struct array_data *data = kmalloc(sizeof(*data), GFP_KERNEL);
-
-	if (data == NULL)
-		return NULL;
-
-	data->array = array;
-	data->elements = elements;
-
-	return debugfs_create_file(name, mode, parent, data, &u32_array_fops);
-}
-#endif
 
 static struct dentry *vgt_debugfs_create_blob(const char *name, mode_t mode,
 					struct dentry *parent,
@@ -619,15 +590,6 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	struct pgt_device *pdev = vgt->pdev;
 	struct dentry *perf_dir_entry, *cmdstat_dir_entry;
 
-	dsp_surf_size[vgt_id][PIPE_A] = __sreg(vgt, _REG_DSPASIZE);
-	dsp_surf_size[vgt_id][PIPE_B] = __sreg(vgt, _REG_DSPBSIZE);
-
-	dsp_surf_base[vgt_id][PIPE_A] = phys_aperture_vbase(pdev) + ((__sreg(vgt, _REG_DSPASURF)) & PAGE_MASK);
-	dsp_surf_base[vgt_id][PIPE_B] = phys_aperture_vbase(pdev) + ((__sreg(vgt, _REG_DSPBSURF)) & PAGE_MASK);
-
-	printk("vGT(%d): Display surface A va(%p) size(%d)\n", vgt_id, dsp_surf_base[vgt_id][PIPE_A], dsp_surf_size[vgt_id][PIPE_A]);
-	printk("vGT(%d): Display surface B va(%p) size(%d)\n", vgt_id, dsp_surf_base[vgt_id][PIPE_B], dsp_surf_size[vgt_id][PIPE_B]);
-
 	if (!vgt || !d_vgt_debug)
 		return -EINVAL;
 
@@ -677,47 +639,6 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		printk(KERN_ERR "vGT(%d): failed to create debugfs node: frame_buffer_format\n", vgt_id);
 	else
 		printk("vGT(%d): create debugfs node: frame_buffer_format\n", vgt_id);
-
-	/* surface B is not used for boot, empty framebuffer cannot be used for debugfs */
-#if 0
-	p = &vgt_debugfs_data[vgt_id][VGT_DEBUGFS_SURFB_FB];
-	p->array = (u32*)dsp_surf_base[vgt_id][PIPE_B];
-	p->elements = 1024*1024/4;
-	d_debugfs_entry[vgt_id][VGT_DEBUGFS_SURFB_FB] = vgt_debugfs_create_blob("surfB_fb",
-			0444,
-			d_per_vgt[vgt_id],
-			p);
-
-	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_SURFB_FB])
-		printk(KERN_ERR "vGT(%d): failed to create debugfs node: fb of surface B\n", vgt_id);
-	else
-		printk("vGT(%d): create debugfs node: fb of surface B\n", vgt_id);
-#endif
-
-	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_SURFA_FB])
-		printk(KERN_ERR "vGT(%d): failed to create debugfs node: fb of surface A\n", vgt_id);
-	else
-		printk("vGT(%d): create debugfs node: fb of surface A\n", vgt_id);
-
-	d_debugfs_entry[vgt_id][VGT_DEBUGFS_SURFA_BASE] = debugfs_create_x32("surfA_base",
-			0444,
-			d_per_vgt[vgt_id],
-			(u32 *)(vgt_sreg(vgt, _REG_DSPASURF)));
-
-	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_SURFA_BASE])
-		printk(KERN_ERR "vGT(%d): failed to create debugfs node: surfA_base\n", vgt_id);
-	else
-		printk("vGT(%d): create debugfs node: surfA_base\n", vgt_id);
-
-	d_debugfs_entry[vgt_id][VGT_DEBUGFS_SURFB_BASE] = debugfs_create_x32("surfB_base",
-			0444,
-			d_per_vgt[vgt_id],
-			(u32 *)(vgt_sreg(vgt, _REG_DSPBSURF)));
-
-	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_SURFB_BASE])
-		printk(KERN_ERR "vGT(%d): failed to create debugfs node: surfB_base\n", vgt_id);
-	else
-		printk("vGT(%d): create debugfs node: surfB_base\n", vgt_id);
 
 	/* perf vm perfermance statistics */
 	perf_dir_entry = debugfs_create_dir("perf", d_per_vgt[vgt_id]);
