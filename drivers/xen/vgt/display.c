@@ -81,6 +81,9 @@ void do_vgt_fast_display_switch(struct vgt_device *to_vgt)
 
 	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; ++ pipe) {
 		vgt_restore_state(to_vgt, pipe);
+		if (_PRI_PLANE_ENABLE & __vreg(to_vgt, VGT_DSPCNTR(pipe))) {
+			set_panel_fitting(to_vgt, pipe);
+		}
 	}
 
 	current_foreground_vm(pdev) = to_vgt;
@@ -462,3 +465,56 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 	return true;
 }
 
+/*
+TODO: 1, program watermark in vgt. 2, make sure dom0 set the max timing for
+each monitor in i915 driver
+*/
+
+bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
+{
+	unsigned int src_width, src_height;
+	unsigned int target_width, target_height;
+	unsigned int pf_ctl;
+	enum vgt_pipe real_pipe;
+
+	real_pipe = vgt->pipe_mapping[pipe];
+
+	if (!enable_panel_fitting) {
+		vgt_warn("panel fitting function is not enabled!\n");
+		return false;
+	}
+
+	if (real_pipe == I915_MAX_PIPES) {
+		vgt_warn("try to set panel fitting before pipe is mapped!\n");
+		return false;
+	}
+	src_width = (__vreg(vgt, VGT_PIPESRC(pipe)) & 0xffff0000) >> 16;
+	src_height = __vreg(vgt, VGT_PIPESRC(pipe)) & 0xffff;
+	src_width += 1;
+	src_height += 1;
+
+	target_width = VGT_MMIO_READ(vgt->pdev, VGT_HTOTAL(real_pipe)) & 0xffff;
+	target_height = VGT_MMIO_READ(vgt->pdev, VGT_VTOTAL(real_pipe)) & 0xffff;
+	target_width += 1;
+	target_height += 1;
+
+
+	/*fixed panel fitting mode to 3x3 mode, Restriction : A 3x3 capable filter must not be enabled
+		when the pipe horizontal source size is greater than 2048 pixels*/
+	pf_ctl =  _REGBIT_PF_FILTER_MED_3x3 | _REGBIT_PF_PIPE_SEL(real_pipe);
+
+	/*enable panel fitting only when the source mode does not eqaul to the target mode*/
+	if (src_width != target_width || src_height != target_height ) {
+		vgt_info("enable panel_fitting for pipe %d, src_width:%d, src_height: %d, tgt_width:%d, tgt_height:%d!\n",
+			pipe,src_width,src_height ,src_width,target_height);
+		pf_ctl = pf_ctl | _REGBIT_PF_ENABLE;
+	}
+
+	VGT_MMIO_WRITE(vgt->pdev, VGT_PIPESRC(real_pipe),  ((src_width -1) << 16) | (src_height - 1));
+	VGT_MMIO_WRITE(vgt->pdev, VGT_PF_WIN_POS(real_pipe), 0);
+	VGT_MMIO_WRITE(vgt->pdev, VGT_PF_CTL(real_pipe), pf_ctl);
+	/* PF ctrl is a double buffered registers and gets updated when window
+	 size registered is updated*/
+	VGT_MMIO_WRITE(vgt->pdev, VGT_PF_WIN_SZ(real_pipe),  (target_width << 16) | target_height);
+	return true;
+}

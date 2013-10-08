@@ -75,6 +75,7 @@ extern int dom0_fence_sz;
 extern bool bypass_scan;
 extern bool bypass_dom0_addr_check;
 extern bool render_engine_reset;
+extern bool enable_panel_fitting;
 
 enum vgt_event_type {
 	// GT
@@ -2008,6 +2009,8 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 bool ring_uhptr_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
+
+bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe);
 
 extern bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);

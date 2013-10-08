@@ -117,6 +117,10 @@ module_param_named(bypass_scan, bypass_scan, bool, 0600);
 bool bypass_dom0_addr_check = false;
 module_param_named(bypass_dom0_addr_check, bypass_dom0_addr_check, bool, 0600);
 
+bool enable_panel_fitting = true;
+module_param_named(enable_panel_fitting, enable_panel_fitting, bool, 0600);
+
+
 static vgt_ops_t vgt_xops = {
 	.mem_read = vgt_emulate_read,
 	.mem_write = vgt_emulate_write,

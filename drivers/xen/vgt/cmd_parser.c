@@ -825,7 +825,7 @@ static bool vgt_flip_parameter_check(struct parser_exec_state *s,
 				>> PLANE_TILE_SHIFT;
 
 	phys_stride = __vreg(current_display_owner(pdev), stride_reg);
-	if ((s->vgt != current_display_owner(pdev)) &&
+	if ((s->vgt != current_display_owner(pdev)) && !enable_panel_fitting &&
 		(plane == PRIMARY_PLANE) &&
 		((stride_val & PITCH_MASK) !=
 			(phys_stride & stride_mask))) {

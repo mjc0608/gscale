@@ -345,6 +345,7 @@
 
 #define VGT_DSPSURF(pipe)	_VGT_PIPE(pipe, _REG_DSPASURF, _REG_DSPBSURF)
 #define VGT_DSPCNTR(pipe)	_VGT_PIPE(pipe, _REG_DSPACNTR, _REG_DSPBCNTR)
+#define VGT_DSPCNTRPIPE(dspcntr) _VGT_GET_PIPE(dspcntr, _REG_DSPACNTR,_REG_DSPBCNTR)
 
 #define VGT_DSPLINOFF(plane) _VGT_PIPE(plane, _REG_DSPALINOFF, _REG_DSPBLINOFF)
 #define VGT_DSPSTRIDE(plane) _VGT_PIPE(plane, _REG_DSPASTRIDE, _REG_DSPBSTRIDE)
@@ -993,6 +994,8 @@ union PCH_PP_STAUTS
 #define _REG_PF_CTL_1			0x68880
 #define _REG_PF_CTL_2			0x69080
 #define _REGBIT_PF_ENABLE		(1 << 31)
+#define  _REGBIT_PF_PIPE_SEL_MASK	(3<<29)
+#define  _REGBIT_PF_PIPE_SEL(pipe)	((pipe)<<29)
 #define _REGBIT_PF_FILTER_MASK		(3 << 23)
 #define _REGBIT_PF_FILTER_PROGRAMMED	(0 << 23)
 #define _REGBIT_PF_FILTER_MED_3x3	(1 << 23)
@@ -1008,8 +1011,8 @@ union PCH_PP_STAUTS
 #define _REG_PF_WIN_POS_2		0x69070
 
 #define VGT_PF_CTL(pipe)	_VGT_PIPE(pipe, _REG_PF_CTL_0, _REG_PF_CTL_1)
-#define VGT_PF_WIN_SZ(pipe)	_VGT_PIPE(pipe, _REG_PFA_WIN_SZ, _REG_PFB_WIN_SZ)
-#define    VGT_PF_WIN_POS(pipe) _VGT_PIPE(pipe, _REG_PFA_WIN_POS, _REG_PFB_WIN_POS)
+#define VGT_PF_WIN_SZ(pipe)	_VGT_PIPE(pipe, _REG_PF_WIN_SZ_0, _REG_PF_WIN_SZ_1)
+#define    VGT_PF_WIN_POS(pipe) _VGT_PIPE(pipe, _REG_PF_WIN_POS_0, _REG_PF_WIN_POS_1)
 
 /* Per-transcoder DIP controls */
 #define _REG_TRANSACONF			0xf0008

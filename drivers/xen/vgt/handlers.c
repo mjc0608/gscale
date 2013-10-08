@@ -1091,6 +1091,32 @@ static bool dpy_plane_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static bool dpy_plane_ctl_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	enum vgt_pipe pipe = PIPE_A;
+	vgt_reg_t new_plane_ctl;
+	bool enable_plane = false;
+
+	new_plane_ctl = *(vgt_reg_t *)p_data;
+	pipe = VGT_DSPCNTRPIPE(offset);
+	if ( (_PRI_PLANE_ENABLE & new_plane_ctl) &&  (_PRI_PLANE_ENABLE & __vreg(vgt, offset)) == 0) {
+		enable_plane = true;
+	}
+
+	if (enable_plane && current_foreground_vm(vgt->pdev) == vgt) {
+		if ( !(_REGBIT_PIPE_ENABLE & VGT_MMIO_READ(vgt->pdev, VGT_PIPECONF(vgt->pipe_mapping[pipe])))) {
+			vgt_warn("enable panel fitting before pipe is enabled\n");
+		}
+		set_panel_fitting(vgt, pipe);
+	}
+
+	dpy_plane_mmio_write(vgt,offset, p_data,bytes);
+
+	return true;
+}
+
+
 static bool pri_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -1643,6 +1669,32 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 
 	return rc;
 }
+
+static bool pf_read(struct vgt_device *vgt, unsigned int offset,
+			void *p_data, unsigned int bytes)
+{
+	if (enable_panel_fitting) {
+		*(vgt_reg_t *)p_data = __vreg(vgt, offset);
+	} else {
+		default_mmio_read(vgt, offset, p_data, bytes);
+	}
+
+	return true;
+}
+
+static bool pf_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+
+	if (enable_panel_fitting) {
+		memcpy ((char *)vgt->state.vReg + offset, p_data, bytes);
+	} else {
+		default_mmio_write(vgt, offset, p_data, bytes);
+	}
+
+	return true;
+}
+
 /*
  * Track policies of all captured registers
  *
@@ -1906,7 +1958,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x701b0, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
 {_REG_DSPACNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
-							dpy_plane_mmio_write},
+							dpy_plane_ctl_write},
 {_REG_DSPASURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
 							pri_surf_mmio_write},
 {_REG_DSPASURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, pri_surflive_mmio_read,
@@ -1923,7 +1975,7 @@ reg_attr_t vgt_base_reg_info[] = {
 							dpy_plane_mmio_write},
 
 {_REG_DSPBCNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read,
-							dpy_plane_mmio_write},
+							dpy_plane_ctl_write},
 {_REG_DSPBSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
 							pri_surf_mmio_write},
 {_REG_DSPBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, pri_surflive_mmio_read,
@@ -1940,7 +1992,7 @@ reg_attr_t vgt_base_reg_info[] = {
 							dpy_plane_mmio_write},
 
 {_REG_DSPCCNTR, 4, F_DPY, 0, D_HSW, dpy_plane_mmio_read,
-							dpy_plane_mmio_write},
+							dpy_plane_ctl_write},
 {_REG_DSPCSURF, 4, F_DPY_ADRFIX, 0xFFFFF000, D_HSW, dpy_plane_mmio_read,
 							pri_surf_mmio_write},
 {_REG_DSPCSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_HSW, pri_surflive_mmio_read,
@@ -2080,15 +2132,15 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIPEC_LINK_M2, 4, F_DPY, 0, D_IVB, NULL, NULL},
 {_REG_PIPEC_LINK_N2, 4, F_DPY, 0, D_IVB, NULL, NULL},
 
-{_REG_PF_CTL_0, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_PF_WIN_SZ_0, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_PF_WIN_POS_0, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_PF_CTL_1, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_PF_WIN_SZ_1, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_PF_WIN_POS_1, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_PF_CTL_2, 4, F_DPY, 0, D_GEN7PLUS, NULL, NULL},
-{_REG_PF_WIN_SZ_2, 4, F_DPY, 0, D_GEN7PLUS, NULL, NULL},
-{_REG_PF_WIN_POS_2, 4, F_DPY, 0, D_GEN7PLUS, NULL, NULL},
+{_REG_PF_CTL_0, 4, F_DPY, 0, D_ALL, pf_read, pf_write},
+{_REG_PF_WIN_SZ_0, 4, F_DPY, 0, D_ALL, pf_read, pf_write},
+{_REG_PF_WIN_POS_0, 4, F_DPY, 0, D_ALL, pf_read, pf_write},
+{_REG_PF_CTL_1, 4, F_DPY, 0, D_ALL, pf_read, pf_write},
+{_REG_PF_WIN_SZ_1, 4, F_DPY, 0, D_ALL, pf_read, pf_write},
+{_REG_PF_WIN_POS_1, 4, F_DPY, 0, D_ALL, pf_read, pf_write},
+{_REG_PF_CTL_2, 4, F_DPY, 0, D_GEN7PLUS, pf_read, pf_write},
+{_REG_PF_WIN_SZ_2, 4, F_DPY, 0, D_GEN7PLUS, pf_read, pf_write},
+{_REG_PF_WIN_POS_2, 4, F_DPY, 0, D_GEN7PLUS, pf_read, pf_write},
 
 {_REG_WM0_PIPEA_ILK, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_WM0_PIPEB_ILK, 4, F_DPY, 0, D_ALL, NULL, NULL},
