@@ -1552,6 +1552,11 @@ static bool pvinfo_read(struct vgt_device *vgt, unsigned int offset,
 			if (offset + bytes > vgt_info_off(min_fence_num) + 4)
 				invalid_read = true;
 			break;
+		case vgt_info_off(v2g_notify):
+			/* set cursor setting here.  For example:
+			 *   *((unsigned int *)p_data)) = VGT_V2G_SET_SW_CURSOR;
+			 */
+			break;
 		default:
 			invalid_read = true;
 			break;
@@ -1609,6 +1614,19 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 				 */
 				vgt->hvm_boot_foreground_visible = 1;
 				do_vgt_fast_display_switch(vgt);
+			}
+			break;
+		case vgt_info_off(g2v_notify):
+			if (val == VGT_G2V_DISPLAY_REFRESH) {
+				/* put handler here
+				 * printk("VGT_G2V_DISPLAY_REFRESH\n");
+				 */
+			} else if (val == VGT_G2V_SET_POINTER_SHAPE) {
+				/* put handler here
+				 * printk("VGT_G2V_SET_POINTER_SHAPE\n");
+				 */
+			} else {
+				vgt_warn("INVALID_WRITE_NOTIFICATION %x\n", val);
 			}
 			break;
 		default:

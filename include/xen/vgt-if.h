@@ -47,8 +47,27 @@
 /*
  * The information set by the guest gfx driver, through the display_ready field
  */
+#define    VGT_DRV_DISPLAY_NOT_READY	(0 << 0)
 #define    VGT_DRV_DISPLAY_READY	(1 << 0)	/* ready for display switch */
 #define    VGT_DRV_LEGACY_VGA_MODE	(1 << 1)	/* in the legacy VGA mode */
+
+/*
+ * guest-to-vgt notifications
+ */
+enum vgt_g2v_type {
+	VGT_G2V_DISPLAY_REFRESH,
+	VGT_G2V_SET_POINTER_SHAPE,
+	VGT_G2V_MAX,
+};
+
+/*
+ * vgt-to-guest notifications
+ */
+enum vgt_v2g_type {
+	VGT_V2G_SET_HW_CURSOR,
+	VGT_V2G_SET_SW_CURSOR,
+	VGT_V2G_MAX,
+};
 
 struct vgt_if {
     uint64_t  magic;      /* VGT_MAGIC */
@@ -99,7 +118,26 @@ struct vgt_if {
     uint32_t  min_low_gmadr;
     uint32_t  min_high_gmadr;
     uint32_t  min_fence_num;
-    uint32_t  rsv4[0x200-6];    /* pad to one page */
+
+    /*
+     * notifications between guest and vgt
+     */
+    uint32_t  g2v_notify;
+    uint32_t  v2g_notify;
+
+    /*
+     * PPGTT PTE table info
+     */
+    uint32_t  gmm_gtt_seg_base;
+    uint32_t  rsv4;
+    uint32_t  gmm_gtt_seg_size;
+
+    /*
+     * scratch space for debugging
+     */
+    uint32_t  scratch;;
+
+    uint32_t  rsv5[0x200-12];    /* pad to one page */
 };
 
 #define vgt_info_off(x)        (VGT_PVINFO_PAGE + (long)&((struct vgt_if*) NULL)->x)
