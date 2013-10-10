@@ -1629,6 +1629,14 @@ enum vgt_port_type {
 #define _SBI_RESPONSE_SUCCESS		(0x0<<_SBI_RESPONSE_SHIFT)
 #define _SBI_BUSY			(0x1<<_SBI_STAT_SHIFT)
 #define _SBI_READY			(0x0<<_SBI_STAT_SHIFT)
+#define _SBI_OPCODE_SHIFT		8
+#define _SBI_OPCODE_MASK		(0xff << _SBI_OPCODE_SHIFT)
+#define _SBI_CMD_IORD			2
+#define _SBI_CMD_IOWR			3
+#define _SBI_CMD_CRRD			6
+#define _SBI_CMD_CRWR			7
+#define _SBI_ADDR_OFFSET_SHIFT		16
+#define _SBI_ADDR_OFFSET_MASK		(0xffff << _SBI_ADDR_OFFSET_SHIFT)
 
 #define _REG_TRANS_DDI_FUNC_CTL_A	0x60400
 #define _REG_TRANS_DDI_FUNC_CTL_B	0x61400

@@ -1532,7 +1532,75 @@ static bool err_int_w(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
-static bool sbi_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static vgt_reg_t get_sbi_reg_cached_value(struct vgt_device *vgt,
+	unsigned int sbi_offset)
+{
+	int i;
+	int num = vgt->sbi_regs.number;
+	vgt_reg_t value = 0;
+
+	for (i = 0; i < num; ++ i) {
+		if (vgt->sbi_regs.registers[i].offset == sbi_offset)
+			break;
+	}
+
+	if (i < num) {
+		value = vgt->sbi_regs.registers[i].value;
+	} else {
+		vgt_warn("vGT(%d): SBI reading did not find the cached value"
+			" for offset 0x%x. 0 will be returned!\n",
+			vgt->vgt_id, sbi_offset);
+	}
+
+	return value;
+}
+
+static void cache_sbi_reg_value(struct vgt_device *vgt, unsigned int sbi_offset,
+	vgt_reg_t value)
+{
+	int i;
+	int num = vgt->sbi_regs.number;
+
+	for (i = 0; i < num; ++ i) {
+		if (vgt->sbi_regs.registers[i].offset == sbi_offset)
+			break;
+	}
+
+	if (i == num) {
+		if (num < SBI_REG_MAX) {
+			vgt->sbi_regs.number ++;
+		} else {
+			vgt_warn("vGT(%d): SBI caching meets maximum limits!\n",
+				vgt->vgt_id);
+			return;
+		}
+	}
+
+	vgt->sbi_regs.registers[i].offset = sbi_offset;
+	vgt->sbi_regs.registers[i].value = value;
+}
+
+static bool sbi_mmio_data_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc;
+
+	rc = default_mmio_read(vgt, offset, p_data, bytes);
+
+	if (!reg_hw_access(vgt, offset)) {
+		if (((__vreg(vgt, _REG_SBI_CTL_STAT) & _SBI_OPCODE_MASK) >>
+			_SBI_OPCODE_SHIFT) == _SBI_CMD_CRRD) {
+			unsigned int sbi_offset = (__vreg(vgt, _REG_SBI_ADDR) &
+				_SBI_ADDR_OFFSET_MASK) >> _SBI_ADDR_OFFSET_SHIFT;
+			vgt_reg_t val = get_sbi_reg_cached_value(vgt, sbi_offset);
+			*(vgt_reg_t *)p_data = val;
+		}
+	}
+
+	return rc;
+}
+
+static bool sbi_mmio_ctl_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	bool rc;
@@ -1549,6 +1617,14 @@ static bool sbi_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		data |= _SBI_RESPONSE_SUCCESS;
 
 		__vreg(vgt, offset) = data;
+
+		if (((__vreg(vgt, _REG_SBI_CTL_STAT) & _SBI_OPCODE_MASK) >>
+			_SBI_OPCODE_SHIFT) == _SBI_CMD_CRWR) {
+			unsigned int sbi_offset = (__vreg(vgt, _REG_SBI_ADDR) &
+				_SBI_ADDR_OFFSET_MASK) >> _SBI_ADDR_OFFSET_SHIFT;
+			vgt_reg_t val = __vreg(vgt, _REG_SBI_DATA);
+			cache_sbi_reg_value(vgt, sbi_offset, val);
+		}
 	}
 
 	return rc;
@@ -2362,8 +2438,8 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_SFUSE_STRAP, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_SBI_ADDR, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_SBI_DATA, 4, F_DPY, 0, D_HSW, NULL, NULL},
-{_REG_SBI_CTL_STAT, 4, F_DPY, 0, D_HSW, NULL, sbi_mmio_write},
+{_REG_SBI_DATA, 4, F_DPY, 0, D_HSW, sbi_mmio_data_read, NULL},
+{_REG_SBI_CTL_STAT, 4, F_DPY, 0, D_HSW, NULL, sbi_mmio_ctl_write},
 {_REG_PIXCLK_GATE, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {0xF200C, 4, F_DPY, 0, D_SNB, NULL, NULL},
 

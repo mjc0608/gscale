@@ -549,6 +549,18 @@ enum dpcd_index {
 
 /* DPCD end */
 
+#define SBI_REG_MAX	20
+
+struct sbi_register {
+	unsigned int offset;
+	vgt_reg_t value;
+};
+
+struct sbi_registers {
+	int number;
+	struct sbi_register registers[SBI_REG_MAX];
+};
+
 struct vgt_device {
 	enum vgt_pipe pipe_mapping[I915_MAX_PIPES];
 	int vgt_id;		/* 0 is always for dom0 */
@@ -642,6 +654,8 @@ struct vgt_device {
 	uint64_t allocated_cmds;	/* CMDs allocated in current slice */
 
 	uint32_t pipe_last_vblank[I915_MAX_PIPES];	/* used for vblank virtualization*/
+
+	struct sbi_registers sbi_regs;
 };
 
 enum vgt_owner_type {
