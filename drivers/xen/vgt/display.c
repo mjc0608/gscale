@@ -505,9 +505,11 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 
 	/*enable panel fitting only when the source mode does not eqaul to the target mode*/
 	if (src_width != target_width || src_height != target_height ) {
-		vgt_info("enable panel_fitting for pipe %d, src_width:%d, src_height: %d, tgt_width:%d, tgt_height:%d!\n",
-			pipe,src_width,src_height ,src_width,target_height);
+		vgt_info("enable panel fitting for pipe %d, src_width:%d, src_height: %d, tgt_width:%d, tgt_height:%d!\n",
+			pipe,src_width,src_height ,target_width,target_height);
 		pf_ctl = pf_ctl | _REGBIT_PF_ENABLE;
+	} else {
+		vgt_info("disable panel fitting for pipe %d!\n", pipe);
 	}
 
 	VGT_MMIO_WRITE(vgt->pdev, VGT_PIPESRC(real_pipe),  ((src_width -1) << 16) | (src_height - 1));

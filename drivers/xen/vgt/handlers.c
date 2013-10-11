@@ -1058,7 +1058,7 @@ bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p
 
 	if(real_pipe == I915_MAX_PIPES)
 	{
-		vgt_warn("the mapping for pipe %d is not ready or created!\n", virtual_pipe);
+		vgt_info("the mapping for pipe %d is not ready or created!\n", virtual_pipe);
 		return false;
 	}
 
