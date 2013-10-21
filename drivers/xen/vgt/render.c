@@ -163,12 +163,11 @@ static bool idle_render_engine(struct pgt_device *pdev, int id)
 
 			vgt_info("(%d) check whether ring actually stops\n", i);
 			acthd2 = VGT_MMIO_READ(pdev, VGT_ACTHD(id));
-			if (acthd1 == acthd2)
-				break;
-
-			vgt_info("ring still moves (%x->%x)\n",
-				acthd1, acthd2);
-			acthd1 = acthd2;
+			if (acthd1 != acthd2) {
+				vgt_info("ring still moves (%x->%x)\n",
+					acthd1, acthd2);
+				acthd1 = acthd2;
+			}
 
 			vgt_info("trigger another wait...\n");
 			busy = wait_for_atomic(ring_is_empty(pdev, id),
