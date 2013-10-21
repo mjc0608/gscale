@@ -569,6 +569,14 @@
 #define   MI_LRI_BYTE2_DISABLE		(1<<10)
 #define   MI_LRI_BYTE3_DISABLE		(1<<11)
 
+#define   MI_WAIT_FOR_PLANE_C_FLIP_PENDING      (1<<15)
+#define   MI_WAIT_FOR_PLANE_B_FLIP_PENDING      (1<<9)
+#define   MI_WAIT_FOR_PLANE_A_FLIP_PENDING      (1<<1)
+
+#define   MI_WAIT_FOR_SPRITE_C_FLIP_PENDING      (1<<20)
+#define   MI_WAIT_FOR_SPRITE_B_FLIP_PENDING      (1<<10)
+#define   MI_WAIT_FOR_SPRITE_A_FLIP_PENDING      (1<<2)
+
 #define PIPE_CONTROL(len)		((0x3<<29)|(0x3<<27)|(0x2<<24)|(len-2))
 #define   PIPE_CONTROL_POST_SYNC_GLOBAL_GTT		(1<<24)
 #define   PIPE_CONTROL_POST_SYNC			(1<<23)

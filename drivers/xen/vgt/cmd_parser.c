@@ -961,6 +961,85 @@ static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 {
 	return vgt_handle_mi_display_flip(s, false);
 }
+static bool is_wait_for_flip_pending(uint32_t cmd)
+{
+	return cmd & (MI_WAIT_FOR_PLANE_A_FLIP_PENDING |
+		MI_WAIT_FOR_PLANE_B_FLIP_PENDING |
+		MI_WAIT_FOR_PLANE_C_FLIP_PENDING |
+		MI_WAIT_FOR_SPRITE_A_FLIP_PENDING |
+		MI_WAIT_FOR_SPRITE_B_FLIP_PENDING |
+		MI_WAIT_FOR_SPRITE_C_FLIP_PENDING);
+}
+
+static int vgt_handle_mi_wait_for_event(struct parser_exec_state *s)
+{
+	int rc = 0;
+	enum vgt_pipe virtual_pipe = I915_MAX_PIPES;
+	enum vgt_pipe real_pipe = I915_MAX_PIPES;
+	uint32_t cmd = *cmd_ptr(s, 0);
+	uint32_t new_cmd = cmd;
+	enum vgt_plane_type plane_type = MAX_PLANE;
+
+	if (!is_wait_for_flip_pending(cmd)) {
+		return rc;
+	}
+
+	if (s->vgt != current_foreground_vm(s->vgt->pdev)) {
+		rc |= add_patch_entry(s, cmd_ptr(s, 0), MI_NOOP);
+		vgt_dbg("VM %d: mi_wait_for_event to be ignored\n", s->vgt->vm_id);
+		return rc;
+	}
+
+	if (cmd & MI_WAIT_FOR_PLANE_A_FLIP_PENDING) {
+		virtual_pipe = PIPE_A;
+		plane_type = PRIMARY_PLANE;
+		new_cmd &= ~MI_WAIT_FOR_PLANE_A_FLIP_PENDING;
+	} else if (cmd & MI_WAIT_FOR_PLANE_B_FLIP_PENDING) {
+		virtual_pipe = PIPE_B;
+		plane_type = PRIMARY_PLANE;
+		new_cmd &= ~MI_WAIT_FOR_PLANE_B_FLIP_PENDING;
+	} else if (cmd & MI_WAIT_FOR_PLANE_C_FLIP_PENDING){
+		virtual_pipe = PIPE_C;
+		plane_type = PRIMARY_PLANE;
+		new_cmd &= ~MI_WAIT_FOR_PLANE_C_FLIP_PENDING;
+	} else if (cmd & MI_WAIT_FOR_SPRITE_A_FLIP_PENDING) {
+		virtual_pipe = PIPE_A;
+		plane_type = SPRITE_PLANE;
+		new_cmd &= ~MI_WAIT_FOR_SPRITE_A_FLIP_PENDING;
+	} else if (cmd & MI_WAIT_FOR_SPRITE_B_FLIP_PENDING) {
+		virtual_pipe = PIPE_B;
+		plane_type = SPRITE_PLANE;
+		new_cmd &= ~MI_WAIT_FOR_SPRITE_B_FLIP_PENDING;
+	} else  if(cmd & MI_WAIT_FOR_SPRITE_C_FLIP_PENDING){
+		virtual_pipe = PIPE_C;
+		plane_type = SPRITE_PLANE;
+		new_cmd &= ~MI_WAIT_FOR_SPRITE_C_FLIP_PENDING;
+	} else {
+		ASSERT(0);
+	}
+
+	real_pipe = s->vgt->pipe_mapping[virtual_pipe];
+
+	if (real_pipe == PIPE_A && plane_type == PRIMARY_PLANE) {
+		new_cmd |= MI_WAIT_FOR_PLANE_A_FLIP_PENDING;
+	} else if (real_pipe == PIPE_B && plane_type == PRIMARY_PLANE) {
+		new_cmd |= MI_WAIT_FOR_PLANE_B_FLIP_PENDING;
+	} else if (real_pipe == PIPE_C && plane_type == PRIMARY_PLANE) {
+		new_cmd |= MI_WAIT_FOR_PLANE_C_FLIP_PENDING;
+	} else if (real_pipe == PIPE_A && plane_type == SPRITE_PLANE) {
+		new_cmd |= MI_WAIT_FOR_SPRITE_A_FLIP_PENDING;
+	} else if (real_pipe == PIPE_B && plane_type == SPRITE_PLANE) {
+		new_cmd |= MI_WAIT_FOR_SPRITE_B_FLIP_PENDING;
+	} else if (real_pipe == PIPE_C && plane_type == SPRITE_PLANE) {
+		new_cmd |= MI_WAIT_FOR_SPRITE_C_FLIP_PENDING;
+	} else {
+		rc = add_patch_entry(s, cmd_ptr(s, 0), MI_NOOP);
+		return rc;
+	}
+	rc = add_patch_entry(s, cmd_ptr(s, 0), new_cmd);
+	return rc;
+}
+
 
 #define USE_GLOBAL_GTT_MASK (1U << 22)
 static int vgt_cmd_handler_mi_update_gtt(struct parser_exec_state *s)
@@ -1240,7 +1319,8 @@ static struct cmd_info cmd_info[] = {
 
 	{"MI_USER_INTERRUPT", OP_MI_USER_INTERRUPT, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
 
-	{"MI_WAIT_FOR_EVENT", OP_MI_WAIT_FOR_EVENT, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
+	{"MI_WAIT_FOR_EVENT", OP_MI_WAIT_FOR_EVENT, F_LEN_CONST | F_POST_HANDLE, R_RCS | R_BCS,
+		D_ALL, 0, 1, vgt_handle_mi_wait_for_event},
 
 	{"MI_FLUSH", OP_MI_FLUSH, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
 
