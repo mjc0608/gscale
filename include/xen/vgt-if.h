@@ -131,13 +131,20 @@ struct vgt_if {
     uint32_t  gmm_gtt_seg_base;
     uint32_t  rsv4;
     uint32_t  gmm_gtt_seg_size;
+    uint32_t  rsv5;
+
+    /*
+     * Cursor hotspot info
+     */
+    uint32_t  xhot;
+    uint32_t  yhot;;
 
     /*
      * scratch space for debugging
      */
     uint32_t  scratch;;
 
-    uint32_t  rsv5[0x200-12];    /* pad to one page */
+    uint32_t  rsv6[0x200-15];    /* pad to one page */
 };
 
 #define vgt_info_off(x)        (VGT_PVINFO_PAGE + (long)&((struct vgt_if*) NULL)->x)

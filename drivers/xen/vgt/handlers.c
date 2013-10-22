@@ -1731,6 +1731,12 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 				vgt_warn("INVALID_WRITE_NOTIFICATION %x\n", val);
 			}
 			break;
+		case vgt_info_off(xhot):
+				/* vgt_info("xhot %x\n", val); */
+			break;
+		case vgt_info_off(yhot):
+				/* vgt_info("yhot %x\n", val); */
+			break;
 		default:
 			/* keep rc's default value: true.
 			 * NOTE: returning false will crash the VM.
