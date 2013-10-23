@@ -66,10 +66,17 @@ struct vgt_cursor_plane_format {
 	u32	height;		/* in lines */
 };
 
+#define INVALID_PIPE_ID	  -1
+
+/* when physical_pipe_id of struct vgt_pipe_format returns an
+	* INVALID_PIPE_ID, it either means that this virtual pipe is not
+	* enabled or the mapping is temporally unavailable.
+	* the caller should stop using this virtual pipe and retry later. */
 struct vgt_pipe_format{
 	struct vgt_primary_plane_format	primary;
 	struct vgt_sprite_plane_format	sprite;
 	struct vgt_cursor_plane_format	cursor;
+	int  physical_pipe_id;  /* the physical pipe id this pipe mapped to */
 };
 
 #define MAX_INTEL_PIPES	3

@@ -330,6 +330,13 @@ int vgt_dump_fb_format(struct dump_buffer *buf, struct vgt_fb_format *fb)
 		vgt_dump_primary_plane_format(buf, &pipe->primary);
 		vgt_dump_cursor_plane_format(buf, &pipe->cursor);
 		vgt_dump_sprite_plane_format(buf, &pipe->sprite);
+		dump_string(buf, "Pipe remapping\n");
+		if (pipe->physical_pipe_id != INVALID_PIPE_ID) {
+			dump_string(buf, "  virtual pipe:%d -> physical pipe:%d\n",
+				 i, pipe->physical_pipe_id);
+		} else {
+			dump_string(buf, "  no mapping available for this pipe\n");
+		}
 	}
 	dump_string(buf, "\n");
 	return 0;
@@ -393,6 +400,8 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 		ret |= vgt_decode_primary_plane_format(vgt, i, &pipe->primary);
 		ret |= vgt_decode_sprite_plane_format(vgt, i, &pipe->sprite);
 		ret |= vgt_decode_cursor_plane_format(vgt, i, &pipe->cursor);
+		pipe->physical_pipe_id = vgt->pipe_mapping[i] == I915_MAX_PIPES ?
+			INVALID_PIPE_ID : vgt->pipe_mapping[i];
 
 		if (ret) {
 			vgt_err("Decode format error for pipe(%d)\n", i);
