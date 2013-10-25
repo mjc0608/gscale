@@ -479,6 +479,7 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	_REG_GEN7_SQ_CHICKEN_MBCUNIT_CONFIG,
 	0x20a0,
 	0x20e8,
+	0xb038,
 };
 
 static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *regs)
