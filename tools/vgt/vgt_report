@@ -29,6 +29,8 @@ parser.add_option("-f", "--file", dest="filename", metavar="FILE",
 		   help="the location of vgt/reg.h (default drivers/xen/vgt/reg.h)")
 parser.add_option("-u", "--untracked", dest="untrack", action="store_true",
 		   help="show the list of untracked registers")
+parser.add_option("-U", "--unused", dest="unuse", action="store_true",
+		   help="show the list of tracked but unused registers")
 parser.add_option("-d", "--vdiff", dest="vdiff", action="store_true",
 		   help="show the list of registers with different vreg values among VMs")
 parser.add_option("-s", "--sdiff", dest="sdiff", action="store_true",
@@ -82,6 +84,7 @@ for line in s.split("\n"):
 fi = open(path_reginfo, "r")
 info = fi.read()
 fi.close()
+i = 0
 for line in info.split("\n"):
 	if len(line.split(":")) == 1 or line.find("Reg:") != -1:
 		continue
@@ -94,8 +97,15 @@ for line in info.split("\n"):
 		reginfo[reg]["name"] = ""
 	flags = int(m.group("flags"), 16)
 
-	reginfo[reg]["Accessed"] = True
+	if reg >= 0x140000 and reg < 0x180000:
+		continue
+
+	if reg >= 0x78000 and reg < 0x79000:
+		continue
+
+	reginfo[reg]["Valid"] = True
 	reginfo[reg]["Owner"] = "N/A"
+	i += 1
 	if (flags & 0xf == 0):
 		reginfo[reg]["Owner"] = "None"
 	elif (flags & 0xf == 4):
@@ -123,11 +133,14 @@ for line in info.split("\n"):
 		reginfo[reg]["ModeMask"] = True;
 	if (flags & (1 << 10) == 0):
 		reginfo[reg]["Untracked"] = True;
+	if (flags & (1 << 11)):
+		reginfo[reg]["Accessed"] = True;
 	if (flags & (1 << 12)):
 		reginfo[reg]["Saved"] = True;
 	if (flags & (1 << 14)):
 		reginfo[reg]["CmdAccess"] = True;
 	reginfo[reg]["Flags"] = flags;
+print "Total %d registers reported" % i
 
 def get_reg_attr(reg):
 	out = ""
@@ -142,6 +155,8 @@ def get_reg_attr(reg):
 def get_reg_state(reg):
 	out = ""
 	if "Untracked" in reg:
+		out += " u"
+	elif not "Accessed" in reg:
 		out += " U"
 	if "CmdAccess" in reg:
 		out += " G"
@@ -161,9 +176,10 @@ def show_reginfo():
 	print "\tHW - Contain HW updated status bit"
 	print "\tMD - High 16bits as mask for change"
 	print "State:"
-	print "\tU - Untracked"
+	print "\tu - Untracked"
 	print "\tD - Different value among VMs"
 	print "\tG - Accessed by GPU CMDs"
+	print "\tU - Tracked but unused"
 
 	print "\n%10s: %5s|%5s|%12s|%8s|%-8s" % ("Reg", "Owner", "Type", "Attributes", "State", "Name")
 	print "------------------------------------"
@@ -196,10 +212,26 @@ def show_untracked():
 	print "===========Untracked Regs==========="
 	i = 0
 	for reg in sorted(reginfo):
-		if not "Accessed" in reginfo[reg]:
+		if not "Valid" in reginfo[reg]:
 			continue;
 
 		if "Untracked" in reginfo[reg]:
+			if "CmdAccess" in reginfo[reg]:
+				print "[G]%10s: %s" %(hex(reg), reginfo[reg]["name"])
+			else:
+				print "%10s: %s" %(hex(reg), reginfo[reg]["name"])
+			i += 1
+	print "Total %d registers" % i
+	print "===================================="
+
+def show_unused():
+	print "===========Unused Regs==========="
+	i = 0
+	for reg in sorted(reginfo):
+		if not "Valid" in reginfo[reg]:
+			continue;
+
+		if not "Accessed" in reginfo[reg] and not "Untracked" in reginfo[reg]:
 			print "%10s: %s" %(hex(reg), reginfo[reg]["name"])
 			i += 1
 	print "Total %d registers" % i
@@ -209,7 +241,7 @@ def show_gpu_access():
 	print "===========GPU-accessed Regs==========="
 	i = 0
 	for reg in sorted(reginfo):
-		if not "Accessed" in reginfo[reg]:
+		if not "Valid" in reginfo[reg]:
 			continue;
 
 		if "CmdAccess" in reginfo[reg]:
@@ -330,6 +362,8 @@ if options.regname:
 	show_regname()
 elif options.untrack:
 	show_untracked()
+elif options.unuse:
+	show_unused()
 elif options.vdiff:
 	show_diff(path_vreg)
 elif options.sdiff:
