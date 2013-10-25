@@ -383,7 +383,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 		}
 		if (virtual_pipe != I915_MAX_PIPES) {
 			vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
-			vgt_info("vGT: delete pipe mapping %x\n", virtual_pipe);
+			vgt_dbg("vGT: delete pipe mapping %x\n", virtual_pipe);
 		}
 		return true;
 	}
@@ -406,7 +406,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 
 	ASSERT(virtual_pipe != I915_MAX_PIPES);
 	vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
-	vgt_info("vGT: add pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
+	vgt_dbg("vGT: add pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
 
 	if (current_foreground_vm(vgt->pdev) == vgt) {
 		vgt_restore_state(vgt, virtual_pipe);
@@ -436,7 +436,7 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 			for (i = 0; i < I915_MAX_PIPES; i ++) {
 				if(vgt->pipe_mapping[i] == physical_pipe) {
 					vgt_set_pipe_mapping(vgt, i, I915_MAX_PIPES);
-					vgt_info("vGT: Update mapping: delete pipe %x  \n", i);
+					vgt_dbg("vGT: Update mapping: delete pipe %x  \n", i);
 				}
 			}
 		}
@@ -459,7 +459,7 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 
 	if (virtual_pipe != I915_MAX_PIPES) {
 		vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
-		vgt_info("vGT: Update pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
+		vgt_dbg("vGT: Update pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
 	}
 
 	return true;
@@ -485,7 +485,7 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 	}
 
 	if (real_pipe == I915_MAX_PIPES) {
-		vgt_warn("try to set panel fitting before pipe is mapped!\n");
+		vgt_dbg("try to set panel fitting before pipe is mapped!\n");
 		return false;
 	}
 	src_width = (__vreg(vgt, VGT_PIPESRC(pipe)) & 0xffff0000) >> 16;
@@ -505,11 +505,11 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 
 	/*enable panel fitting only when the source mode does not eqaul to the target mode*/
 	if (src_width != target_width || src_height != target_height ) {
-		vgt_info("enable panel fitting for pipe %d, src_width:%d, src_height: %d, tgt_width:%d, tgt_height:%d!\n",
+		vgt_dbg("enable panel fitting for pipe %d, src_width:%d, src_height: %d, tgt_width:%d, tgt_height:%d!\n",
 			pipe,src_width,src_height ,target_width,target_height);
 		pf_ctl = pf_ctl | _REGBIT_PF_ENABLE;
 	} else {
-		vgt_info("disable panel fitting for pipe %d!\n", pipe);
+		vgt_dbg("disable panel fitting for pipe %d!\n", pipe);
 	}
 
 	VGT_MMIO_WRITE(vgt->pdev, VGT_PIPESRC(real_pipe),  ((src_width -1) << 16) | (src_height - 1));
