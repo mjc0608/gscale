@@ -476,6 +476,9 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 	unsigned int target_width, target_height;
 	unsigned int pf_ctl;
 	enum vgt_pipe real_pipe;
+	unsigned int h_total_reg;
+	unsigned int v_total_reg;
+	uint32_t edp_trans_code;
 
 	real_pipe = vgt->pipe_mapping[pipe];
 
@@ -493,11 +496,22 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 	src_width += 1;
 	src_height += 1;
 
-	target_width = VGT_MMIO_READ(vgt->pdev, VGT_HTOTAL(real_pipe)) & 0xffff;
-	target_height = VGT_MMIO_READ(vgt->pdev, VGT_VTOTAL(real_pipe)) & 0xffff;
+	h_total_reg = VGT_HTOTAL(real_pipe);
+	v_total_reg = VGT_VTOTAL(real_pipe);
+
+	edp_trans_code = VGT_MMIO_READ(vgt->pdev, _REG_TRANS_DDI_FUNC_CTL_EDP);
+	if ((_REGBIT_TRANS_DDI_FUNC_ENABLE & edp_trans_code)) {
+		if (real_pipe == get_edp_input(edp_trans_code)) {
+			h_total_reg = _REG_HTOTAL_EDP;
+			v_total_reg = _REG_VTOTAL_EDP;
+		}
+	}
+
+	target_width = VGT_MMIO_READ(vgt->pdev, h_total_reg) & 0xffff;
+	target_height = VGT_MMIO_READ(vgt->pdev, v_total_reg) & 0xffff;
+
 	target_width += 1;
 	target_height += 1;
-
 
 	/*fixed panel fitting mode to 3x3 mode, Restriction : A 3x3 capable filter must not be enabled
 		when the pipe horizontal source size is greater than 2048 pixels*/

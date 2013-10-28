@@ -660,6 +660,17 @@
 #define _REG_BCLRPAT_C		0x62020	/*not needed*/
 #define _REG_VSYNCSHIFT_C	0x62028
 
+
+/* Pipe EDP timing regs */
+#define _REG_HTOTAL_EDP		0x6F000
+#define _REG_HBLANK_EDP		0x6F004
+#define _REG_HSYNC_EDP			0x6F008
+#define _REG_VTOTAL_EDP		0x6F00c
+#define _REG_VBLANK_EDP		0x6F010
+#define _REG_VSYNC_EDP			0x6F014
+#define _REG_VSYNCSHIFT_EDP	0x6F028
+
+
 #define VGT_HTOTAL(pipe)	_VGT_PIPE(pipe, _REG_HTOTAL_A, _REG_HTOTAL_B)
 #define VGT_HBLANK(pipe)	_VGT_PIPE(pipe, _REG_HBLANK_A, _REG_HBLANK_B)
 #define VGT_HSYNC(pipe)		_VGT_PIPE(pipe, _REG_HSYNC_A, _REG_HSYNC_B)
