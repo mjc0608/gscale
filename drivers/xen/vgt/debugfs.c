@@ -513,9 +513,16 @@ static const struct file_operations fbinfo_fops = {
 	.release = single_release,
 };
 
-static int vgt_show_dpyinfo(struct seq_file *m, void *data)
+static inline vgt_reg_t vgt_get_mmio_value(struct pgt_device *pdev,
+		struct vgt_device *vgt, unsigned int reg)
 {
-	struct vgt_device *vgt =  (struct vgt_device *)m->private;
+	ASSERT(pdev || vgt);
+	return (vgt ? __vreg(vgt, reg) : VGT_MMIO_READ(pdev, reg));
+}
+
+static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
+		struct vgt_device *vgt)
+{
 	enum vgt_pipe pipe;
 	int port;
 	const char *str;
@@ -523,20 +530,18 @@ static int vgt_show_dpyinfo(struct seq_file *m, void *data)
 	vgt_reg_t val;
 	bool enabled;
 
-	seq_printf(m, "----------DPY info (VM-%d)----------\n", vgt->vm_id);
-
 	seq_printf(m, "----plane:\n");
 	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; ++ pipe) {
 		char P = VGT_PIPE_CHAR(pipe);
 		reg = VGT_DSPCNTR(pipe);
-		val = __vreg(vgt, reg);
+		val = vgt_get_mmio_value(pdev, vgt, reg);
 		enabled = !!(val & _PRI_PLANE_ENABLE);
 		seq_printf(m, "\tDSPCTL_%c(0x%x): 0x%08x (%s)\n",
 			P, reg, val, (enabled ? "enabled" : "disabled"));
 		if (enabled) {
 			reg = VGT_DSPSURF(pipe);
 			seq_printf(m, "\tDSPSURF_%c(0x%x): 0x%08x\n",
-				P, reg, __vreg(vgt, reg));
+				P, reg, vgt_get_mmio_value(pdev, vgt, reg));
 		}
 		seq_printf(m, "\n");
 	}
@@ -545,13 +550,13 @@ static int vgt_show_dpyinfo(struct seq_file *m, void *data)
 	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; ++ pipe) {
 		char P = VGT_PIPE_CHAR(pipe);
 		reg = VGT_PIPECONF(pipe);
-		val = __vreg(vgt, reg);
+		val = vgt_get_mmio_value(pdev, vgt, reg);
 		enabled = !!(val & _REGBIT_PIPE_ENABLE);
 		seq_printf(m, "\tPIPECONF_%c(0x%x): 0x%08x (%s)\n",
 			P, reg, val, (enabled ? "enabled" : "disabled"));
 
 		reg = _VGT_TRANS_DDI_FUNC_CTL(pipe);
-		val = __vreg(vgt, reg);
+		val = vgt_get_mmio_value(pdev, vgt, reg);
 		enabled = !!(val & _REGBIT_TRANS_DDI_FUNC_ENABLE);
 		seq_printf(m, "\tPIPE_DDI_FUNC_CTL_%c(0x%x): 0x%08x (%s)\n",
 			P, reg, val, (enabled ? "enabled" : "disabled"));
@@ -597,13 +602,13 @@ static int vgt_show_dpyinfo(struct seq_file *m, void *data)
 	}
 
 	reg = _REG_PIPE_EDP_CONF;
-	val = __vreg(vgt, reg);
+	val = vgt_get_mmio_value(pdev, vgt, reg);
 	enabled = !!(val & _REGBIT_PIPE_ENABLE);
 	seq_printf(m, "\tPIPECONF_EDP(0x%x): 0x%08x (%s)\n",
 		reg, val, (enabled ? "enabled" : "disabled"));
 
 	reg = _REG_TRANS_DDI_FUNC_CTL_EDP;
-	val = __vreg(vgt, reg);
+	val = vgt_get_mmio_value(pdev, vgt, reg);
 	enabled = !!(val & _REGBIT_TRANS_DDI_FUNC_ENABLE);
 	seq_printf(m, "\tPIPE_DDI_FUNC_CTL_EDP(0x%x): 0x%08x (%s)\n",
 		reg, val, (enabled ? "enabled" : "disabled"));
@@ -625,7 +630,10 @@ static int vgt_show_dpyinfo(struct seq_file *m, void *data)
 	}
 
 	seq_printf(m, "----port:\n");
-	for_each_set_bit(port, vgt->presented_ports, VGT_PORT_MAX) {
+
+	for_each_set_bit(port,
+		(vgt ? vgt->presented_ports : pdev->detected_ports),
+		VGT_PORT_MAX) {
 		switch (port) {
 			case VGT_CRT:
 				str = "Port CRT"; break;
@@ -650,6 +658,26 @@ static int vgt_show_dpyinfo(struct seq_file *m, void *data)
 		}
 		seq_printf(m, "\t%s connected to monitors.\n", str);
 	}
+}
+
+static int vgt_show_phys_dpyinfo(struct seq_file *m, void *data)
+{
+	struct pgt_device *pdev =  (struct pgt_device *)m->private;
+
+	seq_printf(m, "----------Physical DPY info ----------\n");
+	vgt_dump_dpy_mmio(m, pdev, NULL);
+	seq_printf(m, "\n");
+
+	return 0;
+}
+
+static int vgt_show_virt_dpyinfo(struct seq_file *m, void *data)
+{
+	struct vgt_device *vgt =  (struct vgt_device *)m->private;
+	enum vgt_pipe pipe;
+
+	seq_printf(m, "----------DPY info (VM-%d)----------\n", vgt->vm_id);
+	vgt_dump_dpy_mmio(m, NULL, vgt);
 	seq_printf(m, "\n");
 
 	seq_printf(m, "---- physical/virtual mapping:\n");
@@ -661,16 +689,29 @@ static int vgt_show_dpyinfo(struct seq_file *m, void *data)
 			seq_printf(m, "\t virtual pipe %d to physical pipe %d\n", pipe, physical_pipe);
 		}
 	}
+
 	return 0;
 }
 
-static int vgt_dpyinfo_open(struct inode *inode, struct file *file)
+static int vgt_phys_dpyinfo_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, vgt_show_dpyinfo, inode->i_private);
+	return single_open(file, vgt_show_phys_dpyinfo, inode->i_private);
 }
 
-static const struct file_operations dpyinfo_fops = {
-	.open = vgt_dpyinfo_open,
+static const struct file_operations phys_dpyinfo_fops = {
+	.open = vgt_phys_dpyinfo_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
+static int vgt_virt_dpyinfo_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vgt_show_virt_dpyinfo, inode->i_private);
+}
+
+static const struct file_operations virt_dpyinfo_fops = {
+	.open = vgt_virt_dpyinfo_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = single_release,
@@ -713,6 +754,9 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 
 	temp_d = debugfs_create_file("irqinfo", 0444, d_vgt_debug,
 		pdev, &irqinfo_fops);
+
+	temp_d = debugfs_create_file("dpyinfo", 0444, d_vgt_debug,
+		pdev, &phys_dpyinfo_fops);
 	if (!temp_d)
 		return NULL;
 
@@ -806,7 +850,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		printk("vGT(%d): create debugfs node: frame_buffer_format\n", vgt_id);
 
 	d_debugfs_entry[vgt_id][VGT_DEBUGFS_DPY_INFO] = debugfs_create_file("dpyinfo",
-			0444, d_per_vgt[vgt_id], vgt, &dpyinfo_fops);
+			0444, d_per_vgt[vgt_id], vgt, &virt_dpyinfo_fops);
 
 	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_FB_FORMAT])
 		printk(KERN_ERR "vGT(%d): failed to create debugfs node: frame_buffer_format\n", vgt_id);
