@@ -530,6 +530,24 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 	vgt_reg_t val;
 	bool enabled;
 
+	seq_printf(m, "----General CTL:\n");
+
+	reg = _REG_CPU_VGACNTRL;
+	val = vgt_get_mmio_value(pdev, vgt, reg);
+	enabled = !(val & _REGBIT_VGA_DISPLAY_DISABLE);
+	seq_printf(m,"\tVGA_CONTROL(0x%x):0x%08x (VGA Mode %s)\n",
+		reg, val, (enabled ? "enabled" : "disabled"));
+
+	reg = _REG_HSW_FUSE_STRAP;
+	val = vgt_get_mmio_value(pdev, vgt, reg);
+	seq_printf(m,"\tFUSE_STRAP(0x%x):0x%08x(RO)\n", reg, val);
+
+	reg = _REG_SHOTPLUG_CTL;
+	val = vgt_get_mmio_value(pdev, vgt, reg);
+	seq_printf(m,"\tSHOTPLUG_CTL(0x%x):0x%08x\n", reg, val);
+
+	seq_printf(m, "\n");
+
 	seq_printf(m, "----plane:\n");
 	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; ++ pipe) {
 		char P = VGT_PIPE_CHAR(pipe);
@@ -555,6 +573,17 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 		seq_printf(m, "\tPIPECONF_%c(0x%x): 0x%08x (%s)\n",
 			P, reg, val, (enabled ? "enabled" : "disabled"));
 
+		if (enabled) {
+			reg = VGT_HTOTAL(pipe);
+			val = vgt_get_mmio_value(pdev, vgt, reg);
+			seq_printf(m, "\tPIPE_HTOTAL_%c(0x%x): 0x%08x (total: %d)\n",
+				P, reg, val, (val & 0xfff) + 1);
+			reg = VGT_VTOTAL(pipe);
+			val = vgt_get_mmio_value(pdev, vgt, reg);
+			seq_printf(m, "\tPIPE_VTOTAL_%c(0x%x): 0x%08x (total: %d)\n",
+				P, reg, val, (val & 0xfff) + 1);
+		}
+
 		reg = _VGT_TRANS_DDI_FUNC_CTL(pipe);
 		val = vgt_get_mmio_value(pdev, vgt, reg);
 		enabled = !!(val & _REGBIT_TRANS_DDI_FUNC_ENABLE);
@@ -562,10 +591,11 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 			P, reg, val, (enabled ? "enabled" : "disabled"));
 
 		if (enabled) {
-			vgt_reg_t ddi_select =
-					val & _REGBIT_TRANS_DDI_PORT_MASK;
-			vgt_reg_t mode_select =
-					val & _REGBIT_TRANS_DDI_MODE_SELECT_MASK;
+			vgt_reg_t ddi_select, mode_select;
+
+			ddi_select = val & _REGBIT_TRANS_DDI_PORT_MASK;
+			mode_select = val & _REGBIT_TRANS_DDI_MODE_SELECT_MASK;
+
 			switch (ddi_select >> _TRANS_DDI_PORT_SHIFT) {
 				case 0:
 					str = "No Port Connected"; break;
@@ -607,6 +637,15 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 	seq_printf(m, "\tPIPECONF_EDP(0x%x): 0x%08x (%s)\n",
 		reg, val, (enabled ? "enabled" : "disabled"));
 
+	if (enabled) {
+		reg = _REG_HTOTAL_EDP;
+		val = vgt_get_mmio_value(pdev, vgt, reg);
+		seq_printf(m, "\tPIPE_HTOTAL_EDP(0x%x): 0x%08x\n", reg, val);
+		reg = _REG_VTOTAL_EDP;
+		val = vgt_get_mmio_value(pdev, vgt, reg);
+		seq_printf(m, "\tPIPE_VTOTAL_EDP(0x%x): 0x%08x\n", reg, val);
+	}
+
 	reg = _REG_TRANS_DDI_FUNC_CTL_EDP;
 	val = vgt_get_mmio_value(pdev, vgt, reg);
 	enabled = !!(val & _REGBIT_TRANS_DDI_FUNC_ENABLE);
@@ -628,6 +667,7 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 		}
 		seq_printf(m, "\t\teDP select: %s\n", str);
 	}
+	seq_printf(m, "\n");
 
 	seq_printf(m, "----port:\n");
 
@@ -657,6 +697,25 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 				str = "Port INV";
 		}
 		seq_printf(m, "\t%s connected to monitors.\n", str);
+		if (port == VGT_CRT) {
+			reg = _REG_PCH_ADPA;
+			val = vgt_get_mmio_value(pdev, vgt, reg);
+			enabled = !!(val & _REGBIT_ADPA_DAC_ENABLE);
+			seq_printf(m, "\tDAC_CTL(0x%x): 0x%08x (%s)\n",
+				reg, val, (enabled ? "enabled" : "disabled"));
+			if (enabled) {
+				pipe = (val & PORT_TRANS_SEL_MASK)
+						>> PORT_TRANS_SEL_SHIFT;
+				seq_printf(m, "\t\t Transcoder %c selected.\n",
+					VGT_PIPE_CHAR(pipe));
+			}
+			reg = _REG_TRANSACONF;
+			val = vgt_get_mmio_value(pdev, vgt, reg);
+			enabled = !!(val & _REGBIT_TRANS_ENABLE);
+			seq_printf(m, "\tPCH TRANS_CONF(0x%x): 0x%08x (%s)\n",
+				reg, val, (enabled ? "enabled" : "disabled"));
+		}
+		seq_printf(m, "\n");
 	}
 }
 
