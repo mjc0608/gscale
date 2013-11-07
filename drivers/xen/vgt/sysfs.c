@@ -146,7 +146,8 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 		goto out;
 	}
 
-	do_vgt_fast_display_switch(next_vgt);
+	pdev->next_foreground_vm = next_vgt;
+	vgt_raise_request(pdev, VGT_REQUEST_DPY_SWITCH);
 out:
 	spin_unlock_irqrestore(&default_device.lock, flags);
 

@@ -241,6 +241,7 @@ struct vgt_rsvd_ring {
 #define sleep_us(x)	{long y=500UL*x; while (y-- > 0) ;}
 
 #define VGT_RING_TIMEOUT	500	/* in ms */
+#define VGT_VBLANK_TIMEOUT	50	/* in ms */
 
 /* Maximum VMs supported by vGT. Actual number is device specific */
 #define VGT_MAX_VMS			4
@@ -402,6 +403,7 @@ struct vgt_intel_device_info {
 
 struct pgt_device;
 
+extern bool idle_render_engine(struct pgt_device *pdev, int id);
 extern bool vgt_do_render_context_switch(struct pgt_device *pdev);
 extern void vgt_destroy(void);
 extern void vgt_destroy_debugfs(struct vgt_device *vgt);
@@ -857,6 +859,7 @@ struct pgt_device {
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */
 	struct vgt_device *foreground_vm;		/* current visible domain on display. */
 	struct vgt_device *next_sched_vgt;
+	struct vgt_device *next_foreground_vm;
 	struct list_head rendering_runq_head; /* reuse this for context scheduler */
 	struct list_head rendering_idleq_head; /* reuse this for context scheduler */
 	spinlock_t lock;
@@ -924,7 +927,8 @@ struct pgt_device {
 		(__vreg(current_display_owner(pdev),				\
 			VGT_PIPECONF(pipe)) & _REGBIT_PIPE_ENABLE))
 
-extern void do_vgt_fast_display_switch(struct vgt_device *pdev);
+extern int prepare_for_display_switch(struct pgt_device *pdev);
+extern void do_vgt_fast_display_switch(struct pgt_device *pdev);
 
 #define reg_addr_fix(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_ADDR_FIX)
 #define reg_hw_status(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_HW_STATUS)
@@ -1078,6 +1082,7 @@ static inline void reg_update_handlers(struct pgt_device *pdev,
 #define VGT_REQUEST_UEVENT	1
 #define VGT_REQUEST_CTX_SWITCH	2	/* immediate reschedule(context switch) requested */
 #define VGT_REQUEST_EMUL_DPY_EVENTS	3
+#define VGT_REQUEST_DPY_SWITCH	4	/* immediate reschedule(display switch) requested */
 
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {

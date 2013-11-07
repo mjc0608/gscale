@@ -65,12 +65,60 @@ static int vgt_restore_state(struct vgt_device *vgt, enum vgt_pipe pipe)
 	return 0;
 }
 
+static int wait_for_vblank_atomic(struct pgt_device *pdev, enum vgt_pipe pipe)
+{
+	int ret;
+	unsigned int frmcnt_mmio = VGT_PIPE_FRMCOUNT(pipe);
+	vgt_reg_t frmcnt = VGT_MMIO_READ(pdev, frmcnt_mmio);
+
+	ret = wait_for_atomic((VGT_MMIO_READ(pdev, frmcnt_mmio) != frmcnt),
+				VGT_VBLANK_TIMEOUT);
+	if (ret == -ETIMEDOUT) {
+		vgt_warn("pipe-%d: Timeout for waiting vblank!\n", pipe);
+	}
+	return ret;
+}
+
+static int wait_for_vblanks_atomic(struct pgt_device *pdev)
+{
+	int ret = 0;
+	enum vgt_pipe pipe;
+
+	for (pipe = PIPE_A; (pipe < I915_MAX_PIPES) && !ret; ++ pipe) {
+		vgt_reg_t pipeconf = VGT_MMIO_READ(pdev, VGT_PIPECONF(pipe));
+		if (pipeconf & _REGBIT_PIPE_ENABLE) {
+			ret = wait_for_vblank_atomic(pdev, pipe);
+		}
+	}
+	return ret;
+}
+
+int prepare_for_display_switch(struct pgt_device *pdev)
+{
+	int ret = 0;
+
+	if (!(idle_render_engine(pdev, RING_BUFFER_RCS) &&
+		idle_render_engine(pdev, RING_BUFFER_BCS))) {
+		vgt_warn("vGT: Ring RCS or Ring BCS is busy "
+			"in display switch!\n");
+		ret = -1;
+	}
+
+	if (!ret) {
+		ret = wait_for_vblanks_atomic(pdev);
+		if (!ret)
+			vgt_warn("Failed to get vblank in display switch!\n");
+	}
+
+	return ret;
+}
+
 /*
  * Do foreground vm switch.
  */
-void do_vgt_fast_display_switch(struct vgt_device *to_vgt)
+void do_vgt_fast_display_switch(struct pgt_device *pdev)
 {
-	struct pgt_device *pdev = to_vgt->pdev;
+	struct vgt_device *to_vgt = pdev->next_foreground_vm;
 	enum vgt_pipe pipe;
 
 	vgt_dbg("vGT: doing display switch: from %p to %p\n",

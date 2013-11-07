@@ -1715,7 +1715,8 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 				 * Guest had a vaild surface to show.
 				 */
 				vgt->hvm_boot_foreground_visible = 1;
-				do_vgt_fast_display_switch(vgt);
+				vgt->pdev->next_foreground_vm = vgt;
+				vgt_raise_request(vgt->pdev, VGT_REQUEST_DPY_SWITCH);
 			}
 			break;
 		case vgt_info_off(g2v_notify):

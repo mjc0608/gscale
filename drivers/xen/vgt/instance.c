@@ -342,17 +342,6 @@ void vgt_release_instance(struct vgt_device *vgt)
 	vgt_destroy_debugfs(vgt);
 
 	spin_lock_irq(&pdev->lock);
-	printk("check display ownership...\n");
-
-	if (!hvm_super_owner && (current_display_owner(pdev) == vgt)) {
-		vgt_dbg("switch display ownership back to dom0\n");
-		current_display_owner(pdev) = vgt_dom0;
-	}
-
-	if (!hvm_super_owner && (current_foreground_vm(pdev) == vgt)) {
-		vgt_dbg("switch foreground vm back to dom0\n");
-		do_vgt_fast_display_switch(vgt_dom0);
-	}
 
 	printk("check render ownership...\n");
 	list_for_each (pos, &pdev->rendering_runq_head) {
@@ -374,6 +363,18 @@ void vgt_release_instance(struct vgt_device *vgt)
 		pdev->next_sched_vgt = vgt_dom0;
 		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 		wmb();
+	}
+
+	printk("check display ownership...\n");
+	if (!hvm_super_owner && (current_display_owner(pdev) == vgt)) {
+		vgt_dbg("switch display ownership back to dom0\n");
+		current_display_owner(pdev) = vgt_dom0;
+	}
+
+	if (!hvm_super_owner && (current_foreground_vm(pdev) == vgt)) {
+		vgt_dbg("switch foreground vm back to dom0\n");
+		pdev->next_foreground_vm = vgt_dom0;
+		do_vgt_fast_display_switch(pdev);
 	}
 
 	spin_unlock_irq(&pdev->lock);

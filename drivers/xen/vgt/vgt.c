@@ -267,6 +267,14 @@ static int vgt_thread(void *priv)
 			vgt_signal_uevent(pdev);
 		}
 
+		if (test_and_clear_bit(VGT_REQUEST_DPY_SWITCH,
+					(void *)&pdev->request)) {
+			spin_lock_irq(&pdev->lock);
+			if (prepare_for_display_switch(pdev) == 0)
+				do_vgt_fast_display_switch(pdev);
+			spin_unlock_irq(&pdev->lock);
+		}
+
 		/* Handle render context switch request */
 		if (vgt_ctx_switch &&
 		    test_and_clear_bit(VGT_REQUEST_CTX_SWITCH,

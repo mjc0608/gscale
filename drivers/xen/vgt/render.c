@@ -133,7 +133,7 @@ static bool ring_wait_for_completion(struct pgt_device *pdev, int id)
 }
 
 /* make a render engine idle */
-static bool idle_render_engine(struct pgt_device *pdev, int id)
+bool idle_render_engine(struct pgt_device *pdev, int id)
 {
 	if (wait_for_atomic(ring_is_empty(pdev, id), VGT_RING_TIMEOUT) != 0) {
 		int i, busy = 1;
