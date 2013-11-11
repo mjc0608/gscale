@@ -1267,8 +1267,8 @@ static struct cmd_info cmd_info[] = {
 
 	{"MI_RS_CONTEXT", OP_MI_RS_CONTEXT, F_LEN_CONST, R_RCS, D_HSW_PLUS, 0, 1, NULL},
 
-	{"MI_DISPLAY_FLIP", OP_MI_DISPLAY_FLIP, F_LEN_VAR|F_POST_HANDLE, R_ALL, D_ALL,
-		ADDR_FIX_1(2), 8, vgt_cmd_handler_mi_display_flip},
+	{"MI_DISPLAY_FLIP", OP_MI_DISPLAY_FLIP, F_LEN_VAR|F_POST_HANDLE, R_RCS | R_BCS,
+		D_ALL, ADDR_FIX_1(2), 8, vgt_cmd_handler_mi_display_flip},
 
 	{"MI_SEMAPHORE_MBOX", OP_MI_SEMAPHORE_MBOX, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL },
 
