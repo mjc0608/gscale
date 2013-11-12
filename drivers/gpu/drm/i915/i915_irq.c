@@ -3147,6 +3147,13 @@ static void ironlake_irq_reset(struct drm_device *dev)
 	gen5_gt_irq_reset(dev);
 
 	ibx_irq_reset(dev);
+
+#ifdef DRM_I915_VGT_SUPPORT
+	/* a hacky hook to vGT driver */
+	printk("vGT: setup vGT irq hook in %s\n", __FUNCTION__);
+	if (dev_priv->in_xen_vgt)
+		vgt_install_irq(dev->pdev);
+#endif
 }
 
 static void vlv_display_irq_reset(struct drm_i915_private *dev_priv)
