@@ -305,10 +305,8 @@ do_general_protection(struct pt_regs *regs, long error_code)
 	struct task_struct *tsk;
 	enum ctx_state prev_state;
 
-#if 0
 	if (gp_prehandler && gp_prehandler(regs, error_code))
 		return;
-#endif
 
 	prev_state = exception_enter();
 	conditional_sti(regs);
