@@ -1720,9 +1720,10 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 			break;
 		case vgt_info_off(g2v_notify):
 			if (val == VGT_G2V_DISPLAY_REFRESH) {
-				/* put handler here
-				 * printk("VGT_G2V_DISPLAY_REFRESH\n");
-				 */
+				struct fb_notify_msg msg;
+				msg.vm_id = vgt->vm_id;
+				msg.pipe_id = PIPE_A; /* we actually don't care which pipe is notified here */
+				vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 			} else if (val == VGT_G2V_SET_POINTER_SHAPE) {
 				/* put handler here
 				 * printk("VGT_G2V_SET_POINTER_SHAPE\n");
