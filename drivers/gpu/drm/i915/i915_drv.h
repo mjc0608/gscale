@@ -1157,6 +1157,12 @@ struct i915_gem_mm {
 
 	/** PPGTT used for aliasing the PPGTT with the GTT */
 	struct i915_hw_ppgtt *aliasing_ppgtt;
+	/*
+	 * VGT:
+	 * Original i915 driver in 3.11.6 remove this entry,
+	 * whatever we need this for PPGTT ballooning.
+	 */
+	unsigned int first_ppgtt_pde_in_gtt;
 
 	struct notifier_block oom_notifier;
 	struct shrinker shrinker;
@@ -1212,10 +1218,10 @@ struct i915_gem_mm {
 
 #ifdef DRM_I915_VGT_SUPPORT
 	/* VGT balloon info */
-	unsigned long vgt_apert_base;
-	unsigned long vgt_apert_size;
-	unsigned long vgt_gmaddr_base;
-	unsigned long vgt_gmaddr_size;
+	unsigned long vgt_low_gm_base;
+	unsigned long vgt_low_gm_size;
+	unsigned long vgt_high_gm_base;
+	unsigned long vgt_high_gm_size;
 #endif
 };
 
