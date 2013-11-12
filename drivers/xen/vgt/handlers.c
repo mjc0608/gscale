@@ -2674,7 +2674,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x45260, 4, F_PT, 0, D_HSW, NULL, NULL},
 {0x1082c0, 4, F_PT, 0, D_HSW, NULL, NULL},
 {0x13005c, 4, F_PT, 0, D_HSW, NULL, NULL},
-
+{_REG_FPGA_DBG, 4, F_DOM0, 0, D_HSW, NULL, NULL},
 };
 
 bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
