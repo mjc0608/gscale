@@ -737,10 +737,6 @@ static int i915_drm_resume(struct drm_device *dev)
 
 	intel_opregion_notify_adapter(dev, PCI_D0);
 
-	ret = vgt_resume(dev->pdev);
-	if (ret)
-		return ret;
-
 	drm_kms_helper_poll_enable(dev);
 
 	return 0;
@@ -781,16 +777,15 @@ static int i915_drm_resume_early(struct drm_device *dev)
 	return ret;
 }
 
+/* vGT: for debug only. need cleanup. */
+static uint32_t gen_dev_pci_cfg_space[256/4];
+
 int i915_resume_legacy(struct drm_device *dev)
 {
 	int ret;
 
 	if (dev->switch_power_state == DRM_SWITCH_POWER_OFF)
 		return 0;
-
-#ifdef DRM_I915_VGT_SUPPORT
-	set_gen_pci_cfg_space_pt(0);
-#endif
 
 	ret = i915_drm_resume_early(dev);
 	if (ret)
@@ -955,18 +950,27 @@ static int i915_pm_suspend(struct device *dev)
 		return 0;
 
 #ifdef DRM_I915_VGT_SUPPORT
-	/* need cleanup for the native case */
-	set_gen_pci_cfg_space_pt(1);
+	{
+		int i;
+
+		/* need cleanup for the native case */
+		set_gen_pci_cfg_space_pt(1);
+
+		for (i = 0; i < ARRAY_SIZE(gen_dev_pci_cfg_space); i++)
+			pci_read_config_dword(pdev, i*4,
+					&gen_dev_pci_cfg_space[i]);
+	}
 #endif
 
 	error = i915_drm_suspend(drm_dev);
 	if (error)
 		return error;
 
+#ifdef DRM_I915_VGT_SUPPORT
 	error = vgt_suspend(pdev);
 	if (error)
 		return error;
-
+#endif
 	return 0;
 }
 
@@ -1008,6 +1012,33 @@ static int i915_pm_resume(struct device *dev)
 
 	if (drm_dev->switch_power_state == DRM_SWITCH_POWER_OFF)
 		return 0;
+
+#ifdef DRM_I915_VGT_SUPPORT
+        /* XXX: need cleanup the code and make it work for native case!
+         * i.e., use the dev_priv->in_xen_vgt...
+         */
+	{
+		int error;
+		uint32_t tmp;
+		int i;
+		for (i = 0; i < ARRAY_SIZE(gen_dev_pci_cfg_space); i++) {
+			pci_read_config_dword(drm_dev->pdev, i*4, &tmp);
+
+			if (tmp == gen_dev_pci_cfg_space[i])
+				continue;
+
+			printk("vGT: i915: cfg_space[0x%02x]: old = 0x%08x, "
+					"new =0x%08x: changed across S3!\n",
+					i*4, gen_dev_pci_cfg_space[i], tmp);
+		}
+
+		error = vgt_resume(drm_dev->pdev);
+		if (error)
+			return error;
+
+		set_gen_pci_cfg_space_pt(0);
+	}
+#endif
 
 	return i915_drm_resume(drm_dev);
 }
