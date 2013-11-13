@@ -3344,6 +3344,15 @@ static int ironlake_irq_postinstall(struct drm_device *dev)
 				DE_PLANEA_FLIP_DONE_IVB | DE_AUX_CHANNEL_A_IVB);
 		extra_mask = (DE_PIPEC_VBLANK_IVB | DE_PIPEB_VBLANK_IVB |
 			      DE_PIPEA_VBLANK_IVB | DE_ERR_INT_IVB);
+
+		I915_WRITE(GEN7_ERR_INT, I915_READ(GEN7_ERR_INT));
+
+		/*
+		 * Do not enable ERR_INT for VGT temporarily,
+		 * as VGT doesn't handle this.
+		 */
+		if (dev_priv->in_xen_vgt)
+			extra_mask &= ~DE_ERR_INT_IVB;
 	} else {
 		display_mask = (DE_MASTER_IRQ_CONTROL | DE_GSE | DE_PCH_EVENT |
 				DE_PLANEA_FLIP_DONE | DE_PLANEB_FLIP_DONE |
