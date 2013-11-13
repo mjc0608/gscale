@@ -411,6 +411,8 @@ struct parser_exec_state{
 	struct vgt_device *vgt;
 	int ring_id;
 
+	uint64_t request_id;
+
 	cmd_buf_t buf_type;
 
 	/* batch buffer address type */

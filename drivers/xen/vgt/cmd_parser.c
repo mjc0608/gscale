@@ -143,12 +143,12 @@ static int add_patch_entry(struct parser_exec_state *s,
 	}
 
 	vgt_dbg("VM(%d): Add patch entry-%d (addr: %llx, val: %x, id: %lld\n",
-		s->vgt->vm_id, next, (uint64_t)addr, val, rs->request_id);
+		s->vgt->vm_id, next, (uint64_t)addr, val, s->request_id);
 	patch = &list->patch[next];
 	patch->addr = addr;
 	patch->new_val = val;
 	patch->old_val = *(uint32_t *)addr;
-	patch->request_id = rs->request_id;
+	patch->request_id = s->request_id;
 
 	list->tail = next;
 	return 0;
@@ -172,7 +172,7 @@ static int add_post_handle_entry(struct parser_exec_state *s,
 	/* two pages mapping are always valid */
 	memcpy(&entry->exec_state, s, sizeof(struct parser_exec_state));
 	entry->handler = handler;
-	entry->request_id = rs->request_id;
+	entry->request_id = s->request_id;
 
 	list->tail = next;
 	return 0;
@@ -194,7 +194,7 @@ static int add_tail_entry(struct parser_exec_state *s,
 	}
 
 	entry = &list->cmd[next];
-	entry->request_id = rs->request_id;
+	entry->request_id = s->request_id;
 	entry->tail = tail;
 	entry->cmd_nr = cmd_nr;
 	entry->flags = flags;
@@ -2027,6 +2027,8 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	s.ring_size = size;
 	s.ring_head = gma_head;
 	s.ring_tail = gma_tail;
+
+	s.request_id = rs->request_id;
 
 	rc = ip_gma_set(&s, base + head);
 	if (rc < 0)
