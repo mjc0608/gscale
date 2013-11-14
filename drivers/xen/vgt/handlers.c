@@ -2563,7 +2563,6 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {0x3c, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 {0x860, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_RC_PWRCTX_MAXCNT, 4, F_PT, 0, D_ALL, NULL, NULL},
 {_REG_3D_CHICKEN1, 4, F_PT, 0, D_ALL, NULL, NULL},
 {_REG_3D_CHICKEN2, 4, F_PT, 0, D_ALL, NULL, NULL},
 {_REG_3D_CHICKEN3, 4, F_PT, 0, D_ALL, NULL, NULL},
@@ -2675,6 +2674,16 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x1082c0, 4, F_PT, 0, D_HSW, NULL, NULL},
 {0x13005c, 4, F_PT, 0, D_HSW, NULL, NULL},
 {_REG_FPGA_DBG, 4, F_DOM0, 0, D_HSW, NULL, NULL},
+
+/* DOM0 PM owns these registers. */
+{_REG_SCRATCH1, 4, F_DOM0, 0, D_HSW, NULL, NULL},
+{_REG_ROW_CHICKEN3, 4, F_DOM0, 0, D_HSW, NULL, NULL},
+/* MAXCNT means max idle count */
+
+{_REG_RC_PWRCTX_MAXCNT, 4, F_DOM0, 0, D_ALL, NULL, NULL},
+{0x12054, 4, F_DOM0, 0, D_HSW, NULL, NULL},
+{0x22054, 4, F_DOM0, 0, D_HSW, NULL, NULL},
+{0x1A054, 4, F_DOM0, 0, D_HSW, NULL, NULL},
 };
 
 bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)

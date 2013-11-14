@@ -1723,6 +1723,9 @@ enum vgt_port_type {
 
 #define _REG_PIXCLK_GATE			0xC6020
 
+#define _REG_SCRATCH1				0xB038
+#define _REG_ROW_CHICKEN3			0xE49C
+
 #define _REG_FPGA_DBG				0x42300
 
 #endif	/* _VGT_REG_H_ */
