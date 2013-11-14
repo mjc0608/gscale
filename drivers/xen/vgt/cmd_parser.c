@@ -209,6 +209,8 @@ static void apply_patch_entry(struct cmd_patch_info *patch)
 	ASSERT(patch->addr);
 
 	*(uint32_t *)patch->addr = patch->new_val;
+
+	clflush(patch->addr);
 }
 
 #if 0
