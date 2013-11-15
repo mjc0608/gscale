@@ -106,7 +106,7 @@ int prepare_for_display_switch(struct pgt_device *pdev)
 
 	if (!ret) {
 		ret = wait_for_vblanks_atomic(pdev);
-		if (!ret)
+		if (ret)
 			vgt_warn("Failed to get vblank in display switch!\n");
 	}
 
