@@ -1218,40 +1218,6 @@ int vgt_irq_init(struct pgt_device *pdev)
 	return 0;
 }
 
-void vgt_manage_emul_dpy_events(struct pgt_device *pdev)
-{
-	int i;
-	enum vgt_pipe pipe;
-	unsigned hw_enabled_pipes, hvm_enabled_pipes;
-	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
-
-
-	ASSERT(spin_is_locked(&pdev->lock));
-	hw_enabled_pipes = hvm_enabled_pipes = 0;
-
-	for (i = 0; i < VGT_MAX_VMS && pdev->device[i]; i ++) {
-		struct vgt_device *vgt = pdev->device[i];
-		for (pipe = PIPE_A; pipe < I915_MAX_PIPES; pipe ++) {
-			vgt_reg_t pipeconf = __vreg(vgt, VGT_PIPECONF(pipe));
-			if (pipeconf & _REGBIT_PIPE_ENABLE) {
-				if (is_current_display_owner(vgt)) {
-					hw_enabled_pipes |= (1 << pipe);
-				} else {
-					hvm_enabled_pipes |= (1 << pipe);
-				}
-			}
-		}
-	}
-
-	hrtimer_cancel(&hstate->dpy_timer.timer);
-	if (hvm_enabled_pipes & ~hw_enabled_pipes) {
-		/*there is hvm enabled pipe which is not enabled on hardware */
-		hrtimer_start(&hstate->dpy_timer.timer,
-			ktime_add_ns(ktime_get(), hstate->dpy_timer.period),
-			HRTIMER_MODE_ABS);
-	}
-}
-
 void vgt_irq_exit(struct pgt_device *pdev)
 {
 	free_irq(pdev->irq_hstate->pirq, pdev);
