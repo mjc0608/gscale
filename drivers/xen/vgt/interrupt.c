@@ -1033,6 +1033,33 @@ inline bool vgt_need_emulated_irq(struct vgt_device *vgt, enum vgt_pipe pipe)
 	return rc;
 }
 
+static inline void vgt_emulate_vblank(struct vgt_device *vgt,
+			enum vgt_pipe pipe)
+{
+	enum vgt_event_type vblank;
+	switch (pipe) {
+	case PIPE_A:
+		vblank = PIPE_A_VBLANK; break;
+	case PIPE_B:
+		vblank = PIPE_B_VBLANK; break;
+	case PIPE_C:
+		vblank = PIPE_C_VBLANK; break;
+	default:
+		ASSERT(0);
+	}
+
+	if (vgt_has_pipe_enabled(vgt, pipe)) {
+		enum vgt_pipe phys_pipe = vgt->pipe_mapping[pipe];
+		if ((phys_pipe == I915_MAX_PIPES) ||
+			!pdev_has_pipe_enabled(vgt->pdev, phys_pipe)) {
+			uint32_t delta = vgt->frmcount_delta[pipe];
+			vgt->frmcount_delta[pipe] = ((delta == 0xffffffff) ?
+						0 : ++ delta);
+			vgt_trigger_virtual_event(vgt, vblank);
+		}
+	}
+}
+
 /*TODO
  * In vgt_emulate_dpy_events(), so far only one virtual virtual
  * event is injected into VM. If more than one events are injected, we
@@ -1051,17 +1078,9 @@ void vgt_emulate_dpy_events(struct pgt_device *pdev)
 		if (!vgt || is_current_display_owner(vgt))
 			continue;
 
-		if (vgt_need_emulated_irq(vgt, PIPE_A)) {
-			vgt_trigger_virtual_event(vgt, PIPE_A_VBLANK);
-		}
-
-		if (vgt_need_emulated_irq(vgt, PIPE_B)) {
-			vgt_trigger_virtual_event(vgt, PIPE_B_VBLANK);
-		}
-
-		if (vgt_need_emulated_irq(vgt, PIPE_C)) {
-			vgt_trigger_virtual_event(vgt, PIPE_C_VBLANK);
-		}
+		vgt_emulate_vblank(vgt, PIPE_A);
+		vgt_emulate_vblank(vgt, PIPE_B);
+		vgt_emulate_vblank(vgt, PIPE_C);
 	}
 }
 

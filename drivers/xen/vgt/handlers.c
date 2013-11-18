@@ -398,18 +398,27 @@ static bool pipe_frmcount_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	enum vgt_pipe pipe;
-	bool rc = default_passthrough_mmio_read(vgt, offset, p_data, bytes);
 
-	if (rc && !is_current_display_owner(vgt)) {
-		vgt_reg_t count = *(vgt_reg_t *)p_data;
-		pipe = VGT_FRMCOUNTPIPE(offset);
-		ASSERT(pipe >= PIPE_A && pipe < I915_MAX_PIPES);
-		if ((vgt->pipe_last_vblank[pipe] != 0) && (count < vgt->pipe_last_vblank[pipe])) {
-			*(vgt_reg_t *)p_data = vgt->pipe_last_vblank[pipe] + 1;
-		}
-		vgt->pipe_last_vblank[pipe] = *(vgt_reg_t *)p_data;
-	}
-	return rc;
+	/* TODO
+	 *
+	 * If we can switch display owner, the frmcount should be handled specially
+	 * also so that hvm(including dom0) could have monotinic view of frmcount
+	 * during the owner ship switching. But Right now we do not allow the
+	 * display owner switch, so it is OK.
+	 */
+	if (is_current_display_owner(vgt))
+		return default_passthrough_mmio_read(vgt, offset,
+				p_data, bytes);
+
+	pipe = VGT_FRMCOUNTPIPE(offset);
+	ASSERT(pipe >= PIPE_A && pipe < I915_MAX_PIPES);
+
+	if (vgt_has_pipe_enabled(vgt, pipe))
+		vgt_update_frmcount(vgt, pipe);
+
+	*(vgt_reg_t *)p_data = __vreg(vgt, offset);
+
+	return true;
 }
 
 /* Pipe Display Scan Line*/
@@ -623,15 +632,15 @@ static bool dpy_trans_ddi_ctl_write(struct vgt_device *vgt, unsigned int offset,
 		rebuild_pipe_mapping(vgt,  offset, new_data, old_data);
 	}
 
-
 	return true;
 }
 
 static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
-	bool rc;
+	bool rc, orig_pipe_enabled, curr_pipe_enabled;
 	unsigned int reg;
+	enum vgt_pipe pipe;
 	uint32_t wr_data;
 
 	reg = offset & ~(bytes - 1);
@@ -645,7 +654,44 @@ static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 			wr_data &= ~_REGBIT_PIPE_STAT_ENABLED;
 	}
 
-	rc = default_mmio_write(vgt, offset, &wr_data, bytes);
+	if (offset == _REG_PIPE_EDP_CONF) {
+		vgt_reg_t ctl_edp;
+		orig_pipe_enabled = (__vreg((vgt), _REG_PIPE_EDP_CONF) &
+						_REGBIT_PIPE_ENABLE);
+		rc = default_mmio_write(vgt, offset, &wr_data, bytes);
+		curr_pipe_enabled = (__vreg((vgt), _REG_PIPE_EDP_CONF) &
+						_REGBIT_PIPE_ENABLE);
+		if (!curr_pipe_enabled) {
+			pipe = I915_MAX_PIPES;
+		} else {
+			ctl_edp = __vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP);
+			pipe = get_edp_input(ctl_edp);
+		}
+	} else {
+		pipe = VGT_PIPECONFPIPE(offset);
+		orig_pipe_enabled = vgt_has_pipe_enabled(vgt, pipe);
+		rc = default_mmio_write(vgt, offset, &wr_data, bytes);
+		curr_pipe_enabled = vgt_has_pipe_enabled(vgt, pipe);
+	}
+
+	if (orig_pipe_enabled && !curr_pipe_enabled) {
+		if (pipe != I915_MAX_PIPES) {
+			vgt_update_frmcount(vgt, pipe);
+		} else {
+			vgt_update_frmcount(vgt, PIPE_A);
+			vgt_update_frmcount(vgt, PIPE_B);
+			vgt_update_frmcount(vgt, PIPE_C);
+		}
+	}
+
+	if (!orig_pipe_enabled && curr_pipe_enabled) {
+		if (pipe == I915_MAX_PIPES) {
+			vgt_err("VM(%d): eDP pipe does not have corresponding"
+				"mapped pipe while it is enabled!\n", vgt->vm_id);
+			return false;
+		}
+		vgt_calculate_frmcount_delta(vgt, pipe);
+	}
 
 	if (rc)
 		rc = vgt_manage_emul_dpy_events(vgt->pdev);

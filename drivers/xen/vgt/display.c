@@ -364,7 +364,7 @@ static bool is_same_port(vgt_reg_t trans_coder_ctl1, vgt_reg_t trans_coder_ctl2)
 	return !(( trans_coder_ctl1 ^ trans_coder_ctl2 ) & ( _REGBIT_TRANS_DDI_PORT_MASK | _REGBIT_TRANS_DDI_MODE_SELECT_MASK ));
 }
 
-static enum vgt_pipe get_edp_input(uint32_t wr_data)
+enum vgt_pipe get_edp_input(uint32_t wr_data)
 {
 	enum vgt_pipe pipe = I915_MAX_PIPES;
 
@@ -432,6 +432,9 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 		if (virtual_pipe != I915_MAX_PIPES) {
 			vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
 			vgt_dbg("vGT: delete pipe mapping %x\n", virtual_pipe);
+			if (vgt_has_pipe_enabled(vgt, virtual_pipe))
+				vgt_update_frmcount(vgt, virtual_pipe);
+			vgt_calculate_frmcount_delta(vgt, virtual_pipe);
 		}
 		return true;
 	}
@@ -455,6 +458,9 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 	ASSERT(virtual_pipe != I915_MAX_PIPES);
 	vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
 	vgt_dbg("vGT: add pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
+	if (vgt_has_pipe_enabled(vgt, virtual_pipe))
+		vgt_update_frmcount(vgt, virtual_pipe);
+	vgt_calculate_frmcount_delta(vgt, virtual_pipe);
 
 	if (current_foreground_vm(vgt->pdev) == vgt) {
 		vgt_restore_state(vgt, virtual_pipe);
@@ -479,12 +485,18 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 			virtual_pipe = get_edp_input(__vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP));
 			if (virtual_pipe != I915_MAX_PIPES) {
 				vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
+				if (vgt_has_pipe_enabled(vgt, virtual_pipe))
+					vgt_update_frmcount(vgt, virtual_pipe);
+				vgt_calculate_frmcount_delta(vgt, virtual_pipe);
 			}
 		} else {
 			for (i = 0; i < I915_MAX_PIPES; i ++) {
 				if(vgt->pipe_mapping[i] == physical_pipe) {
 					vgt_set_pipe_mapping(vgt, i, I915_MAX_PIPES);
 					vgt_dbg("vGT: Update mapping: delete pipe %x  \n", i);
+					if (vgt_has_pipe_enabled(vgt, i))
+						vgt_update_frmcount(vgt, i);
+					vgt_calculate_frmcount_delta(vgt, i);
 				}
 			}
 		}
@@ -508,6 +520,9 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 	if (virtual_pipe != I915_MAX_PIPES) {
 		vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
 		vgt_dbg("vGT: Update pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
+		if (vgt_has_pipe_enabled(vgt, virtual_pipe))
+			vgt_update_frmcount(vgt, virtual_pipe);
+		vgt_calculate_frmcount_delta(vgt, virtual_pipe);
 	}
 
 	return true;
@@ -677,4 +692,57 @@ bool vgt_manage_emul_dpy_events(struct pgt_device *pdev)
 	}
 
 	return true;
+}
+
+void vgt_update_frmcount(struct vgt_device *vgt,
+	enum vgt_pipe pipe)
+{
+	uint32_t v_counter_addr, count, delta;
+	enum vgt_pipe phys_pipe;
+	v_counter_addr = VGT_PIPE_FRMCOUNT(pipe);
+	phys_pipe = vgt->pipe_mapping[pipe];
+	delta = vgt->frmcount_delta[pipe];
+	if (phys_pipe == I915_MAX_PIPES)
+		__vreg(vgt, v_counter_addr) = delta;
+	else {
+		uint32_t p_counter_addr = VGT_PIPE_FRMCOUNT(phys_pipe);
+		count = VGT_MMIO_READ(vgt->pdev, p_counter_addr);
+		if (count <= 0xffffffff - delta) {
+			__vreg(vgt, v_counter_addr) = count + delta;
+		} else { /* wrap it */
+			count = 0xffffffff - count;
+			__vreg(vgt, v_counter_addr) = delta - count - 1;
+		}
+	}
+}
+
+/* the calculation of delta may eliminate un-read frmcount in vreg.
+ * so if pipe is enabled, need to update frmcount first before
+ * calculating the delta
+ */
+void vgt_calculate_frmcount_delta(struct vgt_device *vgt,
+	enum vgt_pipe pipe)
+{
+	uint32_t delta;
+	uint32_t virt_counter = __vreg(vgt, VGT_PIPE_FRMCOUNT(pipe));
+	enum vgt_pipe phys_pipe = vgt->pipe_mapping[pipe];
+	uint32_t hw_counter;
+
+	/* if physical pipe is not enabled yet, Delta will be used
+	 * as the frmcount. When physical pipe is enabled, new delta
+	 * will be calculated based on the hw count value.
+	 */
+	if (phys_pipe == I915_MAX_PIPES) {
+		vgt->frmcount_delta[pipe] = virt_counter;
+	} else {
+		hw_counter = VGT_MMIO_READ(vgt->pdev,
+					VGT_PIPE_FRMCOUNT(pipe));
+		if (virt_counter >= hw_counter)
+			delta = virt_counter - hw_counter;
+		else {
+			delta = 0xffffffff - hw_counter;
+			delta += virt_counter + 1;
+		}
+		vgt->frmcount_delta[pipe] = delta;
+	}
 }

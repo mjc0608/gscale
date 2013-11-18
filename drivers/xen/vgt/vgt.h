@@ -654,7 +654,7 @@ struct vgt_device {
 	uint64_t submitted_cmds;	/* CMDs submitted in current slice */
 	uint64_t allocated_cmds;	/* CMDs allocated in current slice */
 
-	uint32_t pipe_last_vblank[I915_MAX_PIPES];	/* used for vblank virtualization*/
+	uint32_t frmcount_delta[I915_MAX_PIPES]; /* used for vblank virtualization*/
 
 	struct sbi_registers sbi_regs;
 };
@@ -1932,9 +1932,12 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 }
 
 
+enum vgt_pipe get_edp_input(uint32_t wr_data);
 void vgt_forward_events(struct pgt_device *pdev);
 void vgt_emulate_dpy_events(struct pgt_device *pdev);
 bool vgt_manage_emul_dpy_events(struct pgt_device *pdev);
+void vgt_update_frmcount(struct vgt_device *vgt, enum vgt_pipe pipe);
+void vgt_calculate_frmcount_delta(struct vgt_device *vgt, enum vgt_pipe pipe);
 void vgt_install_irq(struct pci_dev *pdev);
 int vgt_irq_init(struct pgt_device *pgt);
 void vgt_irq_exit(struct pgt_device *pgt);
