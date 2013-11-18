@@ -583,7 +583,7 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 	return true;
 }
 
-void vgt_manage_emul_dpy_events(struct pgt_device *pdev)
+bool vgt_manage_emul_dpy_events(struct pgt_device *pdev)
 {
 	int i;
 	enum vgt_pipe pipe;
@@ -596,15 +596,31 @@ void vgt_manage_emul_dpy_events(struct pgt_device *pdev)
 
 	for (i = 0; i < VGT_MAX_VMS && pdev->device[i]; i ++) {
 		struct vgt_device *vgt = pdev->device[i];
+		vgt_reg_t pipeconf;
 		for (pipe = PIPE_A; pipe < I915_MAX_PIPES; pipe ++) {
-			vgt_reg_t pipeconf = __vreg(vgt, VGT_PIPECONF(pipe));
+			pipeconf = __vreg(vgt, VGT_PIPECONF(pipe));
 			if (pipeconf & _REGBIT_PIPE_ENABLE) {
-				if (is_current_display_owner(vgt)) {
+				if (is_current_display_owner(vgt))
 					hw_enabled_pipes |= (1 << pipe);
-				} else {
+				else
 					hvm_enabled_pipes |= (1 << pipe);
-				}
 			}
+		}
+
+		pipeconf = __vreg(vgt, _REG_PIPE_EDP_CONF);
+		if (pipeconf & _REGBIT_PIPE_ENABLE) {
+			pipe = get_edp_input(
+				__vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP));
+			if (pipe == I915_MAX_PIPES) {
+				vgt_err("vGT(%d): "
+					"Invalid input selection for eDP\n",
+					vgt->vgt_id);
+				return false;
+			}
+			if (is_current_display_owner(vgt))
+				hw_enabled_pipes |= (1 << pipe);
+			else
+				hvm_enabled_pipes |= (1 << pipe);
 		}
 	}
 
@@ -615,4 +631,6 @@ void vgt_manage_emul_dpy_events(struct pgt_device *pdev)
 			ktime_add_ns(ktime_get(), hstate->dpy_timer.period),
 			HRTIMER_MODE_ABS);
 	}
+
+	return true;
 }

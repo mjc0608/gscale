@@ -646,7 +646,10 @@ static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	}
 
 	rc = default_mmio_write(vgt, offset, &wr_data, bytes);
-	vgt_manage_emul_dpy_events(vgt->pdev);
+
+	if (rc)
+		rc = vgt_manage_emul_dpy_events(vgt->pdev);
+
 	return rc;
 }
 

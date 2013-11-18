@@ -1933,7 +1933,7 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 
 void vgt_forward_events(struct pgt_device *pdev);
 void vgt_emulate_dpy_events(struct pgt_device *pdev);
-void vgt_manage_emul_dpy_events(struct pgt_device *pdev);
+bool vgt_manage_emul_dpy_events(struct pgt_device *pdev);
 void vgt_install_irq(struct pci_dev *pdev);
 int vgt_irq_init(struct pgt_device *pgt);
 void vgt_irq_exit(struct pgt_device *pgt);
