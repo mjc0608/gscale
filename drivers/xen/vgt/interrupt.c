@@ -578,6 +578,58 @@ static void vgt_handle_port_hotplug_virt(struct vgt_irq_host_state *hstate,
 	}
 }
 
+
+static enum vgt_event_type translate_physical_event(struct vgt_device *vgt,
+	enum vgt_event_type event)
+{
+	enum vgt_pipe virtual_pipe = I915_MAX_PIPES;
+	enum vgt_pipe physical_pipe = I915_MAX_PIPES;
+	enum vgt_event_type virtual_event = event;
+	int i;
+
+	switch (event) {
+	case PIPE_A_VSYNC:
+	case PIPE_A_LINE_COMPARE:
+	case PIPE_A_VBLANK:
+	case PRIMARY_A_FLIP_DONE:
+	case SPRITE_A_FLIP_DONE:
+		physical_pipe = PIPE_A;
+		break;
+
+	case PIPE_B_VSYNC:
+	case PIPE_B_LINE_COMPARE:
+	case PIPE_B_VBLANK:
+	case PRIMARY_B_FLIP_DONE:
+	case SPRITE_B_FLIP_DONE:
+		physical_pipe = PIPE_B;
+		break;
+
+	case PIPE_C_VSYNC:
+	case PIPE_C_LINE_COMPARE:
+	case PIPE_C_VBLANK:
+	case PRIMARY_C_FLIP_DONE:
+	case SPRITE_C_FLIP_DONE:
+		physical_pipe = PIPE_C;
+		break;
+	default:
+		physical_pipe = I915_MAX_PIPES;
+	}
+
+	for (i = 0; i < I915_MAX_PIPES; i++) {
+		if (vgt->pipe_mapping[i] == physical_pipe) {
+			virtual_pipe = i;
+			break;
+		}
+	}
+
+	if (virtual_pipe != I915_MAX_PIPES && physical_pipe  != I915_MAX_PIPES) {
+		virtual_event = event + ((int)virtual_pipe - (int)physical_pipe);
+	}
+
+	return virtual_event;
+}
+
+
 /* =======================pEvent Handlers===================== */
 
 static void vgt_handle_default_event_phys(struct vgt_irq_host_state *hstate,
@@ -920,6 +972,7 @@ void vgt_forward_events(struct pgt_device *pdev)
 	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
 	vgt_event_virt_handler_t handler;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
+	enum vgt_event_type virtual_event;
 
 	/* WARING: this should be under lock protection */
 	//raise_ctx_sched(vgt_dom0);
@@ -944,12 +997,15 @@ void vgt_forward_events(struct pgt_device *pdev)
 		switch (vgt_get_event_policy(hstate, event)) {
 		case EVENT_FW_ALL:
 			for (i = 0; i < VGT_MAX_VMS; i++) {
-				if (pdev->device[i])
-					handler(hstate, event, pdev->device[i]);
+				if (pdev->device[i]) {
+					virtual_event = translate_physical_event(pdev->device[i], event);
+					handler(hstate, virtual_event, pdev->device[i]);
+				}
 			}
 			break;
 		case EVENT_FW_DOM0:
-			handler(hstate, event, vgt_dom0);
+			virtual_event = translate_physical_event(vgt_dom0, event);
+			handler(hstate, virtual_event, vgt_dom0);
 			break;
 		case EVENT_FW_NONE:
 		default:

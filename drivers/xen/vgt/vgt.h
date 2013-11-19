@@ -108,22 +108,32 @@ enum vgt_event_type {
 	VECS_MI_FLUSH_DW,
 
 	// DISPLAY
-	PIPE_A_FIFO_UNDERRUN,
-	PIPE_A_CRC_ERR,
-	PIPE_A_CRC_DONE,
-	PIPE_A_VSYNC,
-	PIPE_A_LINE_COMPARE,
-	PIPE_A_ODD_FIELD,
-	PIPE_A_EVEN_FIELD,
-	PIPE_A_VBLANK,
-	PIPE_B_FIFO_UNDERRUN,	// This is an active high level for the duration of the Pipe B FIFO underrun
-	PIPE_B_CRC_ERR,	// This is an active high pulse on the Pipe B CRC error
-	PIPE_B_CRC_DONE,	// This is an active high pulse on the Pipe B CRC done
-	PIPE_B_VSYNC,	// This is an active high level for the duration of the Pipe B vertical sync
-	PIPE_B_LINE_COMPARE,	// This is an active high level for the duration of the selected Pipe B scan lines
-	PIPE_B_ODD_FIELD,	// This is an active high level for the duration of the Pipe B interlaced odd field
-	PIPE_B_EVEN_FIELD,	// This is an active high level for the duration of the Pipe B interlaced even field
-	PIPE_B_VBLANK,	// This is an active high level for the duration of the Pipe B vertical blank
+	PIPE_A_FIFO_UNDERRUN,	/* This is an active high level for the duration of the Pipe A FIFO underrun */
+	PIPE_B_FIFO_UNDERRUN,	/* This is an active high level for the duration of the Pipe B FIFO underrun */
+	PIPE_A_CRC_ERR,	/* This is an active high pulse on the Pipe A CRC error */
+	PIPE_B_CRC_ERR,	/* This is an active high pulse on the Pipe B CRC error */
+	PIPE_A_CRC_DONE,	/* This is an active high pulse on the Pipe A CRC done */
+	PIPE_B_CRC_DONE,	/* This is an active high pulse on the Pipe B CRC done */
+	PIPE_A_ODD_FIELD,	/* This is an active high level for the duration of the Pipe A interlaced odd field */
+	PIPE_B_ODD_FIELD,	/* This is an active high level for the duration of the Pipe B interlaced odd field */
+	PIPE_A_EVEN_FIELD,	/* This is an active high level for the duration of the Pipe A interlaced even field */
+	PIPE_B_EVEN_FIELD,	/* This is an active high level for the duration of the Pipe B interlaced even field */
+	PIPE_A_LINE_COMPARE,	/* This is an active high level for the duration of the selected Pipe A scan lines */
+	PIPE_B_LINE_COMPARE,	/* This is an active high level for the duration of the selected Pipe B scan lines */
+	PIPE_C_LINE_COMPARE,	/* This is an active high level for the duration of the selected Pipe C scan lines */
+	PIPE_A_VBLANK,	/* This is an active high level for the duration of the Pipe A vertical blank */
+	PIPE_B_VBLANK,	/* This is an active high level for the duration of the Pipe B vertical blank */
+	PIPE_C_VBLANK,	/* This is an active high level for the duration of the Pipe C vertical blank */
+	PIPE_A_VSYNC,	/* This is an active high level for the duration of the Pipe A vertical sync */
+	PIPE_B_VSYNC,	/* This is an active high level for the duration of the Pipe B vertical sync */
+	PIPE_C_VSYNC,	/* This is an active high level for the duration of the Pipe C vertical sync */
+	PRIMARY_A_FLIP_DONE,	/* This is an active high pulse when a primary plane A flip is done */
+	PRIMARY_B_FLIP_DONE,	/* This is an active high pulse when a primary plane B flip is done */
+	PRIMARY_C_FLIP_DONE,	/* This is an active high pulse when a primary plane C flip is done */
+	SPRITE_A_FLIP_DONE,	/* This is an active high pulse when a sprite plane A flip is done */
+	SPRITE_B_FLIP_DONE,	/* This is an active high pulse when a sprite plane B flip is done */
+	SPRITE_C_FLIP_DONE,	/* This is an active high pulse when a sprite plane C flip is done */
+
 	DPST_PHASE_IN,	// This is an active high pulse on the DPST phase in event
 	DPST_HISTOGRAM,	// This is an active high pulse on the AUX A done event.
 	GSE,
@@ -133,15 +143,6 @@ enum vgt_event_type {
 	PERF_COUNTER,	// This is an active high pulse when the performance counter reaches the threshold value programmed in the Performance Counter Source register
 	POISON,		// This is an active high pulse on receiving the poison message
 	GTT_FAULT,	// This is an active high level while either of the GTT Fault Status register bits are set
-	PRIMARY_A_FLIP_DONE,
-	PRIMARY_B_FLIP_DONE,	// This is an active high pulse when a primary plane B flip is done
-	SPRITE_A_FLIP_DONE,
-	SPRITE_B_FLIP_DONE,	// This is an active high pulse when a sprite plane B flip is done
-	PIPE_C_VBLANK,		/* IVB DE */
-	PIPE_C_VSYNC,
-	PIPE_C_LINE_COMPARE,
-	PRIMARY_C_FLIP_DONE,
-	SPRITE_C_FLIP_DONE,
 	ERROR_INTERRUPT_COMBINED,
 
 	// PM
