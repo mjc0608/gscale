@@ -972,6 +972,15 @@
 #define _REG_WM2S_LP_IVB	0x45124
 #define _REG_WM3S_LP_IVB	0x45128
 
+#define  _REGBIT_WM0_PIPE_PLANE_MASK	(0x7f<<16)
+#define  _REGBIT_WM0_PIPE_PLANE_SHIFT	16
+#define  _REGBIT_WM0_PIPE_SPRITE_MASK	(0x3f<<8)
+#define  _REGBIT_WM0_PIPE_SPRITE_SHIFT	8
+#define  _REGBIT_WM0_PIPE_CURSOR_MASK	(0x1f)
+
+#define DISPLAY_MAXWM	0x7f	/* bit 16:22 */
+#define CURSOR_MAXWM	0x1f	/* bit 4:0 */
+
 union PCH_PP_CONTROL
 {
 	uint32_t data;

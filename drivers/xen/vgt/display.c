@@ -527,6 +527,11 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 	unsigned int h_total_reg;
 	unsigned int v_total_reg;
 	uint32_t edp_trans_code;
+	uint64_t  plane_wm;
+	uint64_t  sprite_wm;
+	uint64_t  cursor_wm;
+	unsigned int wm_reg;
+	unsigned int wm_value;
 
 	real_pipe = vgt->pipe_mapping[pipe];
 
@@ -572,6 +577,28 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 		pf_ctl = pf_ctl | _REGBIT_PF_ENABLE;
 	} else {
 		vgt_dbg("disable panel fitting for pipe %d!\n", pipe);
+	}
+
+	/* we need to increase Water Mark in down scaling case */
+	if (src_width > target_width || src_height > target_height) {
+		wm_reg = real_pipe == PIPE_A ? _REG_WM0_PIPEA_ILK :
+			(real_pipe == PIPE_B ? _REG_WM0_PIPEB_ILK : _REG_WM0_PIPEC_IVB);
+		plane_wm = (__vreg(vgt_dom0, wm_reg) & _REGBIT_WM0_PIPE_PLANE_MASK)
+			>> _REGBIT_WM0_PIPE_PLANE_SHIFT;
+		sprite_wm = (__vreg(vgt_dom0, wm_reg) & _REGBIT_WM0_PIPE_SPRITE_MASK)
+			>> _REGBIT_WM0_PIPE_SPRITE_SHIFT;
+		cursor_wm = __vreg(vgt_dom0, wm_reg) & _REGBIT_WM0_PIPE_CURSOR_MASK;
+		plane_wm = plane_wm * src_width * src_height / (target_width * target_height);
+		sprite_wm = sprite_wm * src_width * src_height / (target_width * target_height);
+		cursor_wm = cursor_wm * src_width * src_height / (target_width * target_height);
+		plane_wm = plane_wm > DISPLAY_MAXWM ? DISPLAY_MAXWM : plane_wm;
+		sprite_wm = sprite_wm > DISPLAY_MAXWM ? DISPLAY_MAXWM : sprite_wm;
+		cursor_wm = cursor_wm > CURSOR_MAXWM ? CURSOR_MAXWM : cursor_wm;
+		wm_value = cursor_wm & _REGBIT_WM0_PIPE_CURSOR_MASK;
+		wm_value = wm_value | (sprite_wm  << _REGBIT_WM0_PIPE_SPRITE_SHIFT);
+		wm_value = wm_value | ((plane_wm << _REGBIT_WM0_PIPE_PLANE_SHIFT) &
+			_REGBIT_WM0_PIPE_PLANE_MASK);
+		VGT_MMIO_WRITE(vgt->pdev, wm_reg, wm_value);
 	}
 
 	VGT_MMIO_WRITE(vgt->pdev, VGT_PIPESRC(real_pipe),  ((src_width -1) << 16) | (src_height - 1));
