@@ -175,7 +175,8 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 	        fail |= i915_balloon_space(
 			&dev_priv->gtt.base.mm,
 			&bl_info.space[3],
-			high_gm_end, dev_priv->gtt.base.start + dev_priv->gtt.base.total);
+			high_gm_base + high_gm_size,
+			dev_priv->gtt.base.start + dev_priv->gtt.base.total);
 	}
 
 	/* Low GM ballooning */
@@ -208,7 +209,7 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 	        fail |= i915_balloon_space(
 			&dev_priv->gtt.base.mm,
 			&bl_info.space[1],
-			low_gm_end,
+			low_gm_base + low_gm_size,
 			dev_priv->gtt.mappable_end);
 	}
 
@@ -1901,15 +1902,15 @@ static int i915_gem_setup_global_gtt(struct drm_device *dev,
 	if (!HAS_LLC(dev))
 		dev_priv->gtt.base.mm.color_adjust = i915_gtt_color_adjust;
 
-	dev_priv->gtt.start = start;
-	dev_priv->gtt.total = end - start;
+	dev_priv->gtt.base.start = start;
+	dev_priv->gtt.base.total = end - start;
 
 #ifdef DRM_I915_VGT_SUPPORT
 	/*
 	 * Do ballooning before touching GEM gtt space.
 	 */
 	if (dev_priv->in_xen_vgt)
-		rc = i915_balloon(dev_priv);
+		ret = i915_balloon(dev_priv);
 #endif
 
 	/* Mark any preallocated objects as occupied */
@@ -1928,17 +1929,6 @@ static int i915_gem_setup_global_gtt(struct drm_device *dev,
 		vma->bound |= GLOBAL_BIND;
 	}
 
-<<<<<<< HEAD
-	dev_priv->gtt.base.start = start;
-	dev_priv->gtt.base.total = end - start;
-
-#ifdef DRM_I915_VGT_SUPPORT
-	if (dev_priv->in_xen_vgt)
-		ret = i915_balloon(dev_priv);
-#endif
-
-=======
->>>>>>> 329997a... vgt: rebase-3.11.6: revisit: do ballooning before touching GEM GTT space.
 	/* Clear any non-preallocated blocks */
 	drm_mm_for_each_hole(entry, &ggtt_vm->mm, hole_start, hole_end) {
 		DRM_DEBUG_KMS("clearing unused GTT space: [%lx, %lx]\n",
