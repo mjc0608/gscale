@@ -377,7 +377,7 @@ void inject_dom0_virtual_interrupt(void *info)
 
 	ASSERT(pdev->dom0_irq_cpu != -1);
 	this_cpu = smp_processor_id();
-	if (this_cpu != pdev->dom0_irq_cpu) {
+	if (this_cpu != pdev->dom0_irq_cpu || pdev->dom0_irq_injecting) {
 		spin_unlock_irqrestore(&pdev->lock, flags);
 		return;
 	}
@@ -401,6 +401,7 @@ void inject_dom0_virtual_interrupt(void *info)
 	 */
 	if (this_cpu == target_cpu) {
 		pdev->dom0_irq_pending = false;
+		pdev->dom0_irq_injecting = false;
 		wmb();
 		pdev->dom0_irq_cpu = -1;
 
@@ -408,6 +409,7 @@ void inject_dom0_virtual_interrupt(void *info)
 		spin_unlock_irqrestore(&pdev->lock, flags);
 	} else {
 		pdev->dom0_irq_cpu = target_cpu;
+		pdev->dom0_irq_injecting = true;
 		spin_unlock_irqrestore(&pdev->lock, flags);
 
 		/* do this out of the lock */
@@ -1188,6 +1190,7 @@ int vgt_irq_init(struct pgt_device *pdev)
 	pdev->irq_hstate = hstate;
 	pdev->dom0_irq_cpu = -1;
 	pdev->dom0_irq_pending = false;
+	pdev->dom0_irq_injecting = false;
 
 	dpy_timer = &hstate->dpy_timer;
 	hrtimer_init(&dpy_timer->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
