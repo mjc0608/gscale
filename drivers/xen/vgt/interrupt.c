@@ -1021,9 +1021,17 @@ void vgt_forward_events(struct pgt_device *pdev)
 	pdev->stat.virq_cycles += get_cycles() - pdev->stat.last_virq;
 }
 
-#define NEED_VIRT_INT_FOR_PIPE(vgt, pipe)		\
-	(vgt_has_pipe_enabled(vgt, pipe) &&		\
-	!pdev_has_pipe_enabled(vgt->pdev, pipe))
+inline bool vgt_need_emulated_irq(struct vgt_device *vgt, enum vgt_pipe pipe)
+{
+	bool rc = false;
+	if (vgt_has_pipe_enabled(vgt, pipe)) {
+		enum vgt_pipe phys_pipe = vgt->pipe_mapping[pipe];
+		if ((phys_pipe == I915_MAX_PIPES) ||
+			!pdev_has_pipe_enabled(vgt->pdev, phys_pipe))
+			rc = true;
+	}
+	return rc;
+}
 
 /*TODO
  * In vgt_emulate_dpy_events(), so far only one virtual virtual
@@ -1043,15 +1051,15 @@ void vgt_emulate_dpy_events(struct pgt_device *pdev)
 		if (!vgt || is_current_display_owner(vgt))
 			continue;
 
-		if (NEED_VIRT_INT_FOR_PIPE(vgt, PIPE_A)) {
+		if (vgt_need_emulated_irq(vgt, PIPE_A)) {
 			vgt_trigger_virtual_event(vgt, PIPE_A_VBLANK);
 		}
 
-		if (NEED_VIRT_INT_FOR_PIPE(vgt, PIPE_B)) {
+		if (vgt_need_emulated_irq(vgt, PIPE_B)) {
 			vgt_trigger_virtual_event(vgt, PIPE_B_VBLANK);
 		}
 
-		if (NEED_VIRT_INT_FOR_PIPE(vgt, PIPE_C)) {
+		if (vgt_need_emulated_irq(vgt, PIPE_C)) {
 			vgt_trigger_virtual_event(vgt, PIPE_C_VBLANK);
 		}
 	}

@@ -614,12 +614,13 @@ bool vgt_manage_emul_dpy_events(struct pgt_device *pdev)
 {
 	int i;
 	enum vgt_pipe pipe;
-	unsigned hw_enabled_pipes, hvm_enabled_pipes;
+	unsigned hw_enabled_pipes, hvm_required_pipes;
 	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
+	bool hvm_no_pipe_mapping = false;
 
 
 	ASSERT(spin_is_locked(&pdev->lock));
-	hw_enabled_pipes = hvm_enabled_pipes = 0;
+	hw_enabled_pipes = hvm_required_pipes = 0;
 
 	for (i = 0; i < VGT_MAX_VMS && pdev->device[i]; i ++) {
 		struct vgt_device *vgt = pdev->device[i];
@@ -629,8 +630,17 @@ bool vgt_manage_emul_dpy_events(struct pgt_device *pdev)
 			if (pipeconf & _REGBIT_PIPE_ENABLE) {
 				if (is_current_display_owner(vgt))
 					hw_enabled_pipes |= (1 << pipe);
-				else
-					hvm_enabled_pipes |= (1 << pipe);
+				else {
+					enum vgt_pipe p_pipe;
+					p_pipe  = vgt->pipe_mapping[pipe];
+					if (p_pipe != I915_MAX_PIPES) {
+						hvm_required_pipes |=
+								(1 << pipe);
+					} else {
+						hvm_no_pipe_mapping = true;
+						break;
+					}
+				}
 			}
 		}
 
@@ -646,13 +656,20 @@ bool vgt_manage_emul_dpy_events(struct pgt_device *pdev)
 			}
 			if (is_current_display_owner(vgt))
 				hw_enabled_pipes |= (1 << pipe);
-			else
-				hvm_enabled_pipes |= (1 << pipe);
+			else {
+				enum vgt_pipe p_pipe = vgt->pipe_mapping[pipe];
+				if (p_pipe != I915_MAX_PIPES) {
+					hvm_required_pipes |= (1 << pipe);
+				} else {
+					hvm_no_pipe_mapping = true;
+					break;
+				}
+			}
 		}
 	}
 
 	hrtimer_cancel(&hstate->dpy_timer.timer);
-	if (hvm_enabled_pipes & ~hw_enabled_pipes) {
+	if (hvm_no_pipe_mapping || (hvm_required_pipes & ~hw_enabled_pipes)) {
 		/*there is hvm enabled pipe which is not enabled on hardware */
 		hrtimer_start(&hstate->dpy_timer.timer,
 			ktime_add_ns(ktime_get(), hstate->dpy_timer.period),
