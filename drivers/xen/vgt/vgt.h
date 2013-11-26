@@ -237,8 +237,6 @@ struct vgt_rsvd_ring {
 
 #define _vgt_mmio_va(pdev, x)		((char*)pdev->gttmmio_base_va+x)	/* PA to VA */
 #define _vgt_mmio_pa(pdev, x)		(pdev->gttmmio_base+x)			/* PA to VA */
-#define sleep_ns(x)	{long y=1UL*x/2; while (y-- > 0) ;}
-#define sleep_us(x)	{long y=500UL*x; while (y-- > 0) ;}
 
 #define VGT_RING_TIMEOUT	500	/* in ms */
 #define VGT_VBLANK_TIMEOUT	50	/* in ms */
@@ -2119,33 +2117,6 @@ int vgt_init_mmio_device(struct pgt_device *pdev);
 void vgt_cleanup_mmio_dev(struct pgt_device *pdev);
 int vgt_create_mmio_dev(struct vgt_device *vgt);
 void vgt_destroy_mmio_dev(struct vgt_device *vgt);
-
-/* copy from drmP.h */
-static __inline__ bool drm_can_sleep(void)
-{
-	if (in_atomic() || irqs_disabled())
-		return false;
-	return true;
-}
-
-#define _wait_for(COND, MS, W) ({					\
-	unsigned long timeout__ = jiffies + msecs_to_jiffies(MS);	\
-	int ret__ = 0;							\
-	while (!(COND)) {						\
-		if (time_after(jiffies, timeout__)) {			\
-			ret__ = -ETIMEDOUT;				\
-			break;						\
-		}							\
-		if (W && drm_can_sleep()) {				\
-			msleep(W);					\
-		} else {						\
-			cpu_relax();					\
-		}							\
-	}								\
-	ret__;								\
-})
-
-#define wait_for(COND, MS) _wait_for(COND, MS, 1)
 
 /* invoked likely in irq disabled condition */
 #define wait_for_atomic(COND, MS) ({					\

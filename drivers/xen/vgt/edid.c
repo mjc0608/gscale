@@ -108,7 +108,7 @@ do {									\
 			time_out = 0;					\
 			break;						\
 		} else {						\
-			msleep(interval);				\
+			mdelay(interval);				\
 		}							\
 	}								\
 } while(0);

@@ -649,7 +649,7 @@ static bool vgt_setup_rsvd_ring(struct vgt_rsvd_ring *ring)
 
 	enable_ring(pdev, id, ((ring->size - PAGE_SIZE) & 0x1FF000) | 1);
 
-	if (wait_for(((VGT_READ_CTL(pdev, id) & 1) != 0 &&
+	if (wait_for_atomic(((VGT_READ_CTL(pdev, id) & 1) != 0 &&
 			VGT_READ_START(pdev, id) == ring->start &&
 			(VGT_READ_HEAD(pdev, id) & RB_HEAD_OFF_MASK) == 0),
 			VGT_RING_TIMEOUT)) {
