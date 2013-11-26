@@ -640,10 +640,12 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 	if (enabled) {
 		reg = _REG_HTOTAL_EDP;
 		val = vgt_get_mmio_value(pdev, vgt, reg);
-		seq_printf(m, "\tPIPE_HTOTAL_EDP(0x%x): 0x%08x\n", reg, val);
+		seq_printf(m, "\tPIPE_HTOTAL_EDP(0x%x): 0x%08x (total: %d)\n",
+			reg, val, (val & 0xfff) + 1);
 		reg = _REG_VTOTAL_EDP;
 		val = vgt_get_mmio_value(pdev, vgt, reg);
-		seq_printf(m, "\tPIPE_VTOTAL_EDP(0x%x): 0x%08x\n", reg, val);
+		seq_printf(m, "\tPIPE_VTOTAL_EDP(0x%x): 0x%08x (total: %d)\n",
+			reg, val, (val & 0xfff) + 1);
 	}
 
 	reg = _REG_TRANS_DDI_FUNC_CTL_EDP;
