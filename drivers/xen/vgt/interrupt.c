@@ -350,15 +350,31 @@ static void pend_dom0_virtual_interrupt(struct vgt_device *vgt)
 	/* TODO: may do a kick here */
 }
 
+static void do_inject_dom0_virtual_interrupt(void *info, int ipi);
+
+static void inject_dom0_ipi_virtual_interrupt(void *info)
+{
+	do_inject_dom0_virtual_interrupt(info, 1);
+
+	return;
+}
+
+void inject_dom0_virtual_interrupt(void *info)
+{
+	do_inject_dom0_virtual_interrupt(info, 0);
+
+	return;
+}
+
 static DEFINE_PER_CPU(struct call_single_data, vgt_call_data) = {
-	.func = inject_dom0_virtual_interrupt,
+	.func = inject_dom0_ipi_virtual_interrupt,
 };
 
 /*
  * actual virq injection happens here. called in vgt_exit()
  * or IPI handler
  */
-void inject_dom0_virtual_interrupt(void *info)
+static void do_inject_dom0_virtual_interrupt(void *info, int ipi)
 {
 	unsigned long flags;
 	struct pgt_device *pdev = &default_device;
@@ -377,7 +393,7 @@ void inject_dom0_virtual_interrupt(void *info)
 
 	ASSERT(pdev->dom0_irq_cpu != -1);
 	this_cpu = smp_processor_id();
-	if (this_cpu != pdev->dom0_irq_cpu || pdev->dom0_irq_injecting) {
+	if (this_cpu != pdev->dom0_irq_cpu) {
 		spin_unlock_irqrestore(&pdev->lock, flags);
 		return;
 	}
@@ -401,21 +417,23 @@ void inject_dom0_virtual_interrupt(void *info)
 	 */
 	if (this_cpu == target_cpu) {
 		pdev->dom0_irq_pending = false;
-		pdev->dom0_irq_injecting = false;
 		wmb();
 		pdev->dom0_irq_cpu = -1;
+
+		if (ipi)
+			clear_bit(0, &pdev->dom0_ipi_irq_injecting);
 
 		resend_irq_on_evtchn(i915_irq);
 		spin_unlock_irqrestore(&pdev->lock, flags);
 	} else {
 		pdev->dom0_irq_cpu = target_cpu;
-		pdev->dom0_irq_injecting = true;
 		spin_unlock_irqrestore(&pdev->lock, flags);
 
 		/* do this out of the lock */
-		if (!per_cpu(in_vgt, target_cpu)) {
+		if (!per_cpu(in_vgt, target_cpu)
+				&& !test_and_set_bit(0, &pdev->dom0_ipi_irq_injecting)) {
 			smp_call_function_single_async(target_cpu,
-				&per_cpu(vgt_call_data, this_cpu));
+					&per_cpu(vgt_call_data, this_cpu));
 		}
 	}
 }
@@ -1190,7 +1208,7 @@ int vgt_irq_init(struct pgt_device *pdev)
 	pdev->irq_hstate = hstate;
 	pdev->dom0_irq_cpu = -1;
 	pdev->dom0_irq_pending = false;
-	pdev->dom0_irq_injecting = false;
+	pdev->dom0_ipi_irq_injecting = 0;
 
 	dpy_timer = &hstate->dpy_timer;
 	hrtimer_init(&dpy_timer->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);

@@ -892,7 +892,7 @@ struct pgt_device {
 	void *opregion_va;
 
 	bool dom0_irq_pending;
-	bool dom0_irq_injecting;
+	unsigned long dom0_ipi_irq_injecting;
 	int dom0_irq_cpu;
 };
 
