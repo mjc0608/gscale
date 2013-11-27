@@ -25,6 +25,7 @@
 
 #include <linux/delay.h>
 #include <linux/slab.h>
+#include <drm/drmP.h>
 
 #include "vgt.h"
 
@@ -317,6 +318,10 @@ static inline bool vgt_port_equivalent(int id, int given_index)
 void vgt_probe_edid(struct pgt_device *pdev, int index)
 {
 	int i, ret;
+	struct drm_device *drm_dev = pci_get_drvdata(pdev->pdev);
+
+	if (drm_dev)
+		mutex_lock(&drm_dev->mode_config.mutex);
 
 	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS0, 0);
 
@@ -441,6 +446,10 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				value = vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 4);
 				(*pedid)->edid_block[length] = ((value) & 0xff0000) >> 16;
 			}
+
+			/* stop reading */
+			msg[0] = (VGT_AUX_I2C_READ) << 4;
+			vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 3);
 		}
 
 		if (*pedid) {
@@ -478,6 +487,9 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			vgt_info("EDID_PROBE: %s\tis not detected\n", vgt_port_name[i]);
 		}
 	}
+
+	if (drm_dev)
+		mutex_unlock(&drm_dev->mode_config.mutex);
 }
 
 /*
@@ -486,6 +498,10 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 {
 	int i;
+	struct drm_device *drm_dev = pci_get_drvdata(pdev->pdev);
+
+	if (drm_dev)
+		mutex_lock(&drm_dev->mode_config.mutex);
 
 	for (i = 0; i < DPCD_MAX; i++) {
 		unsigned int aux_ch_addr = 0;
@@ -575,6 +591,9 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 			clear_bit(dp_port, pdev->detected_ports);
 		}
 	}
+
+	if (drm_dev)
+		mutex_unlock(&drm_dev->mode_config.mutex);
 }
 
 /**************************************************************************
