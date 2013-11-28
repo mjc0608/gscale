@@ -129,7 +129,7 @@ static void v_force_wake_get(struct vgt_device *vgt)
 		}
 	}
 
-	bitmap_set(vgt->pdev->v_force_wake_bitmap, vgt->vgt_id, VGT_MAX_VMS);
+	bitmap_set(vgt->pdev->v_force_wake_bitmap, vgt->vgt_id, 1);
 
 	spin_unlock_irqrestore(&vgt->pdev->v_force_wake_lock, flags);
 }
