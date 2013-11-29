@@ -390,13 +390,26 @@ static bool gtt_mmio_read32(struct vgt_device *vgt, unsigned int off,
 	ASSERT(bytes == 4);
 
 	off -= vgt->pdev->mmio_size;
+	/*
 	if (off >= vgt->vgtt_sz) {
 		vgt_dbg("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
 		return false;
 	}
+	*/
 
 	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
 	*(uint32_t*)p_data = vgt->vgtt[g_gtt_index];
+	if (vgt->vm_id == 0) {
+		*(uint32_t*)p_data = vgt_read_gtt(vgt->pdev,
+						  g_gtt_index);
+	} else if (off < vgt->vgtt_sz) {
+		*(uint32_t*)p_data = vgt->vgtt[g_gtt_index];
+	} else {
+		printk("vGT(%d): captured out of range GTT read on "
+		       "off %x\n", vgt->vgt_id, off);
+		return false;
+	}
+	
 	return true;
 }
 

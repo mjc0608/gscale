@@ -48,6 +48,7 @@
 #include <linux/hashtable.h>
 #include <linux/intel-iommu.h>
 #include <linux/kref.h>
+#include <linux/mmu_notifier.h>
 #include <linux/pm_qos.h>
 
 #if defined(CONFIG_XEN_VGT_I915) || defined(CONFIG_XEN_VGT_I915_MODULE)
@@ -57,6 +58,7 @@
 #ifdef DRM_I915_VGT_SUPPORT
 #include <xen/vgt.h>
 #include <xen/vgt-if.h>
+#include <xen/fb_decoder.h>
 #endif
 
 /* General customization:
@@ -1840,6 +1842,8 @@ struct drm_i915_gem_object_ops {
 	void (*put_pages)(struct drm_i915_gem_object *);
 	int (*dmabuf_export)(struct drm_i915_gem_object *);
 	void (*release)(struct drm_i915_gem_object *);
+	int (*pin)(struct drm_i915_gem_object *, uint32_t, bool, bool);
+	void (*unpin)(struct drm_i915_gem_object *);
 };
 
 /*
@@ -1943,6 +1947,9 @@ struct drm_i915_gem_object {
 	unsigned int has_dma_mapping:1;
 
 	unsigned int frontbuffer_bits:INTEL_FRONTBUFFER_BITS;
+	unsigned int has_vmfb_mapping:1;
+	uint32_t vmfb_gtt_offset;
+	void *vmfb_start;
 
 	struct sg_table *pages;
 	int pages_pin_count;
@@ -1988,6 +1995,28 @@ struct drm_i915_gem_object {
 		} userptr;
 	};
 };
+
+struct i915_gem_vgtbuffer_object {
+	struct drm_i915_gem_object gem;
+        uint32_t vmid;
+        struct vgt_fb_format fb;
+        uintptr_t user_ptr;
+	size_t user_size;
+	int read_only;
+	struct mm_struct *mm;
+#if defined(CONFIG_MMU_NOTIFIER)
+	struct mmu_notifier mn;
+#endif
+};
+
+union drm_i915_gem_objects {
+	struct drm_i915_gem_object base;
+	union {
+		struct i915_gem_vgtbuffer_object vgtbuffer;
+	};
+};
+
+
 #define to_intel_bo(x) container_of(x, struct drm_i915_gem_object, base)
 
 void i915_gem_track_fb(struct drm_i915_gem_object *old,
@@ -2452,6 +2481,8 @@ int i915_gem_throttle_ioctl(struct drm_device *dev, void *data,
 			    struct drm_file *file_priv);
 int i915_gem_madvise_ioctl(struct drm_device *dev, void *data,
 			   struct drm_file *file_priv);
+int i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data,
+			   struct drm_file *file);
 int i915_gem_set_tiling(struct drm_device *dev, void *data,
 			struct drm_file *file_priv);
 int i915_gem_get_tiling(struct drm_device *dev, void *data,
@@ -2518,6 +2549,8 @@ static inline void i915_gem_object_unpin_pages(struct drm_i915_gem_object *obj)
 	BUG_ON(obj->pages_pin_count == 0);
 	obj->pages_pin_count--;
 }
+
+int i915_gem_object_put_pages(struct drm_i915_gem_object *obj);
 
 int __must_check i915_mutex_lock_interruptible(struct drm_device *dev);
 int i915_gem_object_sync(struct drm_i915_gem_object *obj,

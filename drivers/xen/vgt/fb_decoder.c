@@ -68,9 +68,10 @@ static int vgt_decode_primary_plane_format(struct vgt_device *vgt,
 	plane->drm_format = hsw_pixel_formats[fmt].drm_format;
 
 	plane->base = __vreg(vgt, VGT_DSPSURF(pipe)) & GTT_PAGE_MASK;
-	plane->width = __vreg(vgt, VGT_DSPSTRIDE(pipe)) &
+	plane->stride = __vreg(vgt, VGT_DSPSTRIDE(pipe)) &
 				_PRI_PLANE_STRIDE_MASK;
-	plane->width /= plane->bpp / 8;	/* raw width in bytes */
+	plane->width = __vreg(vgt, VGT_HTOTAL(pipe)) & _ACTIVE_WIDTH_MASK;
+	plane->width += 1;
 	plane->height = (__vreg(vgt, VGT_PIPESRC(pipe)) &
 			 _PIPE_V_SRCSZ_MASK) >> _PIPE_V_SRCSZ_SHIFT;
 	plane->height += 1;	/* raw height is one minus the real value */
@@ -97,6 +98,7 @@ static struct cursor_mode_format hsw_cursor_mode_formats[CURSOR_MODE_NUM] = {
 	[0b100010]  = {DRM_FORMAT_ARGB8888, 32, 128, 128,"128x128 32bpp ARGB"},
 	[0b100011]  = {DRM_FORMAT_ARGB8888, 32, 256, 256, "256x256 32bpp ARGB"},
 	[0b100111]  = {DRM_FORMAT_ARGB8888, 32, 64, 64, "64x64 32bpp ARGB"},
+	[0b000111]  = {DRM_FORMAT_ARGB8888, 32, 64, 64, "64x64 32bpp ARGB"},//actually inverted... figure this out later
 };
 static int vgt_decode_cursor_plane_format(struct vgt_device *vgt,
 	int pipe, struct vgt_cursor_plane_format *plane)
@@ -412,7 +414,8 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 
 	spin_unlock_irqrestore(&pdev->lock, flags);
 
-	vgt_show_fb_format(vmid, fb);
+	if(vgt_debug)
+	  vgt_show_fb_format(vmid, fb);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(vgt_decode_fb_format);

@@ -1542,6 +1542,8 @@ void i915_gem_restore_gtt_mappings(struct drm_device *dev)
 		if (!vma)
 			continue;
 
+		if(obj->has_vmfb_mapping)
+			continue;
 		i915_gem_clflush_object(obj, obj->pin_display);
 		/* The bind_vma code tries to be smart about tracking mappings.
 		 * Unfortunately above, we've just wiped out the mappings
@@ -1662,6 +1664,7 @@ static void gen6_ggtt_insert_entries(struct i915_address_space *vm,
 		iowrite32(vm->pte_encode(addr, level, true, flags), &gtt_entries[i]);
 		i++;
 	}
+
 
 	/* XXX: This serves as a posting read to make sure that the PTE has
 	 * actually been updated. There is some concern that even though

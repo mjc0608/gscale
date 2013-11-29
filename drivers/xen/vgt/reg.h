@@ -623,6 +623,8 @@
  * Display engine regs
  */
 
+#define _ACTIVE_WIDTH_MASK (0xFFF)
+
 /* Pipe A timing regs */
 #define _REG_HTOTAL_A		0x60000
 #define _REG_HBLANK_A		0x60004

@@ -4247,6 +4247,11 @@ i915_gem_object_ggtt_unpin(struct drm_i915_gem_object *obj)
 {
 	struct i915_vma *vma = i915_gem_obj_to_ggtt(obj);
 
+	if (obj->ops->unpin) {
+		(obj->ops->unpin)(obj);
+		return;
+	}
+
 	BUG_ON(!vma);
 	BUG_ON(vma->pin_count == 0);
 	BUG_ON(!i915_gem_obj_ggtt_bound(obj));

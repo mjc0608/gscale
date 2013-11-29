@@ -1,3 +1,5 @@
+#ifndef __FB_DECODER_H__
+#define __FB_DECODER_H__
 /*
  * Decode framebuffer attributes from raw vMMIO
  *
@@ -35,6 +37,7 @@ struct vgt_primary_plane_format {
 	u32	y_offset;	/* in lines */
 	u32	width;		/* in pixels */
 	u32	height;		/* in lines */
+	u32	stride;		/* in bytes */
 };
 
 struct vgt_sprite_plane_format {
@@ -119,3 +122,5 @@ int vgt_register_fb_notifier(struct notifier_block *nb);
  * Unregister the callback for notification
  */
 int vgt_unregister_fb_notifier(struct notifier_block *nb);
+
+#endif
