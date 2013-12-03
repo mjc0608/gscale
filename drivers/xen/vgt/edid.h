@@ -42,6 +42,7 @@
 #define _DP_AUX_CH_CTL_MESSAGE_SIZE_MASK 	(0x1f << 20)
 
 typedef struct {
+	bool data_valid;
 	unsigned char edid_block[EDID_SIZE];
 }vgt_edid_data_t;
 

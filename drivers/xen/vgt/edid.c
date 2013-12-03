@@ -445,6 +445,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 
 		if (*pedid) {
 			set_bit(i, pdev->detected_ports);
+			(*pedid)->data_valid = true;
 			if (vgt_debug) {
 				int i;
 				unsigned char *block = (*pedid)->edid_block;
@@ -560,10 +561,10 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 
 		if (*dpcd) {
 			if (!(*dpcd)->data[DPCD_REV]) {
-				kfree(*dpcd);
-				*dpcd = NULL;
+				(*dpcd)->data_valid = false;
 				clear_bit(dp_port, pdev->detected_ports);
 			} else {
+				(*dpcd)->data_valid = true;
 				set_bit(dp_port, pdev->detected_ports);
 				if (vgt_debug) {
 					vgt_info("DPCD_PROBE: DPCD is:\n");
@@ -601,8 +602,6 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 		if (!edid) {
 			if (vgt->vgt_edids[i]) {
 				printk ("EDID_PROPAGATE: Clear EDID %s\n", vgt_port_name[i]);
-				kfree(vgt->vgt_edids[i]);
-				vgt->vgt_edids[i] = NULL;
 				clear_bit(i, vgt->presented_ports);
 			}
 		} else {
@@ -618,11 +617,16 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 					return;
 				}
 			}
+
 			memcpy(vgt->vgt_edids[i], edid,
 				sizeof(vgt_edid_data_t));
-			set_bit(i, vgt->presented_ports);
 
-			if (vgt_debug) {
+			if (vgt->vgt_edids[i]->data_valid)
+				set_bit(i, vgt->presented_ports);
+			else
+				clear_bit(i, vgt->presented_ports);
+
+			if (vgt_debug && vgt->vgt_edids[i]->data_valid) {
 				int j;
 				unsigned char *block = vgt->vgt_edids[i]->edid_block;
 				printk("EDID_PROPAGATE: EDID[%s] is:\n", vgt_port_name[i]);
@@ -651,8 +655,7 @@ void vgt_clear_edid(struct vgt_device *vgt, int index)
 			if (vgt->vgt_edids[i]) {
 				printk("EDID_CLEAR: Clear EDID[%s] of VM%d\n",
 					vgt_port_name[i], vgt->vm_id);
-				kfree(vgt->vgt_edids[i]);
-				vgt->vgt_edids[i] = NULL;
+				vgt->vgt_edids[i]->data_valid = false;
 				clear_bit(i, vgt->presented_ports);
 			}
 		}
@@ -672,8 +675,7 @@ void vgt_propagate_dpcd(struct vgt_device *vgt, int index)
 		if (!dpcd) {
 			vgt_info("DPCD_PROPAGATE: Clear DPCD %d\n", i);
 			if (vgt->vgt_dpcds[i]) {
-				kfree(vgt->vgt_dpcds[i]);
-				vgt->vgt_dpcds[i] = NULL;
+				vgt->vgt_dpcds[i]->data_valid = false;
 			}
 		} else {
 			vgt_info("DPCD_PROPAGATE: Propagate DPCD %d\n", i);
@@ -686,6 +688,7 @@ void vgt_propagate_dpcd(struct vgt_device *vgt, int index)
 					return;
 				}
 			}
+
 			memcpy(vgt->vgt_dpcds[i], dpcd,
 				sizeof(struct vgt_dpcd_data));
 
@@ -693,7 +696,7 @@ void vgt_propagate_dpcd(struct vgt_device *vgt, int index)
 			vgt->vgt_dpcds[i]->data[DPCD_SINK_COUNT] &=
 				~DPCD_CP_READY_MASK;
 
-			if (vgt_debug) {
+			if (vgt_debug && vgt->vgt_dpcds[i]->data_valid) {
 				vgt_info("DPCD_PROPAGATE: DPCD[%d] is:\n", i);
 				vgt_print_dpcd(vgt->vgt_dpcds[i]);
 			}
@@ -710,8 +713,7 @@ void vgt_clear_dpcd(struct vgt_device *vgt, int index)
 			if (vgt->vgt_dpcds[i]) {
 				vgt_dbg("DPCD clear: Clear DPCD[0x%x] of VM%d\n",
 					i, vgt->vm_id);
-				kfree(vgt->vgt_dpcds[i]);
-				vgt->vgt_dpcds[i] = NULL;
+				vgt->vgt_dpcds[i]->data_valid = false;
 			}
 		}
 	}
@@ -773,7 +775,7 @@ static unsigned char edid_get_snap_byte(void *slave)
 			"edid_get_snap_byte with offset %d and value %d\n",
 			edid->current_read,
 			edid->edid_data->edid_block[edid->current_read]);
-	if (edid->edid_data) {
+	if (edid->edid_data && edid->edid_data->data_valid) {
 		return edid->edid_data->edid_block[edid->current_read ++];
 	} else {
 		return 0;
@@ -1225,7 +1227,7 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 	int value = *(int *)p_data;
 	int aux_data_for_write = 0;
 	AUX_CH_REGISTERS reg = vgt_get_aux_ch_reg(offset);
-	edid_presented = (edid != NULL);
+	edid_presented = (edid && edid->data_valid);
 
 	EDID_MSG(VGT_EDID_INFO, edid_presented,
 	"vgt_i2c_handle_aux_ch_write with offset:0x%x, port_idx:0x%x, value:0x%x\n",

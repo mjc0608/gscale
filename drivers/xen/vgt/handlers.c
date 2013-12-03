@@ -1432,7 +1432,7 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 		}
 
 		/* write to virtual DPCD */
-		if (dpcd) {
+		if (dpcd && dpcd->data_valid) {
 			for (t = 0; t <= len; t ++) {
 				int p = addr + t;
 
@@ -1488,7 +1488,7 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 
 		/* read from virtual DPCD to vreg */
 		/* first 4 bytes: [ACK][addr][addr+1][addr+2] */
-		if (dpcd) {
+		if (dpcd && dpcd->data_valid) {
 			for (i = 1; i <= (len + 1); i ++) {
 				int t;
 

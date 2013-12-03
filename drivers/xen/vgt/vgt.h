@@ -511,6 +511,7 @@ struct vgt_tailq {
 #define DPCD_SIZE	0x700
 
 struct vgt_dpcd_data {
+	bool data_valid;
 	u8 data[DPCD_SIZE];
 };
 
