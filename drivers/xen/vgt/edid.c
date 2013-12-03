@@ -609,7 +609,7 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 			if (!vgt->vgt_edids[i]) {
 				BUG_ON(in_interrupt());
 				vgt->vgt_edids[i] = kmalloc(
-						sizeof(vgt_edid_data_t), GFP_KERNEL);
+						sizeof(vgt_edid_data_t), GFP_ATOMIC);
 				if (vgt->vgt_edids[i] == NULL) {
 					printk("ERROR: Insufficient memory in %s\n",
 							__FUNCTION__);
@@ -681,7 +681,7 @@ void vgt_propagate_dpcd(struct vgt_device *vgt, int index)
 			vgt_info("DPCD_PROPAGATE: Propagate DPCD %d\n", i);
 			if (!vgt->vgt_dpcds[i]) {
 				vgt->vgt_dpcds[i] = kmalloc(
-					sizeof(struct vgt_dpcd_data), GFP_KERNEL);
+					sizeof(struct vgt_dpcd_data), GFP_ATOMIC);
 				if (vgt->vgt_dpcds[i] == NULL) {
 					vgt_err("Insufficient memory\n");
 					BUG();
