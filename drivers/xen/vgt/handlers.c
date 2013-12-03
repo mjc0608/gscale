@@ -1963,7 +1963,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_VGA1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_VGA_PD, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
-{0x42080, 4, F_VIRT, 0, D_HSW, NULL, NULL},
+{0x42080, 4, F_DOM0, 0, D_HSW, NULL, NULL},
 {_REG_DEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
 {_REG_DEIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
 {_REG_DEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
