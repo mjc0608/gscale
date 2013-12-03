@@ -401,6 +401,13 @@ void vgt_release_instance(struct vgt_device *vgt)
 		}
 	}
 
+	for (i = 0; i < DPCD_MAX; ++ i) {
+		if (vgt->vgt_dpcds[i]) {
+			kfree(vgt->vgt_dpcds[i]);
+			vgt->vgt_dpcds[i] = NULL;
+		}
+	}
+
 	if (vgt->pdev->enable_ppgtt)
 		vgt_destroy_shadow_ppgtt(vgt);
 

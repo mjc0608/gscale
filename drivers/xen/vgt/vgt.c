@@ -664,6 +664,14 @@ void vgt_destroy(void)
 			pdev->pdev_edids[i] = NULL;
 		}
 	}
+
+	for (i = 0; i < DPCD_MAX; ++ i) {
+		if (pdev->pdev_dpcds[i]) {
+			kfree(pdev->pdev_dpcds[i]);
+			pdev->pdev_dpcds[i] = NULL;
+		}
+	}
+
 	vgt_cmd_parser_exit();
 }
 
