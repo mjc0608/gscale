@@ -418,6 +418,53 @@ static const struct pci_device_id pciidlist[] = {		/* aka */
 MODULE_DEVICE_TABLE(pci, pciidlist);
 #endif
 
+static int __intel_detect_pch(struct drm_i915_private *dev_priv, struct pci_dev *pch)
+{
+	struct drm_device *dev = dev_priv->dev;
+	int find = 0;
+
+	printk("i915: find pch with devfn(%x), device(%x)\n", (u32)pch->devfn, (u32)pch->device);
+	if (pch->vendor == PCI_VENDOR_ID_INTEL) {
+		unsigned short id;
+		id = pch->device & INTEL_PCH_DEVICE_ID_MASK;
+		dev_priv->pch_id = id;
+
+		if (id == INTEL_PCH_IBX_DEVICE_ID_TYPE) {
+			dev_priv->pch_type = PCH_IBX;
+			find = 1;
+			printk("Found Ibex Peak PCH\n");
+			WARN_ON(!IS_GEN5(dev));
+		} else if (id == INTEL_PCH_CPT_DEVICE_ID_TYPE) {
+			dev_priv->pch_type = PCH_CPT;
+			find = 1;
+			printk("Found CougarPoint PCH\n");
+			WARN_ON(!(IS_GEN6(dev) || IS_IVYBRIDGE(dev)));
+		} else if (id == INTEL_PCH_PPT_DEVICE_ID_TYPE) {
+			/* PantherPoint is CPT compatible */
+			dev_priv->pch_type = PCH_CPT;
+			find = 1;
+			printk("Found PatherPoint PCH\n");
+			WARN_ON(!(IS_GEN6(dev) || IS_IVYBRIDGE(dev)));
+		} else if (id == INTEL_PCH_LPT_DEVICE_ID_TYPE) {
+			dev_priv->pch_type = PCH_LPT;
+			find = 1;
+			printk("Found LynxPoint PCH\n");
+			WARN_ON(!IS_HASWELL(dev));
+			WARN_ON(IS_ULT(dev));
+		} else if (id == INTEL_PCH_LPT_LP_DEVICE_ID_TYPE) {
+			dev_priv->pch_type = PCH_LPT;
+			find = 1;
+			printk("Found LynxPoint LP PCH\n");
+			WARN_ON(!IS_HASWELL(dev));
+			WARN_ON(!IS_ULT(dev));
+		} else {
+			find = 0;
+		}
+	}
+
+	return find;
+}
+
 void intel_detect_pch(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
