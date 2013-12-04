@@ -1874,6 +1874,8 @@ struct vgt_emul_timer {
 	u64 period;
 };
 
+#define REGBIT_INTERRUPT_PIPE_MASK    0x1f
+
 /* structure containing device specific IRQ state */
 struct vgt_irq_host_state {
 	struct pgt_device *pdev;
@@ -1884,6 +1886,7 @@ struct vgt_irq_host_state {
 	struct vgt_event_info	events[EVENT_MAX];
 	DECLARE_BITMAP(pending_events, EVENT_MAX);
 	struct vgt_emul_timer dpy_timer;
+	u32  pipe_mask;
 };
 
 #define vgt_get_event_phys_handler(h, e)	(h->events[e].p_handler)
