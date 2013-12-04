@@ -2033,6 +2033,7 @@ bool ring_uhptr_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
 bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe);
+void vgt_set_power_well(struct vgt_device *vgt, bool enable);
 
 extern bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);

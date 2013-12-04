@@ -612,6 +612,15 @@ static bool dpy_trans_ddi_ctl_write(struct vgt_device *vgt, unsigned int offset,
 	uint32_t old_data;
 	int i;
 
+	/* force to use panel fitting path for eDP */
+	if (enable_panel_fitting &&
+		is_current_display_owner(vgt) &&
+		offset == _REG_TRANS_DDI_FUNC_CTL_EDP &&
+		PIPE_A  == get_edp_input(*((uint32_t *)p_data))) {
+		*((uint32_t *)p_data) |= _REGBIT_TRANS_DDI_EDP_INPUT_A_ONOFF;
+		vgt_set_power_well(vgt, true);
+	}
+
 	old_data = __vreg(vgt, offset);
 	default_mmio_write(vgt, offset, p_data, bytes);
 
@@ -1828,6 +1837,50 @@ static bool pf_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static bool power_well_ctl_read(struct vgt_device *vgt, unsigned int offset,
+			void *p_data, unsigned int bytes)
+{
+	bool rc = true;
+	vgt_reg_t data;
+	if (is_current_display_owner(vgt)) {
+		data = VGT_MMIO_READ(vgt->pdev, offset);
+	} else {
+		data = __vreg(vgt, offset);
+	}
+
+	if (enable_panel_fitting && offset == _REG_HSW_PWR_WELL_CTL2) {
+		data = __vreg(vgt, offset);
+	}
+
+	*(vgt_reg_t *)p_data = data;
+	return rc;
+}
+
+static bool power_well_ctl_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc = true;
+	vgt_reg_t value = *(vgt_reg_t *)p_data;
+
+	memcpy ((char *)vgt->state.vReg + offset, p_data, bytes);
+
+	if (value & _REGBIT_HSW_PWR_WELL_ENABLE) {
+		__vreg(vgt, offset) |= _REGBIT_HSW_PWR_WELL_STATE;
+	} else {
+		__vreg(vgt, offset) &= ~_REGBIT_HSW_PWR_WELL_STATE;
+	}
+
+	if (is_current_display_owner(vgt)) {
+		/* force to enable power well physically */
+		if (enable_panel_fitting && offset == _REG_HSW_PWR_WELL_CTL2) {
+			value |= _REGBIT_HSW_PWR_WELL_ENABLE;
+		}
+		VGT_MMIO_WRITE(vgt->pdev, offset, value);
+	}
+
+	return rc;
+}
+
 /*
  * Track policies of all captured registers
  *
@@ -2584,10 +2637,12 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_RC6p_THRESHOLD, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 {_REG_RC6pp_THRESHOLD, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 {_REG_PMINTRMSK, 4, F_DOM0, 0, D_ALL, NULL, NULL},
-{_REG_HSW_PWR_WELL_CTL1, 4, F_DOM0, 0, D_HSW, NULL, NULL},
-{_REG_HSW_PWR_WELL_CTL2, 4, F_DOM0, 0, D_HSW, NULL, NULL},
-{_REG_HSW_PWR_WELL_CTL3, 4, F_DOM0, 0, D_HSW, NULL, NULL},
-{_REG_HSW_PWR_WELL_CTL4, 4, F_DOM0, 0, D_HSW, NULL, NULL},
+{_REG_HSW_PWR_WELL_CTL1, 4, F_DOM0, 0, D_HSW, power_well_ctl_read, power_well_ctl_write},
+{_REG_HSW_PWR_WELL_CTL2, 4, F_DOM0, 0, D_HSW, power_well_ctl_read, power_well_ctl_write},
+{_REG_HSW_PWR_WELL_CTL3, 4, F_DOM0, 0, D_HSW, power_well_ctl_read, power_well_ctl_write},
+{_REG_HSW_PWR_WELL_CTL4, 4, F_DOM0, 0, D_HSW, power_well_ctl_read, power_well_ctl_write},
+{_REG_HSW_PWR_WELL_CTL5, 4, F_DOM0, 0, D_HSW, power_well_ctl_read, power_well_ctl_write},
+{_REG_HSW_PWR_WELL_CTL6, 4, F_DOM0, 0, D_HSW, power_well_ctl_read, power_well_ctl_write},
 
 {_REG_RSTDBYCTL, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 

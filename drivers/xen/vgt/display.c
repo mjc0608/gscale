@@ -746,3 +746,29 @@ void vgt_calculate_frmcount_delta(struct vgt_device *vgt,
 		vgt->frmcount_delta[pipe] = delta;
 	}
 }
+
+void vgt_set_power_well(struct vgt_device *vgt, bool to_enable)
+{
+	bool is_enabled, enable_requested;
+	uint32_t tmp;
+
+	tmp = VGT_MMIO_READ(vgt->pdev, _REG_HSW_PWR_WELL_CTL2);
+	is_enabled = tmp & _REGBIT_HSW_PWR_WELL_STATE;
+	enable_requested = tmp & _REGBIT_HSW_PWR_WELL_ENABLE;
+
+	if (to_enable) {
+		if (!enable_requested)
+			VGT_MMIO_WRITE(vgt->pdev, _REG_HSW_PWR_WELL_CTL2, _REGBIT_HSW_PWR_WELL_ENABLE);
+
+		if (!is_enabled) {
+			if (wait_for_atomic((VGT_MMIO_READ(vgt->pdev, _REG_HSW_PWR_WELL_CTL2) &
+				      _REGBIT_HSW_PWR_WELL_STATE), 20))
+				vgt_err("Timeout enabling power well\n");
+		}
+	} else {
+		if (enable_requested) {
+			VGT_MMIO_WRITE(vgt->pdev, _REG_HSW_PWR_WELL_CTL2, 0);
+			tmp = VGT_MMIO_READ(vgt->pdev, _REG_HSW_PWR_WELL_CTL2);
+		}
+	}
+}
