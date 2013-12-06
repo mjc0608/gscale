@@ -758,6 +758,9 @@ int vgt_resume(struct pci_dev *pdev)
 	 */
 	state_sreg_init(vgt_dom0);
 	state_vreg_init(vgt_dom0);
+
+	vgt_update_monitor_status(vgt_dom0);
+
 	/* TODO, GMBUS inuse bit? */
 	return 0;
 }
