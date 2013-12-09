@@ -46,7 +46,7 @@ static void i915_gem_vgtbuffer_mn_invalidate_range_start(struct mmu_notifier *mn
 	struct drm_device *dev;
 
 	/* XXX race between obj unref and mmu notifier? */
-	printk("DJC: gem_vgtbuffer_mn_invalidate_range_start\n");
+	DRM_DEBUG_DRIVER("DJC: gem_vgtbuffer_mn_invalidate_range_start\n");
 
 	vmap = container_of(mn, struct i915_gem_vgtbuffer_object, mn);
 	BUG_ON(vmap->mm != mm);
@@ -81,7 +81,7 @@ static void i915_gem_vgtbuffer_mn_release(struct mmu_notifier *mn,
 					struct mm_struct *mm)
 {
 	struct i915_gem_vgtbuffer_object *vmap;
-	printk("DJC: gem_vgtbuffer_mn_release\n");
+	DRM_DEBUG_DRIVER("DJC: gem_vgtbuffer_mn_release\n");
 	vmap = container_of(mn, struct i915_gem_vgtbuffer_object, mn);
 	BUG_ON(vmap->mm != mm);
 	vmap->mm = NULL;
@@ -99,7 +99,7 @@ static const struct mmu_notifier_ops i915_gem_vgtbuffer_notifier = {
 static void
 i915_gem_vgtbuffer_release__mmu_notifier(struct i915_gem_vgtbuffer_object *vmap)
 {
-	printk("DJC: gem_vgtbuffer_release_mmu_notifier\n");
+	DRM_DEBUG_DRIVER("DJC: gem_vgtbuffer_release_mmu_notifier\n");
 	if (vmap->mn.ops && vmap->mm) {
 		mmu_notifier_unregister(&vmap->mn, vmap->mm);
 		BUG_ON(vmap->mm);
@@ -110,7 +110,7 @@ static int
 i915_gem_vgtbuffer_init__mmu_notifier(struct i915_gem_vgtbuffer_object *vmap,
 					unsigned flags)
 {
-	printk("DJC: gem_vgtbuffer_init_mmu_notifier\n");
+	DRM_DEBUG_DRIVER("DJC: gem_vgtbuffer_init_mmu_notifier\n");
 	if (flags & I915_VGTBUFFER_UNSYNCHRONIZED)
 		return capable(CAP_SYS_ADMIN) ? 0 : -EPERM;
 
@@ -129,7 +129,7 @@ static int
 i915_gem_vgtbuffer_init__mmu_notifier(struct i915_gem_vgtbuffer_object *vmap,
 					unsigned flags)
 {
-	printk("DJC: gem_vgtbuffer_init_mmu_notifier\n");
+	DRM_DEBUG_DRIVER("DJC: gem_vgtbuffer_init_mmu_notifier\n");
 	if ((flags & I915_VGTBUFFER_UNSYNCHRONIZED) == 0)
 		return -ENODEV;
 
@@ -149,7 +149,7 @@ i915_gem_vgtbuffer_get_pages(struct drm_i915_gem_object *obj)
 	struct scatterlist *sg;
 	struct page **pvec;
 	int n, pinned, ret;
-	printk("DJC: gem_vgtbuffer_get_pages\n");
+	DRM_DEBUG_DRIVER("DJC: gem_vgtbuffer_get_pages\n");
 	if (vmap->mm == NULL)
 		return -EFAULT;
 
@@ -243,7 +243,7 @@ i915_gem_vgtbuffer_put_pages(struct drm_i915_gem_object *obj)
 {
 	struct scatterlist *sg;
 	int i;
-	printk("DJC: gem_vgtbuffer_get_put_pages\n");
+	DRM_DEBUG_DRIVER("DJC: gem_vgtbuffer_get_put_pages\n");
 	if (obj->madv != I915_MADV_WILLNEED)
 		obj->dirty = 0;
 
@@ -266,7 +266,7 @@ static void
 i915_gem_vgtbuffer_release(struct drm_i915_gem_object *obj)
 {
 	struct i915_gem_vgtbuffer_object *vmap = to_vgtbuffer_object(obj);
-	printk("DJC: gem_vgtbuffer_release\n");
+	DRM_DEBUG_DRIVER("DJC: gem_vgtbuffer_release\n");
 	i915_gem_vgtbuffer_release__mmu_notifier(vmap);
 }
 
@@ -303,13 +303,13 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 	uint32_t gtt_pte;
 
 	/* Allocate the new object */
-	printk("DJC: gem_vgtbuffer_ioctl\n");
+	DRM_DEBUG_DRIVER("DJC: gem_vgtbuffer_ioctl\n");
 	obj = kzalloc(sizeof(*obj), GFP_KERNEL);
 	if (obj == NULL)
 		return -ENOMEM;
 
 	vmid = args->vmid;
-	printk("DJC: calling decode\n");
+	DRM_DEBUG_DRIVER("DJC: calling decode\n");
 	if(vgt_decode_fb_format(vmid, &obj->fb)) {
 		return -EINVAL;
 	}
@@ -321,7 +321,7 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 	 */
 	fb = &obj->fb;
 	found = 0;
-	printk("DJC: finding pipe\n");
+	DRM_DEBUG_DRIVER("DJC: finding pipe\n");
 	if (args->phys_pipe_id < I915_MAX_PIPES) {
 		for (i = 0; i < I915_MAX_PIPES; i++) {
 			pipe = &fb->pipes[i];
@@ -347,9 +347,9 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 		return -ENOENT;
 
 	args->pipe_id = i;
-	printk("DJC: pipe = %d\n", i);
+	DRM_DEBUG_DRIVER("DJC: pipe = %d\n", i);
 	if((args->plane_id) == I915_VGT_PLANE_PRIMARY) {
-	  printk("DJC: &pipe=0x%x\n",(&pipe));
+	  DRM_DEBUG_DRIVER("DJC: &pipe=0x%x\n",(&pipe));
 		p = &pipe->primary;
 		args->enabled = p->enabled;
 		args->x_offset = p->x_offset;
@@ -366,7 +366,7 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 				(PAGE_SIZE - 1)) >> PAGE_SHIFT;
 
 		if(args->flags & I915_VGTBUFFER_QUERY_ONLY) {
-	printk("DJC: query only: primary");
+	DRM_DEBUG_DRIVER("DJC: query only: primary");
 			kfree(obj);
 			return 0;
 		}
@@ -396,7 +396,7 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 				(PAGE_SIZE-1)) >> PAGE_SHIFT;
 
 		if(args->flags & I915_VGTBUFFER_QUERY_ONLY) {
-                 	printk("DJC: query only: cursor");
+			DRM_DEBUG_DRIVER("DJC: query only: cursor");
 			kfree(obj);
 			return 0;
 		}
@@ -411,26 +411,26 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 	}
 
 	DRM_DEBUG_DRIVER("VGT GEM: Surface size = %d\n", (int) (num_pages * PAGE_SIZE));
-	printk("DJC: &obj=0x%x\n",&obj);
-	printk("DJC: &obj->gem=0x%x\n",&(obj->gem));
-	printk("DJC: &obj->gem.gttoffset=0x%x\n",&(obj->gem.gtt_offset));
-	printk("DJC: obj->gem.gttoffset=0x%x\n", obj->gem.gtt_offset);
+	DRM_DEBUG_DRIVER("DJC: &obj=0x%x\n",&obj);
+	DRM_DEBUG_DRIVER("DJC: &obj->gem=0x%x\n",&(obj->gem));
+	DRM_DEBUG_DRIVER("DJC: &obj->gem.gttoffset=0x%x\n",&(obj->gem.gtt_offset));
+	DRM_DEBUG_DRIVER("DJC: obj->gem.gttoffset=0x%x\n", obj->gem.gtt_offset);
 
 	gtt_fbstart = obj->gem.gtt_offset / 0x1000;
 
-	printk("VGT GEM: gtt start addr %x\n", (unsigned int) gtt_base);
-	printk("VGT GEM: fb start %x\n", (unsigned int) gtt_fbstart);
+	DRM_DEBUG_DRIVER("VGT GEM: gtt start addr %x\n", (unsigned int) gtt_base);
+	DRM_DEBUG_DRIVER("VGT GEM: fb start %x\n", (unsigned int) gtt_fbstart);
 
 	gtt_base += gtt_fbstart;
 
-	printk("VGT GEM: gtt + fb start  %x\n", (uint32_t) gtt_base);
+	DRM_DEBUG_DRIVER("VGT GEM: gtt + fb start  %x\n", (uint32_t) gtt_base);
 	
-	printk("DJC: gtt_base=0x%x\n",gtt_base);
+	DRM_DEBUG_DRIVER("DJC: gtt_base=0x%x\n",gtt_base);
 
 	gtt_pte = readl(gtt_base);
 
-	printk("VGT GEM: pte  %x\n", (uint32_t) gtt_pte);
-	printk("VGT GEM: num_pages from fb decode=%d  \n", (uint32_t) num_pages);
+	DRM_DEBUG_DRIVER("VGT GEM: pte  %x\n", (uint32_t) gtt_pte);
+	DRM_DEBUG_DRIVER("VGT GEM: num_pages from fb decode=%d  \n", (uint32_t) num_pages);
 	
 	/*DJC
 	if (num_pages * PAGE_SIZE > dev_priv->mm.gtt_total) {
