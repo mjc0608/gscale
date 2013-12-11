@@ -42,6 +42,9 @@
 	((ring_id) == 3 ? (vecs_reg) : ((rcs_reg) + (ring_id) * ((vcs_reg) - (rcs_reg))))
 #define _REG_INVALID	0xFFFFFFFF
 
+#define _MASKED_BIT_ENABLE(a) (((a) << 16) | (a))
+#define _MASKED_BIT_DISABLE(a) ((a) << 16)
+
 /* PRB0, RCS */
 #define _REG_RCS_TAIL		0x02030
 #define _REG_RCS_HEAD		0x02034
@@ -122,6 +125,9 @@
 #define _REG_VCS_INSTPM		0x120C0
 #define _REG_BCS_INSTPM		0x220C0
 #define _REG_VECS_INSTPM	0x1A0C0
+#define     _REGBIT_INSTPM_SYNC_FLUSH		(1<<5)
+#define     _REGBIT_INSTPM_FORCE_ORDERING	(1<<7) /* GEN6+ */
+#define     _REGBIT_INSTPM_TLB_INVALIDATE	(1<<9)
 
 #define INSTPM_CONS_BUF_ADDR_OFFSET_DIS (1<<6)
 

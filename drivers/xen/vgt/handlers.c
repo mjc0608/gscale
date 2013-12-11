@@ -1881,6 +1881,82 @@ static bool power_well_ctl_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+static bool instpm_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_reg_t val = *(vgt_reg_t *)p_data;
+	uint16_t val_low = val & 0xFFFF;
+	uint16_t val_high = val >> 16;
+	uint16_t old_val_low = __vreg16(vgt, offset);
+	unsigned int bit;
+	bool hw_access = reg_hw_access(vgt, offset);
+	bool sync_flush = false;
+	bool tlb_invd = false;
+	bool warn_msg = false;
+
+	__vreg16(vgt, offset) =  (old_val_low & ~val_high) |
+		(val_low & val_high);
+
+	for_each_set_bit(bit, (unsigned  long *)&val_high, 16) {
+		bool enable = !!test_bit(bit, (void *)&val_low);
+
+		switch (1 << bit)  {
+		case  _REGBIT_INSTPM_SYNC_FLUSH:
+			sync_flush = enable;
+			break;
+
+		case _REGBIT_INSTPM_FORCE_ORDERING:
+			if (enable && offset != _REG_RCS_INSTPM)
+				warn_msg = true;
+			break;
+
+		case  _REGBIT_INSTPM_TLB_INVALIDATE:
+			if (!enable)
+				break;
+			if (!sync_flush) {
+				warn_msg = true;
+				break;
+			}
+			tlb_invd = true;
+			break;
+		default:
+			if (enable && !hw_access)
+				warn_msg = true;
+			break;
+		}
+	}
+
+	if (warn_msg)
+		vgt_warn("unknown INSTPM write: VM%d: off=0x%x, val=0x%x\n",
+			vgt->vm_id, offset, val);
+
+	if (hw_access || tlb_invd) {
+		if (!hw_access && tlb_invd)
+			__vreg(vgt, offset) = _MASKED_BIT_ENABLE(
+				_REGBIT_INSTPM_TLB_INVALIDATE |
+				_REGBIT_INSTPM_SYNC_FLUSH);
+
+		VGT_MMIO_WRITE(pdev, offset, __vreg(vgt, offset));
+
+		if (tlb_invd) {
+			/*
+			 * The time is usually 0.2ms for 3.11.6 Ubuntu guest.
+			 * 3.8 Linux and Win don't use this to flush GPU tlb.
+			 */
+			if (wait_for_atomic((VGT_MMIO_READ(pdev, offset) &
+				_REGBIT_INSTPM_SYNC_FLUSH) == 0, 1))
+				vgt_warn("INSTPM_TLB_INVALIDATE timed out!\n");
+			__vreg16(vgt, offset) &= ~_REGBIT_INSTPM_SYNC_FLUSH;
+		}
+
+	}
+
+	__sreg(vgt, offset) = __vreg(vgt, offset);
+
+	return true;
+}
+
 /*
  * Track policies of all captured registers
  *
@@ -1990,10 +2066,10 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_BCS_MI_MODE, 4, F_RDR_MODE, 0, D_ALL, NULL, NULL},
 {_REG_VECS_MI_MODE, 4, F_RDR_MODE, 0, D_HSW_PLUS, NULL, NULL},
 
-{_REG_RCS_INSTPM, 4, F_RDR_MODE, 0, D_ALL, NULL, NULL},
-{_REG_VCS_INSTPM, 4, F_RDR_MODE, 0, D_ALL, NULL, NULL},
-{_REG_BCS_INSTPM, 4, F_RDR_MODE, 0, D_ALL, NULL, NULL},
-{_REG_VECS_INSTPM, 4, F_RDR_MODE, 0, D_HSW_PLUS, NULL, NULL},
+{_REG_RCS_INSTPM, 4, F_RDR_MODE, 0, D_ALL, NULL, instpm_write},
+{_REG_VCS_INSTPM, 4, F_RDR_MODE, 0, D_ALL, NULL, instpm_write},
+{_REG_BCS_INSTPM, 4, F_RDR_MODE, 0, D_ALL, NULL, instpm_write},
+{_REG_VECS_INSTPM, 4, F_RDR_MODE, 0, D_HSW_PLUS, NULL, instpm_write},
 
 {_REG_GT_MODE, 4, F_RDR_MODE, 0, D_SNB, NULL, NULL},
 {_REG_GT_MODE_IVB, 4, F_RDR_MODE, 0, D_GEN7PLUS, NULL, NULL},

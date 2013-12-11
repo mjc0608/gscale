@@ -304,6 +304,7 @@ typedef struct {
 
 #define __vreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.vReg + off))
 #define __vreg8(vgt, off) (*(char *)((char *)vgt->state.vReg + off))
+#define __vreg16(vgt, off) (*(uint16_t *)((char *)vgt->state.vReg + off))
 #define __sreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.sReg + off))
 #define __sreg8(vgt, off) (*(char *)((char *)vgt->state.sReg + off))
 #define __vreg64(vgt, off) (*(unsigned long *)((char *)vgt->state.vReg + off))
