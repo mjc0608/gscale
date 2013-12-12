@@ -2107,6 +2107,7 @@ extern u64 context_switch_num;
 extern u64 ring_0_idle;
 extern u64 ring_0_busy;
 extern u64 vm_pending_irq[VGT_MAX_VMS];
+extern u64 forcewake_count;
 
 struct vgt_port_output_struct {
 	unsigned int ctrl_reg;

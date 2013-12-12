@@ -109,6 +109,7 @@ static debug_statistics_t  stat_info [] = {
 	{ "context_switch_num", &context_switch_num },
 	{ "ring_0_busy", &ring_0_busy },
 	{ "ring_0_idle", &ring_0_idle },
+	{ "forcewake_count", &forcewake_count },
 	{ "", NULL}
 };
 

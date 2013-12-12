@@ -114,6 +114,7 @@ static void set_vRC_to_C0(struct vgt_device *vgt)
 	set_vRC(vgt, 0);
 }
 
+u64 forcewake_count;
 static void v_force_wake_get(struct vgt_device *vgt)
 {
 	unsigned long flags;
@@ -127,6 +128,8 @@ static void v_force_wake_get(struct vgt_device *vgt)
 			printk("incompatible hypervisor, consider to update your hypervisor\n");
 			BUG();
 		}
+
+		++forcewake_count;
 	}
 
 	bitmap_set(vgt->pdev->v_force_wake_bitmap, vgt->vgt_id, 1);
@@ -148,6 +151,8 @@ static void v_force_wake_put(struct vgt_device *vgt)
 				printk("incompatible hypervisor, consider to update your hypervisor\n");
 				BUG();
 			}
+
+			--forcewake_count;
 		}
 	}
 
