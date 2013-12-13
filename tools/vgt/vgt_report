@@ -25,8 +25,8 @@ parser.add_option("-i", "--info", dest="reginfo", action="store_true",
 parser.add_option("-r", "--regname", dest="regname", action="store_true",
 		   help="show the list of register names")
 parser.add_option("-f", "--file", dest="filename", metavar="FILE",
-		   default="drivers/xen/vgt_reg.h",
-		   help="the location of vgt_reg.h (default drivers/xen/vgt_reg.h)")
+		   default="drivers/xen/vgt/reg.h",
+		   help="the location of vgt/reg.h (default drivers/xen/vgt/reg.h)")
 parser.add_option("-u", "--untracked", dest="untrack", action="store_true",
 		   help="show the list of untracked registers")
 parser.add_option("-d", "--vdiff", dest="vdiff", action="store_true",
