@@ -1732,8 +1732,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 #endif
 
 
-		if ( !bypass_scan )
-			vgt_scan_vring(vgt, ring_id);
+		vgt_scan_vring(vgt, ring_id);
 
 		t1 = get_cycles();
 		stat->ring_tail_mmio_wcycles += (t1-t0);
@@ -1784,7 +1783,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 					return false;
 			}
 		}
-		if (!bypass_scan && (vring->ctl & _RING_CTL_ENABLE)) {
+		if (vring->ctl & _RING_CTL_ENABLE) {
 			rs->last_scan_head =
 				vring->head & RB_HEAD_OFF_MASK;
 			vgt_scan_vring(vgt, ring_id);

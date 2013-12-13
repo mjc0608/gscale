@@ -2175,6 +2175,11 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 
 	s.request_id = rs->request_id;
 
+	if (bypass_scan) {
+		add_tail_entry(&s, tail, 100, 0);
+		return 0;
+	}
+
 	rc = ip_gma_set(&s, base + head);
 	if (rc < 0)
 		return rc;
