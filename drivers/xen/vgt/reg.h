@@ -1351,11 +1351,6 @@ union _TRANS_CONFIG
 
 #define _REG_DP_BUFTRANS	0xe4f00
 
-/* VBIOS flags */
-#define _REG_SWF00		0x71410
-#define _REG_SWF10		0x70410
-#define _REG_SWF30		0x72414
-
 /* digital port hotplug */
 
 #define _REG_PCH_GPIOA		0xc5010

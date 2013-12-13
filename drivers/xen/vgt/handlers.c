@@ -2136,6 +2136,12 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {0x20dc, 4, F_PT, 0, D_ALL, NULL, NULL},
 
+{0x60220, 0x20, F_DPY, 0, D_ALL, NULL, NULL},
+{0x602a0, 4, F_DPY, 0, D_ALL, NULL, NULL},
+
+{0x65050, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x650b4, 4, F_DPY, 0, D_ALL, NULL, NULL},
+
 	/* -------display regs---------- */
 {_REG_VGA_CR_INDEX_MDA, 1, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_VGA_ST01_MDA, 1, F_DPY, 0, D_ALL, NULL, NULL},
@@ -2155,6 +2161,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_SDEIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
 {_REG_SDEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
 {_REG_SDEISR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_isr_handler},
+
+{0xc4040, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
 {_REG_DE_RRMR, 4, F_VIRT, 0, D_ALL, NULL, rrmr_mmio_write},
 
@@ -2585,7 +2593,17 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {0x60110, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {0x61110, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{0x70400, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{0x70400, 0x40, F_DPY, 0, D_ALL, NULL, NULL},
+{0x71400, 0x40, F_DPY, 0, D_ALL, NULL, NULL},
+{0x72400, 0x40, F_DPY, 0, D_ALL, NULL, NULL},
+
+{0x70440, 0xc, F_DPY, 0, D_ALL, NULL, NULL},
+{0x71440, 0xc, F_DPY, 0, D_ALL, NULL, NULL},
+{0x72440, 0xc, F_DPY, 0, D_ALL, NULL, NULL},
+
+{0x7044c, 0xc, F_DPY, 0, D_ALL, NULL, NULL},
+{0x7144c, 0xc, F_DPY, 0, D_ALL, NULL, NULL},
+{0x7244c, 0xc, F_DPY, 0, D_ALL, NULL, NULL},
 
 {_REG_WM_DBG, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_PIPE_WM_LINETIME_A, 4, F_DPY, 0, D_HSW, NULL, NULL},
@@ -2742,9 +2760,6 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_SWF, 0x110, F_VIRT, 0, D_SNB, NULL, NULL},
 {_REG_SWF, 0x90, F_VIRT, 0, D_GEN7PLUS, NULL, NULL},
-{_REG_SWF00, 0x40, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_SWF10, 4*16, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_SWF30, 4*3, F_VIRT, 0, D_ALL, NULL, NULL},
 
 	/* -------un-categorized regs--------- */
 
