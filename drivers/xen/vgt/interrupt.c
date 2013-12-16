@@ -415,6 +415,9 @@ static void do_inject_dom0_virtual_interrupt(void *info, int ipi)
 	int i915_irq;
 	int this_cpu, target_cpu;
 
+	if (ipi)
+		clear_bit(0, &pdev->dom0_ipi_irq_injecting);
+
 	/* still in vgt. the injection will happen later */
 	if (__get_cpu_var(in_vgt))
 		return;
@@ -453,9 +456,6 @@ static void do_inject_dom0_virtual_interrupt(void *info, int ipi)
 		pdev->dom0_irq_pending = false;
 		wmb();
 		pdev->dom0_irq_cpu = -1;
-
-		if (ipi)
-			clear_bit(0, &pdev->dom0_ipi_irq_injecting);
 
 		resend_irq_on_evtchn(i915_irq);
 		spin_unlock_irqrestore(&pdev->lock, flags);
