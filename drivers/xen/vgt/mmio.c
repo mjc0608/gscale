@@ -318,13 +318,13 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	if (bytes > 4)
 		vgt_dbg("vGT: capture >4 bytes read to %x\n", offset);
 
-	spin_lock_irqsave(&pdev->lock, flags);
+	vgt_lock_dev_flags(pdev, flags);
 
 	raise_ctx_sched(vgt);
 
 	if (reg_is_gtt(pdev, offset)) {
 		rc = gtt_mmio_read(vgt, offset, p_data, bytes);
-		spin_unlock_irqrestore(&pdev->lock, flags);
+		vgt_unlock_dev_flags(pdev, flags);
 		return rc;
 	}
 
@@ -360,7 +360,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 
 	reg_set_accessed(pdev, offset);
 
-	spin_unlock_irqrestore(&pdev->lock, flags);
+	vgt_unlock_dev_flags(pdev, flags);
 	trace_vgt_mmio_rw(VGT_TRACE_READ, vgt->vm_id, offset, p_data, bytes);
 
 	t1 = get_cycles();
@@ -420,13 +420,13 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	}
 */
 
-	spin_lock_irqsave(&pdev->lock, flags);
+	vgt_lock_dev_flags(pdev, flags);
 
 	raise_ctx_sched(vgt);
 
 	if (reg_is_gtt(pdev, offset)) {
 		rc = gtt_mmio_write(vgt, offset, p_data, bytes);
-		spin_unlock_irqrestore(&pdev->lock, flags);
+		vgt_unlock_dev_flags(pdev, flags);
 		return rc;
 	}
 
@@ -480,7 +480,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 		vgt_dbg("vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
 
 	reg_set_accessed(pdev, offset);
-	spin_unlock_irqrestore(&pdev->lock, flags);
+	vgt_unlock_dev_flags(pdev, flags);
 	trace_vgt_mmio_rw(VGT_TRACE_WRITE, vgt->vm_id, offset, p_data, bytes);
 
 	t1 = get_cycles();

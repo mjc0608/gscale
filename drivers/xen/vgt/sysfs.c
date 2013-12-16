@@ -117,7 +117,7 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 	int ret = count;
 	int vmid;
 	struct vgt_device *next_vgt;
-	struct pgt_device *pdev;
+	struct pgt_device *pdev = &default_device;
 	int cpu;
 
 	if (sscanf(buf, "%d", &vmid) != 1)
@@ -126,7 +126,7 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 	cpu = vgt_enter();
 	mutex_lock(&vgt_sysfs_lock);
 
-	spin_lock_irqsave(&default_device.lock, flags);
+	vgt_lock_dev_flags(pdev, flags);
 
 	next_vgt = vmid_2_vgt_device(vmid);
 	if (next_vgt == NULL) {
@@ -135,7 +135,6 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 		goto out;
 	}
 
-	pdev = next_vgt->pdev;
 	if (current_foreground_vm(pdev) == next_vgt) {
 		goto out;
 	}
@@ -149,7 +148,7 @@ static ssize_t vgt_foreground_vm_store(struct kobject *kobj, struct kobj_attribu
 	pdev->next_foreground_vm = next_vgt;
 	vgt_raise_request(pdev, VGT_REQUEST_DPY_SWITCH);
 out:
-	spin_unlock_irqrestore(&default_device.lock, flags);
+	vgt_unlock_dev_flags(pdev, flags);
 
 	mutex_unlock(&vgt_sysfs_lock);
 
@@ -253,10 +252,10 @@ static ssize_t vgt_dpy_switch_show(struct kobject *kobj, struct kobj_attribute *
 	cpu = vgt_enter();
 
 	mutex_lock(&vgt_sysfs_lock);
-	spin_lock_irq(&pdev->lock);
+	vgt_lock_dev(pdev);
 	buf_len = get_avl_vm_aperture_gm_and_fence(pdev, buf,
 			PAGE_SIZE);
-	spin_unlock_irq(&pdev->lock);
+	vgt_unlock_dev(pdev);
 	mutex_unlock(&vgt_sysfs_lock);
 
 	vgt_exit(cpu);
@@ -490,7 +489,7 @@ igd_mmio_read(struct file *filp, struct kobject *kobj,
 		return -EINVAL;
 
 	cpu = vgt_enter();
-	spin_lock_irq(&pdev->lock);
+	vgt_lock_dev(pdev);
 
 	while (count > 0) {
 		len = (count > sizeof(unsigned long)) ? sizeof(unsigned long) :
@@ -498,7 +497,7 @@ igd_mmio_read(struct file *filp, struct kobject *kobj,
 
 		if (hcall_mmio_read(_vgt_mmio_pa(pdev, off), len, &data) !=
 				X86EMUL_OKAY) {
-			spin_unlock_irq(&pdev->lock);
+			vgt_unlock_dev(pdev);
 			vgt_exit(cpu);
 			return -EIO;
 		}
@@ -508,7 +507,7 @@ igd_mmio_read(struct file *filp, struct kobject *kobj,
 		count -= len;
 	}
 
-	spin_unlock_irq(&pdev->lock);
+	vgt_unlock_dev(pdev);
 	vgt_exit(cpu);
 
 	return init_count;
@@ -528,7 +527,7 @@ igd_mmio_write(struct file* filp, struct kobject *kobj,
 		return -EINVAL;
 
 	cpu = vgt_enter();
-	spin_lock_irq(&pdev->lock);
+	vgt_lock_dev(pdev);
 
 	while (count > 0) {
 		len = (count > sizeof(unsigned long)) ? sizeof(unsigned long) :
@@ -537,7 +536,7 @@ igd_mmio_write(struct file* filp, struct kobject *kobj,
 		memcpy(&data, buf, len);
 		if (hcall_mmio_write(_vgt_mmio_pa(pdev, off), len, data) !=
 				X86EMUL_OKAY) {
-			spin_unlock_irq(&pdev->lock);
+			vgt_unlock_dev(pdev);
 			vgt_exit(cpu);
 			return -EIO;
 		}
@@ -546,7 +545,7 @@ igd_mmio_write(struct file* filp, struct kobject *kobj,
 		count -= len;
 	}
 
-	spin_unlock_irq(&pdev->lock);
+	vgt_unlock_dev(pdev);
 	vgt_exit(cpu);
 	return init_count;
 }

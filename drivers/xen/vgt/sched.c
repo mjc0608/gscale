@@ -459,7 +459,7 @@ static enum hrtimer_restart vgt_poll_rb_tail(struct hrtimer *data)
 	ASSERT(pdev);
 
 	cpu = vgt_enter();
-	spin_lock_irqsave(&pdev->lock, flags);
+	vgt_lock_dev_flags(pdev, flags);
 	/* TODO: if no more than 2 vgt in runqueue */
 	active_nr = vgt_nr_in_runq(pdev);
 
@@ -484,7 +484,7 @@ static enum hrtimer_restart vgt_poll_rb_tail(struct hrtimer *data)
 		ondemand_sched_ctx(pdev);
 
 reload_timer:
-	spin_unlock_irqrestore(&pdev->lock, flags);
+	vgt_unlock_dev_flags(pdev, flags);
 	/* Slow down the polling as 16 ms to prevent the starvation
 	 * of vgt_thread
 	 */

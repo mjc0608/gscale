@@ -246,19 +246,19 @@ static int vgt_thread(void *priv)
 				cpu = vgt_enter();
 			}
 			else {
-				spin_lock_irq(&pdev->lock);
+				vgt_lock_dev(pdev);
 				pdev->next_sched_vgt = vgt_dom0;
 				vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
-				spin_unlock_irq(&pdev->lock);
+				vgt_unlock_dev(pdev);
 			}
 		}
 
 		/* forward physical GPU events to VMs */
 		if (test_and_clear_bit(VGT_REQUEST_IRQ,
 					(void *)&pdev->request)) {
-			spin_lock_irq(&pdev->lock);
+			vgt_lock_dev(pdev);
 			vgt_forward_events(pdev);
-			spin_unlock_irq(&pdev->lock);
+			vgt_unlock_dev(pdev);
 		}
 
 		/* Send uevent to userspace */
@@ -269,10 +269,10 @@ static int vgt_thread(void *priv)
 
 		if (test_and_clear_bit(VGT_REQUEST_DPY_SWITCH,
 					(void *)&pdev->request)) {
-			spin_lock_irq(&pdev->lock);
+			vgt_lock_dev(pdev);
 			if (prepare_for_display_switch(pdev) == 0)
 				do_vgt_fast_display_switch(pdev);
-			spin_unlock_irq(&pdev->lock);
+			vgt_unlock_dev(pdev);
 		}
 
 		/* Handle render context switch request */
@@ -288,9 +288,9 @@ static int vgt_thread(void *priv)
 
 		if (test_and_clear_bit(VGT_REQUEST_EMUL_DPY_EVENTS,
 				(void *)&pdev->request)) {
-			spin_lock_irq(&pdev->lock);
+			vgt_lock_dev(pdev);
 			vgt_emulate_dpy_events(pdev);
-			spin_unlock_irq(&pdev->lock);
+			vgt_unlock_dev(pdev);
 		}
 
 		vgt_exit(cpu);

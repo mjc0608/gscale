@@ -214,7 +214,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 	if (get_event_and_edid_info(hotplug_cmd, &event, &port_idx) < 0)
 		return;
 
-	spin_lock_irq(&dev->lock);
+	vgt_lock_dev(dev);
 	for (i = 0; i < VGT_MAX_VMS; ++ i) {
 		struct vgt_device *vgt = dev->device[i];
 
@@ -240,7 +240,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 		vgt_trigger_virtual_event(vgt, event);
 	}
 
-	spin_unlock_irq(&dev->lock);
+	vgt_unlock_dev(dev);
 	return;
 }
 

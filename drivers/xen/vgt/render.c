@@ -1478,7 +1478,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	 * simply a spinlock is enough. IRQ handler is another
 	 * race point
 	 */
-	spin_lock_irq(&pdev->lock);
+	vgt_lock_dev(pdev);
 
 	vgt_schedule(pdev);
 
@@ -1612,7 +1612,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	t1 = vgt_get_cycles();
 	context_switch_cost += (t1-t0);
 out:
-	spin_unlock_irq(&pdev->lock);
+	vgt_unlock_dev(pdev);
 	return true;
 err:
 	/* TODO: any cleanup for context switch errors? */
@@ -1632,7 +1632,7 @@ err:
 			vgt_dom0->rb[i].sring.start);
 	show_ring_debug(pdev, i);
 	show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
-	spin_unlock_irq(&pdev->lock);
+	vgt_unlock_dev(pdev);
 	/* crash system now, to avoid causing more confusing errors */
 	ASSERT(0);
 	return false;

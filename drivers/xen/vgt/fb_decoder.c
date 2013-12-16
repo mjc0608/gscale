@@ -389,12 +389,12 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 	}
 
 	/* TODO: use fine-grained refcnt later */
-	spin_lock_irqsave(&pdev->lock, flags);
+	vgt_lock_dev_flags(pdev, flags);
 
 	vgt = vmid_2_vgt_device(vmid);
 	if (!vgt) {
 		vgt_err("Invalid domain ID (%d)\n", vmid);
-		spin_unlock_irqrestore(&pdev->lock, flags);
+		vgt_unlock_dev_flags(pdev, flags);
 		return -ENODEV;
 	}
 
@@ -414,7 +414,7 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 		}
 	}
 
-	spin_unlock_irqrestore(&pdev->lock, flags);
+	vgt_unlock_dev_flags(pdev, flags);
 
 	if(vgt_debug)
 	  vgt_show_fb_format(vmid, fb);
