@@ -286,8 +286,14 @@ static int vgt_thread(void *priv)
 		    test_and_clear_bit(VGT_REQUEST_CTX_SWITCH,
 				(void *)&pdev->request)) {
 			if (!vgt_do_render_context_switch(pdev)) {
-				vgt_err("Exiting thread!!!\n");
-				break;
+				if (enable_reset) {
+					vgt_err("Hang in context switch, try to reset device.\n");
+
+					vgt_reset_device(pdev);
+				} else {
+					vgt_err("Hang in context switch, panic the system.\n");
+					ASSERT(0);
+				}
 			}
 		}
 
