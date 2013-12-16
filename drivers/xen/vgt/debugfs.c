@@ -924,6 +924,7 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	if (!perf_dir_entry)
 		printk(KERN_ERR "vGT(%d): failed to create debugfs directory: perf\n", vgt_id);
 	else {
+		extern u64 vgt_gp_cycles, vgt_gp_cnt;
 		debugfs_create_u64_node ("schedule_in_time", 0444, perf_dir_entry, &(vgt->stat.schedule_in_time));
 		debugfs_create_u64_node ("allocated_cycles", 0444, perf_dir_entry, &(vgt->stat.allocated_cycles));
 		//debugfs_create_u64_node ("used_cycles", 0444, perf_dir_entry, &(vgt->stat.used_cycles));
@@ -943,6 +944,8 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		debugfs_create_u64_node ("total_cmds", 0444, perf_dir_entry, &(vgt->total_cmds));
 		debugfs_create_u64_node ("vring_scan_cnt", 0444, perf_dir_entry, &(vgt->stat.vring_scan_cnt));
 		debugfs_create_u64_node ("vring_scan_cycles", 0444, perf_dir_entry, &(vgt->stat.vring_scan_cycles));
+		debugfs_create_u64_node ("vgt_gp_cnt", 0444, perf_dir_entry, &vgt_gp_cnt);
+		debugfs_create_u64_node ("vgt_gp_cycles", 0444, perf_dir_entry, &vgt_gp_cycles);
 
 		/* cmd statistics for ring/batch buffers */
 		cmdstat_dir_entry = debugfs_create_dir("ring", perf_dir_entry);

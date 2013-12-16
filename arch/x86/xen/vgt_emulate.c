@@ -849,17 +849,23 @@ static void pt_regs_2_em_regs(
 #endif
 }
 
+u64 vgt_gp_cycles, vgt_gp_cnt;
 static int vgt_emulate_ins(struct pt_regs *regs)
 {
 	int rc;
 	unsigned cpu = vgt_enter();
 	struct x86_emulate_ctxt *pctx = &per_cpu(ctxt, cpu);
 	struct cpu_user_regs *p_regs = pctx->regs;
+	cycles_t t;
+
+	vgt_gp_cnt++;
+	t = get_cycles();
 
 	pt_regs_2_em_regs(regs, p_regs);
 	rc = x86_emulate (pctx, &vgt_emu_ops);
 	em_regs_2_pt_regs(p_regs, regs);
 
+	vgt_gp_cycles += get_cycles() - t;
 	vgt_exit(cpu);
 	return rc;
 }
