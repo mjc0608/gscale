@@ -237,28 +237,24 @@ static int vgt_thread(void *priv)
 			continue;
 		}
 
-		cpu = vgt_enter();
-
 		if (freezing(current)) {
 			if (current_render_owner(pdev) == vgt_dom0) {
-				vgt_exit(cpu);
 				try_to_freeze();
-				cpu = vgt_enter();
 			}
 			else {
-				vgt_lock_dev(pdev);
+				vgt_lock_dev(pdev, cpu);
 				pdev->next_sched_vgt = vgt_dom0;
 				vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
-				vgt_unlock_dev(pdev);
+				vgt_unlock_dev(pdev, cpu);
 			}
 		}
 
 		/* forward physical GPU events to VMs */
 		if (test_and_clear_bit(VGT_REQUEST_IRQ,
 					(void *)&pdev->request)) {
-			vgt_lock_dev(pdev);
+			vgt_lock_dev(pdev, cpu);
 			vgt_forward_events(pdev);
-			vgt_unlock_dev(pdev);
+			vgt_unlock_dev(pdev, cpu);
 		}
 
 		/* Send uevent to userspace */
@@ -269,10 +265,10 @@ static int vgt_thread(void *priv)
 
 		if (test_and_clear_bit(VGT_REQUEST_DPY_SWITCH,
 					(void *)&pdev->request)) {
-			vgt_lock_dev(pdev);
+			vgt_lock_dev(pdev, cpu);
 			if (prepare_for_display_switch(pdev) == 0)
 				do_vgt_fast_display_switch(pdev);
-			vgt_unlock_dev(pdev);
+			vgt_unlock_dev(pdev, cpu);
 		}
 
 		/* Handle render context switch request */
@@ -281,19 +277,16 @@ static int vgt_thread(void *priv)
 				(void *)&pdev->request)) {
 			if (!vgt_do_render_context_switch(pdev)) {
 				vgt_err("Exiting thread!!!\n");
-				vgt_exit(cpu);
 				break;
 			}
 		}
 
 		if (test_and_clear_bit(VGT_REQUEST_EMUL_DPY_EVENTS,
 				(void *)&pdev->request)) {
-			vgt_lock_dev(pdev);
+			vgt_lock_dev(pdev, cpu);
 			vgt_emulate_dpy_events(pdev);
-			vgt_unlock_dev(pdev);
+			vgt_unlock_dev(pdev, cpu);
 		}
-
-		vgt_exit(cpu);
 	}
 	return 0;
 }

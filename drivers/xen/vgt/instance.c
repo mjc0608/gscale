@@ -333,6 +333,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	struct pgt_device *pdev = vgt->pdev;
 	struct list_head *pos;
 	struct vgt_device *v = NULL;
+	int cpu;
 
 	printk("prepare to destroy vgt (%d)\n", vgt->vgt_id);
 
@@ -341,7 +342,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	vgt_destroy_debugfs(vgt);
 
-	vgt_lock_dev(pdev);
+	vgt_lock_dev(pdev, cpu);
 
 	printk("check render ownership...\n");
 	list_for_each (pos, &pdev->rendering_runq_head) {
@@ -377,7 +378,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 		do_vgt_fast_display_switch(pdev);
 	}
 
-	vgt_unlock_dev(pdev);
+	vgt_unlock_dev(pdev, cpu);
 	if (vgt->force_removal)
 		/* wait for removal completion */
 		wait_event(pdev->destroy_wq, !vgt->force_removal);

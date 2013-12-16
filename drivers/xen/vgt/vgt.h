@@ -1947,20 +1947,24 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 }
 
 /* wrappers for criticl section in vgt */
-#define vgt_lock_dev(pdev) {		\
+#define vgt_lock_dev(pdev, cpu) {	\
+	cpu = vgt_enter();		\
 	spin_lock_irq(&pdev->lock);	\
 }
 
-#define vgt_unlock_dev(pdev) {		\
+#define vgt_unlock_dev(pdev, cpu) {	\
 	spin_unlock_irq(&pdev->lock);	\
+	vgt_exit(cpu);			\
 }
 
-#define vgt_lock_dev_flags(pdev, flags) {	\
+#define vgt_lock_dev_flags(pdev, cpu, flags) {	\
+	cpu = vgt_enter();			\
 	spin_lock_irqsave(&pdev->lock, flags);	\
 }
 
-#define vgt_unlock_dev_flags(pdev, flags) {		\
+#define vgt_unlock_dev_flags(pdev, cpu, flags) {	\
 	spin_unlock_irqrestore(&pdev->lock, flags);	\
+	vgt_exit(cpu);					\
 }
 
 enum vgt_pipe get_edp_input(uint32_t wr_data);

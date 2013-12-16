@@ -1463,6 +1463,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	int threshold = 500; /* print every 500 times */
 	int i;
 	cycles_t t0, t1;
+	int cpu;
 
 	if (!(vgt_ctx_check(pdev) % threshold))
 		vgt_dbg("vGT: %lldth checks, %lld switches\n",
@@ -1478,7 +1479,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	 * simply a spinlock is enough. IRQ handler is another
 	 * race point
 	 */
-	vgt_lock_dev(pdev);
+	vgt_lock_dev(pdev, cpu);
 
 	vgt_schedule(pdev);
 
@@ -1612,7 +1613,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	t1 = vgt_get_cycles();
 	context_switch_cost += (t1-t0);
 out:
-	vgt_unlock_dev(pdev);
+	vgt_unlock_dev(pdev, cpu);
 	return true;
 err:
 	/* TODO: any cleanup for context switch errors? */
@@ -1632,7 +1633,7 @@ err:
 			vgt_dom0->rb[i].sring.start);
 	show_ring_debug(pdev, i);
 	show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
-	vgt_unlock_dev(pdev);
+	vgt_unlock_dev(pdev, cpu);
 	/* crash system now, to avoid causing more confusing errors */
 	ASSERT(0);
 	return false;

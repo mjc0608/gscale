@@ -27,6 +27,7 @@
 #define _VGT_H_
 
 #include <linux/interrupt.h>
+#include <linux/sched.h>
 
 // structures
 struct vgt_device;

@@ -305,6 +305,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	bool rc;
 	cycles_t t0, t1;
 	struct vgt_statistics *stat = &vgt->stat;
+	int cpu;
 
 	t0 = get_cycles();
 	stat->mmio_rcnt++;
@@ -318,13 +319,13 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	if (bytes > 4)
 		vgt_dbg("vGT: capture >4 bytes read to %x\n", offset);
 
-	vgt_lock_dev_flags(pdev, flags);
+	vgt_lock_dev_flags(pdev, cpu, flags);
 
 	raise_ctx_sched(vgt);
 
 	if (reg_is_gtt(pdev, offset)) {
 		rc = gtt_mmio_read(vgt, offset, p_data, bytes);
-		vgt_unlock_dev_flags(pdev, flags);
+		vgt_unlock_dev_flags(pdev, cpu, flags);
 		return rc;
 	}
 
@@ -360,7 +361,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 
 	reg_set_accessed(pdev, offset);
 
-	vgt_unlock_dev_flags(pdev, flags);
+	vgt_unlock_dev_flags(pdev, cpu, flags);
 	trace_vgt_mmio_rw(VGT_TRACE_READ, vgt->vm_id, offset, p_data, bytes);
 
 	t1 = get_cycles();
@@ -386,6 +387,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	struct vgt_mmio_entry *mht;
 	unsigned int offset;
 	unsigned long flags;
+	int cpu;
 	vgt_reg_t old_vreg=0, old_sreg=0;
 	bool rc;
 	cycles_t t0, t1;
@@ -420,13 +422,13 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	}
 */
 
-	vgt_lock_dev_flags(pdev, flags);
+	vgt_lock_dev_flags(pdev, cpu, flags);
 
 	raise_ctx_sched(vgt);
 
 	if (reg_is_gtt(pdev, offset)) {
 		rc = gtt_mmio_write(vgt, offset, p_data, bytes);
-		vgt_unlock_dev_flags(pdev, flags);
+		vgt_unlock_dev_flags(pdev, cpu, flags);
 		return rc;
 	}
 
@@ -480,7 +482,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 		vgt_dbg("vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
 
 	reg_set_accessed(pdev, offset);
-	vgt_unlock_dev_flags(pdev, flags);
+	vgt_unlock_dev_flags(pdev, cpu, flags);
 	trace_vgt_mmio_rw(VGT_TRACE_WRITE, vgt->vm_id, offset, p_data, bytes);
 
 	t1 = get_cycles();
@@ -512,7 +514,6 @@ static int vgt_emulation_thread(void *priv)
 
 	struct ioreq *ioreq;
 	int irq, ret;
-	int cpu;
 
 	vgt_info("start kthread for VM%d\n", vgt->vm_id);
 
@@ -530,7 +531,6 @@ static int vgt_emulation_thread(void *priv)
 		if (kthread_should_stop())
 			return 0;
 
-		cpu = vgt_enter();
 		for (vcpu = 0; vcpu < nr_vcpus; vcpu++) {
 			if (!test_and_clear_bit(vcpu, info->ioreq_pending))
 				continue;
@@ -546,7 +546,6 @@ static int vgt_emulation_thread(void *priv)
 			irq = info->evtchn_irq[vcpu];
 			notify_remote_via_irq(irq);
 		}
-		vgt_exit(cpu);
 	}
 
 	BUG(); /* It's actually impossible to reach here */

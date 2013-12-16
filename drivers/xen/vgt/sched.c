@@ -458,8 +458,7 @@ static enum hrtimer_restart vgt_poll_rb_tail(struct hrtimer *data)
 
 	ASSERT(pdev);
 
-	cpu = vgt_enter();
-	vgt_lock_dev_flags(pdev, flags);
+	vgt_lock_dev_flags(pdev, cpu, flags);
 	/* TODO: if no more than 2 vgt in runqueue */
 	active_nr = vgt_nr_in_runq(pdev);
 
@@ -484,7 +483,7 @@ static enum hrtimer_restart vgt_poll_rb_tail(struct hrtimer *data)
 		ondemand_sched_ctx(pdev);
 
 reload_timer:
-	vgt_unlock_dev_flags(pdev, flags);
+	vgt_unlock_dev_flags(pdev, cpu, flags);
 	/* Slow down the polling as 16 ms to prevent the starvation
 	 * of vgt_thread
 	 */
@@ -496,7 +495,6 @@ reload_timer:
 
 	hrtimer_add_expires_ns(&hrtimer->timer, hrtimer->period);
 
-	vgt_exit(cpu);
 	return HRTIMER_RESTART;
 }
 

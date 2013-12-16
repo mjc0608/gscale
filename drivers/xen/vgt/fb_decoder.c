@@ -378,6 +378,7 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 	struct vgt_device *vgt;
 	struct pgt_device *pdev = &default_device;
 	unsigned long flags;
+	int cpu;
 	int ret = 0;
 
 	if (!fb)
@@ -389,12 +390,12 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 	}
 
 	/* TODO: use fine-grained refcnt later */
-	vgt_lock_dev_flags(pdev, flags);
+	vgt_lock_dev_flags(pdev, cpu, flags);
 
 	vgt = vmid_2_vgt_device(vmid);
 	if (!vgt) {
 		vgt_err("Invalid domain ID (%d)\n", vmid);
-		vgt_unlock_dev_flags(pdev, flags);
+		vgt_unlock_dev_flags(pdev, cpu, flags);
 		return -ENODEV;
 	}
 
@@ -414,7 +415,7 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 		}
 	}
 
-	vgt_unlock_dev_flags(pdev, flags);
+	vgt_unlock_dev_flags(pdev, cpu, flags);
 
 	if(vgt_debug)
 	  vgt_show_fb_format(vmid, fb);
