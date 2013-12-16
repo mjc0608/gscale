@@ -1995,6 +1995,8 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 		cpu = 0;				\
 }
 
+void vgt_reset_virtual_states(struct vgt_device *vgt);
+
 enum vgt_pipe get_edp_input(uint32_t wr_data);
 void vgt_forward_events(struct pgt_device *pdev);
 void vgt_emulate_dpy_events(struct pgt_device *pdev);

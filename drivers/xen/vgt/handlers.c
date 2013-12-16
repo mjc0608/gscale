@@ -255,37 +255,53 @@ static bool rc_state_ctrl_1_mmio_write(struct vgt_device *vgt, unsigned int offs
 
 }
 
-static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
+static bool handle_device_reset(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
-	uint32_t data;
-
-	data = 0;
-	memcpy(&data, p_data, bytes);
-
-	if (data & _REGBIT_GEN6_GRDOM_FULL){
-		printk("VM%d request Full GPU Reset\n", vgt->vm_id);
-	}
-
-	if (data & _REGBIT_GEN6_GRDOM_RENDER){
-		printk("VM%d request GPU Render Reset\n", vgt->vm_id);
-	}
-
-	if (data & _REGBIT_GEN6_GRDOM_MEDIA){
-		printk("VM%d request GPU Media Reset\n", vgt->vm_id);
-	}
-
-	if (data & _REGBIT_GEN6_GRDOM_BLT){
-		printk("VM%d request GPU BLT Reset\n", vgt->vm_id);
-	}
-	/* TODO: add appropriate action */
-	/* so far, we just simply ignore it and VM treat it as success */
+	vgt_info("VM %d is trying to reset device.\n", vgt->vm_id);
 
 	show_debug(vgt->pdev);
 
 	/* after this point, driver should re-initialize the device */
 	vgt->warn_untrack = 1;
+
+	clear_bit(WAIT_RESET, &vgt->reset_flags);
+
+	vgt_reset_virtual_states(vgt);
+
+	vgt->last_reset_time = get_seconds();
+
+	if (test_bit(DEVICE_RESET_INPROGRESS, &vgt->pdev->device_reset_flags)
+			&& vgt->vm_id == 0)
+		return default_mmio_write(vgt, offset, p_data, bytes);
+
 	return true;
+}
+
+static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	uint32_t data = 0;
+
+	memcpy(&data, p_data, bytes);
+
+	if (data & _REGBIT_GEN6_GRDOM_FULL) {
+		vgt_info("VM %d request Full GPU Reset\n", vgt->vm_id);
+	}
+
+	if (data & _REGBIT_GEN6_GRDOM_RENDER) {
+		vgt_info("VM %d request GPU Render Reset\n", vgt->vm_id);
+	}
+
+	if (data & _REGBIT_GEN6_GRDOM_MEDIA) {
+		vgt_info("VM %d request GPU Media Reset\n", vgt->vm_id);
+	}
+
+	if (data & _REGBIT_GEN6_GRDOM_BLT) {
+		vgt_info("VM %d request GPU BLT Reset\n", vgt->vm_id);
+	}
+
+	return handle_device_reset(vgt, offset, p_data, bytes);
 }
 
 static bool rrmr_mmio_write(struct vgt_device *vgt, unsigned int offset,
@@ -2797,7 +2813,7 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_RSTDBYCTL, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 
-{_REG_GEN6_GDRST, 4, F_VIRT, 0, D_ALL, NULL, gen6_gdrst_mmio_write},
+{_REG_GEN6_GDRST, 4, F_DOM0, 0, D_ALL, NULL, gen6_gdrst_mmio_write},
 {_REG_FENCE_0_LOW, 0x80, F_VIRT, 0, D_ALL, fence_mmio_read, fence_mmio_write},
 {VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, F_VIRT, 0, D_ALL, pvinfo_read, pvinfo_write},
 {_REG_CPU_VGACNTRL, 4, F_DOM0, 0, D_ALL, vga_control_r, vga_control_w},

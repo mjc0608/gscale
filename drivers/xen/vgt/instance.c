@@ -423,3 +423,80 @@ void vgt_release_instance(struct vgt_device *vgt)
 	printk("vGT: vgt_release_instance done\n");
 }
 
+static void vgt_reset_virtual_interrupt(struct vgt_device *vgt)
+{
+	vgt_info("VM %d: Reset virtual interrupt registers.\n", vgt->vm_id);
+
+	__vreg(vgt, _REG_GTIER) = 0x0;
+	__vreg(vgt, _REG_GTIIR) = 0x0;
+	__vreg(vgt, _REG_GTIMR) = 0xffffffff;
+	__vreg(vgt, _REG_RCS_IMR) = 0xffffffff;
+	__vreg(vgt, _REG_BCS_IMR) = 0xffffffff;
+	__vreg(vgt, _REG_VCS_IMR) = 0xffffffff;
+	__vreg(vgt, _REG_VECS_IMR) = 0xffffffff;
+
+	return;
+}
+
+static void vgt_reset_ppgtt(struct vgt_device *vgt)
+{
+	int i;
+
+	if (vgt->pdev->enable_ppgtt && vgt->ppgtt_initialized) {
+		vgt_info("VM %d: Reset PPGTT state.\n", vgt->vm_id);
+
+		/*
+		 * DOM0 doesn't use shadow PPGTT table.
+		 */
+		if (vgt->vm_id)
+			vgt_destroy_shadow_ppgtt(vgt);
+
+		vgt->ppgtt_initialized = false;
+
+		if (vgt->vm_id)
+			vgt_init_shadow_ppgtt(vgt);
+
+		for (i = 0; i < vgt->pdev->max_engines; i++) {
+			vgt->rb[i].has_ppgtt_mode_enabled = 0;
+			vgt->rb[i].has_ppgtt_base_set = 0;
+		}
+	}
+
+	return;
+}
+
+static void vgt_reset_ringbuffer(struct vgt_device *vgt)
+{
+	vgt_state_ring_t *rb;
+	int i;
+
+	for (i = 0; i < vgt->pdev->max_engines; i++) {
+		rb = &vgt->rb[i];
+
+		/* Drop all submitted commands. */
+		vgt_init_cmd_info(rb);
+
+		rb->uhptr = 0;
+		rb->request_id = rb->uhptr_id = 0;
+
+		memset(&rb->vring, 0, sizeof(vgt_ringbuffer_t));
+		memset(&rb->sring, 0, sizeof(vgt_ringbuffer_t));
+	}
+
+	return;
+}
+
+void vgt_reset_virtual_states(struct vgt_device *vgt)
+{
+	ASSERT(spin_is_locked(&vgt->pdev->lock));
+
+	vgt_reset_virtual_interrupt(vgt);
+
+	vgt_reset_ringbuffer(vgt);
+
+	vgt_reset_ppgtt(vgt);
+
+	vgt->has_context = 0;
+
+	return;
+}
