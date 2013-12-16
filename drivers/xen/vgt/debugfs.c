@@ -779,6 +779,111 @@ static const struct file_operations virt_dpyinfo_fops = {
 	.release = single_release,
 };
 
+static int vgt_device_reset_show(struct seq_file *m, void *data)
+{
+	struct pgt_device *pdev = (struct pgt_device *)m->private;
+
+	unsigned long flags;
+	int i;
+
+	seq_printf(m, "switch: ");
+	seq_printf(m, enable_reset ? "enable" : "disable");
+	seq_printf(m, "\n");
+
+	seq_printf(m, "status: ");
+
+	if (test_bit(DEVICE_RESET_INPROGRESS, &pdev->device_reset_flags))
+		seq_printf(m, "resetting");
+	else {
+		if (get_seconds() - vgt_dom0->last_reset_time < 6)
+			seq_printf(m, "hold");
+		else
+			seq_printf(m, "idle");
+	}
+
+	seq_printf(m, "\n");
+
+	seq_printf(m, "waiting vm reset: ");
+
+	spin_lock_irqsave(&pdev->lock, flags);
+
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		if (pdev->device[i]
+			&& test_bit(WAIT_RESET, &pdev->device[i]->reset_flags))
+		seq_printf(m, "%d ", pdev->device[i]->vm_id);
+	}
+
+	spin_unlock_irqrestore(&pdev->lock, flags);
+
+	seq_printf(m, "\n");
+
+	return 0;
+}
+
+static int vgt_device_reset_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vgt_device_reset_show, inode->i_private);
+}
+
+static ssize_t vgt_device_reset_write(struct file *file,
+		const char __user *ubuf, size_t count, loff_t *ppos)
+{
+	struct seq_file *s = file->private_data;
+	struct pgt_device *pdev = (struct pgt_device *)s->private;
+	struct vgt_device *vgt;
+	struct list_head *pos, *n;
+	unsigned long flags;
+	char buf[32];
+
+	if (*ppos && count > sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, ubuf, count))
+		return -EFAULT;
+
+	if (!enable_reset) {
+		vgt_err("VGT device reset is not enabled.\n");
+		return -ENODEV;
+	}
+
+	/*
+	 * Prevent the protection logic bites ourself.
+	 */
+	if (get_seconds() - vgt_dom0->last_reset_time < 6)
+		return -EAGAIN;
+
+	if (!strncmp(buf, "normal", 6)) {
+		vgt_info("Trigger device reset under normal situation.\n");
+
+		vgt_raise_request(pdev, VGT_REQUEST_DEVICE_RESET);
+	} else if (!strncmp(buf, "invalid head", 12)) {
+		spin_lock_irqsave(&pdev->lock, flags);
+
+		list_for_each_safe(pos, n, &pdev->rendering_runq_head) {
+			vgt = list_entry(pos, struct vgt_device, list);
+
+			if (vgt != current_render_owner(pdev)) {
+				vgt_info("Inject an invalid RCS ring head pointer to VM: %d.\n",
+						vgt->vm_id);
+
+				vgt->rb[0].sring.head = 0xdeadbeef;
+			}
+		}
+
+		spin_unlock_irqrestore(&pdev->lock, flags);
+	}
+
+	return count;
+}
+
+static const struct file_operations vgt_device_reset_fops = {
+	.open = vgt_device_reset_open,
+	.read = seq_read,
+	.write = vgt_device_reset_write,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 /* initialize vGT debufs top directory */
 struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 {
@@ -793,6 +898,11 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 			return NULL;
 		}
 	}
+
+	temp_d = debugfs_create_file("device_reset", 0444, d_vgt_debug,
+		pdev, &vgt_device_reset_fops);
+	if (!temp_d)
+		return NULL;
 
 	for ( i = 0; stat_info[i].stat != NULL; i++ ) {
 		temp_d = debugfs_create_u64(stat_info[i].node_name,
