@@ -136,6 +136,13 @@ i915_gem_wait_for_error(struct i915_gpu_error *error)
 	return 0;
 }
 
+int i915_wait_error_work_complete(struct drm_device *dev)
+{
+       struct drm_i915_private *dev_priv = dev->dev_private;
+
+       return i915_gem_wait_for_error(&dev_priv->gpu_error);
+}
+
 int i915_mutex_lock_interruptible(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;

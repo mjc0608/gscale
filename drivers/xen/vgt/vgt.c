@@ -123,6 +123,8 @@ module_param_named(bypass_dom0_addr_check, bypass_dom0_addr_check, bool, 0600);
 bool enable_panel_fitting = true;
 module_param_named(enable_panel_fitting, enable_panel_fitting, bool, 0600);
 
+bool enable_reset = true;
+module_param_named(enable_reset, enable_reset, bool, 0600);
 
 static vgt_ops_t vgt_xops = {
 	.mem_read = vgt_emulate_read,
@@ -250,6 +252,11 @@ static int vgt_thread(void *priv)
 				vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 				vgt_unlock_dev(pdev, cpu);
 			}
+		}
+
+		if (test_and_clear_bit(VGT_REQUEST_DEVICE_RESET,
+					(void *)&pdev->request)) {
+			vgt_reset_device(pdev);
 		}
 
 		/* forward physical GPU events to VMs */
@@ -580,6 +587,8 @@ int vgt_initialize(struct pci_dev *dev)
 	init_waitqueue_head(&pdev->event_wq);
 	init_waitqueue_head(&pdev->destroy_wq);
 
+	pdev->device_reset_flags = 0;
+
 	p_thread = kthread_run(vgt_thread, pdev, "vgt_main");
 	if (!p_thread) {
 		goto err;
@@ -763,6 +772,104 @@ int vgt_resume(struct pci_dev *pdev)
 	return 0;
 }
 EXPORT_SYMBOL(vgt_resume);
+
+static void do_device_reset(struct pgt_device *pdev)
+{
+	struct drm_device *drm_dev = pci_get_drvdata(pdev->pdev);
+	vgt_reg_t head, tail, start, ctl;
+	int i;
+
+	vgt_info("Request DOM0 to reset device.\n");
+
+	ASSERT(drm_dev);
+
+	set_bit(WAIT_RESET, &vgt_dom0->reset_flags);
+
+	i915_handle_error(drm_dev, true);
+
+	i915_wait_error_work_complete(drm_dev);
+
+	/*
+	 * User may set i915.reset=0 in kernel command line, which will
+	 * disable the reset logic of i915, without that logics we can
+	 * do nothing, so we panic here and let user remove that parameters.
+	 */
+	if (test_bit(WAIT_RESET, &vgt_dom0->reset_flags)) {
+		vgt_err("DOM0 GPU reset didn't happen?.\n");
+		vgt_err("Maybe you set i915.reset=0 in kernel command line? Panic the system.\n");
+		ASSERT(0);
+	}
+
+	vgt_info("GPU ring status:\n");
+
+	for (i = 0; i < pdev->max_engines; i++) {
+		head = VGT_READ_HEAD(pdev, i);
+		tail = VGT_READ_TAIL(pdev, i);
+		start = VGT_READ_START(pdev, i);
+		ctl = VGT_READ_CTL(pdev, i);
+
+		vgt_info("RING %d: H: %x T: %x S: %x C: %x.\n",
+				i, head, tail, start, ctl);
+	}
+
+	vgt_info("Finish.\n");
+
+	return;
+}
+
+int vgt_reset_device(struct pgt_device *pdev)
+{
+	struct vgt_device *vgt;
+	struct list_head *pos, *n;
+	unsigned long flags;
+	int i;
+
+	if (get_seconds() - vgt_dom0->last_reset_time < 6) {
+		vgt_err("Try to reset device too fast.\n");
+		return -EAGAIN;
+	}
+
+	if (test_and_set_bit(DEVICE_RESET_INPROGRESS,
+				&pdev->device_reset_flags)) {
+		vgt_err("Another device reset has been already running.\n");
+		return -EBUSY;
+	}
+
+	vgt_info("Stop VGT context switch.\n");
+
+	vgt_cleanup_ctx_scheduler(pdev);
+
+	current_render_owner(pdev) = vgt_dom0;
+
+	current_foreground_vm(pdev) = vgt_dom0;
+
+	spin_lock_irqsave(&pdev->lock, flags);
+
+	list_for_each_safe(pos, n, &pdev->rendering_runq_head) {
+		vgt = list_entry(pos, struct vgt_device, list);
+
+		if (vgt->vm_id) {
+			for (i = 0; i < pdev->max_engines; i++) {
+				vgt_info("VM %d: disable ring %d\n", vgt->vm_id, i);
+				vgt_disable_ring(vgt, i);
+			}
+
+			set_bit(WAIT_RESET, &vgt->reset_flags);
+		}
+	}
+
+	spin_unlock_irqrestore(&pdev->lock, flags);
+
+	do_device_reset(pdev);
+
+	vgt_info("Restart VGT context switch.\n");
+
+	vgt_initialize_ctx_scheduler(pdev);
+
+	clear_bit(DEVICE_RESET_INPROGRESS, &pdev->device_reset_flags);
+
+	return 0;
+}
 
 /* for GFX driver */
 int xen_start_vgt(struct pci_dev *pdev)

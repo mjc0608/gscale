@@ -77,6 +77,7 @@ extern bool bypass_scan;
 extern bool bypass_dom0_addr_check;
 extern bool render_engine_reset;
 extern bool enable_panel_fitting;
+extern bool enable_reset;
 
 enum vgt_event_type {
 	// GT
@@ -660,6 +661,9 @@ struct vgt_device {
 	uint32_t frmcount_delta[I915_MAX_PIPES]; /* used for vblank virtualization*/
 
 	struct sbi_registers sbi_regs;
+
+	unsigned long reset_flags;
+	unsigned long last_reset_time;
 };
 
 enum vgt_owner_type {
@@ -795,6 +799,11 @@ struct pgt_statistics {
 
 struct vgt_mmio_dev;
 
+enum {
+	DEVICE_RESET_INPROGRESS = 0,
+	WAIT_RESET,
+};
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list; /* list node for 'pgt_devices' */
@@ -807,6 +816,9 @@ struct pgt_device {
 	struct task_struct *p_thread;
 	wait_queue_head_t event_wq;
 	wait_queue_head_t destroy_wq;
+
+	unsigned long device_reset_flags;
+
 	uint32_t request;
 
 	uint64_t ctx_check;	/* the number of checked count in vgt thread */
@@ -1097,6 +1109,7 @@ static inline void reg_update_handlers(struct pgt_device *pdev,
 #define VGT_REQUEST_CTX_SWITCH	2	/* immediate reschedule(context switch) requested */
 #define VGT_REQUEST_EMUL_DPY_EVENTS	3
 #define VGT_REQUEST_DPY_SWITCH	4	/* immediate reschedule(display switch) requested */
+#define VGT_REQUEST_DEVICE_RESET 5
 
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {
@@ -2053,6 +2066,15 @@ static inline void vgt_set_pipe_mapping(struct vgt_device *vgt,
 
 bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new_data, uint32_t old_data);
 bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint32_t physical_wr_data);
+
+#include <drm/drmP.h>
+
+extern void i915_handle_error(struct drm_device *dev, bool wedged,
+		       const char *fmt, ...);
+
+extern int i915_wait_error_work_complete(struct drm_device *dev);
+
+int vgt_reset_device(struct pgt_device *pgt);
 
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp);
 void vgt_release_instance(struct vgt_device *vgt);

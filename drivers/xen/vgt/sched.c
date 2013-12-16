@@ -530,11 +530,14 @@ void vgt_initialize_ctx_scheduler(struct pgt_device *pdev)
 void vgt_cleanup_ctx_scheduler(struct pgt_device *pdev)
 {
 	ASSERT(pdev);
+
 	if (event_based_qos)
 		return;
 
 	if (shadow_tail_based_qos || timer_based_qos)
 		vgt_hrtimer_exit(pdev);
+
+	pdev->next_sched_vgt = NULL;
 }
 
 /* internal facilities */
