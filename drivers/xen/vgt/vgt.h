@@ -1848,6 +1848,7 @@ struct vgt_irq_info {
 	char *name;
 	int reg_base;
 	enum vgt_event_type bit_to_event[VGT_IRQ_BITWIDTH];
+	unsigned long warned;
 };
 
 #define	EVENT_FW_ALL 0	/* event forwarded to all instances */

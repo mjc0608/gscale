@@ -1140,8 +1140,9 @@ static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
 		pdev->stat.events[event]++;
 
 		if (unlikely(event == EVENT_RESERVED)) {
-			vgt_err("IRQ: abandon non-registered [%s, bit-%d] event (%s)\n",
-				info->name, bit, vgt_irq_name[event]);
+			if (!test_and_set_bit(bit, &info->warned))
+				vgt_err("IRQ: abandon non-registered [%s, bit-%d] event (%s)\n",
+					info->name, bit, vgt_irq_name[event]);
 			continue;
 		}
 
