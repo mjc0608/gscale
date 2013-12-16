@@ -137,6 +137,8 @@ static int vgt_decode_cursor_plane_format(struct vgt_device *vgt,
 	plane->x_sign = (val & _CURSOR_SIGN_X_MASK) >> _CURSOR_SIGN_X_SHIFT;
 	plane->y_pos = (val & _CURSOR_POS_Y_MASK) >> _CURSOR_POS_Y_SHIFT;
 	plane->y_sign = (val & _CURSOR_SIGN_Y_MASK) >> _CURSOR_SIGN_Y_SHIFT;
+	plane->x_hot = __vreg(vgt, vgt_info_off(xhot));
+	plane->y_hot = __vreg(vgt, vgt_info_off(xhot));
 
 	return 0;
 }
@@ -439,3 +441,51 @@ int vgt_fb_notifier_call_chain(unsigned long val, void *data)
 	return atomic_notifier_call_chain(&vgt_fb_notifier_list, val, data);
 }
 EXPORT_SYMBOL_GPL(vgt_fb_notifier_call_chain);
+
+/*
+ * A notifier API for userspace processes
+ * By polling /sys/kernel/vgt/vm<X>/vgt_id for (POLLERR | POLLPRI)
+ * userspace may get notifications of framebuffer events
+ */
+static int vgt_fb_event(struct notifier_block *nb,
+			unsigned long val, void *data)
+{
+	struct fb_notify_msg *msg = data;
+	struct vgt_device *vgt;
+
+	if (!msg) {
+		vgt_err("received invalid fb_event message\n");
+		return -EIO;
+	}
+
+	if (msg->vm_id == 0) {
+		return 0;
+	}
+
+	vgt = vmid_2_vgt_device(msg->vm_id);
+	switch (msg->plane_id) {
+		case CURSOR_PLANE:
+			sysfs_notify(&vgt->kobj, NULL, "cursor_notifier");
+			break;
+		case PRIMARY_PLANE:
+			sysfs_notify(&vgt->kobj, NULL, "primary_notifier");
+			break;
+		case SPRITE_PLANE:
+			sysfs_notify(&vgt->kobj, NULL, "sprite_notifier");
+			break;
+		default:
+			vgt_err("invalid plane in fb_event message\n");
+			break;
+	}
+
+	return (0);
+}
+
+static struct notifier_block vgt_fb_notifier = {
+	.notifier_call = vgt_fb_event,
+};
+
+void vgt_init_fb_notify(void)
+{
+	vgt_register_fb_notifier(&vgt_fb_notifier);
+}

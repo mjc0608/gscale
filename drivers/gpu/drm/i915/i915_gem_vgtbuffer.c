@@ -384,6 +384,8 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 	if((args->plane_id) == I915_VGT_PLANE_CURSOR) {
 		c = &pipe->cursor;
 		args->enabled = c->enabled;
+		args->x_offset = c->x_hot;
+		args->y_offset = c->y_hot;
 		args->x_pos = c->x_pos;
 		args->y_pos = c->y_pos;
 		args->start = c->base;

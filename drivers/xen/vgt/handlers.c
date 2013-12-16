@@ -1188,6 +1188,7 @@ static bool pri_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
 
 	msg.vm_id = vgt->vm_id;
+	msg.plane_id = PRIMARY_PLANE;
 	msg.pipe_id = VGT_DSPSURFPIPE(offset);
 	vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 
@@ -1202,6 +1203,7 @@ static bool spr_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
 
 	msg.vm_id = vgt->vm_id;
+	msg.plane_id = SPRITE_PLANE;
 	msg.pipe_id = VGT_SPRSURFPIPE(offset);
 	vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 
@@ -1786,21 +1788,25 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 			if (val == VGT_G2V_DISPLAY_REFRESH) {
 				struct fb_notify_msg msg;
 				msg.vm_id = vgt->vm_id;
-				msg.pipe_id = PIPE_A; /* we actually don't care which pipe is notified here */
+				msg.plane_id = PRIMARY_PLANE;
 				vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 			} else if (val == VGT_G2V_SET_POINTER_SHAPE) {
-				/* put handler here
-				 * printk("VGT_G2V_SET_POINTER_SHAPE\n");
-				 */
+				struct fb_notify_msg msg;
+				msg.vm_id = vgt->vm_id;
+				msg.plane_id = CURSOR_PLANE;
+				vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 			} else {
 				vgt_warn("INVALID_WRITE_NOTIFICATION %x\n", val);
 			}
 			break;
 		case vgt_info_off(xhot):
-				/* vgt_info("xhot %x\n", val); */
-			break;
 		case vgt_info_off(yhot):
-				/* vgt_info("yhot %x\n", val); */
+			{
+				struct fb_notify_msg msg;
+				msg.vm_id = vgt->vm_id;
+				msg.plane_id = CURSOR_PLANE;
+				vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
+			}
 			break;
 		default:
 			/* keep rc's default value: true.

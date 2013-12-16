@@ -597,6 +597,8 @@ int vgt_initialize(struct pci_dev *dev)
 
 	vgt_init_sysfs(pdev);
 
+	vgt_init_fb_notify();
+
 	printk("vgt_initialize succeeds.\n");
 	return 0;
 err:

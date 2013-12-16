@@ -67,6 +67,8 @@ struct vgt_cursor_plane_format {
 	u8	y_sign;		/* Y Position Sign */
 	u32	width;		/* in pixels */
 	u32	height;		/* in lines */
+	u32	x_hot;		/* in pixels */
+	u32	y_hot;		/* in pixels */
 };
 
 #define INVALID_PIPE_ID	  -1
@@ -96,6 +98,7 @@ typedef enum {
 struct fb_notify_msg {
 	unsigned vm_id;
 	unsigned pipe_id; /* id starting from 0 */
+	unsigned plane_id; /* primary, cursor, or sprite */
 };
 
 /*
