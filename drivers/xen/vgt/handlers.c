@@ -2152,7 +2152,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x2438, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {0x243c, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {0x7018, 4, F_RDR, 0, D_ALL, NULL, NULL},
-{0xb038, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {0xe184, 4, F_RDR, 0, D_ALL, NULL, NULL},
 
 {0x60220, 0x20, F_DPY, 0, D_ALL, NULL, NULL},
@@ -2877,7 +2876,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_FPGA_DBG, 4, F_DOM0, 0, D_HSW, NULL, NULL},
 
 /* DOM0 PM owns these registers. */
-{_REG_SCRATCH1, 4, F_DOM0, 0, D_HSW, NULL, NULL},
+{_REG_SCRATCH1, 4, F_RDR, 0, D_HSW, NULL, NULL},
 {_REG_ROW_CHICKEN3, 4, F_DOM0, 0, D_HSW, NULL, NULL},
 /* MAXCNT means max idle count */
 
