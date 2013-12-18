@@ -311,6 +311,7 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 	vmid = args->vmid;
 	DRM_DEBUG_DRIVER("VGT: calling decode\n");
 	if(vgt_decode_fb_format(vmid, &obj->fb)) {
+		kfree(obj);
 		return -EINVAL;
 	}
 
@@ -343,8 +344,10 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 	}
 
 	/* If we still don't have anything, bail */
-	if (!found)
+	if (!found) {
+		kfree(obj);
 		return -ENOENT;
+	}
 
 	args->pipe_id = i;
 	DRM_DEBUG_DRIVER("VGT: pipe = %d\n", i);
@@ -484,14 +487,18 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 	obj->mm = current->mm;
 
 	ret = i915_gem_vgtbuffer_init__mmu_notifier(obj, args->flags);
-	if (ret)
+	if (ret) {
+		kfree (obj);
 		return ret;
+	}
 
 	ret = drm_gem_handle_create(file, &obj->gem.base, &handle);
 	/* drop reference from allocate - handle holds it now */
 	drm_gem_object_unreference(&obj->gem.base);
-	if (ret)
+	if (ret) {
+		kfree (obj);
 		return ret;
+	}
 
 	args->handle = handle;
 	return 0;
