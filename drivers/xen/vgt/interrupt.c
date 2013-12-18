@@ -299,7 +299,8 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	vgt_dbg("IRQ: old vIER(%x), pIER(%x)\n",
 		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
 
-	if (!vgt->vgt_id && __get_cpu_var(in_vgt) != 1) {
+	if (likely(vgt_track_nest) && !vgt->vgt_id &&
+		__get_cpu_var(in_vgt) != 1) {
 		vgt_err("i915 virq happens in nested vgt context(%d)!!!\n",
 			__get_cpu_var(in_vgt));
 		ASSERT(0);
@@ -368,6 +369,16 @@ static void pend_dom0_virtual_interrupt(struct vgt_device *vgt)
 	struct pgt_device *pdev = vgt->pdev;
 
 	ASSERT(spin_is_locked(&pdev->lock));
+
+	if (unlikely(!vgt_track_nest)) {
+		int i915_irq = pdev->irq_hstate->i915_irq;
+		unsigned long flags;
+		/* resend irq may unmask events which requires irq disabled */
+		local_irq_save(flags);
+		resend_irq_on_evtchn(i915_irq);
+		local_irq_restore(flags);
+		return;
+	}
 
 	if (pdev->dom0_irq_pending)
 		return;
@@ -1397,6 +1408,7 @@ void vgt_install_irq(struct pci_dev *pdev)
 
 	printk("vGT: allocate virq (%d) for i915, while keep original irq (%d) for vgt\n",
 		hstate->i915_irq, hstate->pirq);
+	printk("vGT: track_nest: %s\n", vgt_track_nest ? "enabled" : "disabled");
 }
 
 void vgt_uninstall_irq(struct pci_dev *pdev)

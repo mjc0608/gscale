@@ -59,6 +59,9 @@ MODULE_PARM_DESC(hvm_boot_foreground, "Make HVM to be foreground after create an
 bool vgt_primary = false;
 module_param_named(vgt_primary, vgt_primary, bool, 0600);
 
+bool vgt_track_nest = true;
+module_param_named(track_nest, vgt_track_nest, bool, 0600);
+
 bool vgt_debug = false;
 module_param_named(debug, vgt_debug, bool, 0600);
 

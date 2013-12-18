@@ -63,6 +63,7 @@ extern bool hvm_display_owner;
 extern bool hvm_super_owner;
 extern bool hvm_boot_foreground;
 extern bool vgt_primary;
+extern bool vgt_track_nest;
 extern bool vgt_debug;
 extern bool vgt_enabled;
 extern bool fastpath_dpy_switch;
@@ -1947,24 +1948,36 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 }
 
 /* wrappers for criticl section in vgt */
-#define vgt_lock_dev(pdev, cpu) {	\
-	cpu = vgt_enter();		\
-	spin_lock_irq(&pdev->lock);	\
+#define vgt_lock_dev(pdev, cpu) {		\
+	if (likely(vgt_track_nest))		\
+		cpu = vgt_enter();		\
+	else					\
+		cpu = 0;			\
+	spin_lock_irq(&pdev->lock);		\
 }
 
-#define vgt_unlock_dev(pdev, cpu) {	\
-	spin_unlock_irq(&pdev->lock);	\
-	vgt_exit(cpu);			\
+#define vgt_unlock_dev(pdev, cpu) {		\
+	spin_unlock_irq(&pdev->lock);		\
+	if (likely(vgt_track_nest))		\
+		vgt_exit(cpu);			\
+	else					\
+		cpu = 0;			\
 }
 
 #define vgt_lock_dev_flags(pdev, cpu, flags) {	\
-	cpu = vgt_enter();			\
+	if (likely(vgt_track_nest))		\
+		cpu = vgt_enter();		\
+	else					\
+		cpu = 0;			\
 	spin_lock_irqsave(&pdev->lock, flags);	\
 }
 
 #define vgt_unlock_dev_flags(pdev, cpu, flags) {	\
 	spin_unlock_irqrestore(&pdev->lock, flags);	\
-	vgt_exit(cpu);					\
+	if (likely(vgt_track_nest))			\
+		vgt_exit(cpu);				\
+	else						\
+		cpu = 0;				\
 }
 
 enum vgt_pipe get_edp_input(uint32_t wr_data);
