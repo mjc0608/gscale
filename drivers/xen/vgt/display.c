@@ -265,7 +265,8 @@ bool vgt_hotplug_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt
 	return vgt_default_uevent_handler(uevent_entry, pdev);
 }
 
-bool vgt_vga_stat_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *pdev)
+static bool vgt_dpy_stat_uevent_handler(struct vgt_uevent_info *uevent_entry,
+	struct pgt_device *pdev)
 {
 	/* Add vmid */
 	int retval;
@@ -302,8 +303,10 @@ static struct vgt_uevent_info vgt_default_uevent_info_table[UEVENT_MAX] = {
 	{"PORT C remove", -1, KOBJ_REMOVE, {"PORT_C_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
 	{"PORT D insert", -1, KOBJ_ADD, {"PORT_D_INSERT=1", NULL}, vgt_hotplug_uevent_handler},
 	{"PORT D remove", -1, KOBJ_REMOVE, {"PORT_D_REMOVE=1", NULL}, vgt_hotplug_uevent_handler},
-	{"VGT enable VGA mode", -1, KOBJ_ADD, {"VGT_ENABLE_VGA=1", NULL, NULL}, vgt_vga_stat_uevent_handler},
-	{"VGT disable VGA mode", -1, KOBJ_ADD, {"VGT_ENABLE_VGA=0", NULL, NULL}, vgt_vga_stat_uevent_handler},
+	{"VGT enable VGA mode", -1, KOBJ_ADD, {"VGT_ENABLE_VGA=1", NULL, NULL}, vgt_dpy_stat_uevent_handler},
+	{"VGT disable VGA mode", -1, KOBJ_ADD, {"VGT_ENABLE_VGA=0", NULL, NULL}, vgt_dpy_stat_uevent_handler},
+	{"VGT display ready", -1, KOBJ_ADD, {"VGT_DISPLAY_READY=1", NULL, NULL}, vgt_dpy_stat_uevent_handler},
+	{"VGT display unready", -1, KOBJ_ADD, {"VGT_DISPLAY_READY=0", NULL, NULL}, vgt_dpy_stat_uevent_handler},
 };
 
 void vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent)

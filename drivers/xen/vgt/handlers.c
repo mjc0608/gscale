@@ -1549,6 +1549,21 @@ void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs)
 		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPD_AUX_CH_CTL));
 }
 
+static void vgt_dpy_stat_notify(struct vgt_device *vgt,
+	enum vgt_uevent_type event)
+{
+	struct pgt_device *pdev = vgt->pdev;
+
+	ASSERT(event >= VGT_ENABLE_VGA && event <= VGT_DISPLAY_UNREADY);
+
+	/* no notification at dom0 boot time */
+	if (vgt_ops->boot_time)
+		return;
+
+	vgt_set_uevent(vgt, event);
+	vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
+}
+
 static bool vga_control_r(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -1558,28 +1573,21 @@ static bool vga_control_r(struct vgt_device *vgt, unsigned int offset,
 static bool vga_control_w (struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	struct pgt_device *pdev = vgt->pdev;
+	enum vgt_uevent_type event;
+	bool vga_disable;
 
 	default_mmio_write(vgt, offset, p_data, bytes);
 
-	/* no notification at dom0 boot time */
-	if (vgt_ops->boot_time)
-		return true;
+	vga_disable = __vreg(vgt, offset) & _REGBIT_VGA_DISPLAY_DISABLE;
 
-	if ( __vreg(vgt, offset) & _REGBIT_VGA_DISPLAY_DISABLE ) {
-		/* Disable VGA */
-		printk("VGT(%d): Disable VGA mode %x\n", vgt->vgt_id,
-			(unsigned int) __vreg(vgt, offset));
-		vgt_set_uevent(vgt, VGT_DISABLE_VGA);
-		vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
-	}
-	else {
-		/* Enable VGA */
-		printk("VGT(%d): Enable VGA mode %x\n", vgt->vgt_id,
-			(unsigned int) __vreg(vgt, offset));
-		vgt_set_uevent(vgt, VGT_ENABLE_VGA);
-		vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
-	}
+	vgt_info("VM(%d): %s VGA mode %x\n", vgt->vgt_id,
+		vga_disable ? "Disable" : "Enable",
+		(unsigned int)__vreg(vgt, offset));
+
+	event = vga_disable ? VGT_DISABLE_VGA : VGT_ENABLE_VGA;
+
+	vgt_dpy_stat_notify(vgt, event);
+
 	return true;
 }
 
@@ -1742,6 +1750,7 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 	vgt_reg_t val = *(vgt_reg_t *)p_data;
 	vgt_reg_t min;
 	bool rc = true;
+	enum vgt_uevent_type event;
 
 	switch (offset) {
 		case vgt_info_off(min_low_gmadr):
@@ -1773,7 +1782,26 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 			}
 			break;
 		case vgt_info_off(display_ready):
-			if (vgt->vm_id
+			switch (val) {
+			case 0:
+				event = VGT_DISPLAY_UNREADY;
+				break;
+			case 1:
+				event = VGT_DISPLAY_READY;
+				break;
+			case 2:
+				event = VGT_ENABLE_VGA;
+				break;
+			default:
+				event = UEVENT_MAX;
+				vgt_warn("invalid display event: %d\n", val);
+				break;
+			}
+
+			if (event != UEVENT_MAX)
+				 vgt_dpy_stat_notify(vgt, event);
+
+			if (vgt->vm_id && event == VGT_DISPLAY_READY
 				&& hvm_boot_foreground == true
 				&& !vgt->hvm_boot_foreground_visible) {
 				/*

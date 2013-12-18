@@ -59,3 +59,5 @@ ACTION=="remove", KERNEL=="control", ENV{PORT_D_REMOVE}=="1", RUN+="/bin/sh -c '
 ACTION=="add", KERNEL=="control", ENV{PORT_D_INSERT}=="1", RUN+="/bin/sh -c 'echo 0xfff9 > /sys/kernel/vgt/control/virtual_event'"
 ACTION=="add", KERNEL=="control", ENV{VGT_ENABLE_VGA}=="1", RUN+="/bin/sh -c 'echo VM_$env{VMID}_enable_VGA_mode >> /tmp/vgt-log'"
 ACTION=="add", KERNEL=="control", ENV{VGT_ENABLE_VGA}=="0", RUN+="/bin/sh -c 'echo VM_$env{VMID}_disable_VGA_mode >> /tmp/vgt-log'"
+ACTION=="add", KERNEL=="control", ENV{VGT_DISPLAY_READY}=="1", RUN+="/bin/sh -c 'echo VM_$env{VMID}_display_ready >> /tmp/vgt-log'"
+ACTION=="add", KERNEL=="control", ENV{VGT_DISPLAY_READY}=="0", RUN+="/bin/sh -c 'echo VM_$env{VMID}_display_unready >> /tmp/vgt-log'"
