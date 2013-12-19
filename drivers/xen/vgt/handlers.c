@@ -120,6 +120,10 @@ static void v_force_wake_get(struct vgt_device *vgt)
 	unsigned long flags;
 	int rc;
 
+	/* ignore hvm guest's forcewake req */
+	if (vgt->vm_id != 0 && ignore_hvm_forcewake_req)
+		return;
+
 	spin_lock_irqsave(&vgt->pdev->v_force_wake_lock, flags);
 
 	if (bitmap_empty(vgt->pdev->v_force_wake_bitmap, VGT_MAX_VMS)){
@@ -141,6 +145,10 @@ static void v_force_wake_put(struct vgt_device *vgt)
 {
 	unsigned long flags;
 	int rc;
+
+	/* ignore hvm guest's forcewake req */
+	if (vgt->vm_id != 0 && ignore_hvm_forcewake_req)
+		return;
 
 	spin_lock_irqsave(&vgt->pdev->v_force_wake_lock, flags);
 
