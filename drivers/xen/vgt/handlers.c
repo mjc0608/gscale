@@ -256,9 +256,12 @@ static bool rc_state_ctrl_1_mmio_write(struct vgt_device *vgt, unsigned int offs
 }
 
 static bool handle_device_reset(struct vgt_device *vgt, unsigned int offset,
-		void *p_data, unsigned int bytes)
+		void *p_data, unsigned int bytes, unsigned long ring_bitmap)
 {
-	vgt_info("VM %d is trying to reset device.\n", vgt->vm_id);
+	int bit;
+
+	vgt_info("VM %d is trying to reset device: %s.\n", vgt->vm_id,
+		ring_bitmap == 0xff ? "full reset" : "per-engine reset");
 
 	show_debug(vgt->pdev);
 
@@ -267,12 +270,24 @@ static bool handle_device_reset(struct vgt_device *vgt, unsigned int offset,
 
 	clear_bit(WAIT_RESET, &vgt->reset_flags);
 
-	vgt_reset_virtual_states(vgt);
+	vgt_reset_virtual_states(vgt, ring_bitmap);
+
+	if (ring_bitmap != 0xff && vgt->vm_id && vgt->enabled_rings_before_reset) {
+		vgt->enabled_rings_before_reset &= ~ring_bitmap;
+
+		for_each_set_bit(bit, &vgt->enabled_rings_before_reset,
+				sizeof(vgt->enabled_rings_before_reset)) {
+			vgt_info("VM %d: re-enable ring %d after per-engine reset.\n",
+					vgt->vm_id, bit);
+			vgt_enable_ring(vgt, bit);
+		}
+
+		vgt->enabled_rings_before_reset = 0;
+	}
 
 	vgt->last_reset_time = get_seconds();
 
-	if (test_bit(DEVICE_RESET_INPROGRESS, &vgt->pdev->device_reset_flags)
-			&& vgt->vm_id == 0)
+	if (device_is_reseting(vgt->pdev) && vgt->vm_id == 0)
 		return default_mmio_write(vgt, offset, p_data, bytes);
 
 	return true;
@@ -282,26 +297,31 @@ static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	uint32_t data = 0;
+	unsigned long ring_bitmap = 0;
 
 	memcpy(&data, p_data, bytes);
 
 	if (data & _REGBIT_GEN6_GRDOM_FULL) {
 		vgt_info("VM %d request Full GPU Reset\n", vgt->vm_id);
+		ring_bitmap = 0xff;
 	}
 
 	if (data & _REGBIT_GEN6_GRDOM_RENDER) {
 		vgt_info("VM %d request GPU Render Reset\n", vgt->vm_id);
+		ring_bitmap |= (1 << 0);
 	}
 
 	if (data & _REGBIT_GEN6_GRDOM_MEDIA) {
 		vgt_info("VM %d request GPU Media Reset\n", vgt->vm_id);
+		ring_bitmap |= (1 << 2);
 	}
 
 	if (data & _REGBIT_GEN6_GRDOM_BLT) {
 		vgt_info("VM %d request GPU BLT Reset\n", vgt->vm_id);
+		ring_bitmap |= (1 << 1);
 	}
 
-	return handle_device_reset(vgt, offset, p_data, bytes);
+	return handle_device_reset(vgt, offset, p_data, bytes, ring_bitmap);
 }
 
 static bool rrmr_mmio_write(struct vgt_device *vgt, unsigned int offset,

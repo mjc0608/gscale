@@ -783,6 +783,7 @@ static void do_device_reset(struct pgt_device *pdev)
 {
 	struct drm_device *drm_dev = pci_get_drvdata(pdev->pdev);
 	vgt_reg_t head, tail, start, ctl;
+	vgt_reg_t ier, imr, iir, isr;
 	int i;
 
 	vgt_info("Request DOM0 to reset device.\n");
@@ -817,6 +818,14 @@ static void do_device_reset(struct pgt_device *pdev)
 		vgt_info("RING %d: H: %x T: %x S: %x C: %x.\n",
 				i, head, tail, start, ctl);
 	}
+
+	ier = VGT_MMIO_READ(pdev, _REG_DEIER);
+	iir = VGT_MMIO_READ(pdev, _REG_DEIIR);
+	imr = VGT_MMIO_READ(pdev, _REG_DEIMR);
+	isr = VGT_MMIO_READ(pdev, _REG_DEISR);
+
+	vgt_info("DE: ier: %x iir: %x imr: %x isr: %x.\n",
+			ier, iir, imr, isr);
 
 	vgt_info("Finish.\n");
 
@@ -856,8 +865,13 @@ int vgt_reset_device(struct pgt_device *pdev)
 
 		if (vgt->vm_id) {
 			for (i = 0; i < pdev->max_engines; i++) {
-				vgt_info("VM %d: disable ring %d\n", vgt->vm_id, i);
-				vgt_disable_ring(vgt, i);
+				if (test_bit(i, (void *)vgt->enabled_rings)) {
+					vgt_info("VM %d: disable ring %d\n", vgt->vm_id, i);
+
+					vgt_disable_ring(vgt, i);
+
+					set_bit(i, &vgt->enabled_rings_before_reset);
+				}
 			}
 
 			set_bit(WAIT_RESET, &vgt->reset_flags);

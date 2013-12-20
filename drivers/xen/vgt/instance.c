@@ -433,55 +433,66 @@ void vgt_release_instance(struct vgt_device *vgt)
 	printk("vGT: vgt_release_instance done\n");
 }
 
-static void vgt_reset_virtual_interrupt(struct vgt_device *vgt)
+static void vgt_reset_virtual_interrupt(struct vgt_device *vgt, unsigned long ring_bitmap)
 {
-	vgt_info("VM %d: Reset virtual interrupt registers.\n", vgt->vm_id);
+	if (ring_bitmap == 0xff) {
+		vgt_info("VM %d: Reset virtual interrupt registers.\n", vgt->vm_id);
 
-	__vreg(vgt, _REG_GTIER) = 0x0;
-	__vreg(vgt, _REG_GTIIR) = 0x0;
-	__vreg(vgt, _REG_GTIMR) = 0xffffffff;
-	__vreg(vgt, _REG_RCS_IMR) = 0xffffffff;
-	__vreg(vgt, _REG_BCS_IMR) = 0xffffffff;
-	__vreg(vgt, _REG_VCS_IMR) = 0xffffffff;
-	__vreg(vgt, _REG_VECS_IMR) = 0xffffffff;
+		__vreg(vgt, _REG_GTIER) = 0x0;
+		__vreg(vgt, _REG_GTIIR) = 0x0;
+		__vreg(vgt, _REG_GTIMR) = 0xffffffff;
+		__vreg(vgt, _REG_RCS_IMR) = 0xffffffff;
+		__vreg(vgt, _REG_BCS_IMR) = 0xffffffff;
+		__vreg(vgt, _REG_VCS_IMR) = 0xffffffff;
+		__vreg(vgt, _REG_VECS_IMR) = 0xffffffff;
+	}
 
 	return;
 }
 
-static void vgt_reset_ppgtt(struct vgt_device *vgt)
+static void vgt_reset_ppgtt(struct vgt_device *vgt, unsigned long ring_bitmap)
 {
-	int i;
+	int bit;
 
 	if (vgt->pdev->enable_ppgtt && vgt->ppgtt_initialized) {
-		vgt_info("VM %d: Reset PPGTT state.\n", vgt->vm_id);
+		if (ring_bitmap == 0xff) {
+			vgt_info("VM %d: Reset full virtual PPGTT state.\n", vgt->vm_id);
+			/*
+			 * DOM0 doesn't use shadow PPGTT table.
+			 */
+			if (vgt->vm_id)
+				vgt_destroy_shadow_ppgtt(vgt);
 
-		/*
-		 * DOM0 doesn't use shadow PPGTT table.
-		 */
-		if (vgt->vm_id)
-			vgt_destroy_shadow_ppgtt(vgt);
+			vgt->ppgtt_initialized = false;
 
-		vgt->ppgtt_initialized = false;
+			if (vgt->vm_id)
+				vgt_init_shadow_ppgtt(vgt);
+		}
 
-		if (vgt->vm_id)
-			vgt_init_shadow_ppgtt(vgt);
+		for_each_set_bit(bit, &ring_bitmap, sizeof(ring_bitmap)) {
+			if (bit == vgt->pdev->max_engines)
+				break;
 
-		for (i = 0; i < vgt->pdev->max_engines; i++) {
-			vgt->rb[i].has_ppgtt_mode_enabled = 0;
-			vgt->rb[i].has_ppgtt_base_set = 0;
+			vgt_info("VM %d: Reset ring %d PPGTT state.\n", vgt->vm_id, bit);
+
+			vgt->rb[bit].has_ppgtt_mode_enabled = 0;
+			vgt->rb[bit].has_ppgtt_base_set = 0;
 		}
 	}
 
 	return;
 }
 
-static void vgt_reset_ringbuffer(struct vgt_device *vgt)
+static void vgt_reset_ringbuffer(struct vgt_device *vgt, unsigned long ring_bitmap)
 {
 	vgt_state_ring_t *rb;
-	int i;
+	int bit;
 
-	for (i = 0; i < vgt->pdev->max_engines; i++) {
-		rb = &vgt->rb[i];
+	for_each_set_bit(bit, &ring_bitmap, sizeof(ring_bitmap)) {
+		if (bit == vgt->pdev->max_engines)
+			break;
+
+		rb = &vgt->rb[bit];
 
 		/* Drop all submitted commands. */
 		vgt_init_cmd_info(rb);
@@ -496,15 +507,15 @@ static void vgt_reset_ringbuffer(struct vgt_device *vgt)
 	return;
 }
 
-void vgt_reset_virtual_states(struct vgt_device *vgt)
+void vgt_reset_virtual_states(struct vgt_device *vgt, unsigned long ring_bitmap)
 {
 	ASSERT(spin_is_locked(&vgt->pdev->lock));
 
-	vgt_reset_virtual_interrupt(vgt);
+	vgt_reset_virtual_interrupt(vgt, ring_bitmap);
 
-	vgt_reset_ringbuffer(vgt);
+	vgt_reset_ringbuffer(vgt, ring_bitmap);
 
-	vgt_reset_ppgtt(vgt);
+	vgt_reset_ppgtt(vgt, ring_bitmap);
 
 	vgt->has_context = 0;
 

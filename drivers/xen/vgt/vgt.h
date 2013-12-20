@@ -663,6 +663,7 @@ struct vgt_device {
 	struct sbi_registers sbi_regs;
 
 	unsigned long reset_flags;
+	unsigned long enabled_rings_before_reset;
 	unsigned long last_reset_time;
 };
 
@@ -804,6 +805,9 @@ enum {
 	DEVICE_RESET_INPROGRESS = 0,
 	WAIT_RESET,
 };
+
+#define device_is_reseting(pdev) \
+	test_bit(DEVICE_RESET_INPROGRESS, &pdev->device_reset_flags)
 
 /* per-device structure */
 struct pgt_device {
@@ -2021,7 +2025,7 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 		cpu = 0;				\
 }
 
-void vgt_reset_virtual_states(struct vgt_device *vgt);
+void vgt_reset_virtual_states(struct vgt_device *vgt, unsigned long ring_bitmap);
 
 enum vgt_pipe get_edp_input(uint32_t wr_data);
 void vgt_forward_events(struct pgt_device *pdev);
