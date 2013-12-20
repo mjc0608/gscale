@@ -986,6 +986,7 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 
 	msg.vm_id = s->vgt->vm_id;
 	msg.pipe_id = pipe;
+	msg.plane_id = plane;
 	vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 
 	if ((s->vgt == current_foreground_vm(s->vgt->pdev)) && !resubmitted) {
