@@ -368,7 +368,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	stat->mmio_rcycles += t1 - t0;
 	return true;
 err_mmio:
-	spin_unlock_irqrestore(&pdev->lock, flags);
+	vgt_unlock_dev_flags(pdev, cpu, flags);
 err_common_chk:
 	vgt_err("VM(%d): invalid MMIO offset(%08x), bytes(%d)!\n",
 		vgt->vm_id, offset, bytes);
@@ -489,7 +489,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	stat->mmio_wcycles += t1 - t0;
 	return true;
 err_mmio:
-	spin_unlock_irqrestore(&pdev->lock, flags);
+	vgt_unlock_dev_flags(pdev, cpu, flags);
 err_common_chk:
 	vgt_err("VM(%d): invalid MMIO offset(%08x),"
 		"bytes(%d)!\n", vgt->vm_id, offset, bytes);
