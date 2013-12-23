@@ -1633,17 +1633,16 @@ err:
 			vgt_dom0->rb[i].sring.start);
 	show_ring_debug(pdev, i);
 	show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
-	if (!enable_reset) {
+	if (!enable_reset)
 		/* crash system now, to avoid causing more confusing errors */
 		ASSERT(0);
 
-		/*
-		 * put this after the ASSERT(). When ASSERT() tries to dump more
-		 * CPU/GPU states: we want to hold the lock to prevent other
-		 * vcpus' vGT related codes at this time.
-		 */
-		vgt_unlock_dev(pdev, cpu);
-	}
+	/*
+	 * put this after the ASSERT(). When ASSERT() tries to dump more
+	 * CPU/GPU states: we want to hold the lock to prevent other
+	 * vcpus' vGT related codes at this time.
+	 */
+	vgt_unlock_dev(pdev, cpu);
 
 	return false;
 }
