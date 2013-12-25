@@ -451,6 +451,7 @@ EXPORT_SYMBOL_GPL(vgt_fb_notifier_call_chain);
 static int vgt_fb_event(struct notifier_block *nb,
 			unsigned long val, void *data)
 {
+#if 0
 	struct fb_notify_msg *msg = data;
 	struct vgt_device *vgt;
 
@@ -478,6 +479,7 @@ static int vgt_fb_event(struct notifier_block *nb,
 			vgt_err("invalid plane in fb_event message\n");
 			break;
 	}
+#endif
 
 	return (0);
 }
