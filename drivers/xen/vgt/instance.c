@@ -108,6 +108,7 @@ static int create_state_instance(struct vgt_device *vgt)
  */
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp)
 {
+	int cpu;
 	struct vgt_device *vgt;
 	char *cfg_space;
 	int rc = -ENOMEM;
@@ -249,8 +250,12 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	vgt->bypass_addr_check = bypass_dom0_addr_check && (vgt->vm_id == 0);
 
+	vgt_lock_dev(pdev, cpu);
+
 	pdev->device[vgt->vgt_id] = vgt;
 	list_add(&vgt->list, &pdev->rendering_idleq_head);
+
+	vgt_unlock_dev(pdev, cpu);
 
 	if (vgt->vm_id != 0){
 		/* HVM specific init */
@@ -390,10 +395,16 @@ void vgt_release_instance(struct vgt_device *vgt)
 		vgt_destroy_rb_tailq(vgt);
 
 	vgt_hvm_info_deinit(vgt);
+
+	vgt_lock_dev(pdev, cpu);
+
 	vgt->pdev->device[vgt->vgt_id] = NULL;
+	free_vgt_id(vgt->vgt_id);
 
 	/* already idle */
 	list_del(&vgt->list);
+
+	vgt_unlock_dev(pdev, cpu);
 
 	for (i = 0; i < VGT_PORT_MAX; ++ i) {
 		if (vgt->vgt_edids[i]) {
@@ -418,7 +429,6 @@ void vgt_release_instance(struct vgt_device *vgt)
 	vfree(vgt->vgtt);
 	vfree(vgt->state.vReg);
 	vfree(vgt->state.sReg);
-	free_vgt_id(vgt->vgt_id);
 	vfree(vgt);
 	printk("vGT: vgt_release_instance done\n");
 }
