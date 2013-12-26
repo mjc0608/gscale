@@ -3058,3 +3058,18 @@ int vgt_get_sticky_reg_num()
 {
 	return ARRAY_NUM(vgt_sticky_regs);
 }
+
+reg_addr_sz_t vgt_reg_addr_sz[] = {
+	{_REG_RCS_HWS_PGA, 4096, D_ALL},
+	{_REG_VCS_HWS_PGA, 4096, D_ALL},
+	{_REG_BCS_HWS_PGA, 4096, D_SNB},
+	{_REG_BCS_HWS_PGA_GEN7, 4096, D_GEN7PLUS},
+	{_REG_VEBOX_HWS_PGA_GEN7, 4096, D_GEN7PLUS},
+	{_REG_VECS_HWS_PGA, 4096, D_HSW},
+	{_REG_CCID, HSW_CXT_TOTAL_SIZE, D_HSW},
+};
+
+int vgt_get_reg_addr_sz_num()
+{
+	return ARRAY_NUM(vgt_reg_addr_sz);
+}

@@ -967,6 +967,9 @@ static void vgt_set_reg_attr(struct pgt_device *pdev,
 		if (!attr->addr_mask)
 			printk("vGT: ZERO addr fix mask for %x\n", reg);
 		reg_set_addr_fix(pdev, reg, attr->addr_mask);
+
+		/* set the default range size to 4, might be updated later */
+		reg_aux_addr_size(pdev, reg) = 4;
 	}
 	if (attr->flags & VGT_REG_MODE_CTL)
 		reg_set_mode_ctl(pdev, reg);
@@ -1018,6 +1021,7 @@ void vgt_setup_reg_info(struct pgt_device *pdev)
 {
 	int i, reg;
 	struct vgt_mmio_entry *mht;
+	reg_addr_sz_t *reg_addr_sz;
 
 	printk("vGT: setup tracked reg info\n");
 	vgt_initialize_reg_attr(pdev, vgt_base_reg_info,
@@ -1033,6 +1037,13 @@ void vgt_setup_reg_info(struct pgt_device *pdev)
 		     reg < vgt_sticky_regs[i].reg + vgt_sticky_regs[i].size;
 		     reg += REG_SIZE)
 			reg_set_sticky(pdev, reg);
+	}
+
+	/* update the address range size in aux table */
+	for (i =0; i < vgt_get_reg_addr_sz_num(); i++) {
+		reg_addr_sz = &vgt_reg_addr_sz[i];
+		if (reg_addr_sz->device & vgt_gen_dev_type(pdev))
+			reg_aux_addr_size(pdev, reg_addr_sz->reg) = reg_addr_sz->size;
 	}
 }
 

@@ -36,6 +36,8 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	struct pgt_device *pdev = vgt->pdev;
 	uint64_t h_value;
 	vgt_reg_t mask;
+	uint32_t size;
+	int ret;
 
 	if (!reg_addr_fix(pdev, reg))
 		return g_value;
@@ -58,7 +60,14 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	}
 
 	h_value = g_value & mask;
-	g2h_gm(vgt, &h_value);
+	size = reg_aux_addr_size(pdev, reg);
+	ret = g2h_gm_range(vgt, &h_value, size);
+
+	/*
+	 *  Note: ASSERT_VM should be placed outside, e.g. after lock is released in
+	 *  vgt_emulate_write(). Will fix this later.
+	 */
+	ASSERT_VM(!ret, vgt);
 	vgt_dbg("....(g)%x->(h)%llx\n", g_value, (h_value & mask) | (g_value & ~mask));
 
 	return (h_value & mask) | (g_value & ~mask);

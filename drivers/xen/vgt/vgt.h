@@ -718,6 +718,7 @@ typedef union {
 	} mode_ctl;
 	struct {
 		vgt_reg_t mask;
+		uint32_t  size;
 	} addr_fix;
 } vgt_aux_entry_t;
 
@@ -968,6 +969,8 @@ extern void do_vgt_fast_display_switch(struct pgt_device *pdev);
 	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].mode_ctl.mask)
 #define reg_aux_addr_mask(pdev, index)	\
 	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].addr_fix.mask)
+#define reg_aux_addr_size(pdev, reg)	\
+	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].addr_fix.size)
 
 /*
  * Kernel BUG() doesn't work, because bust_spinlocks try to unblank screen
@@ -1179,6 +1182,22 @@ typedef struct {
 	u32			reg;
 	int			size;
 } reg_list_t;
+
+/*
+ * Comments copied from i915 driver - i915_reg.h :
+ * Haswell does have the CXT_SIZE register however it does not appear to be
+ * valid. Now, docs explain in dwords what is in the context object. The full
+ * size is 70720 bytes, however, the power context and execlist context will
+ * never be saved (power context is stored elsewhere, and execlists don't work
+ * on HSW) - so the final size is 66944 bytes, which rounds to 17 pages.
+ */
+#define HSW_CXT_TOTAL_SIZE		(17 * PAGE_SIZE)
+
+typedef struct {
+	vgt_reg_t   reg;
+	u32			size;
+	int			device;
+} reg_addr_sz_t;
 
 static inline unsigned int vgt_gen_dev_type(struct pgt_device *pdev)
 {
@@ -1446,16 +1465,17 @@ static inline uint64_t h_gm_hidden_offset(struct vgt_device *vgt, uint64_t h_add
 	return h_addr - vgt_hidden_gm_base(vgt);
 }
 
-/* translate a guest gm address to host gm address */
-static inline int g2h_gm(struct vgt_device *vgt, uint64_t *addr)
+/* validate a gm address and related range size, translate it to host gm address */
+static inline int g2h_gm_range(struct vgt_device *vgt, uint64_t *addr, uint32_t size)
 {
 	ASSERT(addr);
 
 	if (vgt->bypass_addr_check)
 		return 0;
 
-	if (!g_gm_is_valid(vgt, *addr)) {
-		vgt_err("VM(%d): invalid g_addr(0x%llx)\n", vgt->vm_id, *addr);
+	if ((!g_gm_is_valid(vgt, *addr)) || (!g_gm_is_valid(vgt, *addr + size - 1))) {
+		vgt_err("VM(%d): invalid address range: g_addr(0x%llx), size(0x%x)\n",
+			vgt->vm_id, *addr, size);
 		return -EACCES;
 	}
 
@@ -1466,6 +1486,12 @@ static inline int g2h_gm(struct vgt_device *vgt, uint64_t *addr)
 		*addr = vgt_hidden_gm_base(vgt) +
 			g_gm_hidden_offset(vgt, *addr);
 	return 0;
+}
+
+/* translate a guest gm address to host gm address */
+static inline int g2h_gm(struct vgt_device *vgt, uint64_t *addr)
+{
+	return g2h_gm_range(vgt, addr, 4);
 }
 
 /* translate a host gm address to guest gm address */
@@ -2214,8 +2240,10 @@ void vgt_destroy_mmio_dev(struct vgt_device *vgt);
 
 extern reg_attr_t vgt_base_reg_info[];
 extern reg_list_t vgt_sticky_regs[];
+extern reg_addr_sz_t vgt_reg_addr_sz[];
 extern int vgt_get_base_reg_num(void);
 extern int vgt_get_sticky_reg_num(void);
+extern int vgt_get_reg_addr_sz_num(void);
 
 bool vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
 	unsigned int port, unsigned int bytes, unsigned long val);
