@@ -1276,6 +1276,12 @@ static void vgt_init_events(
 	SET_POLICY_DOM0(hstate, AUDIO_CP_CHANGE_TRANSCODER_C);
 	SET_POLICY_DOM0(hstate, AUDIO_CP_REQUEST_TRANSCODER_C);
 
+	/* Aux Channel owned by Dom0 */
+	SET_POLICY_DOM0(hstate, AUX_CHANNEL_A);
+	SET_POLICY_DOM0(hstate, AUX_CHENNEL_B);
+	SET_POLICY_DOM0(hstate, AUX_CHENNEL_C);
+	SET_POLICY_DOM0(hstate, AUX_CHENNEL_D);
+
 	/* Monitor interfaces are controlled by XenGT driver */
 	SET_POLICY_NONE(hstate, DP_A_HOTPLUG);
 	SET_POLICY_NONE(hstate, DP_B_HOTPLUG);
@@ -1283,10 +1289,6 @@ static void vgt_init_events(
 	SET_POLICY_NONE(hstate, DP_D_HOTPLUG);
 	SET_POLICY_NONE(hstate, SDVO_B_HOTPLUG);
 	SET_POLICY_NONE(hstate, CRT_HOTPLUG);
-	SET_POLICY_NONE(hstate, AUX_CHANNEL_A);
-	SET_POLICY_NONE(hstate, AUX_CHENNEL_B);
-	SET_POLICY_NONE(hstate, AUX_CHENNEL_C);
-	SET_POLICY_NONE(hstate, AUX_CHENNEL_D);
 	SET_POLICY_NONE(hstate, GMBUS);
 }
 
