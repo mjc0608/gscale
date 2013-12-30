@@ -967,7 +967,7 @@ extern void do_vgt_fast_display_switch(struct pgt_device *pdev);
 #define reg_has_aux_info(pdev, reg)	(reg_mode_ctl(pdev, reg) | reg_addr_fix(pdev, reg))
 #define reg_aux_mode_mask(pdev, reg)	\
 	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].mode_ctl.mask)
-#define reg_aux_addr_mask(pdev, index)	\
+#define reg_aux_addr_mask(pdev, reg)	\
 	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].addr_fix.mask)
 #define reg_aux_addr_size(pdev, reg)	\
 	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].addr_fix.size)
