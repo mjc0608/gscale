@@ -836,6 +836,7 @@ int vgt_reset_device(struct pgt_device *pdev)
 {
 	struct vgt_device *vgt;
 	struct list_head *pos, *n;
+	unsigned long ier;
 	unsigned long flags;
 	int i;
 
@@ -880,6 +881,11 @@ int vgt_reset_device(struct pgt_device *pdev)
 
 	spin_unlock_irqrestore(&pdev->lock, flags);
 
+	vgt_info("Disable master interrupt.\n");
+
+	VGT_MMIO_WRITE(pdev, _REG_DEIER,
+			VGT_MMIO_READ(pdev, _REG_DEIER) & ~_REGBIT_MASTER_INTERRUPT);
+
 	do_device_reset(pdev);
 
 	vgt_info("Restart VGT context switch.\n");
@@ -887,6 +893,15 @@ int vgt_reset_device(struct pgt_device *pdev)
 	vgt_initialize_ctx_scheduler(pdev);
 
 	clear_bit(DEVICE_RESET_INPROGRESS, &pdev->device_reset_flags);
+
+	spin_lock_irqsave(&pdev->lock, flags);
+
+	ier = vgt_recalculate_ier(pdev, _REG_DEIER);
+	VGT_MMIO_WRITE(pdev, _REG_DEIER, ier);
+
+	vgt_info("Enable master interrupt, DEIER: %lx\n", ier);
+
+	spin_unlock_irqrestore(&pdev->lock, flags);
 
 	return 0;
 }

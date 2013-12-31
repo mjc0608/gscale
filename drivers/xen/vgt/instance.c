@@ -433,23 +433,6 @@ void vgt_release_instance(struct vgt_device *vgt)
 	printk("vGT: vgt_release_instance done\n");
 }
 
-static void vgt_reset_virtual_interrupt(struct vgt_device *vgt, unsigned long ring_bitmap)
-{
-	if (ring_bitmap == 0xff) {
-		vgt_info("VM %d: Reset virtual interrupt registers.\n", vgt->vm_id);
-
-		__vreg(vgt, _REG_GTIER) = 0x0;
-		__vreg(vgt, _REG_GTIIR) = 0x0;
-		__vreg(vgt, _REG_GTIMR) = 0xffffffff;
-		__vreg(vgt, _REG_RCS_IMR) = 0xffffffff;
-		__vreg(vgt, _REG_BCS_IMR) = 0xffffffff;
-		__vreg(vgt, _REG_VCS_IMR) = 0xffffffff;
-		__vreg(vgt, _REG_VECS_IMR) = 0xffffffff;
-	}
-
-	return;
-}
-
 static void vgt_reset_ppgtt(struct vgt_device *vgt, unsigned long ring_bitmap)
 {
 	int bit;
@@ -510,8 +493,6 @@ static void vgt_reset_ringbuffer(struct vgt_device *vgt, unsigned long ring_bitm
 void vgt_reset_virtual_states(struct vgt_device *vgt, unsigned long ring_bitmap)
 {
 	ASSERT(spin_is_locked(&vgt->pdev->lock));
-
-	vgt_reset_virtual_interrupt(vgt, ring_bitmap);
 
 	vgt_reset_ringbuffer(vgt, ring_bitmap);
 

@@ -223,7 +223,7 @@ u32 vgt_recalculate_mask_bits(struct pgt_device *pdev, unsigned int reg)
  * as long as a VM wants it. This is safe because we still use a single
  * big lock for all critical paths, but not efficient.
  */
-static u32 vgt_recalculate_ier(struct pgt_device *pdev, unsigned int reg)
+u32 vgt_recalculate_ier(struct pgt_device *pdev, unsigned int reg)
 {
 	int i;
 	u32 ier = 0;
@@ -267,7 +267,7 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 
 	__vreg(vgt, reg) = imr;
 
-	if (changed) {
+	if (changed || device_is_reseting(pdev)) {
 		new_imr = vgt_recalculate_mask_bits(pdev, reg);
 		/*
 		 * may optimize by caching the old imr, and then only update
@@ -315,8 +315,11 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 		changed, enabled, disabled);
 	__vreg(vgt, reg) = ier;
 
-	if (changed) {
+	if (changed || device_is_reseting(pdev)) {
 		new_ier = vgt_recalculate_ier(pdev, reg);
+
+		if (device_is_reseting(pdev) && reg == _REG_DEIER)
+			new_ier &= ~_REGBIT_MASTER_INTERRUPT;
 		/*
 		 * may optimize by caching the old ier, and then only update
 		 * pReg when OR-ed value changes. but that requires link to

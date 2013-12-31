@@ -2045,6 +2045,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev, vgt_hotplug_cmd_t hotp
 
 void vgt_signal_uevent(struct pgt_device *dev);
 
+u32 vgt_recalculate_ier(struct pgt_device *pdev, unsigned int reg);
 u32 vgt_recalculate_mask_bits(struct pgt_device *pdev, unsigned int reg);
 
 bool vgt_reg_imr_handler(struct vgt_device *vgt,
