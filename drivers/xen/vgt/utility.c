@@ -262,6 +262,45 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	}
 }
 
+void show_interrupt_regs(struct pgt_device *pdev,
+		struct seq_file *seq)
+{
+#define P(fmt, args...) \
+	do { \
+		if (!seq) \
+			vgt_info(fmt, ##args); \
+		else \
+			seq_printf(seq, fmt, ##args); \
+	}while(0)
+
+	P("vGT: DEISR is %x, DEIIR is %x, DEIMR is %x, DEIER is %x\n",
+		VGT_MMIO_READ(pdev, _REG_DEISR),
+		VGT_MMIO_READ(pdev, _REG_DEIIR),
+		VGT_MMIO_READ(pdev, _REG_DEIMR),
+		VGT_MMIO_READ(pdev, _REG_DEIER));
+	P("vGT: SDEISR is %x, SDEIIR is %x, SDEIMR is %x, SDEIER is %x\n",
+		VGT_MMIO_READ(pdev, _REG_SDEISR),
+		VGT_MMIO_READ(pdev, _REG_SDEIIR),
+		VGT_MMIO_READ(pdev, _REG_SDEIMR),
+		VGT_MMIO_READ(pdev, _REG_SDEIER));
+	P("vGT: GTISR is %x, GTIIR is %x, GTIMR is %x, GTIER is %x\n",
+		VGT_MMIO_READ(pdev, _REG_GTISR),
+		VGT_MMIO_READ(pdev, _REG_GTIIR),
+		VGT_MMIO_READ(pdev, _REG_GTIMR),
+		VGT_MMIO_READ(pdev, _REG_GTIER));
+	P("vGT: PMISR is %x, PMIIR is %x, PMIMR is %x, PMIER is %x\n",
+		VGT_MMIO_READ(pdev, _REG_PMISR),
+		VGT_MMIO_READ(pdev, _REG_PMIIR),
+		VGT_MMIO_READ(pdev, _REG_PMIMR),
+		VGT_MMIO_READ(pdev, _REG_PMIER));
+	P("vGT: RCS_IMR is %x, VCS_IMR is %x, BCS_IMR is %x\n",
+		VGT_MMIO_READ(pdev, _REG_RCS_IMR),
+		VGT_MMIO_READ(pdev, _REG_VCS_IMR),
+		VGT_MMIO_READ(pdev, _REG_BCS_IMR));
+	return;
+#undef P
+}
+
 uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
 {
 	unsigned long bar_s, bar_size=0;

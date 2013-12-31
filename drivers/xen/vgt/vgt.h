@@ -57,6 +57,7 @@ extern void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes);
 extern void show_mode_settings(struct pgt_device *pdev);
 extern void show_ring_debug(struct pgt_device *pdev, int ring_id);
 extern void show_debug(struct pgt_device *pdev);
+extern void show_interrupt_regs(struct pgt_device *pdev, struct seq_file *seq);
 
 extern bool hvm_render_owner;
 extern bool hvm_display_owner;

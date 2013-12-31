@@ -366,30 +366,9 @@ static int vgt_show_irqinfo(struct seq_file *m, void *data)
 	}
 	seq_printf(m, "--------------------------\n");
 	seq_printf(m, "Interrupt control status:\n");
-	seq_printf(m, "vGT: DEISR is %x, DEIIR is %x, DEIMR is %x, DEIER is %x\n",
-		VGT_MMIO_READ(pdev, _REG_DEISR),
-		VGT_MMIO_READ(pdev, _REG_DEIIR),
-		VGT_MMIO_READ(pdev, _REG_DEIMR),
-		VGT_MMIO_READ(pdev, _REG_DEIER));
-	seq_printf(m, "vGT: SDEISR is %x, SDEIIR is %x, SDEIMR is %x, SDEIER is %x\n",
-		VGT_MMIO_READ(pdev, _REG_SDEISR),
-		VGT_MMIO_READ(pdev, _REG_SDEIIR),
-		VGT_MMIO_READ(pdev, _REG_SDEIMR),
-		VGT_MMIO_READ(pdev, _REG_SDEIER));
-	seq_printf(m, "vGT: GTISR is %x, GTIIR is %x, GTIMR is %x, GTIER is %x\n",
-		VGT_MMIO_READ(pdev, _REG_GTISR),
-		VGT_MMIO_READ(pdev, _REG_GTIIR),
-		VGT_MMIO_READ(pdev, _REG_GTIMR),
-		VGT_MMIO_READ(pdev, _REG_GTIER));
-	seq_printf(m, "vGT: PMISR is %x, PMIIR is %x, PMIMR is %x, PMIER is %x\n",
-		VGT_MMIO_READ(pdev, _REG_PMISR),
-		VGT_MMIO_READ(pdev, _REG_PMIIR),
-		VGT_MMIO_READ(pdev, _REG_PMIMR),
-		VGT_MMIO_READ(pdev, _REG_PMIER));
-	seq_printf(m, "vGT: RCS_IMR is %x, VCS_IMR is %x, BCS_IMR is %x\n",
-		VGT_MMIO_READ(pdev, _REG_RCS_IMR),
-		VGT_MMIO_READ(pdev, _REG_VCS_IMR),
-		VGT_MMIO_READ(pdev, _REG_BCS_IMR));
+
+	show_interrupt_regs(pdev, m);
+
 	seq_printf(m, "Total %lld interrupts logged:\n", pstat->irq_num);
 	seq_printf(m, "#	WARNING: precisely this is the number of vGT \n"
 			"#	physical interrupt handler be called,\n"

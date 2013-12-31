@@ -324,6 +324,31 @@ static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return handle_device_reset(vgt, offset, p_data, bytes, ring_bitmap);
 }
 
+
+static bool gen6_gdrst_mmio_read(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	vgt_reg_t v;
+
+	*(u32 *)p_data = 0;
+
+	if (device_is_reseting(vgt->pdev) && vgt->vm_id == 0) {
+		v = VGT_MMIO_READ(vgt->pdev, offset);
+
+		memcpy(p_data, &v, bytes);
+
+		if (v) {
+			vgt_info("device is still reseting...\n");
+		} else {
+			vgt_info("device is idle.\n");
+
+			show_interrupt_regs(vgt->pdev, NULL);
+		}
+	}
+
+	return true;
+}
+
 static bool rrmr_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -2857,7 +2882,7 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_RSTDBYCTL, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 
-{_REG_GEN6_GDRST, 4, F_DOM0, 0, D_ALL, NULL, gen6_gdrst_mmio_write},
+{_REG_GEN6_GDRST, 4, F_DOM0, 0, D_ALL, gen6_gdrst_mmio_read, gen6_gdrst_mmio_write},
 {_REG_FENCE_0_LOW, 0x80, F_VIRT, 0, D_ALL, fence_mmio_read, fence_mmio_write},
 {VGT_PVINFO_PAGE, VGT_PVINFO_SIZE, F_VIRT, 0, D_ALL, pvinfo_read, pvinfo_write},
 {_REG_CPU_VGACNTRL, 4, F_DOM0, 0, D_ALL, vga_control_r, vga_control_w},
