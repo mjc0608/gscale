@@ -1302,6 +1302,26 @@ static bool surflive_mmio_write (struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static void dp_aux_ch_trigger_interrupt_on_done(struct vgt_device *vgt, vgt_reg_t value,
+	 unsigned int reg)
+{
+	enum vgt_event_type event = EVENT_MAX;
+
+	if (reg == _REG_DPA_AUX_CH_CTL) {
+		event = AUX_CHANNEL_A;
+	} else if (reg == _REG_PCH_DPB_AUX_CH_CTL) {
+		event = AUX_CHENNEL_B;
+	} else if (reg == _REG_PCH_DPC_AUX_CH_CTL) {
+		event = AUX_CHENNEL_C;
+	} else if (reg == _REG_PCH_DPD_AUX_CH_CTL) {
+		event = AUX_CHENNEL_D;
+	}
+
+	if (event != EVENT_MAX && (_REGBIT_DP_AUX_CH_CTL_INTERRUPT & value)) {
+		vgt_trigger_virtual_event(vgt, event);
+	}
+}
+
 static void dp_aux_ch_ctl_trans_done(struct vgt_device *vgt, vgt_reg_t value,
 	 unsigned int reg, int len)
 {
@@ -1314,6 +1334,8 @@ static void dp_aux_ch_ctl_trans_done(struct vgt_device *vgt, vgt_reg_t value,
 	value &= ~(0xf << 20);
 	value |= (len << 20);
 	__vreg(vgt, reg) = value;
+
+	dp_aux_ch_trigger_interrupt_on_done(vgt, value, reg);
 }
 
 static void dp_aux_ch_ctl_link_training(struct vgt_dpcd_data *dpcd, uint8_t t)
@@ -1535,6 +1557,8 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 
 	vgt_i2c_handle_aux_ch_write(&vgt->vgt_i2c_bus, edid,
 				offset, port_idx, p_data);
+
+	dp_aux_ch_trigger_interrupt_on_done(vgt, value, reg);
 	return true;
 }
 
