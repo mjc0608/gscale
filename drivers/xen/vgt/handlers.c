@@ -1236,11 +1236,12 @@ static bool dpy_plane_ctl_write(struct vgt_device *vgt, unsigned int offset,
 		enable_plane = true;
 	}
 
-	if (enable_plane && current_foreground_vm(vgt->pdev) == vgt) {
-		if ( !(_REGBIT_PIPE_ENABLE & VGT_MMIO_READ(vgt->pdev, VGT_PIPECONF(vgt->pipe_mapping[pipe])))) {
-			vgt_warn("enable panel fitting before pipe is enabled\n");
+	if (enable_plane) {
+		if (current_foreground_vm(vgt->pdev) == vgt) {
+			set_panel_fitting(vgt, pipe);
+		} else if (is_current_display_owner(vgt)) {
+			set_panel_fitting(current_foreground_vm(vgt->pdev), pipe);
 		}
-		set_panel_fitting(vgt, pipe);
 	}
 
 	dpy_plane_mmio_write(vgt,offset, p_data,bytes);
