@@ -1460,6 +1460,29 @@ static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
 	return true;
 }
 
+static void dump_regs_on_err(struct pgt_device *pdev)
+{
+	static vgt_reg_t regs[] =  {
+		0x2054,
+		0x12054,
+		0x22054,
+		0x1A054,
+		0xA098,
+		0xA09C,
+		0xA0A8,
+		0xA0AC,
+		0xA0B4,
+		0xA0B8,
+		0xA090,
+		0xA094};
+
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(regs); i++)
+		vgt_info("reg=0x%x, val=0x%x\n", regs[i],
+			VGT_MMIO_READ(pdev, regs[i]));
+}
+
 bool vgt_do_render_context_switch(struct pgt_device *pdev)
 {
 	struct vgt_device *next, *prev;
@@ -1619,6 +1642,7 @@ out:
 	vgt_unlock_dev(pdev, cpu);
 	return true;
 err:
+	dump_regs_on_err(pdev);
 	/* TODO: any cleanup for context switch errors? */
 	vgt_err("Ring-%d: (%lldth checks %lldth switch<%d->%d>)\n",
 			i, vgt_ctx_check(pdev), vgt_ctx_switch(pdev),
