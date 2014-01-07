@@ -477,6 +477,87 @@ bool vgt_reg_isr_write(struct vgt_device *vgt, unsigned int reg,
 
 extern int resend_irq_on_evtchn(unsigned int i915_irq);
 
+DEFINE_PER_CPU(unsigned long, delay_event_bitmap);
+static unsigned long next_avail_delay_event = 1;
+
+static void *delay_event_timers[BITS_PER_LONG];
+
+static bool vgt_check_delay_event(void *timer)
+{
+	int bit;
+
+	if (!vgt_delay_nest || !xen_initial_domain()
+			|| !vgt_enabled || !__get_cpu_var(in_vgt))
+		return true;
+
+	if (timer == NULL) {
+		bit = 0;
+	} else {
+		for (bit = 1; bit < next_avail_delay_event; bit++)
+			if (delay_event_timers[bit] == timer)
+				break;
+
+		if (bit == next_avail_delay_event) {
+			vgt_warn("Unknown delay timer event: %p\n", timer);
+			return true;
+		}
+	}
+
+	set_bit(bit, &__get_cpu_var(delay_event_bitmap));
+	return false;
+}
+
+bool vgt_can_process_irq(void)
+{
+	return vgt_check_delay_event(NULL);
+}
+
+bool vgt_can_process_timer(void *timer)
+{
+	return vgt_check_delay_event(timer);
+}
+
+void vgt_new_delay_event_timer(void *timer)
+{
+	if (next_avail_delay_event == ARRAY_SIZE(delay_event_timers)) {
+		vgt_warn("cannot allocate new delay event timer.\n");
+		return;
+	}
+
+	delay_event_timers[next_avail_delay_event] = timer;
+	next_avail_delay_event++;
+
+	return;
+}
+
+static void vgt_flush_delay_events(void)
+{
+	int bit;
+
+	for_each_set_bit(bit, &__get_cpu_var(delay_event_bitmap), BITS_PER_LONG) {
+		if (bit == next_avail_delay_event)
+			break;
+
+		clear_bit(bit, &__get_cpu_var(delay_event_bitmap));
+
+		if (bit == 0) {
+			struct pgt_device *pdev = &default_device;
+			int i915_irq = pdev->irq_hstate->i915_irq;
+			unsigned long flags;
+
+			local_irq_save(flags);
+			resend_irq_on_evtchn(i915_irq);
+			local_irq_restore(flags);
+		} else {
+			struct timer_list *t = delay_event_timers[bit];
+			if (t)
+				mod_timer(t, jiffies);
+		}
+	}
+
+	return;
+}
+
 /*
  * dom0 virtual interrupt can only be pended here. Immediate
  * injection at this point may cause race condition on nested
@@ -533,6 +614,9 @@ static void inject_dom0_ipi_virtual_interrupt(void *info)
 
 void inject_dom0_virtual_interrupt(void *info)
 {
+	if (vgt_delay_nest)
+		vgt_flush_delay_events();
+
 	do_inject_dom0_virtual_interrupt(info, 0);
 
 	return;

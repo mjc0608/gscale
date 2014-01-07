@@ -2184,6 +2184,11 @@ static irqreturn_t ironlake_irq_handler(int irq, void *arg)
 	u32 de_iir, gt_iir, de_ier, sde_ier = 0;
 	irqreturn_t ret = IRQ_NONE;
 
+#ifdef DRM_I915_VGT_SUPPORT
+	if (USES_VGT(dev) && !vgt_can_process_irq())
+		return IRQ_HANDLED;
+#endif
+
 	/* We get interrupts on unclaimed registers, so check for this before we
 	 * do any I915_{READ,WRITE}. */
 	intel_uncore_check_errors(dev);
@@ -2972,6 +2977,12 @@ static void i915_hangcheck_elapsed(unsigned long data)
 
 	if (!i915.enable_hangcheck)
 		return;
+
+#ifdef DRM_I915_VGT_SUPPORT
+	if (USES_VGT(dev)
+		&& !vgt_can_process_timer(&dev_priv->gpu_error.hangcheck_timer))
+		return;
+#endif
 
 	for_each_ring(ring, dev_priv, i) {
 		u64 acthd;
@@ -4360,6 +4371,11 @@ void intel_irq_init(struct drm_i915_private *dev_priv)
 	setup_timer(&dev_priv->gpu_error.hangcheck_timer,
 		    i915_hangcheck_elapsed,
 		    (unsigned long) dev);
+
+#ifdef DRM_I915_VGT_SUPPORT
+	vgt_new_delay_event_timer(&dev_priv->gpu_error.hangcheck_timer);
+#endif
+
 	INIT_DELAYED_WORK(&dev_priv->hotplug_reenable_work,
 			  intel_hpd_irq_reenable_work);
 

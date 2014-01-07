@@ -99,6 +99,10 @@ extern int vgt_io_trap(struct xen_domctl *ctl);
 */
 #define VGT_ENABLE_ADDRESS_FIX_SAVE_RESTORE
 
+extern bool vgt_can_process_irq(void);
+extern bool vgt_can_process_timer(void *timer);
+extern void vgt_new_delay_event_timer(void *timer);
+
 DECLARE_PER_CPU(u8, in_vgt);
 
 /*
