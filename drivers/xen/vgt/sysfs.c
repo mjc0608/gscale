@@ -391,15 +391,6 @@ static ssize_t aperture_base_va_show(struct kobject *kobj, struct kobj_attribute
 	return sprintf(buf, "%p\n", vgt->aperture_base_va);
 }
 
-/*
- * These notifiers need to be able to read some data, in order
- * for the sysfs poll mechanism to work. What data really does
- * not matter, so much
- */
-#define primary_notifier_show vgt_id_show
-#define cursor_notifier_show vgt_id_show
-#define sprite_notifier_show vgt_id_show
-
 static struct kobj_attribute vgt_id_attribute =
 	__ATTR_RO(vgt_id);
 
@@ -415,15 +406,6 @@ static struct kobj_attribute aperture_base_attribute =
 static struct kobj_attribute aperture_base_va_attribute =
 	__ATTR_RO(aperture_base_va);
 
-static struct kobj_attribute primary_notifier_attribute =
-	__ATTR_RO(primary_notifier);
-
-static struct kobj_attribute cursor_notifier_attribute =
-	__ATTR_RO(cursor_notifier);
-
-static struct kobj_attribute sprite_notifier_attribute =
-	__ATTR_RO(sprite_notifier);
-
 /*
  * Create a group of attributes so that we can create and destroy them all
  * at once.
@@ -434,9 +416,6 @@ static struct attribute *vgt_instance_attrs[] = {
 	&aperture_sz_attribute.attr,
 	&aperture_base_attribute.attr,
 	&aperture_base_va_attribute.attr,
-	&primary_notifier_attribute.attr,
-	&cursor_notifier_attribute.attr,
-	&sprite_notifier_attribute.attr,
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 

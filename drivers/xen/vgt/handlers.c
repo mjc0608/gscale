@@ -1837,6 +1837,24 @@ static bool pvinfo_read(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+static void fb_notify_all_mapped_pipes(struct vgt_device *vgt,
+	enum vgt_plane_type planeid)
+{
+	unsigned i;
+
+	for (i = 0; i < I915_MAX_PIPES; i++) {
+		if (vgt->pipe_mapping[i] != I915_MAX_PIPES) {
+			struct fb_notify_msg msg;
+
+			msg.vm_id = vgt->vm_id;
+			msg.plane_id = planeid;
+			msg.pipe_id = i;
+
+			vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
+		}
+	}
+}
+
 static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -1907,14 +1925,12 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 			break;
 		case vgt_info_off(g2v_notify):
 			if (val == VGT_G2V_DISPLAY_REFRESH) {
-				struct fb_notify_msg msg;
-				msg.vm_id = vgt->vm_id;
-				msg.plane_id = PRIMARY_PLANE;
-				vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
+				fb_notify_all_mapped_pipes(vgt, PRIMARY_PLANE);
 			} else if (val == VGT_G2V_SET_POINTER_SHAPE) {
 				struct fb_notify_msg msg;
 				msg.vm_id = vgt->vm_id;
 				msg.plane_id = CURSOR_PLANE;
+				msg.pipe_id = 0;
 				vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 			} else {
 				vgt_warn("INVALID_WRITE_NOTIFICATION %x\n", val);
@@ -1926,6 +1942,7 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 				struct fb_notify_msg msg;
 				msg.vm_id = vgt->vm_id;
 				msg.plane_id = CURSOR_PLANE;
+				msg.pipe_id = 0;
 				vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 			}
 			break;

@@ -25,9 +25,11 @@
 
 #include <linux/module.h>
 #include <linux/debugfs.h>
+#include <linux/connector.h>
 #include "vgt.h"
 #include <xen/fb_decoder.h>
 #include <uapi/drm/drm_fourcc.h>
+#include <uapi/drm/i915_drm.h>
 
 #define FORMAT_NUM	16
 struct pixel_format {
@@ -443,43 +445,79 @@ int vgt_fb_notifier_call_chain(unsigned long val, void *data)
 }
 EXPORT_SYMBOL_GPL(vgt_fb_notifier_call_chain);
 
+static int vgt_plane_to_i915_plane(unsigned vgt_plane)
+{
+	int ret = -ENOENT;
+	switch (vgt_plane) {
+		case PRIMARY_PLANE:
+			ret = I915_VGT_PLANE_PRIMARY;
+			break;
+		case CURSOR_PLANE:
+			ret = I915_VGT_PLANE_CURSOR;
+			break;
+		case SPRITE_PLANE:
+			ret = I915_VGT_PLANE_SPRITE;
+			break;
+		default:
+			vgt_err("invalid plane: %d\n", vgt_plane);
+			break;
+	}
+	return (ret);
+}
+
 /*
  * A notifier API for userspace processes
- * By polling /sys/kernel/vgt/vm<X>/vgt_id for (POLLERR | POLLPRI)
+ * By opening a netlink socket of id CN_IDX_VGT
  * userspace may get notifications of framebuffer events
  */
 static int vgt_fb_event(struct notifier_block *nb,
 			unsigned long val, void *data)
 {
+	int ret;
+	static int seq = 0;
 	struct fb_notify_msg *msg = data;
+	struct cn_msg *m;
+	int data_sz;
 	struct vgt_device *vgt;
 
-	if (!msg) {
-		vgt_err("received invalid fb_event message\n");
-		return -EIO;
-	}
-
-	if (msg->vm_id == 0) {
-		return 0;
-	}
+	/* Don't notify for dom0 */
+	if (msg->vm_id == 0)
+		return (0);
 
 	vgt = vmid_2_vgt_device(msg->vm_id);
-	switch (msg->plane_id) {
-		case CURSOR_PLANE:
-			sysfs_notify(&vgt->kobj, NULL, "cursor_notifier");
-			break;
-		case PRIMARY_PLANE:
-			sysfs_notify(&vgt->kobj, NULL, "primary_notifier");
-			break;
-		case SPRITE_PLANE:
-			sysfs_notify(&vgt->kobj, NULL, "sprite_notifier");
-			break;
-		default:
-			vgt_err("invalid plane in fb_event message\n");
-			break;
+	if (!vgt)
+		return (-EINVAL);
+
+	data_sz = sizeof(*msg);
+	m = kzalloc(sizeof(*m) + data_sz, GFP_ATOMIC);
+	if (!m)
+		return (-ENOMEM);
+
+	m->id.idx = CN_IDX_VGT;
+	m->id.val = vgt->pipe_mapping[msg->pipe_id] == I915_MAX_PIPES ?
+		INVALID_PIPE_ID : vgt->pipe_mapping[msg->pipe_id];
+
+	/*
+	 * vgt plane ids are not exposed to userspace.
+	 * Swap it out for drm's concept before sending it along.
+	 * A plane without a mapping (MAX_PLANE) is not interesting, so
+	 * drop it.
+	 */
+	msg->plane_id = vgt_plane_to_i915_plane(msg->plane_id);
+	if (msg->plane_id < 0) {
+		ret = -EINVAL;
+		goto out;
 	}
 
-	return (0);
+	m->seq = seq++;
+	m->len = data_sz;
+	memcpy(m + 1, msg, data_sz);
+
+	ret = cn_netlink_send(m, CN_IDX_VGT, GFP_ATOMIC);
+
+out:
+	kfree(m);
+	return (ret);
 }
 
 static struct notifier_block vgt_fb_notifier = {
