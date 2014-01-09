@@ -1198,6 +1198,8 @@ static struct reg_mask_t rcs_reset_mmio[] = {
 	{0x2220, 0},
 	{0x2228, 0},
 	{0x2180, 0},
+
+	{0x2054, 0},
 };
 
 static bool vgt_reset_engine(struct pgt_device *pdev, int id)
