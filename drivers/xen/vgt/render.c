@@ -1165,8 +1165,8 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 
 struct reg_mask_t {
 	u32		reg;
-	vgt_reg_t	val;
 	u8		mask;
+	vgt_reg_t	val;
 };
 
 static struct reg_mask_t rcs_reset_mmio[] = {
@@ -1215,12 +1215,13 @@ static bool vgt_reset_engine(struct pgt_device *pdev, int id)
 	for (i = 0; i < ARRAY_NUM(rcs_reset_mmio); i++) {
 		struct reg_mask_t *r = &rcs_reset_mmio[i];
 
-		if ((r->reg == 0x2220) || (r->reg == 0x2228))
-			r->reg += 0x10000;
+		if (r->reg == 0x2220 || r->reg == 0x2228)
+			r->val = VGT_MMIO_READ(pdev, r->reg + 0x10000);
+		else
+			r->val = VGT_MMIO_READ(pdev, r->reg);
 
-		r->val = VGT_MMIO_READ(pdev, r->reg);
 		if (r->mask)
-			r->val += 0xFFFF0000;
+			r->val |= 0xFFFF0000;
 	}
 
 	head = VGT_READ_HEAD(pdev, id);
