@@ -39,7 +39,7 @@ struct vgt_device *vmid_2_vgt_device(int vmid)
 	ASSERT(vgt_id_alloc_bitmap != ~0UL)
 	for_each_set_bit(bit, &vgt_id_alloc_bitmap, (8 * sizeof(unsigned long))) {
 		vgt = default_device.device[bit];
-		if (vgt->vm_id == vmid)
+		if (vgt && vgt->vm_id == vmid)
 			return vgt;
 	}
 	return NULL;

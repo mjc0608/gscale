@@ -641,9 +641,13 @@ bool vgt_manage_emul_dpy_events(struct pgt_device *pdev)
 	ASSERT(spin_is_locked(&pdev->lock));
 	hw_enabled_pipes = hvm_required_pipes = 0;
 
-	for (i = 0; i < VGT_MAX_VMS && pdev->device[i]; i ++) {
+	for (i = 0; i < VGT_MAX_VMS; i++) {
 		struct vgt_device *vgt = pdev->device[i];
 		vgt_reg_t pipeconf;
+
+		if (vgt == NULL)
+			continue;
+
 		for (pipe = PIPE_A; pipe < I915_MAX_PIPES; pipe ++) {
 			pipeconf = __vreg(vgt, VGT_PIPECONF(pipe));
 			if (pipeconf & _REGBIT_PIPE_ENABLE) {
