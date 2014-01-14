@@ -1013,6 +1013,8 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 			(plane_code << PLANE_INFO_SHIFT) |
 			(length & CMD_LENGTH_MASK));
 
+	vgt_inject_flip_done(s->vgt, pipe);
+
 	return rc;
 
 wrong_command:

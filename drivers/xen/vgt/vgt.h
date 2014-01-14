@@ -2039,6 +2039,8 @@ void vgt_install_irq(struct pci_dev *pdev);
 int vgt_irq_init(struct pgt_device *pgt);
 void vgt_irq_exit(struct pgt_device *pgt);
 
+void vgt_inject_flip_done(struct vgt_device *vgt, enum vgt_pipe pipe);
+
 void vgt_trigger_virtual_event(struct vgt_device *vgt,
 	enum vgt_event_type event);
 

@@ -1461,5 +1461,23 @@ void vgt_uninstall_irq(struct pci_dev *pdev)
 	pdev->irq = hstate->pirq; /* needed by __pci_restore_msi_state() */
 }
 
+void vgt_inject_flip_done(struct vgt_device *vgt, enum vgt_pipe pipe)
+{
+	enum vgt_event_type event = EVENT_MAX;
+	if (current_foreground_vm(vgt->pdev) != vgt) {
+		if (pipe == PIPE_A) {
+			event = PRIMARY_A_FLIP_DONE;
+		} else if (pipe == PIPE_B) {
+			event = PRIMARY_B_FLIP_DONE;
+		} else if (pipe == PIPE_C) {
+			event = PRIMARY_C_FLIP_DONE;
+		}
+
+		if (event != EVENT_MAX) {
+			vgt_trigger_virtual_event(vgt, event);
+		}
+	}
+}
+
 EXPORT_SYMBOL(vgt_install_irq);
 EXPORT_SYMBOL(vgt_uninstall_irq);
