@@ -26,6 +26,8 @@
 #include <linux/module.h>
 #include <linux/kthread.h>
 #include <linux/delay.h>
+#include <xen/interface/vcpu.h>
+#include <xen/interface/hvm/hvm_op.h>
 #include "vgt.h"
 
 /*
@@ -1491,6 +1493,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	int i;
 	cycles_t t0, t1, t2;
 	int cpu;
+	bool forcewake_got = false;
 
 	if (!(vgt_ctx_check(pdev) % threshold))
 		vgt_dbg("vGT: %lldth checks, %lld switches\n",
@@ -1512,6 +1515,13 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 
 	if (!ctx_switch_requested(pdev))
 		goto out;
+
+	ASSERT(spin_is_locked(&pdev->lock));
+	ASSERT(forcewake_count == 0 || forcewake_count == 1);
+	if (forcewake_count == 0) {
+		BUG_ON(hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_GET) != 0);
+		forcewake_got = true;
+	}
 
 	next = pdev->next_sched_vgt;
 	prev = current_render_owner(pdev);
@@ -1621,6 +1631,10 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	/* STEP-6: ctx switch ends, and then kicks of new tail */
 	vgt_kick_ringbuffers(next);
 
+	/* NOTE: do NOT access MMIO after this PUT hypercall! */
+	if (forcewake_got)
+		BUG_ON(hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_PUT) != 0);
+
 	/* request to check IRQ when ctx switch happens */
 	if (prev->force_removal ||
 		bitmap_empty(prev->enabled_rings, MAX_ENGINES)) {
@@ -1673,6 +1687,10 @@ err:
 	 * CPU/GPU states: we want to hold the lock to prevent other
 	 * vcpus' vGT related codes at this time.
 	 */
+
+	if (forcewake_got)
+		BUG_ON(hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_PUT) != 0);
+
 	vgt_unlock_dev(pdev, cpu);
 
 	return false;
