@@ -528,6 +528,9 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 			vgt_update_frmcount(vgt, virtual_pipe);
 		vgt_calculate_frmcount_delta(vgt, virtual_pipe);
 	}
+	if (current_foreground_vm(vgt->pdev) == vgt && virtual_pipe != I915_MAX_PIPES) {
+		vgt_restore_state(vgt, virtual_pipe);
+	}
 
 	return true;
 }
