@@ -103,13 +103,13 @@ module_param_named(enable_video_switch, enable_video_switch, int, 0600);
 /*
  * On HSW, the max low/high gm sizes are 512MB/1536MB.
  * If each VM takes 512MB GM, we can support 4VMs.
- * By default Dom0 has 512MB GM, including 64MB low gm used by i915 and
- * 64MB low gm used by vGT driver itself(see VGT_RSVD_APERTURE_SZ), and
- * (512-64-64)MB high GM space used by i915.
+ * By default Dom0 has 512MB GM, including 120MB low gm used by i915 and
+ * 8MB low gm used by vGT driver itself(see VGT_RSVD_APERTURE_SZ), and
+ * (512-120-8)MB high GM space used by i915.
  * We can reduce the GM space used by Dom0 i915, but remember: Dom0
  * render/display may not work properly without enough GM space.
  */
-int dom0_low_gm_sz = 64;	//in MB.
+int dom0_low_gm_sz = 120;	//in MB.
 module_param_named(dom0_low_gm_sz, dom0_low_gm_sz, int, 0600);
 
 int dom0_high_gm_sz = 384;	//in MB.

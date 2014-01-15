@@ -248,7 +248,7 @@ struct vgt_rsvd_ring {
 
 /* Maximum VMs supported by vGT. Actual number is device specific */
 #define VGT_MAX_VMS			4
-#define VGT_RSVD_APERTURE_SZ		(64*SIZE_1MB)	/* reserve 64MB for vGT itself */
+#define VGT_RSVD_APERTURE_SZ		(8*SIZE_1MB)	/* reserve 8MB for vGT itself */
 
 #define VGT_MAX_GM_SIZE			(2*SIZE_1MB*SIZE_1KB)
 #define VGT_GM_BITMAP_BITS		(VGT_MAX_GM_SIZE/SIZE_1MB)
@@ -260,7 +260,7 @@ struct vgt_rsvd_ring {
 //#define SZ_CONTEXT_AREA_PER_RING	4096
 #define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 256 KB for now */
 #define SZ_INDIRECT_STATE		(4096)		/* use 4KB for now */
-#define VGT_APERTURE_PER_INSTANCE_SZ		(4*SIZE_1MB)	/* 4MB per instance (?) */
+#define VGT_APERTURE_PER_INSTANCE_SZ		(4*SIZE_1KB)	/* 4KB per instance (?) */
 #define VGT_ID_ALLOC_BITMAP		((1UL << VGT_MAX_VMS) - 1)
 
 #define REG_SIZE			sizeof(vgt_reg_t)		/* size of gReg/sReg[0] */
@@ -877,8 +877,6 @@ struct pgt_device {
 	uint64_t rsvd_aperture_sz;
 	uint64_t rsvd_aperture_base;
 	uint64_t scratch_page;		/* page used for data written from GPU */
-	uint64_t ctx_switch_rb_page;	/* page used as ring buffer for context switch */
-	uint64_t dummy_area;
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
 	struct vgt_device *owner[VGT_OT_MAX];	/* owner list of different engines */

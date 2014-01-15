@@ -341,12 +341,4 @@ void vgt_init_reserved_aperture(struct pgt_device *pdev)
 				VGT_APERTURE_PER_INSTANCE_SZ));
 	printk("scratch page is allocated at gm(0x%llx)\n", pdev->scratch_page);
 	/* reserve the 1st trunk for vGT's general usage */
-
-	/* reserve 1 page as the temporary ring buffer for context switch */
-	pdev->ctx_switch_rb_page = aperture_2_gm(pdev, rsvd_aperture_alloc(pdev, PAGE_SIZE));
-	printk("ctx_switch_rb_page is allocated at gm(0x%llx)\n",
-		pdev->ctx_switch_rb_page);
-
-	pdev->dummy_area = aperture_2_gm(pdev, rsvd_aperture_alloc(pdev, SZ_CONTEXT_AREA_PER_RING));
-	printk("dummy_area is allocated at gm(0x%llx)\n", pdev->dummy_area);
 }
