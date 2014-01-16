@@ -36,9 +36,9 @@ MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 
-bool ignore_hvm_forcewake_req = false;
+bool ignore_hvm_forcewake_req = true;
 module_param_named(ignore_hvm_forcewake_req, ignore_hvm_forcewake_req, bool, 0400);
-MODULE_PARM_DESC(ignore_hvm_forcewake_req, "ignore HVM's forwake request: for debug only! (default: false)");
+MODULE_PARM_DESC(ignore_hvm_forcewake_req, "ignore HVM's forwake request (default: true)");
 
 bool hvm_render_owner = false;
 module_param_named(hvm_render_owner, hvm_render_owner, bool, 0600);
