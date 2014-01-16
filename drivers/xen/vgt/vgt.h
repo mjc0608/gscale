@@ -2208,6 +2208,7 @@ typedef struct {
 
 extern u64 context_switch_cost;
 extern u64 context_switch_num;
+extern u64 ring_idle_wait;
 extern u64 ring_0_idle;
 extern u64 ring_0_busy;
 extern u64 vm_pending_irq[VGT_MAX_VMS];

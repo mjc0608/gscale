@@ -107,6 +107,7 @@ enum vgt_debugfs_entry_t
 static debug_statistics_t  stat_info [] = {
 	{ "context_switch_cycles", &context_switch_cost },
 	{ "context_switch_num", &context_switch_num },
+	{ "ring_idle_wait", &ring_idle_wait },
 	{ "ring_0_busy", &ring_0_busy },
 	{ "ring_0_idle", &ring_0_idle },
 	{ "forcewake_count", &forcewake_count },

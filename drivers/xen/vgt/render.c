@@ -38,6 +38,7 @@
  */
 u64	context_switch_cost = 0;
 u64	context_switch_num = 0;
+u64	ring_idle_wait = 0;
 
 int vgt_ctx_switch = 1;
 bool vgt_validate_ctx_switch = false;
@@ -1488,7 +1489,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	struct vgt_device *next, *prev;
 	int threshold = 500; /* print every 500 times */
 	int i;
-	cycles_t t0, t1;
+	cycles_t t0, t1, t2;
 	int cpu;
 
 	if (!(vgt_ctx_check(pdev) % threshold))
@@ -1517,6 +1518,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	ASSERT(pdev->next_sched_vgt);
 	ASSERT(next != prev);
 
+	t0 = vgt_get_cycles();
 	if (!idle_rendering_engines(pdev, &i)) {
 		int j;
 		vgt_err("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
@@ -1530,10 +1532,12 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	}
 
 	vgt_dbg("vGT: next vgt (%d)\n", next->vgt_id);
+	
 
 	/* variable exported by debugfs */
 	context_switch_num ++;
-	t0 = vgt_get_cycles();
+	t1 = vgt_get_cycles();
+	ring_idle_wait += t1 - t0;
 
 	vgt_sched_update_prev(prev, t0);
 
@@ -1636,8 +1640,8 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 
 	vgt_sched_update_next(next);
 
-	t1 = vgt_get_cycles();
-	context_switch_cost += (t1-t0);
+	t2 = vgt_get_cycles();
+	context_switch_cost += (t2-t1);
 out:
 	vgt_unlock_dev(pdev, cpu);
 	return true;
