@@ -342,41 +342,32 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			gmbus_port = 3;
 			break;
 		case VGT_HDMI_C:
-			gmbus_port = 4;
+			if (!test_bit(VGT_DP_C, pdev->detected_ports))
+				gmbus_port = 4;
 			break;
 		case VGT_HDMI_B:
-			gmbus_port = 5;
+			if (!test_bit(VGT_DP_B, pdev->detected_ports))
+				gmbus_port = 5;
 			break;
 		case VGT_HDMI_D:
-			gmbus_port = 6;
+			if (!test_bit(VGT_DP_D, pdev->detected_ports))
+				gmbus_port = 6;
 			break;
 		case VGT_DP_A:
-			if ((VGT_MMIO_READ(pdev, _REG_DDI_BUF_CTL_A) |
-				_DDI_BUFCTL_DETECT_MASK) &&
-				(test_bit(VGT_DP_A, pdev->detected_ports))) {
+			if (test_bit(VGT_DP_A, pdev->detected_ports))
 				aux_ch_addr = _REG_DPA_AUX_CH_CTL;
-			}
 			break;
 		case VGT_DP_B:
-			if ((VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) |
-				_REGBIT_SFUSE_STRAP_B_PRESENTED) &&
-				(test_bit(VGT_DP_B, pdev->detected_ports))) {
+			if (test_bit(VGT_DP_B, pdev->detected_ports))
 				aux_ch_addr = _REG_PCH_DPB_AUX_CH_CTL;
-			}
 			break;
 		case VGT_DP_C:
-			if ((VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) |
-				_REGBIT_SFUSE_STRAP_C_PRESENTED) &&
-				(test_bit(VGT_DP_C, pdev->detected_ports))) {
+			if (test_bit(VGT_DP_C, pdev->detected_ports))
 				aux_ch_addr = _REG_PCH_DPC_AUX_CH_CTL;
-			}
 			break;
 		case VGT_DP_D:
-			if ((VGT_MMIO_READ(pdev, _REG_SFUSE_STRAP) |
-				_REGBIT_SFUSE_STRAP_D_PRESENTED) &&
-				(test_bit(VGT_DP_D, pdev->detected_ports))) {
+			if (test_bit(VGT_DP_D, pdev->detected_ports))
 				aux_ch_addr = _REG_PCH_DPD_AUX_CH_CTL;
-			}
 			break;
 		default:
 			vgt_info("EDID_PROBE: Others?\n");
