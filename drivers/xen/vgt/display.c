@@ -365,7 +365,7 @@ void vgt_update_monitor_status(struct vgt_device *vgt)
 
 static bool is_same_port(vgt_reg_t trans_coder_ctl1, vgt_reg_t trans_coder_ctl2)
 {
-	return !(( trans_coder_ctl1 ^ trans_coder_ctl2 ) & ( _REGBIT_TRANS_DDI_PORT_MASK | _REGBIT_TRANS_DDI_MODE_SELECT_MASK ));
+	return !(( trans_coder_ctl1 ^ trans_coder_ctl2 ) & _REGBIT_TRANS_DDI_PORT_MASK);
 }
 
 enum vgt_pipe get_edp_input(uint32_t wr_data)
