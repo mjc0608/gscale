@@ -776,6 +776,18 @@ int vgt_resume(struct pci_dev *pdev)
 	state_sreg_init(vgt_dom0);
 	state_vreg_init(vgt_dom0);
 
+
+	vgt_probe_dpcd(pgt, -1);
+
+	vgt_probe_edid(pgt, -1);
+
+	/* initialize i2c states */
+	vgt_init_i2c_bus(&vgt_dom0->vgt_i2c_bus);
+	/* assign aux_ch vregs for aux_ch virtualization */
+	vgt_init_aux_ch_vregs(&vgt_dom0->vgt_i2c_bus, vgt_dom0->state.vReg);
+	vgt_propagate_edid(vgt_dom0, -1);
+	vgt_propagate_dpcd(vgt_dom0, -1);
+
 	vgt_update_monitor_status(vgt_dom0);
 
 	/* TODO, GMBUS inuse bit? */
