@@ -1297,6 +1297,13 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 			}
 		}
 	} else if ((op & 0x1) == VGT_AUX_I2C_WRITE) {
+		/* TODO
+		 * We only support EDID reading from I2C_over_AUX. And
+		 * we do not expect the index mode to be used. Right now
+		 * the WRITE operation is ignored. It is good enough to
+		 * support the gfx driver to do EDID access.
+		 */
+#if 0
 		int write_length;
 		int write_value;
 
@@ -1309,6 +1316,7 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 		write_value = *i2c_bus->aux_ch.aux_registers[port_idx][reg + 2]
 				 & 0xff;
 		ASSERT(write_value == 0);
+#endif
 	} else {
 		ASSERT((op & 0x1) == VGT_AUX_I2C_READ);
 		ASSERT(msg_length == 4);
