@@ -905,10 +905,10 @@ static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt, unsigned int offset, v
 	 * FIXME: never clear _GMBUS_HW_WAIT */
 	__vreg(vgt, _REG_PCH_GMBUS2) &= ~ _GMBUS_ACTIVE;
 	__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_RDY | _GMBUS_HW_WAIT;
-	if (!edid_data)
-		__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_NAK;
-	else
+	if (edid_data && edid_data->data_valid)
 		__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_NAK;
+	else
+		__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_NAK;
 
 	memcpy(p_data, (char *)vgt->state.vReg + offset, bytes);
 	return true;
