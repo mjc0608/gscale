@@ -1379,13 +1379,19 @@ static void dp_aux_ch_trigger_interrupt_on_done(struct vgt_device *vgt, vgt_reg_
 }
 
 static void dp_aux_ch_ctl_trans_done(struct vgt_device *vgt, vgt_reg_t value,
-	 unsigned int reg, int len)
+	 unsigned int reg, int len, bool data_valid)
 {
 	/* mark transaction done */
 	value |= _REGBIT_DP_AUX_CH_CTL_DONE;
 	value &= ~_REGBIT_DP_AUX_CH_CTL_SEND_BUSY;
 	value &= ~_REGBIT_DP_AUX_CH_CTL_RECV_ERR;
-	value &= ~_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR;
+
+	if (data_valid) {
+		value &= ~_REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR;
+	} else {
+		value |= _REGBIT_DP_AUX_CH_CTL_TIME_OUT_ERR;
+	}
+
 	/* message size */
 	value &= ~(0xf << 20);
 	value |= (len << 20);
@@ -1511,7 +1517,7 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 			/* NAK the write */
 			__vreg(vgt, reg + 4) = AUX_NATIVE_REPLY_NAK;
 
-			dp_aux_ch_ctl_trans_done(vgt, value, reg, 2);
+			dp_aux_ch_ctl_trans_done(vgt, value, reg, 2, true);
 
 			return true;
 		}
@@ -1548,7 +1554,7 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 		/* ACK the write */
 		__vreg(vgt, reg + 4) = 0;
 
-		dp_aux_ch_ctl_trans_done(vgt, value, reg, 1);
+		dp_aux_ch_ctl_trans_done(vgt, value, reg, 1, dpcd && dpcd->data_valid);
 
 		return true;
 	}
@@ -1572,7 +1578,7 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 			__vreg(vgt, reg + 16) = 0;
 			__vreg(vgt, reg + 20) = 0;
 
-			dp_aux_ch_ctl_trans_done(vgt ,value, reg, len + 2);
+			dp_aux_ch_ctl_trans_done(vgt ,value, reg, len + 2, true);
 
 			return true;
 		}
@@ -1604,7 +1610,7 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 			}
 		}
 
-		dp_aux_ch_ctl_trans_done(vgt, value, reg, len + 2);
+		dp_aux_ch_ctl_trans_done(vgt, value, reg, len + 2, dpcd && dpcd->data_valid);
 
 		return true;
 	}
