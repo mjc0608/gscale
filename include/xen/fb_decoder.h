@@ -71,17 +71,27 @@ struct vgt_cursor_plane_format {
 	u32	y_hot;		/* in pixels */
 };
 
-#define INVALID_PIPE_ID	  -1
+/* The virtual DDI port type definition.
+ *
+ * DDI port A for eDP is not supported.
+ * DDI port E is for CRT.
+ * DDI_PORT_NONE means no valid port information available. When getting
+ * this return value from vgt_pipe_format, caller should stop using the
+ * virtual pipe and retry later.
+ */
+typedef enum {
+	DDI_PORT_NONE	= 0,
+	DDI_PORT_B	= 1,
+	DDI_PORT_C	= 2,
+	DDI_PORT_D	= 3,
+	DDI_PORT_E	= 4
+}ddi_port_t;
 
-/* when physical_pipe_id of struct vgt_pipe_format returns an
-	* INVALID_PIPE_ID, it either means that this virtual pipe is not
-	* enabled or the mapping is temporally unavailable.
-	* the caller should stop using this virtual pipe and retry later. */
 struct vgt_pipe_format{
 	struct vgt_primary_plane_format	primary;
 	struct vgt_sprite_plane_format	sprite;
 	struct vgt_cursor_plane_format	cursor;
-	int  physical_pipe_id;  /* the physical pipe id this pipe mapped to */
+	ddi_port_t ddi_port;  /* the DDI port that the pipe is connected to */
 };
 
 #define MAX_INTEL_PIPES	3

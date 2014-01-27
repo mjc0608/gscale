@@ -338,11 +338,23 @@ int vgt_dump_fb_format(struct dump_buffer *buf, struct vgt_fb_format *fb)
 		vgt_dump_cursor_plane_format(buf, &pipe->cursor);
 		vgt_dump_sprite_plane_format(buf, &pipe->sprite);
 		dump_string(buf, "Pipe remapping\n");
-		if (pipe->physical_pipe_id != INVALID_PIPE_ID) {
-			dump_string(buf, "  virtual pipe:%d -> physical pipe:%d\n",
-				 i, pipe->physical_pipe_id);
-		} else {
+		if (pipe->ddi_port == DDI_PORT_NONE) {
 			dump_string(buf, "  no mapping available for this pipe\n");
+		} else {
+			char port_id;
+			switch (pipe->ddi_port) {
+			case DDI_PORT_B:
+				port_id = 'B'; break;
+			case DDI_PORT_C:
+				port_id = 'C'; break;
+			case DDI_PORT_D:
+				port_id = 'D'; break;
+			case DDI_PORT_E:
+			default:
+				port_id = 'E'; break;
+			}
+			dump_string(buf, "  virtual pipe:%d -> DDI PORT:%c\n",
+				 i, port_id);
 		}
 	}
 	dump_string(buf, "\n");
@@ -404,12 +416,22 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 
 	for (i = 0; i < MAX_INTEL_PIPES; i++) {
 		struct vgt_pipe_format *pipe = &fb->pipes[i];
+		vgt_reg_t ddi_func_ctl = __vreg(vgt, _VGT_TRANS_DDI_FUNC_CTL(i));
+
+		if (!(ddi_func_ctl & _TRANS_DDI_PORT_SHIFT)) {
+			pipe->ddi_port = DDI_PORT_NONE;
+		} else {
+			vgt_reg_t port = (ddi_func_ctl & _REGBIT_TRANS_DDI_PORT_MASK) >>
+						_TRANS_DDI_PORT_SHIFT;
+			if ((port >= DDI_PORT_NONE) || (port <= DDI_PORT_E))
+				pipe->ddi_port = port;
+			else
+				pipe->ddi_port = DDI_PORT_NONE;
+		}
 
 		ret |= vgt_decode_primary_plane_format(vgt, i, &pipe->primary);
 		ret |= vgt_decode_sprite_plane_format(vgt, i, &pipe->sprite);
 		ret |= vgt_decode_cursor_plane_format(vgt, i, &pipe->cursor);
-		pipe->physical_pipe_id = vgt->pipe_mapping[i] == I915_MAX_PIPES ?
-			INVALID_PIPE_ID : vgt->pipe_mapping[i];
 
 		if (ret) {
 			vgt_err("Decode format error for pipe(%d)\n", i);
