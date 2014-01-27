@@ -290,7 +290,7 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 	struct vgt_fb_format *fb;
 	struct vgt_pipe_format *pipe;
 
-	int i, found, ret;
+	int ret;
 
 	loff_t first_data_page, last_data_page;
 	int num_pages = 0;
@@ -315,42 +315,17 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 		return -EINVAL;
 	}
 
-	/*
-	 * Find the pipe id we are interested in.
-	 * If the phys_pipe_id is outside the bounds of the pipe
-	 * array, default to the first enabled (used for thumbnails)
-	 */
 	fb = &obj->fb;
-	found = 0;
-	DRM_DEBUG_DRIVER("VGT: finding pipe\n");
-	if (args->phys_pipe_id < I915_MAX_PIPES) {
-		for (i = 0; i < I915_MAX_PIPES; i++) {
-			pipe = &fb->pipes[i];
-			if (pipe->physical_pipe_id == args->phys_pipe_id) {
-				found = 1;
-				break;
-			}
-		}
-	}
+	pipe = ((args->pipe_id >= I915_MAX_PIPES) ?
+				NULL : &fb->pipes[args->pipe_id]);
 
-	if (!found) {
-		for (i = 0; i < I915_MAX_PIPES; i++) {
-			pipe = &fb->pipes[i];
-			if (pipe->primary.enabled) {
-				found = 1;
-				break;
-			}
-		}
-	}
-
-	/* If we still don't have anything, bail */
-	if (!found) {
+	/* If plane is not enabled, bail */
+	if (!pipe || !pipe->primary.enabled) {
 		kfree(obj);
 		return -ENOENT;
 	}
-
-	args->pipe_id = i;
-	DRM_DEBUG_DRIVER("VGT: pipe = %d\n", i);
+ 
+	DRM_DEBUG_DRIVER("VGT: pipe = %d\n", args->pipe_id);
 	if((args->plane_id) == I915_VGT_PLANE_PRIMARY) {
 	  DRM_DEBUG_DRIVER("VGT: &pipe=0x%x\n",(&pipe));
 		p = &pipe->primary;

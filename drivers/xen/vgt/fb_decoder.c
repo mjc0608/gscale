@@ -495,8 +495,7 @@ static int vgt_fb_event(struct notifier_block *nb,
 		return (-ENOMEM);
 
 	m->id.idx = CN_IDX_VGT;
-	m->id.val = vgt->pipe_mapping[msg->pipe_id] == I915_MAX_PIPES ?
-		INVALID_PIPE_ID : vgt->pipe_mapping[msg->pipe_id];
+	m->id.val = msg->pipe_id;
 
 	/*
 	 * vgt plane ids are not exposed to userspace.
