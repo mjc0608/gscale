@@ -718,12 +718,74 @@ static bool dpy_trans_ddi_ctl_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+extern int vgt_decode_primary_plane_format(struct vgt_device *vgt,
+	int pipe, struct vgt_primary_plane_format *plane);
+extern int vgt_decode_cursor_plane_format(struct vgt_device *vgt,
+	int pipe, struct vgt_cursor_plane_format *plane);
+extern int vgt_decode_sprite_plane_format(struct vgt_device *vgt,
+	int pipe, struct vgt_sprite_plane_format *plane);
+
+vgt_reg_t vgt_surf_base_range_check (struct vgt_device *vgt,
+	enum vgt_pipe pipe, enum vgt_plane_type plane)
+{
+	uint32_t  reg = _REG_INVALID;
+	vgt_reg_t surf_base = 0;
+	uint32_t  range;
+	struct vgt_primary_plane_format primary_plane;
+	struct vgt_sprite_plane_format  sprite_plane;
+	struct vgt_cursor_plane_format  cursor_plane;
+
+	if (!vgt_has_pipe_enabled(vgt, pipe)) {
+		return 0;
+	}
+
+	switch (plane)
+	{
+	case PRIMARY_PLANE:
+		vgt_decode_primary_plane_format(vgt, pipe, &primary_plane);
+		if (primary_plane.enabled){
+			reg = VGT_DSPSURF(pipe);
+			range = primary_plane.stride * primary_plane.height;
+		}
+		break;
+
+	case SPRITE_PLANE:
+		vgt_decode_sprite_plane_format(vgt, pipe, &sprite_plane);
+		if (sprite_plane.enabled){
+			reg = VGT_SPRSURF(pipe);
+			range = sprite_plane.width* sprite_plane.height*
+					(sprite_plane.bpp / 8);
+		}
+		break;
+
+	case CURSOR_PLANE:
+		vgt_decode_cursor_plane_format(vgt, pipe, &cursor_plane);
+		if (cursor_plane.enabled) {
+			reg = VGT_CURBASE(pipe);
+			range = cursor_plane.width * cursor_plane.height *
+					(cursor_plane.bpp / 8);
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	if (reg != _REG_INVALID){
+		reg_aux_addr_size(vgt->pdev, reg) = range;
+		surf_base = mmio_g2h_gmadr (vgt, reg, __vreg(vgt, reg));
+	}
+
+	return surf_base;
+}
+
 static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	bool rc, orig_pipe_enabled, curr_pipe_enabled;
 	unsigned int reg;
 	enum vgt_pipe pipe;
+	enum vgt_plane_type plane;
 	uint32_t wr_data;
 
 	reg = offset & ~(bytes - 1);
@@ -774,6 +836,10 @@ static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 			return false;
 		}
 		vgt_calculate_frmcount_delta(vgt, pipe);
+
+		for (plane = PRIMARY_PLANE; plane < MAX_PLANE; plane++) {
+			vgt_surf_base_range_check(vgt, pipe, plane);
+		}
 	}
 
 	if (rc)
@@ -1242,6 +1308,7 @@ static bool dpy_plane_ctl_write(struct vgt_device *vgt, unsigned int offset,
 		} else if (is_current_display_owner(vgt)) {
 			set_panel_fitting(current_foreground_vm(vgt->pdev), pipe);
 		}
+		vgt_surf_base_range_check(vgt, pipe, PRIMARY_PLANE);
 	}
 
 	dpy_plane_mmio_write(vgt,offset, p_data,bytes);
@@ -1254,8 +1321,18 @@ static bool pri_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	struct fb_notify_msg msg;
+	enum vgt_pipe pipe = VGT_DSPSURFPIPE(offset);
+	unsigned int real_offset;
+	vgt_reg_t ret_val;
 
-	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
+	__vreg(vgt, offset) = *(vgt_reg_t*)p_data;
+	ret_val = vgt_surf_base_range_check(vgt, pipe, PRIMARY_PLANE);
+	__sreg(vgt, offset) = ret_val ? ret_val : __vreg(vgt, offset);
+
+	if (current_foreground_vm(vgt->pdev) == vgt &&
+		vgt_map_plane_reg(vgt, offset, &real_offset)) {
+		VGT_MMIO_WRITE(vgt->pdev, real_offset, __sreg(vgt, offset));
+	}
 
 	msg.vm_id = vgt->vm_id;
 	msg.plane_id = PRIMARY_PLANE;
@@ -1267,17 +1344,68 @@ static bool pri_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static bool sprite_plane_ctl_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	enum vgt_pipe pipe = VGT_SPRCNTRPIPE(offset);
+
+	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
+	vgt_surf_base_range_check(vgt, pipe, SPRITE_PLANE);
+
+	return true;
+}
+
 static bool spr_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	struct fb_notify_msg msg;
+	enum vgt_pipe pipe = VGT_SPRSURFPIPE(offset);
+	unsigned int real_offset;
+	vgt_reg_t ret_val;
 
-	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
+	__vreg(vgt, offset) = *(vgt_reg_t*)p_data;
+	ret_val = vgt_surf_base_range_check(vgt, pipe, SPRITE_PLANE);
+	__sreg(vgt, offset) = ret_val ? ret_val : __vreg(vgt, offset);
+
+	if (current_foreground_vm(vgt->pdev) == vgt &&
+		vgt_map_plane_reg(vgt, offset, &real_offset)) {
+		VGT_MMIO_WRITE(vgt->pdev, real_offset, __sreg(vgt, offset));
+	}
 
 	msg.vm_id = vgt->vm_id;
 	msg.plane_id = SPRITE_PLANE;
 	msg.pipe_id = VGT_SPRSURFPIPE(offset);
 	vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
+
+	return true;
+}
+
+static bool cur_plane_ctl_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	enum vgt_pipe pipe = VGT_CURCNTRPIPE(offset);
+
+	dpy_plane_mmio_write(vgt,offset, p_data, bytes);
+	vgt_surf_base_range_check(vgt, pipe, CURSOR_PLANE);
+
+	return true;
+}
+
+static bool cur_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	enum vgt_pipe pipe = VGT_CURSURFPIPE(offset);
+	unsigned int real_offset;
+	vgt_reg_t ret_val;
+
+	__vreg(vgt, offset) = *(vgt_reg_t*)p_data;
+	ret_val = vgt_surf_base_range_check(vgt, pipe, CURSOR_PLANE);
+	__sreg(vgt, offset) = ret_val ? ret_val : __vreg(vgt, offset);
+
+	if (current_foreground_vm(vgt->pdev) == vgt &&
+		vgt_map_plane_reg(vgt, offset, &real_offset)) {
+		VGT_MMIO_WRITE(vgt->pdev, real_offset, __sreg(vgt, offset));
+	}
 
 	return true;
 }
@@ -2356,8 +2484,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIPE_EDP_CONF, 4, F_DPY, 0, D_HSW, NULL, pipe_conf_mmio_write},
 
 {_REG_CURABASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_ALL, dpy_plane_mmio_read,
-						dpy_plane_mmio_write},
-{_REG_CURACNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read, dpy_plane_mmio_write},
+						cur_surf_mmio_write},
+{_REG_CURACNTR, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read, cur_plane_ctl_write},
 {_REG_CURAPOS, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read, dpy_plane_mmio_write},
 {_REG_CURASURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_ALL, cur_surflive_mmio_read,
 					surflive_mmio_write},
@@ -2377,18 +2505,18 @@ reg_attr_t vgt_base_reg_info[] = {
 					surflive_mmio_write},
 
 {_REG_CURBBASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_GEN7PLUS, dpy_plane_mmio_read,
-						dpy_plane_mmio_write},
+						cur_surf_mmio_write},
 {_REG_CURBCNTR, 4, F_DPY, 0, D_GEN7PLUS, dpy_plane_mmio_read,
-						dpy_plane_mmio_write},
+						cur_plane_ctl_write},
 {_REG_CURBPOS, 4, F_DPY, 0, D_GEN7PLUS, dpy_plane_mmio_read,
 						dpy_plane_mmio_write},
 {_REG_CURBSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_GEN7PLUS, cur_surflive_mmio_read,
 					surflive_mmio_write},
-
 {_REG_CURCBASE, 4, F_DPY_ADRFIX, 0xFFFFF000, D_GEN7PLUS, dpy_plane_mmio_read,
-						dpy_plane_mmio_write},
+						cur_surf_mmio_write},
+
 {_REG_CURCCNTR, 4, F_DPY, 0, D_GEN7PLUS, dpy_plane_mmio_read,
-						dpy_plane_mmio_write},
+						cur_plane_ctl_write},
 {_REG_CURCPOS, 4, F_DPY, 0, D_GEN7PLUS, dpy_plane_mmio_read,
 						dpy_plane_mmio_write},
 {_REG_CURCSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_GEN7PLUS, cur_surflive_mmio_read,
@@ -2492,13 +2620,14 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_SPRCSURFLIVE, 4, F_DPY_HWSTS_ADRFIX, 0xFFFFF000, D_HSW,
 			spr_surflive_mmio_read, surflive_mmio_write},
 
-{_REG_SPRA_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SPRA_CTL, 4, F_DPY, 0, D_HSW, NULL, sprite_plane_ctl_write},
 {_REG_SPRA_SCALE, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
-{_REG_SPRB_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SPRB_CTL, 4, F_DPY, 0, D_HSW, NULL, sprite_plane_ctl_write},
 {_REG_SPRB_SCALE, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
-{_REG_SPRC_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SPRC_CTL, 4, F_DPY, 0, D_HSW, NULL, sprite_plane_ctl_write},
+
 {_REG_SPRC_SCALE, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
 

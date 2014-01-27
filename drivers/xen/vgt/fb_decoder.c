@@ -48,7 +48,7 @@ static struct pixel_format hsw_pixel_formats[FORMAT_NUM] = {
 	[0b1110] = {DRM_FORMAT_XBGR8888, 32, "32-bit RGBX (8:8:8:8 MSB-X:B:G:R)"},
 };
 
-static int vgt_decode_primary_plane_format(struct vgt_device *vgt,
+int vgt_decode_primary_plane_format(struct vgt_device *vgt,
 	int pipe, struct vgt_primary_plane_format *plane)
 {
 	u32	val, fmt;
@@ -102,7 +102,7 @@ static struct cursor_mode_format hsw_cursor_mode_formats[CURSOR_MODE_NUM] = {
 	[0b100111]  = {DRM_FORMAT_ARGB8888, 32, 64, 64, "64x64 32bpp ARGB"},
 	[0b000111]  = {DRM_FORMAT_ARGB8888, 32, 64, 64, "64x64 32bpp ARGB"},//actually inverted... figure this out later
 };
-static int vgt_decode_cursor_plane_format(struct vgt_device *vgt,
+int vgt_decode_cursor_plane_format(struct vgt_device *vgt,
 	int pipe, struct vgt_cursor_plane_format *plane)
 {
 	u32 val, mode;
@@ -160,7 +160,7 @@ static struct pixel_format hsw_pixel_formats_sprite[FORMAT_NUM_SRRITE] = {
 };
 
 /* Non-supported format has bpp default to 0 */
-static int vgt_decode_sprite_plane_format(struct vgt_device *vgt,
+int vgt_decode_sprite_plane_format(struct vgt_device *vgt,
 	int pipe, struct vgt_sprite_plane_format *plane)
 {
 	u32 val, fmt;
