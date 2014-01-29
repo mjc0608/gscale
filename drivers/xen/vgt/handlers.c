@@ -1210,6 +1210,7 @@ bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p
 	case _REG_DSPASIZE:
 	case _REG_DSPATILEOFF:
 	case _REG_SPRASURF:
+	case _REG_SPRA_CTL:
 		real_pipe = vgt->pipe_mapping[0];
 		virtual_pipe = PIPE_A;
 		break;
@@ -1229,6 +1230,7 @@ bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p
 	case _REG_DSPBSIZE:
 	case _REG_DSPBTILEOFF:
 	case _REG_SPRBSURF:
+	case _REG_SPRB_CTL:
 		real_pipe = vgt->pipe_mapping[1];
 		virtual_pipe = PIPE_B;
 		break;
@@ -1245,6 +1247,7 @@ bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p
 	case _REG_DSPCSIZE:
 	case _REG_DSPCTILEOFF:
 	case _REG_SPRCSURF:
+	case _REG_SPRC_CTL:
 		real_pipe = vgt->pipe_mapping[2];
 		virtual_pipe = PIPE_C;
 		break;
