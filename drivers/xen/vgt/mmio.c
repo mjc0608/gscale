@@ -1108,6 +1108,14 @@ void state_vreg_init(struct vgt_device *vgt)
 	__vreg(vgt, _REG_GT_CORE_STATUS) = 0;
 
 	/*TODO: init other regs that need different value from pdev */
+
+	if (IS_HSW(vgt->pdev)) {
+		/*
+		 * Clear _REGBIT_FPGA_DBG_RM_NOCLAIM for not causing DOM0
+		 * or Ubuntu HVM complains about unclaimed MMIO registers.
+		 */
+		__vreg(vgt, _REG_FPGA_DBG) &= ~_REGBIT_FPGA_DBG_RM_NOCLAIM;
+	}
 }
 
 /* TODO: figure out any security holes by giving the whole initial state */

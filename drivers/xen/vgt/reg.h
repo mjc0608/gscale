@@ -1759,5 +1759,6 @@ enum vgt_port_type {
 #define _REG_ROW_CHICKEN3			0xE49C
 
 #define _REG_FPGA_DBG				0x42300
+#define _REGBIT_FPGA_DBG_RM_NOCLAIM		(1 << 31)
 
 #endif	/* _VGT_REG_H_ */

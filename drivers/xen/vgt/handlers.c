@@ -2246,6 +2246,33 @@ static bool instpm_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+bool fpga_dbg_mmio_read(struct vgt_device *vgt, unsigned int reg,
+        void *p_data, unsigned int bytes)
+{
+	if (vgt->vm_id == 0
+		&& (VGT_MMIO_READ(vgt->pdev, reg) & _REGBIT_FPGA_DBG_RM_NOCLAIM))
+		VGT_MMIO_WRITE(vgt->pdev, reg, _REGBIT_FPGA_DBG_RM_NOCLAIM);
+
+	return default_mmio_read(vgt, reg, p_data, bytes);
+}
+
+bool fpga_dbg_mmio_write(struct vgt_device *vgt, unsigned int reg,
+	void *p_data, unsigned int bytes)
+{
+	vgt_reg_t v = *(vgt_reg_t *)p_data;
+
+	vgt_warn("VM %d writes FPGA_DBG register: %x.\n", vgt->vm_id, v);
+
+	if (vgt->vm_id == 0)
+		return default_mmio_write(vgt, reg, p_data, bytes);
+	else {
+		__vreg(vgt, reg) &= ~v;
+		__sreg(vgt, reg) = __vreg(vgt, reg);
+	}
+
+	return true;
+}
+
 /*
  * Track policies of all captured registers
  *
@@ -3158,7 +3185,7 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {0x45260, 4, F_PT, 0, D_HSW, NULL, NULL},
 {0x13005c, 4, F_PT, 0, D_HSW, NULL, NULL},
-{_REG_FPGA_DBG, 4, F_DOM0, 0, D_HSW, NULL, NULL},
+{_REG_FPGA_DBG, 4, F_DOM0, 0, D_HSW, fpga_dbg_mmio_read, fpga_dbg_mmio_write},
 
 /* DOM0 PM owns these registers. */
 {_REG_SCRATCH1, 4, F_RDR, 0, D_HSW, NULL, NULL},
