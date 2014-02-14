@@ -899,8 +899,12 @@ int vgt_reset_device(struct pgt_device *pdev)
 
 	vgt_info("Disable master interrupt.\n");
 
+	vgt_get_irq_lock(pdev, flags);
+
 	VGT_MMIO_WRITE(pdev, _REG_DEIER,
 			VGT_MMIO_READ(pdev, _REG_DEIER) & ~_REGBIT_MASTER_INTERRUPT);
+
+	vgt_put_irq_lock(pdev, flags);
 
 	do_device_reset(pdev);
 
@@ -911,13 +915,16 @@ int vgt_reset_device(struct pgt_device *pdev)
 	clear_bit(DEVICE_RESET_INPROGRESS, &pdev->device_reset_flags);
 
 	spin_lock_irqsave(&pdev->lock, flags);
+	vgt_get_irq_lock(pdev, flags);
 
 	ier = vgt_recalculate_ier(pdev, _REG_DEIER);
 	VGT_MMIO_WRITE(pdev, _REG_DEIER, ier);
 
-	vgt_info("Enable master interrupt, DEIER: %lx\n", ier);
+	vgt_put_irq_lock(pdev, flags);
 
 	spin_unlock_irqrestore(&pdev->lock, flags);
+
+	vgt_info("Enable master interrupt, DEIER: %lx\n", ier);
 
 	return 0;
 }

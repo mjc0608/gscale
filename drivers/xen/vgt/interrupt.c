@@ -268,14 +268,20 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 	__vreg(vgt, reg) = imr;
 
 	if (changed || device_is_reseting(pdev)) {
+		unsigned long flags;
+
 		new_imr = vgt_recalculate_mask_bits(pdev, reg);
 		/*
 		 * may optimize by caching the old imr, and then only update
 		 * pReg when AND-ed value changes. but that requires link to
 		 * device specific irq info. So avoid the complexity here
 		 */
+		vgt_get_irq_lock(pdev, flags);
+
 		VGT_MMIO_WRITE(pdev, reg, new_imr);
 		VGT_POST_READ(pdev, reg);
+
+		vgt_put_irq_lock(pdev, flags);
 	}
 
 	ops->check_pending_irq(vgt);
@@ -316,6 +322,8 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	__vreg(vgt, reg) = ier;
 
 	if (changed || device_is_reseting(pdev)) {
+		unsigned long flags;
+
 		new_ier = vgt_recalculate_ier(pdev, reg);
 
 		if (device_is_reseting(pdev) && reg == _REG_DEIER)
@@ -325,8 +333,12 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 		 * pReg when OR-ed value changes. but that requires link to
 		 * device specific irq info. So avoid the complexity here
 		 */
+		vgt_get_irq_lock(pdev, flags);
+
 		VGT_MMIO_WRITE(pdev, reg, new_ier);
 		VGT_POST_READ(pdev, reg);
+
+		vgt_put_irq_lock(pdev, flags);
 	}
 
 	ops->check_pending_irq(vgt);
@@ -1155,7 +1167,7 @@ static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
 	vgt_event_phys_handler_t handler;
 	struct pgt_device *pdev = hstate->pdev;
 
-	ASSERT(spin_is_locked(&pdev->lock));
+	ASSERT(spin_is_locked(&pdev->irq_lock));
 
 	for_each_set_bit(bit, iir, VGT_IRQ_BITWIDTH) {
 		event = info->bit_to_event[bit];
@@ -1194,7 +1206,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	pdev->stat.irq_num++;
 	pdev->stat.last_pirq = get_cycles();
 
-	spin_lock(&pdev->lock);
+	spin_lock(&pdev->irq_lock);
 	vgt_dbg("IRQ: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
 		VGT_MMIO_READ(pdev, _REG_DEIIR),
 		VGT_MMIO_READ(pdev, _REG_GTIIR),
@@ -1216,7 +1228,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 out:
 	/* re-enable master interrupt */
 	VGT_MMIO_WRITE(pdev, _REG_DEIER, de_ier);
-	spin_unlock(&pdev->lock);
+	spin_unlock(&pdev->irq_lock);
 
 	pdev->stat.pirq_cycles += get_cycles() - pdev->stat.last_pirq;
 
@@ -1338,6 +1350,8 @@ int vgt_irq_init(struct pgt_device *pdev)
 		kfree(hstate);
 		return -EINVAL;
 	}
+
+	spin_lock_init(&pdev->irq_lock);
 
 	hstate->pdev = pdev;
 	//hstate.i915_irq = IRQ_INVALID;

@@ -886,6 +886,7 @@ struct pgt_device {
 	struct list_head rendering_runq_head; /* reuse this for context scheduler */
 	struct list_head rendering_idleq_head; /* reuse this for context scheduler */
 	spinlock_t lock;
+	spinlock_t irq_lock;
 
 	reg_info_t *reg_info;	/* virtualization policy for a given reg */
 	struct vgt_irq_host_state *irq_hstate;
@@ -2023,6 +2024,14 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 		vgt_exit(cpu);				\
 	else						\
 		cpu = 0;				\
+}
+
+#define vgt_get_irq_lock(pdev, flags) {		\
+	spin_lock_irqsave(&pdev->irq_lock, flags);	\
+}
+
+#define vgt_put_irq_lock(pdev, flags) {		\
+	spin_unlock_irqrestore(&pdev->irq_lock, flags);	\
 }
 
 void vgt_reset_virtual_states(struct vgt_device *vgt, unsigned long ring_bitmap);
