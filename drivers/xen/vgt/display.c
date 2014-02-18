@@ -230,8 +230,11 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 
 		if (hotplug_cmd.action == 0x1) {
 			/* plug in */
-			vgt_propagate_edid(vgt, port_idx);
-			vgt_propagate_dpcd(vgt, port_idx);
+			if (propagate_monitor_to_guest ||
+				is_current_display_owner(vgt)) {
+				vgt_propagate_edid(vgt, port_idx);
+				vgt_propagate_dpcd(vgt, port_idx);
+			}
 		} else {
 			/* pull out */
 			vgt_clear_port(vgt, port_idx);

@@ -81,6 +81,7 @@ extern bool render_engine_reset;
 extern bool enable_panel_fitting;
 extern bool enable_reset;
 extern bool vgt_lock_irq;
+extern bool propagate_monitor_to_guest;
 
 enum vgt_event_type {
 	// GT

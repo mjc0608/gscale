@@ -309,9 +309,12 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
 	/* assign aux_ch vregs for aux_ch virtualization */
 	vgt_init_aux_ch_vregs(&vgt->vgt_i2c_bus, vgt->state.vReg);
-	vgt_propagate_edid(vgt, -1);
-	vgt_propagate_dpcd(vgt, -1);
-	vgt_update_monitor_status(vgt);
+
+	if ((propagate_monitor_to_guest) || (vgt->vm_id == 0)) {
+		vgt_propagate_edid(vgt, -1);
+		vgt_propagate_dpcd(vgt, -1);
+		vgt_update_monitor_status(vgt);
+	}
 
 	*ptr_vgt = vgt;
 
