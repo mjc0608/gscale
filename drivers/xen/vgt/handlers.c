@@ -2249,11 +2249,22 @@ static bool instpm_write(struct vgt_device *vgt, unsigned int offset,
 bool fpga_dbg_mmio_read(struct vgt_device *vgt, unsigned int reg,
         void *p_data, unsigned int bytes)
 {
-	if (vgt->vm_id == 0
-		&& (VGT_MMIO_READ(vgt->pdev, reg) & _REGBIT_FPGA_DBG_RM_NOCLAIM))
+	bool rc;
+
+	rc = default_mmio_read(vgt, reg, p_data, bytes);
+	if (!rc)
+		return false;
+
+	if (vgt->vm_id == 0 && (__vreg(vgt, reg) & _REGBIT_FPGA_DBG_RM_NOCLAIM)) {
 		VGT_MMIO_WRITE(vgt->pdev, reg, _REGBIT_FPGA_DBG_RM_NOCLAIM);
 
-	return default_mmio_read(vgt, reg, p_data, bytes);
+		__vreg(vgt, reg) &= ~_REGBIT_FPGA_DBG_RM_NOCLAIM;
+		__sreg(vgt, reg) = __vreg(vgt, reg);
+
+		*(vgt_reg_t *)p_data &= ~_REGBIT_FPGA_DBG_RM_NOCLAIM;
+	}
+
+	return true;
 }
 
 bool fpga_dbg_mmio_write(struct vgt_device *vgt, unsigned int reg,
