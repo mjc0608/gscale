@@ -415,7 +415,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			msg[0] = (VGT_AUX_I2C_WRITE | VGT_AUX_I2C_MOT) << 4;
 			msg[1] = 0;
 			msg[2] = EDID_ADDR;
-			msg[3] = 1;
+			msg[3] = 0;
 			msg[4] = 0;
 
 			/* start */
@@ -429,9 +429,6 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 3);
 
 			/* read */
-			msg[1] = 0;
-			msg[2] = EDID_ADDR;
-			msg[3] = 0;
 
 			for (length = 0; length < EDID_SIZE; length ++) {
 				value = vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 4);
@@ -451,12 +448,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 				unsigned char *block = (*pedid)->edid_block;
 				printk("EDID_PROBE: EDID is:\n");
 				for (i = 0; i < EDID_SIZE; ++ i) {
-					if ((block[i] >= 'a' && block[i] <= 'z') ||
-					    (block[i] >= 'A' && block[i] <= 'Z')) {
-						printk ("%c ", block[i]);
-					} else {
-						printk ("0x%x ", block[i]);
-					}
+					printk ("0x%02x ", block[i]);
 					if (((i + 1) & 0xf) == 0) {
 						printk ("\n");
 					}
