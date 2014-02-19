@@ -315,6 +315,20 @@ static inline bool vgt_port_equivalent(int id, int given_index)
 	return false;
 }
 
+
+static const u8 edid_header[] = {
+	0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00
+};
+
+int vgt_edid_header_is_valid(const u8 *raw_edid)
+{
+	int i, score = 0;
+	for (i = 0; i < sizeof(edid_header); i++)
+		if (raw_edid[i] == edid_header[i])
+			score++;
+	return score;
+}
+
 void vgt_probe_edid(struct pgt_device *pdev, int index)
 {
 	int i, ret;
@@ -329,6 +343,8 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		int gmbus_port = 0;
 		unsigned int aux_ch_addr = 0;
 		vgt_edid_data_t **pedid = &(pdev->pdev_edids[i]);
+		bool is_edid_valid = false;
+		int score;
 
 		if (!vgt_port_equivalent(i, index)) {
 			continue;
@@ -441,6 +457,17 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		}
 
 		if (*pedid) {
+			score = vgt_edid_header_is_valid((*pedid)->edid_block);
+			if (score < 8 && score >= 6) {
+				vgt_err("Fixing EDID header, your hardware may be failing\n");
+				memcpy((*pedid)->edid_block, edid_header, sizeof(edid_header));
+			}
+			if (score >= 6) {
+				is_edid_valid = true;
+			}
+		}
+
+		if (is_edid_valid) {
 			set_bit(i, pdev->detected_ports);
 			(*pedid)->data_valid = true;
 			if (vgt_debug) {
