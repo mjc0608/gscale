@@ -1305,6 +1305,7 @@ static bool dpy_plane_ctl_write(struct vgt_device *vgt, unsigned int offset,
 		enable_plane = true;
 	}
 
+	dpy_plane_mmio_write(vgt, offset, p_data, bytes);
 	if (enable_plane) {
 		if (current_foreground_vm(vgt->pdev) == vgt) {
 			set_panel_fitting(vgt, pipe);
@@ -1314,7 +1315,6 @@ static bool dpy_plane_ctl_write(struct vgt_device *vgt, unsigned int offset,
 		vgt_surf_base_range_check(vgt, pipe, PRIMARY_PLANE);
 	}
 
-	dpy_plane_mmio_write(vgt,offset, p_data,bytes);
 
 	return true;
 }
