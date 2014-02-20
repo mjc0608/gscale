@@ -1296,8 +1296,12 @@ static bool dpy_plane_ctl_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	enum vgt_pipe pipe = PIPE_A;
+	enum vgt_pipe p_pipe = I915_MAX_PIPES;
+	enum vgt_pipe v_pipe = I915_MAX_PIPES;
 	vgt_reg_t new_plane_ctl;
 	bool enable_plane = false;
+	struct vgt_device *foreground_vgt;
+	int i;
 
 	new_plane_ctl = *(vgt_reg_t *)p_data;
 	pipe = VGT_DSPCNTRPIPE(offset);
@@ -1310,11 +1314,20 @@ static bool dpy_plane_ctl_write(struct vgt_device *vgt, unsigned int offset,
 		if (current_foreground_vm(vgt->pdev) == vgt) {
 			set_panel_fitting(vgt, pipe);
 		} else if (is_current_display_owner(vgt)) {
-			set_panel_fitting(current_foreground_vm(vgt->pdev), pipe);
+			p_pipe = vgt->pipe_mapping[pipe];
+			foreground_vgt = current_foreground_vm(vgt->pdev);
+			for (i = 0; i < I915_MAX_PIPES; i++) {
+				if (foreground_vgt->pipe_mapping[i] == p_pipe) {
+					v_pipe = i;
+					break;
+				}
+			}
+			if (p_pipe != I915_MAX_PIPES && v_pipe != I915_MAX_PIPES) {
+				set_panel_fitting(foreground_vgt, v_pipe);
+			}
 		}
 		vgt_surf_base_range_check(vgt, pipe, PRIMARY_PLANE);
 	}
-
 
 	return true;
 }
