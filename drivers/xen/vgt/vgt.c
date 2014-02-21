@@ -488,8 +488,10 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 
 	/* initialize ports */
 	memset(pdev->ports, 0, sizeof(struct gt_port) * VGT_PORT_MAX);
-	for (i = 0; i < I915_MAX_PORTS; i ++)
+	for (i = 0; i < I915_MAX_PORTS; i ++) {
 		pdev->ports[i].type = VGT_PORT_MAX;
+		pdev->ports[i].port_override = i;
+	}
 
 	if (!initial_phys_states(pdev)) {
 		printk("vGT: failed to initialize physical state\n");

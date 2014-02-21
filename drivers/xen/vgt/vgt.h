@@ -575,6 +575,7 @@ struct gt_port {
 	vgt_edid_data_t		*edid;	/* per display EDID information */
 	struct vgt_dpcd_data	*dpcd;	/* per display DPCD information */
 	enum vgt_port_type	type;
+	enum vgt_port		port_override;
 };
 
 struct vgt_device {

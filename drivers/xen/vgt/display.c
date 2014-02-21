@@ -387,12 +387,6 @@ void vgt_update_monitor_status(struct vgt_device *vgt)
 	}
 }
 
-
-static bool is_same_port(vgt_reg_t trans_coder_ctl1, vgt_reg_t trans_coder_ctl2)
-{
-	return !(( trans_coder_ctl1 ^ trans_coder_ctl2 ) & _REGBIT_TRANS_DDI_PORT_MASK);
-}
-
 enum vgt_pipe get_edp_input(uint32_t wr_data)
 {
 	enum vgt_pipe pipe = I915_MAX_PIPES;
@@ -469,17 +463,43 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 	}
 
 	/*enable pipe case*/
-	ASSERT((reg == _REG_TRANS_DDI_FUNC_CTL_EDP) || (new_data &  _REGBIT_TRANS_DDI_PORT_MASK) );
+	ASSERT((reg == _REG_TRANS_DDI_FUNC_CTL_EDP) ||
+			(new_data & _REGBIT_TRANS_DDI_PORT_MASK));
 
 	if (reg == _REG_TRANS_DDI_FUNC_CTL_EDP) {
-		hw_value= VGT_MMIO_READ(vgt->pdev, _REG_TRANS_DDI_FUNC_CTL_EDP);
-		physical_pipe = get_edp_input(hw_value);
+		// In such case, it is virtual PORT_A mapping to physical PORT_A
+		hw_value = VGT_MMIO_READ(vgt->pdev, _REG_TRANS_DDI_FUNC_CTL_EDP);
+		if (_REGBIT_TRANS_DDI_FUNC_ENABLE & hw_value)
+			physical_pipe = get_edp_input(hw_value);
 	} else {
-		for (i = 0; i <= TRANSCODER_C; i++) {
-			hw_value = VGT_MMIO_READ(vgt->pdev, _VGT_TRANS_DDI_FUNC_CTL(i));
-			if (is_same_port(new_data,hw_value) && ( _REGBIT_TRANS_DDI_FUNC_ENABLE & hw_value)) {
-				physical_pipe = i;
-				break;
+		enum vgt_port vport, vport_override;
+		vport = (new_data & _REGBIT_TRANS_DDI_PORT_MASK) >> _TRANS_DDI_PORT_SHIFT;
+		vport_override = vgt->ports[vport].port_override;
+		ASSERT (vport_override != I915_MAX_PORTS);
+		if (vport_override == PORT_A) {
+			hw_value = VGT_MMIO_READ(vgt->pdev, _REG_TRANS_DDI_FUNC_CTL_EDP);
+			if (_REGBIT_TRANS_DDI_FUNC_ENABLE & hw_value)
+				physical_pipe = get_edp_input(hw_value);
+								
+		} else {
+			for (i = 0; i <= TRANSCODER_C; i++) {
+				enum vgt_port pport;
+				hw_value = VGT_MMIO_READ(vgt->pdev, _VGT_TRANS_DDI_FUNC_CTL(i));
+				pport = (hw_value & _REGBIT_TRANS_DDI_PORT_MASK) >>
+						_TRANS_DDI_PORT_SHIFT;
+
+				printk("%s: Enable. pport = %d, vport = %d, "
+					"hw_value = 0x%08x, new_data = 0x%08x\n",
+			       		__FUNCTION__, pport, vport, hw_value, new_data);
+
+				if (!(_REGBIT_TRANS_DDI_FUNC_ENABLE & hw_value)) {
+					continue;
+				}
+
+				if (vport_override == pport) {
+					physical_pipe = i;
+					break;
+				}
 			}
 		}
 	}
@@ -496,7 +516,6 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 	}
 
 	return true;
-
 }
 
 bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint32_t physical_wr_data)
@@ -505,28 +524,19 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 	uint32_t virtual_wr_data;
 	enum vgt_pipe virtual_pipe = I915_MAX_PIPES;
 	enum vgt_pipe physical_pipe = I915_MAX_PIPES;
+	enum vgt_port pport;
 
 	physical_pipe = get_pipe(physical_reg, physical_wr_data);
 
 	/*disable pipe case*/
 	if ((_REGBIT_TRANS_DDI_FUNC_ENABLE & physical_wr_data) == 0) {
-		if (physical_reg == _REG_TRANS_DDI_FUNC_CTL_EDP ) {
-			virtual_pipe = get_edp_input(__vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP));
-			if (virtual_pipe != I915_MAX_PIPES) {
-				vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
-				if (vgt_has_pipe_enabled(vgt, virtual_pipe))
-					vgt_update_frmcount(vgt, virtual_pipe);
-				vgt_calculate_frmcount_delta(vgt, virtual_pipe);
-			}
-		} else {
-			for (i = 0; i < I915_MAX_PIPES; i ++) {
-				if(vgt->pipe_mapping[i] == physical_pipe) {
-					vgt_set_pipe_mapping(vgt, i, I915_MAX_PIPES);
-					vgt_dbg("vGT: Update mapping: delete pipe %x  \n", i);
-					if (vgt_has_pipe_enabled(vgt, i))
-						vgt_update_frmcount(vgt, i);
-					vgt_calculate_frmcount_delta(vgt, i);
-				}
+		for (i = 0; i < I915_MAX_PIPES; i ++) {
+			if(vgt->pipe_mapping[i] == physical_pipe) {
+				vgt_set_pipe_mapping(vgt, i, I915_MAX_PIPES);
+				vgt_dbg("vGT: Update mapping: delete pipe %x  \n", i);
+				if (vgt_has_pipe_enabled(vgt, i))
+					vgt_update_frmcount(vgt, i);
+				vgt_calculate_frmcount_delta(vgt, i);
 			}
 		}
 		return true;
@@ -534,15 +544,28 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 
 	/*enable case*/
 	if (physical_reg == _REG_TRANS_DDI_FUNC_CTL_EDP) {
-		virtual_pipe = get_edp_input(__vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP));
+		pport = PORT_A;
 	} else {
-		for (i = 0; i <= TRANSCODER_C; i++) {
-			virtual_wr_data = __vreg(vgt, _VGT_TRANS_DDI_FUNC_CTL(i));
-			if (is_same_port(virtual_wr_data,physical_wr_data) &&
-				(_REGBIT_TRANS_DDI_FUNC_ENABLE & virtual_wr_data ) ) {
-				virtual_pipe = i;
-				break;
-			}
+		pport = (physical_wr_data & _REGBIT_TRANS_DDI_PORT_MASK) >> _TRANS_DDI_PORT_SHIFT;
+	}
+
+	for (i = 0; i <= TRANSCODER_C; i++) {
+		enum vgt_port vport, vport_override;
+		virtual_wr_data = __vreg(vgt, _VGT_TRANS_DDI_FUNC_CTL(i));
+		vport = (virtual_wr_data & _REGBIT_TRANS_DDI_PORT_MASK) >>
+				_TRANS_DDI_PORT_SHIFT;
+		vport_override = vgt->ports[vport].port_override;
+
+		printk("%s: Enable. pport = %d, vport = %d\n", __FUNCTION__, pport, vport);
+
+		if (!(_REGBIT_TRANS_DDI_FUNC_ENABLE & virtual_wr_data) ||
+			(vport_override == I915_MAX_PORTS)) {
+			continue;
+		}
+
+		if (vport_override == pport) {
+			virtual_pipe = i;
+			break;
 		}
 	}
 
@@ -553,6 +576,7 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 			vgt_update_frmcount(vgt, virtual_pipe);
 		vgt_calculate_frmcount_delta(vgt, virtual_pipe);
 	}
+
 	if (current_foreground_vm(vgt->pdev) == vgt && virtual_pipe != I915_MAX_PIPES) {
 		vgt_restore_state(vgt, virtual_pipe);
 	}

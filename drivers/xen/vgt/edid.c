@@ -682,6 +682,7 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 
 		memcpy(port->edid, edid, sizeof(vgt_edid_data_t));
 		port->type = type;
+		port->port_override = index;
 		set_bit(type, vgt->presented_ports);
 
 		if (vgt_debug) {

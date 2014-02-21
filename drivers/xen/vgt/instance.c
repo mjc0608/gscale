@@ -141,6 +141,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	memset(vgt->presented_ports, 0, sizeof(vgt->presented_ports));
 	for (i = 0; i < I915_MAX_PORTS; i++) {
 		vgt->ports[i].type = VGT_PORT_MAX;
+		vgt->ports[i].port_override = i;
 	}
 
 	/* Hard code ballooning now. We can support non-ballooning too in the future */
