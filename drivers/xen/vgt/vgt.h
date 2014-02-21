@@ -569,6 +569,14 @@ struct sbi_registers {
 	struct sbi_register registers[SBI_REG_MAX];
 };
 
+struct gt_port {
+	struct kobject  	kobj;
+
+	vgt_edid_data_t		*edid;	/* per display EDID information */
+	struct vgt_dpcd_data	*dpcd;	/* per display DPCD information */
+	enum vgt_port_type	type;
+};
+
 struct vgt_device {
 	enum vgt_pipe pipe_mapping[I915_MAX_PIPES];
 	int vgt_id;		/* 0 is always for dom0 */
@@ -578,10 +586,8 @@ struct vgt_device {
 	vgt_state_t	state;		/* MMIO state except ring buffers */
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
 
-	struct vgt_port_struct *attached_port[I915_MAX_PIPES]; /* one port per PIPE */
+	struct gt_port		ports[I915_MAX_PORTS]; /* one port per PIPE */
 	vgt_i2c_bus_t		vgt_i2c_bus;	/* i2c bus state emulaton for reading EDID */
-	vgt_edid_data_t		*vgt_edids[VGT_PORT_MAX];	/* per display EDID information */
-	struct vgt_dpcd_data		*vgt_dpcds[DPCD_MAX];	/* per display DPCD information */
 
 	DECLARE_BITMAP(presented_ports, VGT_PORT_MAX);
 
@@ -864,8 +870,8 @@ struct pgt_device {
 	u8 ring_xxx_bit[MAX_ENGINES];
 	u8 ring_xxx_valid;
 
-	vgt_edid_data_t		*pdev_edids[VGT_PORT_MAX];	/* per display EDID information */
-	struct vgt_dpcd_data	*pdev_dpcds[DPCD_MAX];	/* per display DPCD information */
+	struct gt_port ports[I915_MAX_PORTS];
+	DECLARE_BITMAP(detected_ports, VGT_PORT_MAX);
 
 	 /* 1 bit corresponds to 1MB in the GM space */
 	DECLARE_BITMAP(gm_bitmap, VGT_GM_BITMAP_BITS);
@@ -902,8 +908,6 @@ struct pgt_device {
 
 	uint64_t vgtt_sz; /* in bytes */
 	uint32_t *vgtt; /* virtual GTT table for guest to read*/
-
-	DECLARE_BITMAP(detected_ports, VGT_PORT_MAX);
 
 	DECLARE_BITMAP(dpy_emul_request, VGT_MAX_VMS);
 
@@ -2151,12 +2155,11 @@ int vgt_init_sysfs(struct pgt_device *pdev);
 void vgt_destroy_sysfs(void);
 extern void vgt_set_display_pointer(int vm_id);
 extern ssize_t vgt_get_display_pointer(char *buf);
+extern void vgt_clear_port(struct vgt_device *vgt, int index);
 extern void vgt_probe_edid(struct pgt_device *pdev, int index);
 extern void vgt_propagate_edid(struct vgt_device *vgt, int index);
-extern void vgt_clear_edid(struct vgt_device *vgt, int index);
 extern void vgt_probe_dpcd(struct pgt_device *pdev, int index);
 extern void vgt_propagate_dpcd(struct vgt_device *vgt, int index);
-extern void vgt_clear_dpcd(struct vgt_device *vgt, int index);
 void vgt_update_monitor_status(struct vgt_device *vgt);
 
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);

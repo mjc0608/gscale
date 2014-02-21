@@ -1447,6 +1447,13 @@ enum vgt_port {
 	I915_MAX_PORTS
 };
 
+#define VGT_PORT_NAME(p)	\
+	((p) == PORT_A ? "PORT_A" : \
+	((p) == PORT_B ? "PORT_B" : \
+	((p) == PORT_C ? "PORT_C" : \
+	((p) == PORT_D ? "PORT_D" : \
+	((p) == PORT_E ? "PORT_E" : "PORT_X")))))
+
 #define VGT_PIPE_NAME(p)	\
 	((p) == PIPE_A ? "Pipe A" : \
 		((p) == PIPE_B ? "Pipe B" : \
@@ -1472,9 +1479,56 @@ enum vgt_port_type {
 	VGT_HDMI_B,
 	VGT_HDMI_C,
 	VGT_HDMI_D,
-	VGT_LVDS,
 	VGT_PORT_MAX
 };
+
+#define VGT_PORT_TYPE_NAME(p)	\
+        ((p) == VGT_CRT ? "VGT_CRT" : \
+        ((p) == VGT_DP_A ? "VGT_DP_A" : \
+        ((p) == VGT_DP_B ? "VGT_DP_B" : \
+        ((p) == VGT_DP_C ? "VGT_DP_C" : \
+	((p) == VGT_DP_D ? "VGT_DP_D" : \
+	((p) == VGT_HDMI_B ? "VGT_HDMI_B" : \
+	((p) == VGT_HDMI_C ? "VGT_HDMI_C" : \
+	((p) == VGT_HDMI_D ? "VGT_HDMI_D" : "UNKNOWN"))))))))
+
+static inline int port_to_port_type(int port_sel)
+{
+        switch(port_sel) {
+        case PORT_A:
+                return VGT_DP_A;
+        case PORT_B:
+                return VGT_DP_B;
+        case PORT_C:
+                return VGT_DP_C;
+        case PORT_D:
+                return VGT_DP_D;
+        case PORT_E:
+                return VGT_CRT;
+	}
+        return VGT_PORT_MAX;
+}
+
+static inline int port_type_to_port(int port_sel)
+{
+	switch(port_sel) {
+	case VGT_DP_A:
+		return PORT_A;
+	case VGT_DP_B:
+	case VGT_HDMI_B:
+		return PORT_B;
+	case VGT_DP_C:
+	case VGT_HDMI_C:
+		return PORT_C;
+	case VGT_DP_D:
+	case VGT_HDMI_D:
+		return PORT_D;
+	case VGT_CRT:
+		return PORT_E;
+	}
+
+	return I915_MAX_PORTS;
+}
 
 /* interrupt related definitions */
 #define _REG_DEISR	0x44000

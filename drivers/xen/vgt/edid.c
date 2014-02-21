@@ -315,7 +315,6 @@ static inline bool vgt_port_equivalent(int id, int given_index)
 	return false;
 }
 
-
 static const u8 edid_header[] = {
 	0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00
 };
@@ -327,6 +326,20 @@ int vgt_edid_header_is_valid(const u8 *raw_edid)
 		if (raw_edid[i] == edid_header[i])
 			score++;
 	return score;
+}
+
+static inline void vgt_clear_edid(struct gt_port *port)
+{
+	if (port && port->edid && port->edid->data_valid) {
+		port->edid->data_valid = false;
+	}
+}
+
+static inline void vgt_clear_dpcd(struct gt_port *port)
+{
+	if (port && port->dpcd && port->dpcd->data_valid) {
+		port->dpcd->data_valid = false;
+	}
 }
 
 void vgt_probe_edid(struct pgt_device *pdev, int index)
@@ -344,9 +357,8 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 	for (i = 0; i < VGT_PORT_MAX; ++ i) {
 		int gmbus_port = 0;
 		unsigned int aux_ch_addr = 0;
-		vgt_edid_data_t **pedid = &(pdev->pdev_edids[i]);
-		bool is_edid_valid = false;
-		int score;
+		int port_id = port_type_to_port(i);
+		vgt_edid_data_t *new_edid = NULL;
 
 		if (!vgt_port_equivalent(i, index)) {
 			continue;
@@ -355,9 +367,6 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		switch (i) {
 		case VGT_CRT:
 			gmbus_port = 2;
-			break;
-		case VGT_LVDS:
-			gmbus_port = 3;
 			break;
 		case VGT_HDMI_C:
 			if (!test_bit(VGT_DP_C, pdev->detected_ports))
@@ -393,35 +402,31 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		}
 
 		if (gmbus_port || aux_ch_addr) {
-			if (!*pedid) {
-				/* Do not use GFP_KERNEL in any interrupt or
-				 * atomic context (e.g. Do not hold a spin_lock
-				 * ,this should be guaranteed by the caller).
-				 */
-				BUG_ON(in_interrupt());
-				*pedid = kmalloc(sizeof(vgt_edid_data_t), GFP_KERNEL);
+			vgt_edid_data_t **pedid = &(pdev->ports[port_id].edid);
+			/* Do not use GFP_KERNEL in any interrupt or
+			 * atomic context (e.g. Do not hold a spin_lock
+			 * ,this should be guaranteed by the caller).
+			 */
+			BUG_ON(in_interrupt());
+			if (*pedid == NULL) {
+				*pedid = kmalloc(sizeof(vgt_edid_data_t),
+						GFP_KERNEL);
+			}
 
-				if (*pedid == NULL) {
-					vgt_err("ERROR: Insufficient memory in %s\n",
-							__FUNCTION__);
-					BUG();
-				}
+			if (*pedid == NULL) {
+				vgt_err("Insufficient memory!\n");
+				BUG();
 			}
-		} else {
-			if (*pedid) {
-				vgt_info("EDID_PROBE: Free edid memory.\n");
-				kfree(*pedid);
-				*pedid = NULL;
-			}
+			new_edid = *pedid;
+			vgt_clear_edid(&pdev->ports[port_id]);
 		}
 
 		if (gmbus_port) {
 			ret = vgt_get_phys_edid_from_gmbus(pdev,
-					(*pedid)->edid_block, EDID_ADDR,
+					new_edid->edid_block, EDID_ADDR,
 					EDID_SIZE, gmbus_port);
-			if (ret) {
-				kfree(*pedid);
-				*pedid = NULL;
+			if (ret == 0) {
+				new_edid->data_valid = true;
 			}
 		}
 
@@ -450,44 +455,45 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 
 			for (length = 0; length < EDID_SIZE; length ++) {
 				value = vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 4);
-				(*pedid)->edid_block[length] = ((value) & 0xff0000) >> 16;
+				new_edid->edid_block[length] = ((value) & 0xff0000) >> 16;
 			}
 
 			/* stop reading */
 			msg[0] = (VGT_AUX_I2C_READ) << 4;
 			vgt_aux_ch_transaction(pdev, aux_ch_addr, msg, 3);
+
+			new_edid->data_valid = true;
 		}
 
-		if (*pedid) {
-			int j;
-			score = vgt_edid_header_is_valid((*pedid)->edid_block);
+		if (new_edid && new_edid->data_valid) {
+			int score, j;
+			score = vgt_edid_header_is_valid(new_edid->edid_block);
 			if (score < 8 && score >= 6) {
-				vgt_err("Fixing EDID header, your hardware may be failing\n");
-				memcpy((*pedid)->edid_block, edid_header, sizeof(edid_header));
+				vgt_warn("Fixing EDID header, your hardware may be failing\n");
+				memcpy(new_edid->edid_block, edid_header, sizeof(edid_header));
 			}
 			check_sum = 0;
-			raw_edid = (*pedid)->edid_block;
+			raw_edid = new_edid->edid_block;
 			for (j = 0; j < EDID_SIZE; ++ j) {
 				check_sum += raw_edid[j];
 			}
 			if(check_sum) {
 				vgt_err("EDID check sum is invalid\n");
 			}
-			if (score >= 6 && check_sum == 0) {
-				is_edid_valid = true;
-			} else {
-				is_edid_valid = false;
-				kfree(*pedid);
-				*pedid = NULL;
+
+			if ((score < 6) || (check_sum != 0)) {
+				vgt_err("Reading wrong EDID header! EDID will be ignored on port: %s\n",
+					VGT_PORT_NAME(port_id));
+				new_edid->data_valid = false;
 			}
 		}
 
-		if (is_edid_valid) {
+		if (new_edid && new_edid->data_valid) {
 			set_bit(i, pdev->detected_ports);
-			(*pedid)->data_valid = true;
+			pdev->ports[port_id].type = i;
 			if (vgt_debug) {
 				int i;
-				unsigned char *block = (*pedid)->edid_block;
+				unsigned char *block = new_edid->edid_block;
 				printk("EDID_PROBE: EDID is:\n");
 				for (i = 0; i < EDID_SIZE; ++ i) {
 					printk ("0x%02x ", block[i]);
@@ -498,15 +504,16 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			}
 
 			/* Check the extension */
-			if ((*pedid)->edid_block[0x7e]) {
+			if (new_edid->edid_block[0x7e]) {
 				/* Disable the extension whilst
 				 * keep the checksum
 				 */
-				u8 *block = (*pedid)->edid_block;
+				u8 *block = new_edid->edid_block;
 				block[0x7f] += block[0x7e];
 				block[0x7e] = 0;
 			}
-			vgt_info("EDID_PROBE: %s\tis detected.\n", vgt_port_name[i]);
+			vgt_info("EDID_PROBE: %s\tis detected, on Port %s\n",
+					vgt_port_name[i], VGT_PORT_NAME(port_id));
 		} else {
 			clear_bit(i, pdev->detected_ports);
 			vgt_info("EDID_PROBE: %s\tis not detected\n", vgt_port_name[i]);
@@ -531,7 +538,7 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 	for (i = 0; i < DPCD_MAX; i++) {
 		unsigned int aux_ch_addr = 0;
 		enum vgt_port_type dp_port = 0;
-		struct vgt_dpcd_data **dpcd = &(pdev->pdev_dpcds[i]);
+		struct vgt_dpcd_data **dpcd = &(pdev->ports[i + PORT_A].dpcd);
 
 		if (!vgt_port_equivalent(i, index))
 			continue;
@@ -563,9 +570,13 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 			break;
 		default:
 			vgt_err("DPCD_PROBE: invalid DP number.\n");
+			BUG();
 			break;
 
 		}
+
+		ASSERT(dp_port >= VGT_DP_A && dp_port <= VGT_DP_D);
+		clear_bit(dp_port, pdev->detected_ports);
 
 		if (aux_ch_addr) {
 			unsigned char msg[4];
@@ -596,24 +607,19 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 				if (!(*dpcd)->data[DPCD_REV])
 					break;
 			}
-		}
 
-		ASSERT(dp_port >= VGT_DP_A && dp_port <= VGT_DP_D);
-
-		if (*dpcd) {
 			if (!(*dpcd)->data[DPCD_REV]) {
 				(*dpcd)->data_valid = false;
 				clear_bit(dp_port, pdev->detected_ports);
 			} else {
 				(*dpcd)->data_valid = true;
 				set_bit(dp_port, pdev->detected_ports);
+				pdev->ports[i + PORT_A].type = dp_port;
 				if (vgt_debug) {
 					vgt_info("DPCD_PROBE: DPCD is:\n");
 					vgt_print_dpcd(*dpcd);
 				}
 			}
-		} else {
-			clear_bit(dp_port, pdev->detected_ports);
 		}
 	}
 
@@ -634,133 +640,149 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
  */
 void vgt_propagate_edid(struct vgt_device *vgt, int index)
 {
+	struct gt_port *port;
+	vgt_edid_data_t *edid;
+	enum vgt_port_type type;
 	int i;
 
-	for (i = 0; i < VGT_PORT_MAX; ++ i) {
-		vgt_edid_data_t	*edid = vgt->pdev->pdev_edids[i];
-
-		if (!vgt_port_equivalent(i, index)) {
-			continue;
+	if (index == -1) { /* -1 index means "ALL" */
+		for (i = 0; i < I915_MAX_PORTS; i++) {
+			vgt_propagate_edid(vgt, i);
 		}
-
-		if (!edid) {
-			if (vgt->vgt_edids[i]) {
-				printk ("EDID_PROPAGATE: Clear EDID %s\n", vgt_port_name[i]);
-				clear_bit(i, vgt->presented_ports);
-			}
-		} else {
-			printk ("EDID_PROPAGATE: Propagate EDID %s\n", vgt_port_name[i]);
-			if (!vgt->vgt_edids[i]) {
-				BUG_ON(in_interrupt());
-				vgt->vgt_edids[i] = kmalloc(
-						sizeof(vgt_edid_data_t), GFP_ATOMIC);
-				if (vgt->vgt_edids[i] == NULL) {
-					printk("ERROR: Insufficient memory in %s\n",
-							__FUNCTION__);
-					BUG();
-					return;
-				}
-			}
-
-			memcpy(vgt->vgt_edids[i], edid,
-				sizeof(vgt_edid_data_t));
-
-			if (vgt->vgt_edids[i]->data_valid)
-				set_bit(i, vgt->presented_ports);
-			else
-				clear_bit(i, vgt->presented_ports);
-
-			if (vgt_debug && vgt->vgt_edids[i]->data_valid) {
-				int j;
-				unsigned char *block = vgt->vgt_edids[i]->edid_block;
-				printk("EDID_PROPAGATE: EDID[%s] is:\n", vgt_port_name[i]);
-				for (j = 0; j < EDID_SIZE; ++ j) {
-					if ((block[j] >= 'a' && block[j] <= 'z') ||
-						(block[j] >= 'A' && block[j] <= 'Z')) {
-						printk ("%c ", block[j]);
-					} else {
-						printk ("0x%x ", block[j]);
-					}
-					if (((j + 1) & 0xf) == 0) {
-						printk ("\n");
-					}
-				}
-			}
-		}
+		return;
 	}
-}
 
-void vgt_clear_edid(struct vgt_device *vgt, int index)
-{
-	int i;
+	if (index < 0 || index >= I915_MAX_PORTS) {
+		vgt_warn("Wrong port index input! Will do nothing!\n");
+		return;
+	}
 
-	for (i = 0; i < VGT_PORT_MAX; ++ i) {
-		if (vgt_port_equivalent(i, index)) {
-			if (vgt->vgt_edids[i]) {
-				printk("EDID_CLEAR: Clear EDID[%s] of VM%d\n",
-					vgt_port_name[i], vgt->vm_id);
-				vgt->vgt_edids[i]->data_valid = false;
-				clear_bit(i, vgt->presented_ports);
+	port = &vgt->ports[index];
+	if (port->type >= 0 && port->type < VGT_PORT_MAX)
+		clear_bit(vgt->ports[index].type, vgt->presented_ports);
+	vgt_clear_edid(port);
+
+	edid = vgt->pdev->ports[index].edid;
+	type = vgt->pdev->ports[index].type;
+
+	if (edid && edid->data_valid) {
+
+		vgt_info ("EDID_PROPAGATE: Propagate %s EDID[%s] for vm %d\n",
+			VGT_PORT_NAME(index), vgt_port_name[type], vgt->vm_id);
+
+		if (!port->edid) {
+			BUG_ON(in_interrupt());
+			port->edid = kmalloc(sizeof(vgt_edid_data_t), GFP_ATOMIC);
+			if (port->edid == NULL) {
+				vgt_err("Insufficient memory!\n");
+				BUG();
+				return;
 			}
 		}
+
+		memcpy(port->edid, edid, sizeof(vgt_edid_data_t));
+		port->type = type;
+		set_bit(type, vgt->presented_ports);
+
+		if (vgt_debug) {
+			int j;
+			unsigned char *block = edid->edid_block;
+			printk("EDID_PROPAGATE: EDID[%s] is:\n", vgt_port_name[type]);
+			for (j = 0; j < EDID_SIZE; ++ j) {
+				if ((block[j] >= 'a' && block[j] <= 'z') ||
+					(block[j] >= 'A' && block[j] <= 'Z')) {
+					printk ("%c ", block[j]);
+				} else {
+					printk ("0x%x ", block[j]);
+				}
+				if (((j + 1) & 0xf) == 0) {
+					printk ("\n");
+				}
+			}
+		}
+	} else {
+		vgt_info ("EDID_PROPAGATE: Clear %s for vm %d\n",
+					VGT_PORT_NAME(index), vgt->vm_id);
 	}
 }
 
 void vgt_propagate_dpcd(struct vgt_device *vgt, int index)
 {
+	struct vgt_dpcd_data *dpcd = NULL;
 	int i;
 
-	for (i = 0; i < DPCD_MAX; ++i) {
-		struct vgt_dpcd_data *dpcd = vgt->pdev->pdev_dpcds[i];
+	if (index == -1) { /* -1 index means "ALL" */
+		for (i = 0; i < I915_MAX_PORTS; i++) {
+			vgt_propagate_dpcd(vgt, i);
+		}
+		return;
+	}
 
-		if (!vgt_port_equivalent(VGT_DP_A + i, index))
-			continue;
+	if (index < 0 || index >= I915_MAX_PORTS) {
+		vgt_warn("Wrong port index input! Will do nothing!\n");
+		return;
+	}
 
-		if (!dpcd) {
-			vgt_info("DPCD_PROPAGATE: Clear DPCD %d\n", i);
-			if (vgt->vgt_dpcds[i]) {
-				vgt->vgt_dpcds[i]->data_valid = false;
+	/* Assumption: Port is DP if it has DPCD */
+	if (vgt->pdev->ports[index].dpcd && vgt->pdev->ports[index].dpcd->data_valid) {
+		dpcd = vgt->pdev->ports[index].dpcd;
+	}
+
+	vgt_clear_dpcd(&vgt->ports[index]);
+
+	if (dpcd) {
+		vgt_info("DPCD_PROPAGATE: Propagate DPCD %d\n", index);
+		if (!vgt->ports[index].dpcd) {
+			vgt->ports[index].dpcd = kmalloc(
+				sizeof(struct vgt_dpcd_data), GFP_ATOMIC);
+			if (vgt->ports[index].dpcd == NULL) {
+				vgt_err("Insufficient memory!\n");
+				BUG();
+				return;
 			}
-		} else {
-			vgt_info("DPCD_PROPAGATE: Propagate DPCD %d\n", i);
-			if (!vgt->vgt_dpcds[i]) {
-				vgt->vgt_dpcds[i] = kmalloc(
-					sizeof(struct vgt_dpcd_data), GFP_ATOMIC);
-				if (vgt->vgt_dpcds[i] == NULL) {
-					vgt_err("Insufficient memory\n");
-					BUG();
-					return;
-				}
-			}
+		}
 
-			memcpy(vgt->vgt_dpcds[i], dpcd,
-				sizeof(struct vgt_dpcd_data));
+		memcpy(vgt->ports[index].dpcd, dpcd,
+			sizeof(struct vgt_dpcd_data));
 
-			/* mask off CP */
-			vgt->vgt_dpcds[i]->data[DPCD_SINK_COUNT] &=
-				~DPCD_CP_READY_MASK;
+		/* mask off CP */
+		vgt->ports[index].dpcd->data[DPCD_SINK_COUNT] &=
+			~DPCD_CP_READY_MASK;
 
-			if (vgt_debug && vgt->vgt_dpcds[i]->data_valid) {
-				vgt_info("DPCD_PROPAGATE: DPCD[%d] is:\n", i);
-				vgt_print_dpcd(vgt->vgt_dpcds[i]);
-			}
+		if (vgt_debug && vgt->ports[index].dpcd->data_valid) {
+			vgt_info("DPCD_PROPAGATE: DPCD[%d] is:\n", index);
+			vgt_print_dpcd(vgt->ports[index].dpcd);
 		}
 	}
 }
 
-void vgt_clear_dpcd(struct vgt_device *vgt, int index)
+void vgt_clear_port(struct vgt_device *vgt, int index)
 {
 	int i;
+	struct gt_port *port;
 
-	for (i = 0; i < DPCD_MAX; ++i) {
-		if (vgt_port_equivalent(VGT_DP_A + i, index)) {
-			if (vgt->vgt_dpcds[i]) {
-				vgt_dbg("DPCD clear: Clear DPCD[0x%x] of VM%d\n",
-					i, vgt->vm_id);
-				vgt->vgt_dpcds[i]->data_valid = false;
-			}
+	if (index == -1) { /* -1 index means "ALL" */
+		for (i = 0; i < I915_MAX_PORTS; i++) {
+			vgt_clear_port(vgt, i);
 		}
+		return;
 	}
+
+	if (index < 0 || index >= I915_MAX_PORTS) {
+		vgt_warn("Wrong port index input! Will do nothing!\n");
+		return;
+	}
+
+	port = &vgt->ports[index];
+	vgt_clear_edid(port);
+	vgt_clear_dpcd(port);
+	
+	if (port->type >= 0 && port->type < VGT_PORT_MAX) {
+		clear_bit(vgt->ports[index].type,
+			  vgt->presented_ports);
+	}
+
+	port->type = VGT_PORT_MAX;
 }
 
 /**************************************************************************
@@ -900,6 +922,8 @@ static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt, unsigned int offset, v
 {
 	vgt_edid_data_t *edid_data = NULL;
 	vgt_reg_t wvalue = *(vgt_reg_t *)p_data;
+	struct gt_port *port = NULL;
+
 	switch (wvalue & _GMBUS_PIN_SEL_MASK) {
 	case 0: /* disabled. Be treated as reset */
 		edid_data = NULL;
@@ -909,19 +933,16 @@ static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt, unsigned int offset, v
 			vgt->vgt_id);
 		break;
 	case 2: /* Analog Mon */
-		edid_data = vgt->vgt_edids[VGT_CRT];
-		break;
-	case 3: /* LVDS */
-		edid_data = vgt->vgt_edids[VGT_LVDS];
+		port = &vgt->ports[port_type_to_port(VGT_CRT)];
 		break;
 	case 4: /* Port C use */
-		edid_data = vgt->vgt_edids[VGT_HDMI_C];
+		port = &vgt->ports[port_type_to_port(VGT_HDMI_C)];
 		break;
 	case 5: /* Port B use */
-		edid_data = vgt->vgt_edids[VGT_HDMI_B];
+		port = &vgt->ports[port_type_to_port(VGT_HDMI_B)];
 		break;
 	case 6: /* Port D use */
-		edid_data = vgt->vgt_edids[VGT_HDMI_D];
+		port = &vgt->ports[port_type_to_port(VGT_HDMI_D)];
 		break;
 	case 7:
 		printk("vGT(%d): WARNING: GMBUS accessing reserved port!!!!\n", vgt->vgt_id);
@@ -930,18 +951,21 @@ static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt, unsigned int offset, v
 		printk("vGT(%d): EDID unknown ERROR!\n", vgt->vgt_id);
 	}
 
+	if (port) 
+		edid_data = port->edid;
+
 	vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
 	//vgt->vgt_i2c_bus.state = VGT_I2C_SEND;
-	vgt->vgt_i2c_bus.gmbus.pedid = edid_data;
 	vgt->vgt_i2c_bus.gmbus.phase = GMBUS_IDLE_PHASE;
 
 	/* Initialize status reg
 	 * FIXME: never clear _GMBUS_HW_WAIT */
 	__vreg(vgt, _REG_PCH_GMBUS2) &= ~ _GMBUS_ACTIVE;
 	__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_RDY | _GMBUS_HW_WAIT;
-	if (edid_data && edid_data->data_valid)
+	if (edid_data && edid_data->data_valid && !(port->dpcd && port->dpcd->data_valid)) {
 		__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_NAK;
-	else
+		vgt->vgt_i2c_bus.gmbus.pedid = edid_data;
+	} else
 		__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_NAK;
 
 	memcpy(p_data, (char *)vgt->state.vReg + offset, bytes);
@@ -1240,7 +1264,6 @@ static inline AUX_CH_REGISTERS vgt_get_aux_ch_reg(unsigned int offset)
 }
 
 void vgt_i2c_handle_aux_ch_read(vgt_i2c_bus_t *i2c_bus,
-				vgt_edid_data_t **pedid,
 				unsigned int offset,
 				VGT_DP_PORTS_IDX port_idx, void *p_data)
 {

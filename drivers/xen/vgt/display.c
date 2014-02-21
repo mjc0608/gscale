@@ -170,31 +170,32 @@ static inline int get_event_and_edid_info(vgt_hotplug_cmd_t cmd,
 				enum vgt_port_type *pedid_idx)
 {
 	int ret = 0;
+
 	switch(cmd.port_sel) {
 	case 0:
-		*pedid_idx = VGT_CRT;
+		*pedid_idx = PORT_E;
 		*pevent = CRT_HOTPLUG;
 		break;
 	case 1:
-		*pedid_idx = VGT_PORT_MAX;
+		*pedid_idx = I915_MAX_PORTS;
 		*pevent = EVENT_MAX;
 		printk("vGT: No support for hot plug type: DP_A!\n");
 		ret = -EINVAL;
 		break;
 	case 2:
-		*pedid_idx = VGT_DP_B;
+		*pedid_idx = PORT_B;
 		*pevent = DP_B_HOTPLUG;
 		break;
 	case 3:
-		*pedid_idx = VGT_DP_C;
+		*pedid_idx = PORT_C;
 		*pevent = DP_C_HOTPLUG;
 		break;
 	case 4:
-		*pedid_idx = VGT_DP_D;
+		*pedid_idx = PORT_D;
 		*pevent = DP_D_HOTPLUG;
 		break;
 	default:
-		*pedid_idx = VGT_PORT_MAX;
+		*pedid_idx = I915_MAX_PORTS;
 		*pevent = EVENT_MAX;
 		printk("vGT: Not supported hot plug type: 0x%x!\n",
 			cmd.port_sel);
@@ -233,8 +234,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 			vgt_propagate_dpcd(vgt, port_idx);
 		} else {
 			/* pull out */
-			vgt_clear_edid(vgt, port_idx);
-			vgt_clear_dpcd(vgt, port_idx);
+			vgt_clear_port(vgt, port_idx);
 		}
 
 		vgt_update_monitor_status(vgt);

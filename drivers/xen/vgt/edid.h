@@ -289,7 +289,6 @@ bool vgt_i2c_handle_gmbus_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes);
 
 void vgt_i2c_handle_aux_ch_read(vgt_i2c_bus_t *i2c_bus,
-				vgt_edid_data_t **pedid,
 				unsigned int offset,
 				VGT_DP_PORTS_IDX port_idx, void *p_data);
 

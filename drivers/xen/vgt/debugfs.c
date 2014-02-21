@@ -674,8 +674,6 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 				str = "Port C HDMI"; break;
 			case VGT_HDMI_D:
 				str = "Port D HDMI"; break;
-			case VGT_LVDS:
-				str = "LVDS"; break;
 			default:
 				str = "Port INV";
 		}

@@ -486,8 +486,10 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	memset(pdev->detected_ports, 0, sizeof(pdev->detected_ports));
 	bitmap_zero(pdev->dpy_emul_request, VGT_MAX_VMS);
 
-	/* initialize DPCD pointers of all DPs to NULL */
-	memset(pdev->pdev_dpcds, 0, sizeof(struct vgt_dpcd_data *) * DPCD_MAX);
+	/* initialize ports */
+	memset(pdev->ports, 0, sizeof(struct gt_port) * VGT_PORT_MAX);
+	for (i = 0; i < I915_MAX_PORTS; i ++)
+		pdev->ports[i].type = VGT_PORT_MAX;
 
 	if (!initial_phys_states(pdev)) {
 		printk("vGT: failed to initialize physical state\n");
@@ -681,16 +683,14 @@ void vgt_destroy(void)
 	vfree(pdev->initial_mmio_state);
 
 	for (i = 0; i < VGT_PORT_MAX; ++ i) {
-		if (pdev->pdev_edids[i]) {
-			kfree(pdev->pdev_edids[i]);
-			pdev->pdev_edids[i] = NULL;
+		if (pdev->ports[i].edid) {
+			kfree(pdev->ports[i].edid);
+			pdev->ports[i].edid = NULL;
 		}
-	}
 
-	for (i = 0; i < DPCD_MAX; ++ i) {
-		if (pdev->pdev_dpcds[i]) {
-			kfree(pdev->pdev_dpcds[i]);
-			pdev->pdev_dpcds[i] = NULL;
+		if (pdev->ports[i].dpcd) {
+			kfree(pdev->ports[i].dpcd);
+			pdev->ports[i].dpcd = NULL;
 		}
 	}
 

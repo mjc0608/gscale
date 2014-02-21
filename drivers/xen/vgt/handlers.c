@@ -644,7 +644,6 @@ static bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	bool rc = true;
-	vgt_edid_data_t **pedid = NULL;
 	VGT_DP_PORTS_IDX port_idx;
 
 	ASSERT(bytes == 4);
@@ -653,28 +652,7 @@ static bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	rc = default_mmio_read(vgt, offset, p_data, bytes);
 
 	port_idx = vgt_get_dp_port_idx(offset);
-	switch (port_idx) {
-	case VGT_DPA_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_A];
-		break;
-	case VGT_DPB_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_B];
-		break;
-	case VGT_DPC_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_C];
-		break;
-	case VGT_DPD_IDX:
-		pedid = (vgt_edid_data_t **) &vgt->vgt_edids[VGT_DP_D];
-		break;
-	default:
-		printk("vGT(%d): WARNING: Unsupported DP port [0x%x]access!\n",
-				vgt->vgt_id, offset);
-		BUG();
-		break;
-	}
-
-	vgt_i2c_handle_aux_ch_read(&vgt->vgt_i2c_bus, pedid,
-				offset, port_idx, p_data);
+	vgt_i2c_handle_aux_ch_read(&vgt->vgt_i2c_bus, offset, port_idx, p_data);
 
 	return rc;
 }
@@ -1589,6 +1567,7 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 	vgt_edid_data_t *edid = NULL;
 	struct vgt_dpcd_data *dpcd = NULL;
 	VGT_DP_PORTS_IDX port_idx = vgt_get_dp_port_idx(offset);
+	struct gt_port *port = NULL;
 
 	ASSERT(bytes == 4);
 	ASSERT((offset & (bytes - 1)) == 0);
@@ -1617,26 +1596,27 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 
 	switch (port_idx) {
 	case VGT_DPA_IDX:
-		edid = vgt->vgt_edids[VGT_DP_A];
-		dpcd = vgt->vgt_dpcds[DPCD_DPA];
+		port = &vgt->ports[port_type_to_port(VGT_DP_A)];
 		break;
 	case VGT_DPB_IDX:
-		edid = vgt->vgt_edids[VGT_DP_B];
-		dpcd = vgt->vgt_dpcds[DPCD_DPB];
+		port = &vgt->ports[port_type_to_port(VGT_DP_B)];
 		break;
 	case VGT_DPC_IDX:
-		edid = vgt->vgt_edids[VGT_DP_C];
-		dpcd = vgt->vgt_dpcds[DPCD_DPC];
+		port = &vgt->ports[port_type_to_port(VGT_DP_C)];
 		break;
 	case VGT_DPD_IDX:
-		edid = vgt->vgt_edids[VGT_DP_D];
-		dpcd = vgt->vgt_dpcds[DPCD_DPD];
+		port = &vgt->ports[port_type_to_port(VGT_DP_D)];
 		break;
 	default:
 		vgt_warn("vGT(%d): Unsupported DP port access!\n",
 				vgt->vgt_id);
 		BUG();
 		break;
+	}
+
+	if (port) {
+		edid = port->edid;
+		dpcd = port->dpcd;
 	}
 
 	/* read out message from DATA1 register */
@@ -1760,6 +1740,9 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 	}
 
 	/* i2c transaction starts */
+	if (!(dpcd && dpcd->data_valid)) {
+		edid = NULL;
+	}
 
 	vgt_i2c_handle_aux_ch_write(&vgt->vgt_i2c_bus, edid,
 				offset, port_idx, p_data);

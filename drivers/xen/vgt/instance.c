@@ -112,6 +112,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	struct vgt_device *vgt;
 	char *cfg_space;
 	int rc = -ENOMEM;
+	int i;
 
 	vgt_info("vm_id=%d, low_gm_sz=%dMB, high_gm_sz=%dMB, fence_sz=%d, vgt_primary=%d\n",
 		vp.vm_id, vp.aperture_sz, vp.gm_sz-vp.aperture_sz, vp.fence_sz, vp.vgt_primary);
@@ -138,6 +139,9 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		goto err;
 
 	memset(vgt->presented_ports, 0, sizeof(vgt->presented_ports));
+	for (i = 0; i < I915_MAX_PORTS; i++) {
+		vgt->ports[i].type = VGT_PORT_MAX;
+	}
 
 	/* Hard code ballooning now. We can support non-ballooning too in the future */
 	vgt->ballooning = 1;
@@ -406,17 +410,19 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	vgt_unlock_dev(pdev, cpu);
 
-	for (i = 0; i < VGT_PORT_MAX; ++ i) {
-		if (vgt->vgt_edids[i]) {
-			kfree(vgt->vgt_edids[i]);
-			vgt->vgt_edids[i] = NULL;
+	for (i = 0; i < I915_MAX_PORTS; i++) {
+		if (vgt->ports[i].edid) {
+			kfree(vgt->ports[i].edid);
+			vgt->ports[i].edid = NULL;
 		}
-	}
 
-	for (i = 0; i < DPCD_MAX; ++ i) {
-		if (vgt->vgt_dpcds[i]) {
-			kfree(vgt->vgt_dpcds[i]);
-			vgt->vgt_dpcds[i] = NULL;
+		if (vgt->ports[i].dpcd) {
+			kfree(vgt->ports[i].dpcd);
+			vgt->ports[i].dpcd = NULL;
+		}
+
+		if (vgt->ports[i].kobj.state_initialized) {
+			kobject_put(&vgt->ports[i].kobj);
 		}
 	}
 
