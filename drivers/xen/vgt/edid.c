@@ -45,8 +45,7 @@ static const char *vgt_port_name[] = {
 	"DP_D",
 	"HDMI_B",
 	"HDMI_C",
-	"HDMI_D",
-	"LVDS"
+	"HDMI_D"
 };
 
 #define EDID_LOG(log, emu, fmt, args...)			\
@@ -492,15 +491,9 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 			set_bit(i, pdev->detected_ports);
 			pdev->ports[port_id].type = i;
 			if (vgt_debug) {
-				int i;
-				unsigned char *block = new_edid->edid_block;
-				printk("EDID_PROBE: EDID is:\n");
-				for (i = 0; i < EDID_SIZE; ++ i) {
-					printk ("0x%02x ", block[i]);
-					if (((i + 1) & 0xf) == 0) {
-						printk ("\n");
-					}
-				}
+				vgt_info("EDID_PROBE: EDID[%s] is:\n",
+					vgt_port_name[i]);
+				vgt_print_edid(new_edid);
 			}
 
 			/* Check the extension */
@@ -686,20 +679,10 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 		set_bit(type, vgt->presented_ports);
 
 		if (vgt_debug) {
-			int j;
-			unsigned char *block = edid->edid_block;
-			printk("EDID_PROPAGATE: EDID[%s] is:\n", vgt_port_name[type]);
-			for (j = 0; j < EDID_SIZE; ++ j) {
-				if ((block[j] >= 'a' && block[j] <= 'z') ||
-					(block[j] >= 'A' && block[j] <= 'Z')) {
-					printk ("%c ", block[j]);
-				} else {
-					printk ("0x%x ", block[j]);
-				}
-				if (((j + 1) & 0xf) == 0) {
-					printk ("\n");
-				}
-			}
+			vgt_info("EDID_PROPAGATE: %s EDID[%s] is:\n",
+				VGT_PORT_NAME(index),
+				vgt_port_name[type]);
+			vgt_print_edid(edid);
 		}
 	} else {
 		vgt_info ("EDID_PROPAGATE: Clear %s for vm %d\n",

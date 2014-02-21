@@ -570,6 +570,12 @@ struct sbi_registers {
 	struct sbi_register registers[SBI_REG_MAX];
 };
 
+struct port_cache {
+	bool valid;
+	vgt_edid_data_t		*edid;	/* per display EDID information */
+	enum vgt_port		port_override;
+};
+
 struct gt_port {
 	struct kobject  	kobj;
 
@@ -577,6 +583,7 @@ struct gt_port {
 	struct vgt_dpcd_data	*dpcd;	/* per display DPCD information */
 	enum vgt_port_type	type;
 	enum vgt_port		port_override;
+	struct port_cache	cache; /* the temporary updated information */
 };
 
 struct vgt_device {
@@ -1236,6 +1243,58 @@ static inline unsigned int vgt_gen_dev_type(struct pgt_device *pdev)
 static inline bool vgt_match_device_attr(struct pgt_device *pdev, reg_attr_t *attr)
 {
 	return attr->device & vgt_gen_dev_type(pdev);
+}
+
+static inline enum vgt_port vgt_get_port(struct vgt_device *vgt, struct gt_port *port_ptr)
+{
+	enum vgt_port port_type;
+
+	if (!vgt || !port_ptr)
+		return I915_MAX_PORTS;
+
+	for (port_type = PORT_A; port_type < I915_MAX_PORTS; ++ port_type)
+		if (port_ptr == &vgt->ports[port_type])
+			break;
+
+	return port_type;
+}
+
+static inline enum vgt_pipe vgt_get_pipe_from_port(struct vgt_device *vgt,
+						struct gt_port *port_ptr)
+{
+	enum vgt_pipe pipe;
+	enum vgt_port port;
+
+	if (!vgt || !port_ptr)
+		return I915_MAX_PIPES;
+
+	port = vgt_get_port(vgt, port_ptr);
+
+	if (port == I915_MAX_PORTS) {
+		return I915_MAX_PIPES;
+	} else if (port == PORT_A) {
+		vgt_warn("Getting pipe info for PORT_A is not supported!\n");
+		return I915_MAX_PIPES;
+	}
+
+	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; ++ pipe) {
+		vgt_reg_t ddi_func_ctl;
+		vgt_reg_t ddi_port_info;
+
+		ddi_func_ctl  = __vreg(vgt, _VGT_TRANS_DDI_FUNC_CTL(pipe));
+
+		if (!(ddi_func_ctl & _REGBIT_TRANS_DDI_FUNC_ENABLE))
+			continue;
+
+		ddi_port_info = (ddi_func_ctl & _REGBIT_TRANS_DDI_PORT_MASK) >>
+					_TRANS_DDI_PORT_SHIFT;
+		if (ddi_port_info == port) {
+			// pipe has the port setting same as input
+			break;
+		}
+	}
+
+	return pipe;
 }
 
 /*
@@ -2180,6 +2239,7 @@ bool ring_uhptr_write(struct vgt_device *vgt, unsigned int off,
 
 bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe);
 void vgt_set_power_well(struct vgt_device *vgt, bool enable);
+void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port);
 
 extern bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
@@ -2315,6 +2375,7 @@ int vgt_hvm_vmem_init(struct vgt_device *vgt);
 void vgt_vmem_destroy(struct vgt_device *vgt);
 void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 struct vgt_device *vmid_2_vgt_device(int vmid);
+extern void vgt_print_edid(vgt_edid_data_t *edid);
 extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);
 int vgt_fb_notifier_call_chain(unsigned long val, void *data);
 void vgt_init_fb_notify(void);

@@ -543,14 +543,67 @@ void vgt_restore_gtt_and_fence(struct pgt_device *pdev)
 			pdev->saved_fences[i], 8);
 }
 
+static void _hex_dump(const char *data, size_t size)
+{
+	char buf[74];
+	size_t offset;
+	int line;
+
+	for (line = 0; line < ((size + 0xF) / 0x10); line++) {
+		int byte;
+
+		memset(buf, ' ', sizeof(buf));
+		buf[73] = '\0';
+		offset = 0;
+
+		offset += snprintf(buf + offset, 74 - offset, "%07x: ", line * 0x10);
+
+		for (byte = 0; byte < 0x10; byte++) {
+			if (!(byte & 0x1)) {
+				offset += snprintf(buf + offset, 74 - offset, " ");
+			}
+
+			if (((line * 0x10) + byte) >= size) {
+				offset += snprintf(buf + offset, 74 - offset, "  ");
+			} else {
+				offset += snprintf(buf + offset, 74 - offset, "%02x",
+					       data[byte + (line * 0x10)] & 0xFF);
+			}
+		}
+		
+		offset += snprintf(buf + offset, 74 - offset, "  ");
+
+		for (byte = 0; byte < 0x10; byte++) {
+			if (data[byte + (line * 0x10)] >= 0x20 &&
+			    data[byte + (line * 0x10)] <= 0x7E) {
+				offset += snprintf(buf + offset, 74 - offset, "%c",
+				    data[byte + (line * 0x10)] & 0xFF);
+			} else {
+				offset += snprintf(buf + offset, 74 - offset, ".");
+			}
+		}
+
+		offset += snprintf(buf + offset, 74 - offset, "\n");
+		printk(buf);
+	}
+}
+
+void vgt_print_edid(vgt_edid_data_t *edid)
+{
+	if (edid && edid->data_valid) {
+		_hex_dump(edid->edid_block, EDID_SIZE);
+	} else {
+		printk("EDID is not available!\n");
+	}
+
+	return;
+}
+
 void vgt_print_dpcd(struct vgt_dpcd_data *dpcd)
 {
-	int idx;
-	uint8_t *data = dpcd->data;
-
-	for (idx = 0; idx < DPCD_SIZE; ++idx) {
-		printk("0x%0x ", data[idx]);
-		if (((idx + 1) & 0xf) == 0)
-			printk("\n");
+	if (dpcd && dpcd->data_valid) {
+		_hex_dump(dpcd->data, DPCD_SIZE);
+	} else {
+		printk("DPCD is not available!\n");
 	}
 }

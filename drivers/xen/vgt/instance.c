@@ -142,6 +142,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	for (i = 0; i < I915_MAX_PORTS; i++) {
 		vgt->ports[i].type = VGT_PORT_MAX;
 		vgt->ports[i].port_override = i;
+		vgt->ports[i].cache.port_override = i;
 	}
 
 	/* Hard code ballooning now. We can support non-ballooning too in the future */
@@ -423,6 +424,11 @@ void vgt_release_instance(struct vgt_device *vgt)
 		if (vgt->ports[i].dpcd) {
 			kfree(vgt->ports[i].dpcd);
 			vgt->ports[i].dpcd = NULL;
+		}
+
+		if (vgt->ports[i].cache.edid) {
+			kfree(vgt->ports[i].cache.edid);
+			vgt->ports[i].cache.edid = NULL;
 		}
 
 		if (vgt->ports[i].kobj.state_initialized) {

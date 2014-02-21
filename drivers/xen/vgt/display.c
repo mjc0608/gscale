@@ -378,14 +378,17 @@ void vgt_update_monitor_status(struct vgt_device *vgt)
 
 	if (test_bit(VGT_DP_B, vgt->presented_ports) ||
 		test_bit(VGT_HDMI_B, vgt->presented_ports)) {
+		vgt_dbg("enable B port monitor\n");
 		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_B_HOTPLUG;
 	}
 	if (test_bit(VGT_DP_C, vgt->presented_ports) ||
 		test_bit(VGT_HDMI_C, vgt->presented_ports)) {
+		vgt_dbg("enable C port monitor\n");
 		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_C_HOTPLUG;
 	}
 	if (test_bit(VGT_DP_D, vgt->presented_ports) ||
 		test_bit(VGT_HDMI_D, vgt->presented_ports)) {
+		vgt_dbg("enable D port monitor\n");
 		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_D_HOTPLUG;
 	}
 }
@@ -478,8 +481,11 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 		enum vgt_port vport, vport_override;
 		vport = (new_data & _REGBIT_TRANS_DDI_PORT_MASK) >> _TRANS_DDI_PORT_SHIFT;
 		vport_override = vgt->ports[vport].port_override;
-		ASSERT (vport_override != I915_MAX_PORTS);
-		if (vport_override == PORT_A) {
+		if (vport_override == I915_MAX_PORTS) {
+			vgt_warn("Unexpected driver behavior to enable TRANS_DDI"
+					" for not ready port!!\n");
+			physical_pipe = I915_MAX_PIPES;
+		} else if (vport_override == PORT_A) {
 			hw_value = VGT_MMIO_READ(vgt->pdev, _REG_TRANS_DDI_FUNC_CTL_EDP);
 			if (_REGBIT_TRANS_DDI_FUNC_ENABLE & hw_value)
 				physical_pipe = get_edp_input(hw_value);
@@ -842,4 +848,78 @@ void vgt_set_power_well(struct vgt_device *vgt, bool to_enable)
 			tmp = VGT_MMIO_READ(vgt->pdev, _REG_HSW_PWR_WELL_CTL2);
 		}
 	}
+}
+
+/* copy the cached value into corresponding port field. Meanwhile,
+ * Update system monitor state for EDID changes
+ */
+void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port)
+{
+	int port_idx;
+	enum vgt_port_type legacy_porttype;
+
+	if (!vgt || !port)
+		return;
+	if (!port->cache.valid) {
+		vgt_warn("port cache flush with invalid data. "
+				"Will be ignored!\n");
+		return;
+	}
+
+	port_idx = vgt_get_port(vgt, port);
+
+	if (port_idx == I915_MAX_PORTS) {
+		vgt_err ("VM-%d: port is not a valid pointer", vgt->vm_id);
+		goto finish_flush;
+	} else if (port_idx == PORT_A) {
+		vgt_warn ("VM-%d: PORT_A setting through sysfs is not supported. "
+			"Will be ignored!\n", vgt->vm_id);
+		goto finish_flush;
+	}
+
+	if (port_idx == PORT_E)
+		legacy_porttype = VGT_CRT;
+	else if (port->dpcd && port->dpcd->data_valid)
+		legacy_porttype = VGT_DP_B + port_idx - 1;
+	else
+		legacy_porttype = VGT_HDMI_B + port_idx - 1;
+
+	if (port->edid == NULL) {
+		port->edid = kmalloc(sizeof(vgt_edid_data_t), GFP_ATOMIC);
+	}
+	if (port->edid == NULL) {
+		vgt_err("Memory allocation fail for EDID block!\n");
+		return;
+	}
+
+	if (!(port->cache.edid && port->cache.edid->data_valid)) {
+		port->edid->data_valid = false;
+		if (port->dpcd)
+			port->dpcd->data_valid = false;
+		port->type = VGT_PORT_MAX;
+		port->port_override = I915_MAX_PORTS;
+		clear_bit(legacy_porttype, vgt->presented_ports);
+	} else {
+		if (port->dpcd && port->dpcd->data_valid) {
+			vgt_err("The interface does not support the plug-in of DP "
+				"type monitors! Behavior could be unexpected!!\n");
+			goto finish_flush;
+		}
+		memcpy(port->edid->edid_block,
+			port->cache.edid->edid_block, EDID_SIZE);
+		// customize the EDID to remove extended EDID block.
+		if (port->edid->edid_block[0x7e]) {
+			port->edid->edid_block[0x7f] +=
+				port->edid->edid_block[0x7e];
+			port->edid->edid_block[0x7e] = 0;
+		}
+		port->edid->data_valid = true;
+		port->type = legacy_porttype;
+		port->port_override = port->cache.port_override;
+		set_bit(legacy_porttype, vgt->presented_ports);
+	}
+	vgt_update_monitor_status(vgt);
+
+finish_flush:
+	port->cache.valid = false;
 }

@@ -326,6 +326,374 @@ static struct attribute *vgt_ctrl_attrs[] = {
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 
+#define kobj_to_port(kobj) container_of((kobj), struct gt_port, kobj)
+#define kobj_to_vgt(xkobj) container_of((xkobj), struct vgt_device, kobj)
+
+static ssize_t vgt_port_edid_show(struct file *filp, struct kobject *kobj,
+				  struct bin_attribute *attr, char *buf, loff_t off,
+				  size_t count)
+{
+	struct gt_port *port = kobj_to_port(kobj);
+	vgt_edid_data_t *edid;
+
+	if (off >= EDID_SIZE) {
+		return 0;
+	}
+
+	if (off + count > EDID_SIZE) {
+		count = EDID_SIZE - off;
+	}
+
+	mutex_lock(&vgt_sysfs_lock);
+
+	edid = port->edid;
+
+	if (edid && edid->data_valid) {
+		memcpy(buf, edid->edid_block + off, count);
+	} else {
+		count = 0;
+	}
+
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return count;
+}
+
+static ssize_t
+vgt_port_edid_store(struct file* filp, struct kobject *kobj,
+		    struct bin_attribute *bin_attr,
+		    char *buf, loff_t off, size_t count)
+{
+	struct gt_port *port = kobj_to_port(kobj);
+	int write_count = count;
+	char *dest;
+
+	if (!count || off < 0 || (off & 3))
+		return -EINVAL;
+
+	if (off >= bin_attr->size)
+		return count;
+
+	if (off + count > bin_attr->size)
+		write_count = bin_attr->size - off;
+
+	mutex_lock(&vgt_sysfs_lock);
+
+	if (port->cache.edid == NULL) {
+		port->cache.edid = kmalloc(sizeof(vgt_edid_data_t),
+			      GFP_ATOMIC);
+	}
+
+	if (port->cache.edid == NULL) {
+		mutex_unlock(&vgt_sysfs_lock);
+		return -ENOMEM;
+	}
+
+	dest = port->cache.edid->edid_block + off;
+	memcpy(dest, buf, write_count);
+	if (off + write_count == bin_attr->size) {
+		port->cache.edid->data_valid = true;
+		port->cache.valid = true;
+	}
+
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return count;
+}
+
+static inline int ctoi(char chr)
+{
+    return (chr >= '0' && chr <= '9' ? chr - '0' :
+		(chr >= 'a' && chr <= 'f' ? chr - 'a' + 10 :
+		(chr >= 'A' && chr <= 'F' ? chr - 'A' + 10 :
+			-1)));
+}
+
+static ssize_t
+vgt_port_edid_text_store(struct kobject *kobj, struct kobj_attribute *attr,
+                        const char *buf, size_t count)
+{
+	struct gt_port *port = kobj_to_port(kobj);
+	int i;
+	char *dest;
+
+	if (count != (EDID_SIZE << 1))
+		return -EINVAL;
+
+	mutex_lock(&vgt_sysfs_lock);
+
+	if (port->cache.edid == NULL) {
+		port->cache.edid = kmalloc(sizeof(vgt_edid_data_t),
+			      GFP_ATOMIC);
+	}
+
+	if (port->cache.edid == NULL) {
+		return -ENOMEM;
+	}
+
+	port->cache.edid->data_valid = false;
+
+	dest = port->cache.edid->edid_block;
+
+	for (i = 0; i < count; i += 2) {
+		int hi = ctoi(buf[i]);
+		int lo  = ctoi(buf[i + 1]);
+		if (hi < 0 || lo < 0) {
+			vgt_warn("invalid injected EDID!\n");
+			break;
+		}
+
+		*dest= (hi << 4) + lo;
+		dest++;
+	}
+
+	if ((i == count)) {
+		port->cache.edid->data_valid = true;
+		port->cache.valid = true;
+	}
+
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return count;
+}
+
+static ssize_t vgt_pport_connection_show(struct kobject *kobj, struct kobj_attribute *attr,
+				   char *buf)
+{
+	struct pgt_device *pgt = &default_device;
+	ssize_t buf_len;
+	int i;
+
+        for (i = 0; i < I915_MAX_PORTS; i++) {
+                if (strcmp(VGT_PORT_NAME(i), kobj->name) == 0) {
+                        break;
+                }
+        }
+
+	if (i >= I915_MAX_PORTS) {
+		return 0;
+	}
+
+	mutex_lock(&vgt_sysfs_lock);
+	
+	buf_len = sprintf(buf, "%s\n",
+		pgt->ports[i].edid && pgt->ports[i].edid->data_valid ?
+			"connected" : "disconnected");
+
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return buf_len;
+}
+
+static ssize_t vgt_vport_connection_show(struct kobject *kobj, struct kobj_attribute *attr,
+				   char *buf)
+{
+	struct gt_port *port = kobj_to_port(kobj);
+	ssize_t buf_len;
+
+	mutex_lock(&vgt_sysfs_lock);
+	
+	buf_len = sprintf(buf, "%s\n",
+		(port->edid && port->edid->data_valid) ?
+			"connected" : "disconnected");
+
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return buf_len;
+}
+
+static ssize_t vgt_vport_connection_store(struct kobject *kobj, struct kobj_attribute *attr,
+                        const char *buf, size_t count)
+{
+	struct gt_port *port = kobj_to_port(kobj);
+	struct vgt_device *vgt = kobj_to_vgt(kobj->parent);
+	enum vgt_event_type event;
+	bool flush_request = false;
+	bool hotplug_request = false;
+	int cpu;
+
+	mutex_lock(&vgt_sysfs_lock);
+	vgt_lock_dev(vgt->pdev, cpu);
+	
+	if (strncmp("connect", buf, 7) == 0) {
+		if (port->edid && port->edid->data_valid)
+			vgt_warn("Request to connect a monitor to port which has "
+				"already connected a monitor. Will be ignored\n");
+		else if (!(port->cache.valid && port->cache.edid &&
+				port->cache.edid->data_valid))
+			vgt_warn("Request to connect a monitor but new monitor "
+				"setting is not ready. Will be ignored\n");
+		else
+			flush_request = hotplug_request = true;
+	} else if (strncmp("disconnect", buf, 10) == 0) {
+		if (!(port->edid && port->edid->data_valid))
+			vgt_warn("Request disconnect a monitor to port which "
+				"does not connect a monitor. Will be ignored\n");
+		else {
+			if (port->cache.edid)
+				port->cache.edid->data_valid = false;
+			port->cache.valid = true;
+			flush_request = hotplug_request = true;
+		}
+	} else if (strncmp("flush", buf, 5) == 0) {
+		flush_request = true;
+	} else {
+		vgt_warn("Input string not recognized: %s\n", buf);
+	}
+
+	if (flush_request)
+		vgt_flush_port_info(vgt, port);
+
+	if (hotplug_request) {
+		enum vgt_port port_type = vgt_get_port(vgt, port);
+		switch (port_type) {
+		case PORT_B:
+			event = DP_B_HOTPLUG; break;
+		case PORT_C:
+			event = DP_C_HOTPLUG; break;
+		case PORT_D:
+			event = DP_D_HOTPLUG; break;
+		case PORT_E:
+			event = CRT_HOTPLUG; break;
+		default:
+			event = EVENT_MAX;
+			vgt_err("Invalid port(%s) for hotplug!\n",
+				VGT_PORT_NAME(port_type));
+		}
+		if (event != EVENT_MAX)
+			vgt_trigger_virtual_event(vgt, event);
+	}
+
+	vgt_unlock_dev(vgt->pdev, cpu);
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return count;
+}
+
+static ssize_t vgt_port_type_show(struct kobject *kobj, struct kobj_attribute *attr,
+				   char *buf)
+{
+	struct gt_port *port = kobj_to_port(kobj);
+	ssize_t buf_len;
+
+	mutex_lock(&vgt_sysfs_lock);
+	buf_len = sprintf(buf, "%s\n", VGT_PORT_TYPE_NAME(port->type));
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return buf_len;
+}
+
+static ssize_t vgt_vport_port_override_show(struct kobject *kobj, struct kobj_attribute *attr,
+				   char *buf)
+{
+	struct gt_port *port = kobj_to_port(kobj);
+	ssize_t buf_len;
+
+	mutex_lock(&vgt_sysfs_lock);
+	buf_len = sprintf(buf, "%s\n", VGT_PORT_NAME(port->port_override));
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return buf_len;
+}
+
+static ssize_t vgt_vport_port_override_store(struct kobject *kobj, struct kobj_attribute *attr,
+                        const char *buf, size_t count)
+{
+	struct gt_port *port = kobj_to_port(kobj);
+	enum vgt_port override;
+
+	if (strncmp("PORT_A", buf, 6) == 0) {
+		override = PORT_A;
+	} else if (strncmp("PORT_B", buf, 6) == 0) {
+		override = PORT_B;
+	} else if (strncmp("PORT_C", buf, 6) == 0) {
+		override  = PORT_C;
+	} else if (strncmp("PORT_D", buf, 6) == 0) {
+		override  = PORT_D;
+	} else if (strncmp("PORT_E", buf, 6) == 0) {
+		override = PORT_E;
+	} else {
+		return -EINVAL;
+	}
+
+	mutex_lock(&vgt_sysfs_lock);
+
+	port->cache.port_override = override;
+	port->cache.valid = true;
+
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return count;
+}
+
+static ssize_t vgt_vport_pipe_show(struct kobject *kobj, struct kobj_attribute *attr,
+				   char *buf)
+{
+	struct gt_port *port = kobj_to_port(kobj);
+	struct vgt_device *vgt = kobj_to_vgt(kobj->parent);
+	enum vgt_pipe pipe;
+	ssize_t buf_len;
+	int cpu;
+
+	mutex_lock(&vgt_sysfs_lock);
+	vgt_lock_dev(vgt->pdev, cpu);
+
+	pipe = vgt_get_pipe_from_port(vgt, port);
+	buf_len = sprintf(buf, "%s\n", VGT_PIPE_NAME(pipe));
+
+	vgt_unlock_dev(vgt->pdev, cpu);
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return buf_len;
+}
+
+static struct kobj_attribute vport_connection_attrs =
+	__ATTR(connection, 0660, vgt_vport_connection_show, vgt_vport_connection_store);
+
+static struct kobj_attribute vport_type_attrs =
+	__ATTR(type, 0660, vgt_port_type_show, NULL);
+
+static struct kobj_attribute vport_port_override_attrs =
+	__ATTR(port_override, 0660, vgt_vport_port_override_show, vgt_vport_port_override_store);
+
+static struct kobj_attribute vport_pipe_attrs =
+	__ATTR(pipe, 0440, vgt_vport_pipe_show, NULL);
+
+// EDID text mode input interface for the convenience of testing
+static struct kobj_attribute vport_edid_text_attrs =
+	__ATTR(edid_text, 0660, NULL, vgt_port_edid_text_store);
+
+static struct attribute *vgt_vport_attrs[] = {
+	&vport_connection_attrs.attr,
+	&vport_type_attrs.attr,
+	&vport_port_override_attrs.attr,
+	&vport_pipe_attrs.attr,
+	&vport_edid_text_attrs.attr,
+	NULL,
+};
+
+static struct bin_attribute port_edid_attr = {
+        .attr = {
+                .name = "edid",
+                .mode = 0660
+        },
+        .size = EDID_SIZE,
+        .read = vgt_port_edid_show,
+        .write = vgt_port_edid_store,
+};
+
+static struct kobj_attribute pport_type_attrs =
+	__ATTR(type, 0440, vgt_port_type_show, NULL);
+
+static struct kobj_attribute pport_connection_attrs =
+	__ATTR(connection, 0440, vgt_pport_connection_show, NULL);
+
+static struct attribute *vgt_pport_attrs[] = {
+	&pport_connection_attrs.attr,
+	&pport_type_attrs.attr,
+	NULL,
+};
+
 /* copied code from here */
 static ssize_t kobj_attr_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
@@ -358,8 +726,6 @@ const struct sysfs_ops vgt_kobj_sysfs_ops = {
 
 
 /* copied code end */
-
-#define kobj_to_vgt(kobj) container_of((kobj), struct vgt_device, kobj)
 
 static ssize_t vgt_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -441,6 +807,18 @@ static struct kobj_type vgt_ctrl_ktype = {
 	.release	= vgt_kobj_release,
 	.sysfs_ops  = &vgt_kobj_sysfs_ops,
 	.default_attrs = vgt_ctrl_attrs,
+};
+
+static struct kobj_type vgt_vport_ktype = {
+	.release	= vgt_kobj_release,
+	.sysfs_ops	= &vgt_kobj_sysfs_ops,
+	.default_attrs	= vgt_vport_attrs,
+};
+
+static struct kobj_type vgt_pport_ktype = {
+	.release	= vgt_kobj_release,
+	.sysfs_ops	= &vgt_kobj_sysfs_ops,
+	.default_attrs	= vgt_pport_attrs,
 };
 
 static ssize_t
@@ -525,7 +903,7 @@ static struct bin_attribute igd_mmio_attr = {
 
 static int vgt_add_state_sysfs(vgt_params_t vp)
 {
-	int retval;
+	int retval, i;
 	struct vgt_device *vgt;
 	/*
 	* Create a simple kobject located under /sys/kernel/
@@ -560,17 +938,52 @@ static int vgt_add_state_sysfs(vgt_params_t vp)
 		kobject_put(&vgt->kobj);
 	}
 
+	for (i = 0; i < I915_MAX_PORTS; i++) {
+		retval = kobject_init_and_add(&vgt->ports[i].kobj,
+					      &vgt_vport_ktype,
+					      &vgt->kobj,
+					      "%s",
+					      VGT_PORT_NAME(i));
+
+		if (retval) {
+			printk(KERN_WARNING
+			       "%s: vgt vport kobject add error: %d\n",
+			       __func__, retval);
+			retval = -EINVAL;
+			goto kobj_fail;
+		}
+
+		retval = sysfs_create_bin_file(&vgt->ports[i].kobj,
+					    &port_edid_attr);
+		if (retval < 0) {
+			retval = -EINVAL;
+			goto kobj_fail;
+		}
+	}
+
+	return retval;
+
+kobj_fail:
+	for (; i >= 0; i++) {
+		kobject_put(&vgt->ports[i].kobj);
+	}
+	kobject_put(&vgt->kobj);
 	return retval;
 }
 
 static int vgt_del_state_sysfs(vgt_params_t vp)
 {
 	struct vgt_device *vgt;
+	int i;
 
 	vp.vm_id = -vp.vm_id;
 	vgt = vmid_2_vgt_device(vp.vm_id);
 	if (!vgt)
 		return -ENODEV;
+
+	for (i = 0; i < I915_MAX_PORTS; i++) {
+		kobject_put(&vgt->ports[i].kobj);
+	}
 
 	kobject_put(&vgt->kobj);
 
@@ -581,7 +994,8 @@ static int vgt_del_state_sysfs(vgt_params_t vp)
 
 int vgt_init_sysfs(struct pgt_device *pdev)
 {
-	int ret;
+	struct pgt_device *pgt = &default_device;
+	int ret, i = 0;
 
 	vgt_kset = kset_create_and_add("vgt", NULL, kernel_kobj);
 	if (!vgt_kset) {
@@ -609,9 +1023,36 @@ int vgt_init_sysfs(struct pgt_device *pdev)
 		goto kobj_fail;
 	}
 
+	for (i = 0; i < I915_MAX_PORTS; i++) {
+		ret = kobject_init_and_add(&pgt->ports[i].kobj,
+					      &vgt_pport_ktype,
+					      vgt_ctrl_kobj,
+					      "%s",
+					      VGT_PORT_NAME(i));
+
+		if (ret) {
+			printk(KERN_WARNING
+			       "%s: vgt pport kobject add error: %d\n",
+			       __func__, ret);
+			ret = -EINVAL;
+			kobject_put(&pgt->ports[i].kobj);
+			goto kobj_fail;
+		}
+
+		ret = sysfs_create_bin_file(&pgt->ports[i].kobj,
+					    &port_edid_attr);
+		if (ret < 0) {
+			ret = -EINVAL;
+			goto kobj_fail;
+		}
+	}
+
 	return 0;
 
 kobj_fail:
+	for (; i > 0; i--) {
+		kobject_put(&pgt->ports[i - 1].kobj);
+	}
 	kobject_put(vgt_ctrl_kobj);
 ctrl_fail:
 	kset_unregister(vgt_kset);

@@ -1079,6 +1079,40 @@ bool vgt_initial_mmio_setup (struct pgt_device *pdev)
 
 	__vgt_initial_mmio_space(pdev, vgt_base_reg_info, vgt_get_base_reg_num());
 
+	/* customize the initial MMIO
+	 * 1, GMBUS status
+	 * 2, Initial port status. 
+	 */
+
+	/* GMBUS2 has an in-use bit as the hw semaphore, and we should recover
+	 * it after the snapshot.
+	 */
+	pdev->initial_mmio_state[REG_INDEX(_REG_PCH_GMBUS2)] &= ~0x8000;
+	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS2,
+			VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2) | 0x8000);
+
+	pdev->initial_mmio_state[REG_INDEX(_REG_DDI_BUF_CTL_A)] &= ~1;
+	pdev->initial_mmio_state[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_A)] &=
+				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
+	pdev->initial_mmio_state[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_B)] &=
+				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
+	pdev->initial_mmio_state[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_C)] &=
+				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
+	pdev->initial_mmio_state[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_EDP)] &=
+				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
+
+	pdev->initial_mmio_state[REG_INDEX(_REG_PIPEACONF)] &=
+				~_REGBIT_PIPE_ENABLE;
+	pdev->initial_mmio_state[REG_INDEX(_REG_PIPEBCONF)] &=
+				~_REGBIT_PIPE_ENABLE;
+	pdev->initial_mmio_state[REG_INDEX(_REG_PIPECCONF)] &=
+				~_REGBIT_PIPE_ENABLE;
+	pdev->initial_mmio_state[REG_INDEX(_REG_PIPE_EDP_CONF)] &=
+				~_REGBIT_PIPE_ENABLE;
+
+	pdev->initial_mmio_state[REG_INDEX(_REG_DP_TP_CTL_E)] &=
+				~_REGBIT_DP_TP_ENABLE;
+
 	return true;
 }
 

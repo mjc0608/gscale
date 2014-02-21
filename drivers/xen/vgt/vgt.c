@@ -699,6 +699,11 @@ void vgt_destroy(void)
 			kfree(pdev->ports[i].dpcd);
 			pdev->ports[i].dpcd = NULL;
 		}
+
+		if (pdev->ports[i].cache.edid) {
+			kfree(pdev->ports[i].cache.edid);
+			pdev->ports[i].cache.edid = NULL;
+		}
 	}
 
 	vgt_cmd_parser_exit();
