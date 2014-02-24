@@ -80,6 +80,7 @@ extern bool bypass_dom0_addr_check;
 extern bool render_engine_reset;
 extern bool enable_panel_fitting;
 extern bool enable_reset;
+extern bool vgt_lock_irq;
 
 enum vgt_event_type {
 	// GT
@@ -2009,11 +2010,17 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 		cpu = vgt_enter();		\
 	else					\
 		cpu = 0;			\
-	spin_lock_irq(&pdev->lock);		\
+	if (vgt_lock_irq)			\
+		spin_lock_irq(&pdev->lock);	\
+	else					\
+		spin_lock(&pdev->lock);		\
 }
 
 #define vgt_unlock_dev(pdev, cpu) {		\
-	spin_unlock_irq(&pdev->lock);		\
+	if (vgt_lock_irq)			\
+		spin_unlock_irq(&pdev->lock);	\
+	else					\
+		spin_unlock(&pdev->lock);	\
 	if (likely(vgt_track_nest))		\
 		vgt_exit(cpu);			\
 	else					\
@@ -2025,11 +2032,17 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 		cpu = vgt_enter();		\
 	else					\
 		cpu = 0;			\
-	spin_lock_irqsave(&pdev->lock, flags);	\
+	if (vgt_lock_irq)			\
+		spin_lock_irqsave(&pdev->lock, flags);	\
+	else					\
+		spin_lock(&pdev->lock);		\
 }
 
 #define vgt_unlock_dev_flags(pdev, cpu, flags) {	\
-	spin_unlock_irqrestore(&pdev->lock, flags);	\
+	if (vgt_lock_irq)				\
+		spin_unlock_irqrestore(&pdev->lock, flags); \
+	else						\
+		spin_unlock(&pdev->lock);		\
 	if (likely(vgt_track_nest))			\
 		vgt_exit(cpu);				\
 	else						\
