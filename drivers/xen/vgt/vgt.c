@@ -541,9 +541,11 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 
 	vgt_probe_dpcd(pdev, -1);
-
 	vgt_probe_edid(pdev, -1);
 
+	mutex_init(&pdev->hpd_work.hpd_mutex);
+	INIT_WORK(&pdev->hpd_work.work, vgt_hotplug_udev_notify_func);
+	
 	/* create debugfs interface */
 	if (!vgt_init_debugfs(pdev)) {
 		printk("vGT:failed to create debugfs\n");

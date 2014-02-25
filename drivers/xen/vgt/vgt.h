@@ -759,7 +759,9 @@ struct vgt_uevent_info {
 	int vm_id;
 	enum kobject_action action;
 	char *env_var_table[VGT_MAX_UEVENT_VARS];
-	bool (*vgt_uevent_handler)(struct vgt_uevent_info *uevent_entry, struct pgt_device *dev);
+	bool (*vgt_uevent_handler)(enum vgt_uevent_type event,
+				struct vgt_uevent_info *uevent_entry,
+				struct pgt_device *dev);
 };
 
 void vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent);
@@ -779,6 +781,12 @@ typedef union {
 		uint32_t rsvd_16_31 : 16;
 	};
 } vgt_hotplug_cmd_t;
+
+struct hotplug_work {
+	struct work_struct work;
+	DECLARE_BITMAP(hotplug_uevent, UEVENT_MAX);
+	struct mutex hpd_mutex;
+};
 
 enum vgt_output_type {
 	VGT_OUTPUT_ANALOG = 0,
@@ -918,6 +926,8 @@ struct pgt_device {
 	bool dom0_irq_pending;
 	unsigned long dom0_ipi_irq_injecting;
 	int dom0_irq_cpu;
+
+	struct hotplug_work hpd_work;
 };
 
 /*
@@ -2054,6 +2064,7 @@ void vgt_trigger_virtual_event(struct vgt_device *vgt,
 void vgt_trigger_display_hot_plug(struct pgt_device *dev, vgt_hotplug_cmd_t hotplug_cmd);
 
 void vgt_signal_uevent(struct pgt_device *dev);
+void vgt_hotplug_udev_notify_func(struct work_struct *work);
 
 u32 vgt_recalculate_ier(struct pgt_device *pdev, unsigned int reg);
 u32 vgt_recalculate_mask_bits(struct pgt_device *pdev, unsigned int reg);

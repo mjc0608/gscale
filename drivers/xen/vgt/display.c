@@ -258,15 +258,21 @@ bool vgt_default_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt
 		return false;
 }
 
-bool vgt_hotplug_uevent_handler(struct vgt_uevent_info *uevent_entry, struct pgt_device *pdev)
+bool vgt_hotplug_uevent_handler(enum vgt_uevent_type event,
+			struct vgt_uevent_info *uevent_entry,
+			struct pgt_device *pdev)
 {
-	vgt_probe_dpcd(pdev, -1);
-	vgt_probe_edid(pdev, -1);
-	return vgt_default_uevent_handler(uevent_entry, pdev);
+	mutex_lock(&pdev->hpd_work.hpd_mutex);
+	set_bit(event, pdev->hpd_work.hotplug_uevent);
+	mutex_unlock(&pdev->hpd_work.hpd_mutex);
+
+	schedule_work(&pdev->hpd_work.work);
+	return true;
 }
 
-static bool vgt_dpy_stat_uevent_handler(struct vgt_uevent_info *uevent_entry,
-	struct pgt_device *pdev)
+static bool vgt_dpy_stat_uevent_handler(enum vgt_uevent_type event,
+			struct vgt_uevent_info *uevent_entry,
+			struct pgt_device *pdev)
 {
 	/* Add vmid */
 	int retval;
@@ -335,11 +341,30 @@ void vgt_signal_uevent(struct pgt_device *pdev)
 		ASSERT(info_entry);
 		ASSERT(info_entry->vgt_uevent_handler);
 
-		rc = info_entry->vgt_uevent_handler(info_entry, pdev);
+		rc = info_entry->vgt_uevent_handler(bit, info_entry, pdev);
 		if (rc == false)
 			printk("%s: %d: vGT: failed to send uevent [%s]!\n",
 					__func__, __LINE__, info_entry->uevent_name);
 	}
+}
+
+void vgt_hotplug_udev_notify_func(struct work_struct *work)
+{
+	struct hotplug_work *hpd_work = (struct hotplug_work *)work;
+	struct pgt_device *pdev = container_of(hpd_work, struct pgt_device, hpd_work);
+	int bit;
+
+	vgt_probe_dpcd(pdev, -1);
+	vgt_probe_edid(pdev, -1);
+
+	mutex_lock(&hpd_work->hpd_mutex);
+	for_each_set_bit(bit, hpd_work->hotplug_uevent, UEVENT_MAX) {
+		struct vgt_uevent_info *info_entry;
+		clear_bit(bit, hpd_work->hotplug_uevent);
+		info_entry = &vgt_default_uevent_info_table[bit];
+		vgt_default_uevent_handler(info_entry, pdev);
+	}
+	mutex_unlock(&hpd_work->hpd_mutex);
 }
 
 void vgt_update_monitor_status(struct vgt_device *vgt)
