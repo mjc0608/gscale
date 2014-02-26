@@ -333,6 +333,8 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 {
 	int i, ret;
 	struct drm_device *drm_dev = pci_get_drvdata(pdev->pdev);
+	u8 check_sum = 0;
+	u8 *raw_edid;
 
 	if (drm_dev)
 		mutex_lock(&drm_dev->mode_config.mutex);
@@ -457,13 +459,26 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		}
 
 		if (*pedid) {
+			int j;
 			score = vgt_edid_header_is_valid((*pedid)->edid_block);
 			if (score < 8 && score >= 6) {
 				vgt_err("Fixing EDID header, your hardware may be failing\n");
 				memcpy((*pedid)->edid_block, edid_header, sizeof(edid_header));
 			}
-			if (score >= 6) {
+			check_sum = 0;
+			raw_edid = (*pedid)->edid_block;
+			for (j = 0; j < EDID_SIZE; ++ j) {
+				check_sum += raw_edid[j];
+			}
+			if(check_sum) {
+				vgt_err("EDID check sum is invalid\n");
+			}
+			if (score >= 6 && check_sum == 0) {
 				is_edid_valid = true;
+			} else {
+				is_edid_valid = false;
+				kfree(*pedid);
+				*pedid = NULL;
 			}
 		}
 
