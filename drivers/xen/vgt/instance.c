@@ -485,6 +485,8 @@ static void vgt_reset_ringbuffer(struct vgt_device *vgt, unsigned long ring_bitm
 
 		memset(&rb->vring, 0, sizeof(vgt_ringbuffer_t));
 		memset(&rb->sring, 0, sizeof(vgt_ringbuffer_t));
+
+		vgt_disable_ring(vgt, bit);
 	}
 
 	return;
