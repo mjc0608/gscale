@@ -72,7 +72,8 @@ int vgt_decode_primary_plane_format(struct vgt_device *vgt,
 	plane->base = __vreg(vgt, VGT_DSPSURF(pipe)) & GTT_PAGE_MASK;
 	plane->stride = __vreg(vgt, VGT_DSPSTRIDE(pipe)) &
 				_PRI_PLANE_STRIDE_MASK;
-	plane->width = __vreg(vgt, VGT_HTOTAL(pipe)) & _ACTIVE_WIDTH_MASK;
+	plane->width = (__vreg(vgt, VGT_PIPESRC(pipe)) & _PIPE_H_SRCSZ_MASK) >>
+				_PIPE_H_SRCSZ_SHIFT;
 	plane->width += 1;
 	plane->height = (__vreg(vgt, VGT_PIPESRC(pipe)) &
 			 _PIPE_V_SRCSZ_MASK) >> _PIPE_V_SRCSZ_SHIFT;
