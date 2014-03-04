@@ -472,7 +472,7 @@ static void vgt_reset_ringbuffer(struct vgt_device *vgt, unsigned long ring_bitm
 	int bit;
 
 	for_each_set_bit(bit, &ring_bitmap, sizeof(ring_bitmap)) {
-		if (bit == vgt->pdev->max_engines)
+		if (bit >= vgt->pdev->max_engines)
 			break;
 
 		rb = &vgt->rb[bit];
