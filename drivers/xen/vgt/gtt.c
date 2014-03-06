@@ -119,7 +119,12 @@ static unsigned long vgt_gma_2_shadow_gpa(struct vgt_device *vgt, unsigned long 
 
 	ASSERT(vgt->vm_id != 0);
 
-	p = &vgt->shadow_pte_table[((gma >> 22) & 0x3ff)];
+	if (unlikely(gma >= (1 << 31))) {
+		vgt_warn("invalid gma value 0x%lx\n", gma);
+		return INVALID_ADDR;
+	}
+
+	p = &vgt->shadow_pte_table[((gma >> 22) & 0x1ff)];
 
 	/* gpa is physical pfn from shadow page table, we need VM's
 	 * pte page entry */
@@ -141,7 +146,12 @@ static unsigned long vgt_gma_2_dom0_ppgtt_gpa(struct vgt_device *vgt, unsigned l
 	unsigned long pfn, gpa;
 	u32 *ent, pte;
 
-	gtt_index = vgt->ppgtt_base + ((gma >> 22) & 0x3ff);
+	if (unlikely(gma >= (1 << 31))) {
+		vgt_warn("invalid gma value 0x%lx\n", gma);
+		return INVALID_ADDR;
+	}
+
+	gtt_index = vgt->ppgtt_base + ((gma >> 22) & 0x1ff);
 	pfn = gtt_pte_get_pfn(vgt->pdev, vgt->vgtt[gtt_index]);
 
 	/* dom0 PTE page */
