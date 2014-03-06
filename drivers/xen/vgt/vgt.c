@@ -689,7 +689,7 @@ void vgt_destroy(void)
 	vfree(pdev->reg_info);
 	vfree(pdev->initial_mmio_state);
 
-	for (i = 0; i < VGT_PORT_MAX; ++ i) {
+	for (i = 0; i < I915_MAX_PORTS; ++ i) {
 		if (pdev->ports[i].edid) {
 			kfree(pdev->ports[i].edid);
 			pdev->ports[i].edid = NULL;
