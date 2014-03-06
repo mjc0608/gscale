@@ -469,7 +469,7 @@ static void vgt_reset_ppgtt(struct vgt_device *vgt, unsigned long ring_bitmap)
 		}
 
 		for_each_set_bit(bit, &ring_bitmap, sizeof(ring_bitmap)) {
-			if (bit == vgt->pdev->max_engines)
+			if (bit >= vgt->pdev->max_engines)
 				break;
 
 			vgt_info("VM %d: Reset ring %d PPGTT state.\n", vgt->vm_id, bit);
