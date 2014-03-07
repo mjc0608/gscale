@@ -2214,8 +2214,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 void vgt_release_instance(struct vgt_device *vgt);
 int vgt_init_sysfs(struct pgt_device *pdev);
 void vgt_destroy_sysfs(void);
-extern void vgt_set_display_pointer(int vm_id);
-extern ssize_t vgt_get_display_pointer(char *buf);
 extern void vgt_clear_port(struct vgt_device *vgt, int index);
 extern void vgt_probe_edid(struct pgt_device *pdev, int index);
 extern void vgt_propagate_edid(struct vgt_device *vgt, int index);

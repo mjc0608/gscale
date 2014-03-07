@@ -137,34 +137,6 @@ void do_vgt_fast_display_switch(struct pgt_device *pdev)
 	current_foreground_vm(pdev) = to_vgt;
 }
 
-static int display_pointer_id = 0;
-void vgt_set_display_pointer(int vm_id)
-{
-	struct vgt_device *vgt = vmid_2_vgt_device(vm_id);
-
-	if (!vgt) {
-		vgt_dbg("vGT: invalid vm_id (%d)\n", vm_id);
-		return;
-	}
-
-	VGT_MMIO_WRITE(vgt->pdev, _REG_DSPASURF, __sreg(vgt, _REG_DSPASURF));
-	VGT_MMIO_WRITE(vgt->pdev, _REG_CURABASE, __sreg(vgt, _REG_CURABASE));
-	vgt_dbg("vGT: set display to VM(%d) with (%x, %x)\n", vm_id,
-		__sreg(vgt, _REG_DSPASURF), __sreg(vgt, _REG_CURABASE));
-	display_pointer_id = vm_id;
-}
-
-ssize_t vgt_get_display_pointer(char *buf)
-{
-	struct vgt_device *vgt = vmid_2_vgt_device(display_pointer_id);
-
-	return sprintf(buf, "Current pointer: id [%d] sReg[%x,%x] pReg[%x,%x]\n",
-			display_pointer_id,
-			__sreg(vgt, _REG_DSPASURF), __sreg(vgt, _REG_CURABASE),
-			VGT_MMIO_READ(vgt->pdev, _REG_DSPASURF),
-			VGT_MMIO_READ(vgt->pdev, _REG_CURABASE));
-}
-
 static inline int get_event_and_edid_info(vgt_hotplug_cmd_t cmd,
 				enum vgt_event_type *pevent,
 				enum vgt_port_type *pedid_idx)

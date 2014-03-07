@@ -151,33 +151,6 @@ out:
 	return ret;
 }
 
-static ssize_t vgt_display_pointer_store(struct kobject *kobj, struct kobj_attribute *attr,
-			const char *buf, size_t count)
-{
-	int vmid;
-
-	if (sscanf(buf, "%du", &vmid) != 1)
-		return -EINVAL;
-
-	mutex_lock(&vgt_sysfs_lock);
-	vgt_set_display_pointer(vmid);
-	mutex_unlock(&vgt_sysfs_lock);
-
-	return count;
-}
-
-static ssize_t vgt_display_pointer_show(struct kobject *kobj, struct kobj_attribute *attr,
-			char *buf)
-{
-	ssize_t ret;
-
-	mutex_lock(&vgt_sysfs_lock);
-	ret = vgt_get_display_pointer(buf);
-	mutex_unlock(&vgt_sysfs_lock);
-
-	return ret;
-}
-
 static ssize_t vgt_ctx_switch_store(struct kobject *kobj, struct kobj_attribute *attr,
 			const char *buf, size_t count)
 {
@@ -295,8 +268,6 @@ static struct kobj_attribute display_owner_ctrl_attrs =
 	__ATTR(display_owner, 0660, vgt_display_owner_show, vgt_display_owner_store);
 static struct kobj_attribute foreground_vm_ctrl_attrs =
 	__ATTR(foreground_vm, 0660, vgt_foreground_vm_show, vgt_foreground_vm_store);
-static struct kobj_attribute display_pointer_attrs =
-	__ATTR(display_pointer, 0660, vgt_display_pointer_show, vgt_display_pointer_store);
 
 static struct kobj_attribute hot_plug_event_attrs =
 	__ATTR(virtual_event, 0660, vgt_hot_plug_reader, vgt_hot_plug_trigger);
@@ -317,7 +288,6 @@ static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
 	&display_owner_ctrl_attrs.attr,
 	&foreground_vm_ctrl_attrs.attr,
-	&display_pointer_attrs.attr,
 	&hot_plug_event_attrs.attr,
 	&ctx_switch_attrs.attr,
 	&validate_ctx_switch_attrs.attr,
