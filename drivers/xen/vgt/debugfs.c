@@ -946,13 +946,14 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	int retval,i;
 	struct array_data *p;
 	int vgt_id;
-	struct pgt_device *pdev = vgt->pdev;
+	struct pgt_device *pdev;
 	struct dentry *perf_dir_entry, *cmdstat_dir_entry;
 
 	if (!vgt || !d_vgt_debug)
 		return -EINVAL;
 
 	vgt_id = vgt->vgt_id;
+	pdev = vgt->pdev;
 
 	retval = sprintf(vm_dir_name[vgt_id], "vm%d", vgt->vm_id);
 	if (retval <= 0) {
