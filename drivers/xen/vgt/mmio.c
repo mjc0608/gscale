@@ -1091,7 +1091,8 @@ bool vgt_initial_mmio_setup (struct pgt_device *pdev)
 	VGT_MMIO_WRITE(pdev, _REG_PCH_GMBUS2,
 			VGT_MMIO_READ(pdev, _REG_PCH_GMBUS2) | 0x8000);
 
-	pdev->initial_mmio_state[REG_INDEX(_REG_DDI_BUF_CTL_A)] &= ~1;
+	pdev->initial_mmio_state[REG_INDEX(_REG_DDI_BUF_CTL_A)] &=
+				~_DDI_BUFCTL_DETECT_MASK;
 	pdev->initial_mmio_state[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_A)] &=
 				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
 	pdev->initial_mmio_state[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_B)] &=

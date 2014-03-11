@@ -363,6 +363,9 @@ void vgt_update_monitor_status(struct vgt_device *vgt)
 		vgt_dbg("enable D port monitor\n");
 		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_D_HOTPLUG;
 	}
+	if (test_bit(VGT_DP_A, vgt->presented_ports)) {
+		__vreg(vgt, _REG_DDI_BUF_CTL_A) |= _DDI_BUFCTL_DETECT_MASK;
+	}
 }
 
 enum vgt_pipe get_edp_input(uint32_t wr_data)
