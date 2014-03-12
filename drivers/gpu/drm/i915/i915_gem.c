@@ -3591,6 +3591,12 @@ search_free:
 		if (ret == 0)
 			goto search_free;
 
+		DRM_ERROR("fail to allocate space from %s GM space, size: %u.\n",
+				map_and_fenceable ? "low" : "whole",
+				size);
+
+		dump_stack();
+
 		goto err_free_vma;
 	}
 	if (WARN_ON(!i915_gem_valid_gtt_space(vma, obj->cache_level))) {
