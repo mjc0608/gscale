@@ -605,7 +605,18 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 				(*dpcd)->data_valid = false;
 				clear_bit(dp_port, pdev->detected_ports);
 			} else {
+				u32 lane_count;
 				(*dpcd)->data_valid = true;
+
+				/*temp workaround*/
+				if ((*dpcd)->data[DPCD_MAX_LINK_RATE] != 0x6 && (*dpcd)->data[DPCD_MAX_LINK_RATE] != 0xa) {
+					(*dpcd)->data[DPCD_MAX_LINK_RATE] = 0xa;
+				}
+				lane_count = (*dpcd)->data[DPCD_MAX_LANE_COUNT];
+				if (lane_count != 0x1 && lane_count != 0x2 && lane_count != 0x4) {
+					(*dpcd)->data[DPCD_MAX_LANE_COUNT] = 0x4;
+				}
+
 				set_bit(dp_port, pdev->detected_ports);
 				pdev->ports[i + PORT_A].type = dp_port;
 				if (vgt_debug) {
