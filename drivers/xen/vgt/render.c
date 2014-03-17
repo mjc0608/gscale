@@ -195,7 +195,7 @@ bool idle_render_engine(struct pgt_device *pdev, int id)
 	return true;
 }
 
-static bool idle_rendering_engines(struct pgt_device *pdev, int *id)
+bool idle_rendering_engines(struct pgt_device *pdev, int *id)
 {
 	int i;
 

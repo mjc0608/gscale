@@ -3064,8 +3064,14 @@ static void i915_hangcheck_elapsed(unsigned long data)
 		}
 	}
 
-	if (rings_hung)
-		return i915_handle_error(dev, true, "Ring hung");
+	if (rings_hung) {
+#ifdef DRM_I915_VGT_SUPPORT
+		if (dev_priv->in_xen_vgt)
+			vgt_handle_dom0_device_reset();
+		else
+#endif
+			i915_handle_error(dev, true, "Ring hung");
+	}
 
 	if (busy_count)
 		/* Reset timer case chip hangs without another request

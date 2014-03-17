@@ -828,7 +828,7 @@ static void do_device_reset(struct pgt_device *pdev)
 
 	set_bit(WAIT_RESET, &vgt_dom0->reset_flags);
 
-	i915_handle_error(drm_dev, true);
+	i915_handle_error(drm_dev, true, "VGT device reset");
 
 	i915_wait_error_work_complete(drm_dev);
 
@@ -866,6 +866,36 @@ static void do_device_reset(struct pgt_device *pdev)
 	vgt_info("Finish.\n");
 
 	return;
+}
+
+int vgt_handle_dom0_device_reset(void)
+{
+	struct pgt_device *pdev = &default_device;
+	struct drm_device *drm_dev = pci_get_drvdata(pdev->pdev);
+
+	unsigned long flags;
+	int cpu;
+
+	int id;
+	bool rc;
+
+	ASSERT(drm_dev);
+
+	vgt_info("DOM0 hangcheck timer request reset device.\n");
+
+	vgt_lock_dev_flags(pdev, cpu, flags);
+	rc = idle_rendering_engines(pdev, &id);
+	vgt_unlock_dev_flags(pdev, cpu, flags);
+
+	if (!rc) {
+		vgt_info("Really hung, request to reset device.\n");
+		vgt_raise_request(pdev, VGT_REQUEST_DEVICE_RESET);
+	} else {
+		vgt_info("Not really hung, continue DOM0 reset sequence.\n");
+		i915_handle_error(drm_dev, true, "VGT DOM0 device reset");
+	}
+
+	return 0;
 }
 
 int vgt_reset_device(struct pgt_device *pdev)

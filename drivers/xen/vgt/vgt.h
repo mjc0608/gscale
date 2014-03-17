@@ -409,6 +409,7 @@ struct vgt_intel_device_info {
 
 struct pgt_device;
 
+extern bool idle_rendering_engines(struct pgt_device *pdev, int *id);
 extern bool idle_render_engine(struct pgt_device *pdev, int id);
 extern bool vgt_do_render_context_switch(struct pgt_device *pdev);
 extern void vgt_destroy(void);
