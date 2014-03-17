@@ -1789,8 +1789,8 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 			sring->tail = vring->tail;
 #endif
 
-
-		vgt_scan_vring(vgt, ring_id);
+		if (vring->ctl & _RING_CTL_ENABLE)
+			vgt_scan_vring(vgt, ring_id);
 
 		t1 = get_cycles();
 		stat->ring_tail_mmio_wcycles += (t1-t0);
@@ -1861,7 +1861,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	 * quantum
 	 */
 	if (reg_hw_access(vgt, off)) {
-		if (rel_off == RB_OFFSET_TAIL)
+		if (rel_off == RB_OFFSET_TAIL && (vring->ctl & _RING_CTL_ENABLE))
 			vgt_submit_commands(vgt, ring_id);
 		else
 			VGT_MMIO_WRITE(pdev, off,
