@@ -169,6 +169,7 @@ static void show_batchbuffer(struct pgt_device *pdev, u32 addr,
 {
 	int i;
 	char *ip_va;
+	u32 start;
 	struct vgt_device *vgt = current_render_owner(pdev);
 
 	if (!vgt) {
@@ -176,18 +177,29 @@ static void show_batchbuffer(struct pgt_device *pdev, u32 addr,
 		return;
 	}
 
-	printk("Batch buffer contents: \n");
-	for (i = -bytes; i < bytes; i += 4) {
-		ip_va = vgt_gma_to_va(vgt, addr+i, ppgtt);
+	if (addr < bytes) {
+		bytes *= 2;
+		start = 0;
+	} else if ((addr + bytes) >= (1 << 31)) {
+		bytes *= 2;
+		start = (1 << 31) - bytes;
+	} else {
+		start = addr - bytes;
+		bytes *= 2;
+	}
 
-		if (!((i + bytes) % 32))
-			printk("\n[%08x]:", addr+i);
+	printk("Batch buffer contents: \n");
+	for (i = 0; i < bytes; i += 4) {
+		ip_va = vgt_gma_to_va(vgt, start + i, ppgtt);
+
+		if (!(i % 32))
+			printk("\n[%08x]:", start + i);
 
 		if (ip_va == NULL)
 			printk(" %8s", "N/A");
 		else
 			printk(" %08x", *((u32 *)ip_va));
-		if (!i)
+		if (start + i == addr)
 			printk("(*)");
 	}
 	printk("\n");
@@ -251,14 +263,21 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	off = WRAP_OFF(p_head - 8, ring_len);
 	cur = (u32*)(p_contents + off);
 	if ((*cur & 0xfff00000) == 0x18800000 && vgt) {
+		int ppgtt = (*cur & _CMDBIT_BB_START_IN_PPGTT);
+
+		if (ppgtt && !vgt->ppgtt_initialized) {
+			printk("Batch buffer in PPGTT with PPGTT disabled?\n");
+			return;
+		}
+
 		printk("Hang in (%s) batch buffer (%x)\n",
-			(*cur & _CMDBIT_BB_START_IN_PPGTT) ? "PPGTT" : "GTT",
+			ppgtt ? "PPGTT" : "GTT",
 			*(cur + 1));
 
 		show_batchbuffer(pdev,
 			VGT_MMIO_READ(pdev, VGT_ACTHD(ring_id)),
-			(*cur & _CMDBIT_BB_START_IN_PPGTT),
-			bytes);
+			bytes,
+			ppgtt);
 	}
 }
 
