@@ -59,6 +59,7 @@ void vgt_del_mmio_entry(unsigned int base)
 
 	if ((e = vgt_find_mmio_entry(base))) {
 		hash_del(&e->hlist);
+		kfree(e);
 	}
 }
 
@@ -118,7 +119,7 @@ void vgt_clear_wp_table(struct vgt_device *vgt)
 bool vgt_register_mmio_handler(unsigned int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write)
 {
-	int i, end;
+	int i, j, end;
 	struct vgt_mmio_entry *mht;
 
 	end = start + bytes -1;
@@ -132,7 +133,10 @@ bool vgt_register_mmio_handler(unsigned int start, int bytes,
 		mht = kmalloc(sizeof(*mht), GFP_KERNEL);
 		if (mht == NULL) {
 			printk("Insufficient memory in %s\n", __FUNCTION__);
-			return false;
+			for (j = start; j < i; j += 4) {
+				vgt_del_mmio_entry (j);
+			}
+			BUG();
 		}
 		mht->base = i;
 
