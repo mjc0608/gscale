@@ -189,7 +189,6 @@ int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages,
 {
 	xen_hvm_vgt_wp_pages_t req;
 	int i, rc = 0;
-	unsigned long *p = pages;
 
 	if (nr > MAX_WP_BATCH_PAGES)
 		return -1;
@@ -200,7 +199,7 @@ int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages,
 	req.nr_pages = nr;
 
 	for (i = 0; i < nr; i++)
-		req.wp_pages[i] = *pages++;
+		req.wp_pages[i] = pages[i];
 
 	rc = HYPERVISOR_hvm_op(HVMOP_vgt_wp_pages, &req);
 	if (rc)
@@ -213,10 +212,11 @@ int vgt_set_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages,
 			mht = kmalloc(sizeof(*mht), GFP_ATOMIC);
 			if (!mht) {
 				vgt_err("out of memory!\n");
-				break;
+				vgt_unset_wp_pages(vgt, nr, pages);
+				return -ENOMEM;
 			}
-			mht->pfn = *p++;
-			mht->idx = *idx++;
+			mht->pfn = pages[i];
+			mht->idx = idx[i];
 			vgt_add_wp_page_entry(vgt, mht);
 		}
 	}
@@ -234,7 +234,6 @@ int vgt_unset_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
 {
 	xen_hvm_vgt_wp_pages_t req;
 	int i, rc = 0;
-	unsigned long *p = pages;
 
 	if (nr > MAX_WP_BATCH_PAGES)
 		return -1;
@@ -245,14 +244,14 @@ int vgt_unset_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages)
 	req.nr_pages = nr;
 
 	for (i = 0; i < nr; i++)
-		req.wp_pages[i] = *pages++;
+		req.wp_pages[i] = pages[i];
 
 	rc = HYPERVISOR_hvm_op(HVMOP_vgt_wp_pages, &req);
 	if (rc)
 		vgt_err("Unset WP pages failed!\n");
 	else {
 		for (i = 0; i < nr; i++)
-			vgt_del_wp_page_entry(vgt, *p++);
+			vgt_del_wp_page_entry(vgt, pages[i]);
 	}
 
 	return rc;

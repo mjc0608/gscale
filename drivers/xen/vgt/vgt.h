@@ -2266,6 +2266,7 @@ extern unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte);
 
 extern void vgt_add_wp_page_entry(struct vgt_device *vgt, struct vgt_wp_page_entry *e);
 extern void vgt_del_wp_page_entry(struct vgt_device *vgt, unsigned int pfn);
+extern int vgt_unset_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages);
 
 extern bool vgt_init_shadow_ppgtt(struct vgt_device *vgt);
 extern bool vgt_setup_ppgtt(struct vgt_device *vgt);
