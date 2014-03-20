@@ -341,7 +341,12 @@ static inline void vgt_clear_dpcd(struct gt_port *port)
 	}
 }
 
-void vgt_probe_edid(struct pgt_device *pdev, int index)
+static inline bool vgt_port_pluggable(int i)
+{
+	return (i != VGT_DP_A);
+}
+
+void vgt_probe_edid(struct pgt_device *pdev, int index, bool init)
 {
 	int i, ret;
 	struct drm_device *drm_dev = pci_get_drvdata(pdev->pdev);
@@ -359,7 +364,9 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 		int port_id = port_type_to_port(i);
 		vgt_edid_data_t *new_edid = NULL;
 
-		if (!vgt_port_equivalent(i, index)) {
+		if (!init) {
+			if (!vgt_port_pluggable(i) ||
+				!vgt_port_equivalent(i, index))
 			continue;
 		}
 
@@ -520,7 +527,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index)
 /*
  * Get physical DPCD data from DP. DP is specified by index parameter.
  */
-void vgt_probe_dpcd(struct pgt_device *pdev, int index)
+void vgt_probe_dpcd(struct pgt_device *pdev, int index, bool init)
 {
 	int i;
 	struct drm_device *drm_dev = pci_get_drvdata(pdev->pdev);
@@ -533,8 +540,11 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index)
 		enum vgt_port_type dp_port = 0;
 		struct vgt_dpcd_data **dpcd = &(pdev->ports[i + PORT_A].dpcd);
 
-		if (!vgt_port_equivalent(i, index))
+		if (!init) {
+			if (!vgt_port_pluggable(i) ||
+				!vgt_port_equivalent(i, index))
 			continue;
+		}
 
 		switch (i) {
 		case DPCD_DPA:

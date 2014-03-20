@@ -329,8 +329,8 @@ void vgt_hotplug_udev_notify_func(struct work_struct *work)
 	struct pgt_device *pdev = container_of(hpd_work, struct pgt_device, hpd_work);
 	int bit;
 
-	vgt_probe_dpcd(pdev, -1);
-	vgt_probe_edid(pdev, -1);
+	vgt_probe_dpcd(pdev, -1, false);
+	vgt_probe_edid(pdev, -1, false);
 
 	mutex_lock(&hpd_work->hpd_mutex);
 	for_each_set_bit(bit, hpd_work->hotplug_uevent, UEVENT_MAX) {

@@ -552,8 +552,8 @@ int vgt_initialize(struct pci_dev *dev)
 	if (vgt_cmd_parser_init(pdev) < 0)
 		goto err;
 
-	vgt_probe_dpcd(pdev, -1);
-	vgt_probe_edid(pdev, -1);
+	vgt_probe_dpcd(pdev, -1, true);
+	vgt_probe_edid(pdev, -1, true);
 
 	mutex_init(&pdev->hpd_work.hpd_mutex);
 	INIT_WORK(&pdev->hpd_work.work, vgt_hotplug_udev_notify_func);
@@ -749,9 +749,6 @@ int vgt_suspend(struct pci_dev *pdev)
 }
 EXPORT_SYMBOL(vgt_suspend);
 
-#define PLUGGABLE_PORTS  (VGT_CRT | VGT_DP_B | VGT_DP_C | VGT_DP_D |\
-		VGT_HDMI_B | VGT_HDMI_C | VGT_HDMI_D)
-
 int vgt_resume(struct pci_dev *pdev)
 {
 	struct pgt_device *node, *pgt = NULL;
@@ -797,9 +794,9 @@ int vgt_resume(struct pci_dev *pdev)
 	state_vreg_init(vgt_dom0);
 
 
-	vgt_probe_dpcd(pgt, PLUGGABLE_PORTS);
+	vgt_probe_dpcd(pgt, -1, false);
 
-	vgt_probe_edid(pgt, PLUGGABLE_PORTS);
+	vgt_probe_edid(pgt, -1, false);
 
 	/* initialize i2c states */
 	vgt_init_i2c_bus(&vgt_dom0->vgt_i2c_bus);
