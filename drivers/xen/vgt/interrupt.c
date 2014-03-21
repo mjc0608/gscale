@@ -360,7 +360,20 @@ bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 	return true;
 }
 
-bool vgt_reg_isr_handler(struct vgt_device *vgt, unsigned int reg,
+bool vgt_reg_isr_read(struct vgt_device *vgt, unsigned int reg,
+	void *p_data, unsigned int bytes)
+{
+	vgt_reg_t isr_value;
+	if (is_current_display_owner(vgt) && reg == _REG_SDEISR) {
+		isr_value = VGT_MMIO_READ(vgt->pdev, _REG_SDEISR);
+		memcpy(p_data, (char *)&isr_value, bytes);
+		return true;
+	} else {
+		return default_mmio_read(vgt, reg, p_data, bytes);
+	}
+}
+
+bool vgt_reg_isr_write(struct vgt_device *vgt, unsigned int reg,
 	void *p_data, unsigned int bytes)
 {
 	vgt_dbg("IRQ: capture ISR write on reg (%x) with val (%x)." \
@@ -1306,12 +1319,13 @@ static void vgt_init_events(
 	SET_POLICY_DOM0(hstate, AUX_CHENNEL_D);
 
 	/* Monitor interfaces are controlled by XenGT driver */
-	SET_POLICY_NONE(hstate, DP_A_HOTPLUG);
-	SET_POLICY_NONE(hstate, DP_B_HOTPLUG);
-	SET_POLICY_NONE(hstate, DP_C_HOTPLUG);
-	SET_POLICY_NONE(hstate, DP_D_HOTPLUG);
-	SET_POLICY_NONE(hstate, SDVO_B_HOTPLUG);
-	SET_POLICY_NONE(hstate, CRT_HOTPLUG);
+	SET_POLICY_DOM0(hstate, DP_A_HOTPLUG);
+	SET_POLICY_DOM0(hstate, DP_B_HOTPLUG);
+	SET_POLICY_DOM0(hstate, DP_C_HOTPLUG);
+	SET_POLICY_DOM0(hstate, DP_D_HOTPLUG);
+	SET_POLICY_DOM0(hstate, SDVO_B_HOTPLUG);
+	SET_POLICY_DOM0(hstate, CRT_HOTPLUG);
+
 	SET_POLICY_DOM0(hstate, GMBUS);
 }
 

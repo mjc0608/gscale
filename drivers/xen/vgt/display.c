@@ -200,10 +200,13 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 				continue;
 		}
 
+		if (vgt->vm_id == 0) {
+			continue;
+		}
+
 		if (hotplug_cmd.action == 0x1) {
 			/* plug in */
-			if (propagate_monitor_to_guest ||
-				is_current_display_owner(vgt)) {
+			if (propagate_monitor_to_guest) {
 				vgt_propagate_edid(vgt, port_idx);
 				vgt_propagate_dpcd(vgt, port_idx);
 			}
