@@ -1312,7 +1312,7 @@ static void vgt_init_events(
 	SET_POLICY_NONE(hstate, DP_D_HOTPLUG);
 	SET_POLICY_NONE(hstate, SDVO_B_HOTPLUG);
 	SET_POLICY_NONE(hstate, CRT_HOTPLUG);
-	SET_POLICY_NONE(hstate, GMBUS);
+	SET_POLICY_DOM0(hstate, GMBUS);
 }
 
 static enum hrtimer_restart vgt_dpy_timer_fn(struct hrtimer *data)

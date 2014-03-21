@@ -43,13 +43,19 @@ static bool vgt_error_handler(struct vgt_device *vgt, unsigned int offset,
 static bool gmbus_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	return vgt_i2c_handle_gmbus_read(vgt, offset, p_data, bytes);
+	if (reg_hw_access(vgt, offset))
+		return default_mmio_read(vgt, offset, p_data, bytes);
+	else
+		return vgt_i2c_handle_gmbus_read(vgt, offset, p_data, bytes);
 }
 
 static bool gmbus_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	return vgt_i2c_handle_gmbus_write(vgt, offset, p_data, bytes);
+	if (reg_hw_access(vgt, offset))
+		return default_mmio_write(vgt, offset, p_data, bytes);
+	else
+		return vgt_i2c_handle_gmbus_write(vgt, offset, p_data, bytes);
 }
 
 static bool fence_mmio_read(struct vgt_device *vgt, unsigned int off,
@@ -2771,7 +2777,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_BLC_PWM_PCH_CTL1, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 {_REG_BLC_PWM_PCH_CTL2, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 
-{_REG_PCH_GMBUS0, 4*4, F_VIRT, 0, D_ALL, gmbus_mmio_read, gmbus_mmio_write},
+{_REG_PCH_GMBUS0, 4*4, F_DPY, 0, D_ALL, gmbus_mmio_read, gmbus_mmio_write},
 {_REG_PCH_GPIOA, 6*4, F_VIRT, 0, D_ALL, NULL, NULL},
 
 {_REG_DP_BUFTRANS, 0x28, F_DPY, 0, D_ALL, NULL, NULL},
