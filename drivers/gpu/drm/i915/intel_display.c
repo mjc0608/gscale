@@ -11534,6 +11534,8 @@ static int intel_crtc_set_config(struct drm_mode_set *set)
 	struct intel_crtc_config *pipe_config;
 	unsigned modeset_pipes, prepare_pipes, disable_pipes;
 	int ret;
+	
+	drm_i915_private_t *dev_priv;
 
 	BUG_ON(!set);
 	BUG_ON(!set->crtc);
@@ -11552,6 +11554,7 @@ static int intel_crtc_set_config(struct drm_mode_set *set)
 	}
 
 	dev = set->crtc->dev;
+	dev_priv = dev->dev_private;
 
 	ret = -ENOMEM;
 	config = kzalloc(sizeof(*config), GFP_KERNEL);
@@ -11639,6 +11642,17 @@ static int intel_crtc_set_config(struct drm_mode_set *set)
 			intel_modeset_check_state(set->crtc->dev);
 	}
 
+#ifdef DRM_I915_VGT_SUPPORT
+		if (dev_priv->in_xen_vgt == true) {
+			/*
+			 * Tell VGT that we have a valid surface to show
+			 * after modesetting. We doesn't distinguish DOM0 and
+			 * Linux guest here, The PVINFO write handler will
+			 * handle this.
+			 */
+			I915_WRITE(vgt_info_off(display_ready), 1);		
+		}
+#endif
 	if (ret) {
 		DRM_DEBUG_KMS("failed to set mode on [CRTC:%d], err = %d\n",
 			      set->crtc->base.id, ret);
