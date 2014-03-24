@@ -240,12 +240,7 @@ bool vgt_hotplug_uevent_handler(enum vgt_uevent_type event,
 			struct vgt_uevent_info *uevent_entry,
 			struct pgt_device *pdev)
 {
-	mutex_lock(&pdev->hpd_work.hpd_mutex);
-	set_bit(event, pdev->hpd_work.hotplug_uevent);
-	mutex_unlock(&pdev->hpd_work.hpd_mutex);
-
-	schedule_work(&pdev->hpd_work.work);
-	return true;
+	return vgt_default_uevent_handler(uevent_entry, pdev);
 }
 
 static bool vgt_dpy_stat_uevent_handler(enum vgt_uevent_type event,
@@ -257,6 +252,13 @@ static bool vgt_dpy_stat_uevent_handler(enum vgt_uevent_type event,
 	char vmid_str[20];
 	retval = snprintf(vmid_str, 20, "VMID=%d", uevent_entry->vm_id);
 	uevent_entry->env_var_table[1] = vmid_str;
+	return vgt_default_uevent_handler(uevent_entry, pdev);
+}
+
+static bool vgt_dpy_detect_uevent_handler(enum vgt_uevent_type event,
+			struct vgt_uevent_info *uevent_entry,
+			struct pgt_device *pdev)
+{
 	return vgt_default_uevent_handler(uevent_entry, pdev);
 }
 
@@ -291,6 +293,11 @@ static struct vgt_uevent_info vgt_default_uevent_info_table[UEVENT_MAX] = {
 	{"VGT disable VGA mode", -1, KOBJ_ADD, {"VGT_ENABLE_VGA=0", NULL, NULL}, vgt_dpy_stat_uevent_handler},
 	{"VGT display ready", -1, KOBJ_ADD, {"VGT_DISPLAY_READY=1", NULL, NULL}, vgt_dpy_stat_uevent_handler},
 	{"VGT display unready", -1, KOBJ_ADD, {"VGT_DISPLAY_READY=0", NULL, NULL}, vgt_dpy_stat_uevent_handler},
+	{"VGT detect PORT A", -1, KOBJ_ADD, {"VGT_DETECT_PORT_A=1", NULL, NULL}, vgt_dpy_detect_uevent_handler},
+	{"VGT detect PORT B", -1, KOBJ_ADD, {"VGT_DETECT_PORT_B=1", NULL, NULL}, vgt_dpy_detect_uevent_handler},
+	{"VGT detect PORT C", -1, KOBJ_ADD, {"VGT_DETECT_PORT_C=1", NULL, NULL}, vgt_dpy_detect_uevent_handler},
+	{"VGT detect PORT D", -1, KOBJ_ADD, {"VGT_DETECT_PORT_D=1", NULL, NULL}, vgt_dpy_detect_uevent_handler},
+	{"VGT detect PORT E", -1, KOBJ_ADD, {"VGT_DETECT_PORT_E=1", NULL, NULL}, vgt_dpy_detect_uevent_handler},
 };
 
 void vgt_set_uevent(struct vgt_device *vgt, enum vgt_uevent_type uevent)
@@ -331,9 +338,6 @@ void vgt_hotplug_udev_notify_func(struct work_struct *work)
 	struct hotplug_work *hpd_work = (struct hotplug_work *)work;
 	struct pgt_device *pdev = container_of(hpd_work, struct pgt_device, hpd_work);
 	int bit;
-
-	vgt_probe_dpcd(pdev, -1, false);
-	vgt_probe_edid(pdev, -1, false);
 
 	mutex_lock(&hpd_work->hpd_mutex);
 	for_each_set_bit(bit, hpd_work->hotplug_uevent, UEVENT_MAX) {
@@ -828,6 +832,24 @@ void vgt_set_power_well(struct vgt_device *vgt, bool to_enable)
 	}
 }
 
+#define DPCD_HEADER_SIZE	0xb
+
+u8 dpcd_fix_data[DPCD_HEADER_SIZE] = {
+	0x11, 0x0a, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+static bool is_dp_port_type(enum vgt_port_type port_type)
+{
+	if (port_type == VGT_DP_A ||
+		port_type == VGT_DP_B ||
+		port_type == VGT_DP_C ||
+		port_type == VGT_DP_D) {
+		return true;
+	}
+	return false;
+}
+
+
 /* copy the cached value into corresponding port field. Meanwhile,
  * Update system monitor state for EDID changes
  */
@@ -849,18 +871,18 @@ void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port)
 	if (port_idx == I915_MAX_PORTS) {
 		vgt_err ("VM-%d: port is not a valid pointer", vgt->vm_id);
 		goto finish_flush;
-	} else if (port_idx == PORT_A) {
-		vgt_warn ("VM-%d: PORT_A setting through sysfs is not supported. "
-			"Will be ignored!\n", vgt->vm_id);
-		goto finish_flush;
-	}
+	} 
 
-	if (port_idx == PORT_E)
-		legacy_porttype = VGT_CRT;
-	else if (port->dpcd && port->dpcd->data_valid)
-		legacy_porttype = VGT_DP_B + port_idx - 1;
-	else
-		legacy_porttype = VGT_HDMI_B + port_idx - 1;
+	legacy_porttype = port->cache.type;
+
+	if (legacy_porttype == VGT_PORT_MAX) {
+		if (port_idx == PORT_E)
+			legacy_porttype = VGT_CRT;
+		else if (port->dpcd && port->dpcd->data_valid)
+			legacy_porttype = VGT_DP_B + port_idx - 1;
+		else
+			legacy_porttype = VGT_HDMI_B + port_idx - 1;
+	}
 
 	if (port->edid == NULL) {
 		port->edid = kmalloc(sizeof(vgt_edid_data_t), GFP_ATOMIC);
@@ -878,26 +900,59 @@ void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port)
 		port->port_override = I915_MAX_PORTS;
 		clear_bit(legacy_porttype, vgt->presented_ports);
 	} else {
-		if (port->dpcd && port->dpcd->data_valid) {
-			vgt_err("The interface does not support the plug-in of DP "
-				"type monitors! Behavior could be unexpected!!\n");
-			goto finish_flush;
-		}
 		memcpy(port->edid->edid_block,
 			port->cache.edid->edid_block, EDID_SIZE);
-		// customize the EDID to remove extended EDID block.
-		if (port->edid->edid_block[0x7e]) {
-			port->edid->edid_block[0x7f] +=
-				port->edid->edid_block[0x7e];
-			port->edid->edid_block[0x7e] = 0;
-		}
 		port->edid->data_valid = true;
 		port->type = legacy_porttype;
 		port->port_override = port->cache.port_override;
+		if (vgt_debug) {
+			vgt_info("Monitor detection:new monitor detected on %s\n", VGT_PORT_NAME(port->physcal_port));
+			vgt_print_edid(port->edid);
+		}
+
+		if (is_dp_port_type(port->type)) {
+			if (port->dpcd == NULL) {
+				port->dpcd = kmalloc(sizeof(struct vgt_dpcd_data),
+				GFP_ATOMIC);
+			}
+
+			if (port->dpcd == NULL) {
+				return;
+			}
+			memset(port->dpcd->data, 0, DPCD_SIZE);
+			memcpy(port->dpcd->data, dpcd_fix_data, DPCD_HEADER_SIZE);
+			port->dpcd->data_valid = true;
+			if (vgt_debug) {
+				vgt_info("Monitor detection:assign fixed dpcd to port %s\n", VGT_PORT_NAME(port->physcal_port));
+			}
+		}
+		
 		set_bit(legacy_porttype, vgt->presented_ports);
 	}
 	vgt_update_monitor_status(vgt);
 
 finish_flush:
 	port->cache.valid = false;
+	port->cache.type = VGT_PORT_MAX;
 }
+
+/*send uevent to user space to do display detection*/
+void vgt_detect_display(struct vgt_device *vgt, int index)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	int i;
+	enum vgt_uevent_type uevent;
+
+	if (index == -1) { /* -1 index means "ALL" */
+		for (i = 0; i < I915_MAX_PORTS; i++) {
+			vgt_detect_display(vgt, i);
+		}
+		return;
+	}
+
+	uevent = VGT_DETECT_PORT_A + index;
+
+	vgt_set_uevent(vgt, uevent);
+	vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
+}
+

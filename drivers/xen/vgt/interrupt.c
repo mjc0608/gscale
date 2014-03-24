@@ -116,6 +116,7 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[PIPE_B_ODD_FIELD] = "Pipe B odd field",
 	[PIPE_B_EVEN_FIELD] = "Pipe B even field",
 	[PIPE_B_VBLANK] = "Pipe B vblank",
+	[PIPE_C_VBLANK] = "Pipe C vblank",
 	[DPST_PHASE_IN] = "DPST phase in event",
 	[DPST_HISTOGRAM] = "DPST histogram event",
 	[GSE] = "GSE",

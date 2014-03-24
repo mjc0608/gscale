@@ -339,10 +339,10 @@ vgt_port_edid_store(struct file* filp, struct kobject *kobj,
 	char *dest;
 
 	if (!count || off < 0 || (off & 3))
-		return -EINVAL;
+		return count;
 
 	if (off >= bin_attr->size)
-		return count;
+		return -EINVAL;
 
 	if (off + count > bin_attr->size)
 		write_count = bin_attr->size - off;
@@ -361,7 +361,15 @@ vgt_port_edid_store(struct file* filp, struct kobject *kobj,
 
 	dest = port->cache.edid->edid_block + off;
 	memcpy(dest, buf, write_count);
-	if (off + write_count == bin_attr->size) {
+	if (off + write_count == bin_attr->size &&
+		vgt_is_edid_valid(port->cache.edid->edid_block)) {
+		
+		// customize the EDID to remove extended EDID block.
+		u8 *block = port->cache.edid->edid_block;
+		if (block[0x7e]) {
+			block[0x7f] += block[0x7e];
+			block[0x7e] = 0;
+		}
 		port->cache.edid->data_valid = true;
 		port->cache.valid = true;
 	}
@@ -417,7 +425,13 @@ vgt_port_edid_text_store(struct kobject *kobj, struct kobj_attribute *attr,
 		dest++;
 	}
 
-	if ((i == count)) {
+	if ((i == count) && vgt_is_edid_valid(port->cache.edid->edid_block)) {
+		// customize the EDID to remove extended EDID block.
+		u8 *block = port->cache.edid->edid_block;
+		if (block[0x7e]) {
+			block[0x7f] += block[0x7e];
+			block[0x7e] = 0;
+		}
 		port->cache.edid->data_valid = true;
 		port->cache.valid = true;
 	}
@@ -425,6 +439,15 @@ vgt_port_edid_text_store(struct kobject *kobj, struct kobj_attribute *attr,
 	mutex_unlock(&vgt_sysfs_lock);
 
 	return count;
+}
+
+
+static bool is_port_connected(struct gt_port *port)
+{
+	if (port && port->edid && port->edid->data_valid) {
+		return true;
+	}
+	return false;
 }
 
 static ssize_t vgt_pport_connection_show(struct kobject *kobj, struct kobj_attribute *attr,
@@ -445,14 +468,29 @@ static ssize_t vgt_pport_connection_show(struct kobject *kobj, struct kobj_attri
 	}
 
 	mutex_lock(&vgt_sysfs_lock);
-	
-	buf_len = sprintf(buf, "%s\n",
-		pgt->ports[i].edid && pgt->ports[i].edid->data_valid ?
+
+	buf_len = sprintf(buf, "%s\n", is_port_connected(&(pgt->ports[i])) ?
 			"connected" : "disconnected");
 
 	mutex_unlock(&vgt_sysfs_lock);
 
 	return buf_len;
+}
+
+static ssize_t vgt_pport_connection_store(struct kobject *kobj, struct kobj_attribute *attr,
+			const char *buf, size_t count)
+{
+	bool is_connected = false;
+
+	mutex_lock(&vgt_sysfs_lock);
+	if (strncmp("connect", buf, 7) == 0) {
+			is_connected = true;
+	} else if (strncmp("disconnect", buf, 10) == 0) {
+			is_connected = false;
+	}
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return count;
 }
 
 static ssize_t vgt_vport_connection_show(struct kobject *kobj, struct kobj_attribute *attr,
@@ -463,9 +501,7 @@ static ssize_t vgt_vport_connection_show(struct kobject *kobj, struct kobj_attri
 
 	mutex_lock(&vgt_sysfs_lock);
 	
-	buf_len = sprintf(buf, "%s\n",
-		(port->edid && port->edid->data_valid) ?
-			"connected" : "disconnected");
+	buf_len = sprintf(buf, "%s\n", is_port_connected(port) ? "connected" : "disconnected");
 
 	mutex_unlock(&vgt_sysfs_lock);
 
@@ -481,25 +517,26 @@ static ssize_t vgt_vport_connection_store(struct kobject *kobj, struct kobj_attr
 	bool flush_request = false;
 	bool hotplug_request = false;
 	int cpu;
+	bool is_current_connected = is_port_connected(port);
 
 	mutex_lock(&vgt_sysfs_lock);
 	vgt_lock_dev(vgt->pdev, cpu);
-	
+
 	if (strncmp("connect", buf, 7) == 0) {
-		if (port->edid && port->edid->data_valid)
-			vgt_warn("Request to connect a monitor to port which has "
-				"already connected a monitor. Will be ignored\n");
-		else if (!(port->cache.valid && port->cache.edid &&
+		vgt_info("Monitor detection: %s  is connected\n", VGT_PORT_NAME(port->physcal_port));
+		if (!(port->cache.valid && port->cache.edid &&
 				port->cache.edid->data_valid))
 			vgt_warn("Request to connect a monitor but new monitor "
 				"setting is not ready. Will be ignored\n");
-		else
+		else if (!is_current_connected) {
 			flush_request = hotplug_request = true;
+		} else if (is_current_connected &&
+			memcmp(port->edid->edid_block, port->cache.edid->edid_block, EDID_SIZE)) {
+			flush_request = hotplug_request = true;
+		}
 	} else if (strncmp("disconnect", buf, 10) == 0) {
-		if (!(port->edid && port->edid->data_valid))
-			vgt_warn("Request disconnect a monitor to port which "
-				"does not connect a monitor. Will be ignored\n");
-		else {
+		vgt_info("Monitor detection: %s  is disconnected\n", VGT_PORT_NAME(port->physcal_port));
+		if (is_current_connected) {
 			if (port->cache.edid)
 				port->cache.edid->data_valid = false;
 			port->cache.valid = true;
@@ -517,6 +554,8 @@ static ssize_t vgt_vport_connection_store(struct kobject *kobj, struct kobj_attr
 	if (hotplug_request) {
 		enum vgt_port port_type = vgt_get_port(vgt, port);
 		switch (port_type) {
+		case PORT_A:
+			event = EVENT_MAX; break;
 		case PORT_B:
 			event = DP_B_HOTPLUG; break;
 		case PORT_C:
@@ -551,6 +590,25 @@ static ssize_t vgt_port_type_show(struct kobject *kobj, struct kobj_attribute *a
 	mutex_unlock(&vgt_sysfs_lock);
 
 	return buf_len;
+}
+
+static ssize_t vgt_port_type_store(struct kobject *kobj, struct kobj_attribute *attr,
+				   const char *buf, size_t count)
+{
+	struct gt_port *port = kobj_to_port(kobj);
+	int portIndex;
+
+
+	mutex_lock(&vgt_sysfs_lock);
+	if (sscanf(buf, "%d", &portIndex) != 1) {
+		mutex_unlock(&vgt_sysfs_lock);
+		return -EINVAL;
+	}
+
+	port->cache.type = VGT_CRT + portIndex;
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return count;
 }
 
 static ssize_t vgt_vport_port_override_show(struct kobject *kobj, struct kobj_attribute *attr,
@@ -621,7 +679,7 @@ static struct kobj_attribute vport_connection_attrs =
 	__ATTR(connection, 0660, vgt_vport_connection_show, vgt_vport_connection_store);
 
 static struct kobj_attribute vport_type_attrs =
-	__ATTR(type, 0660, vgt_port_type_show, NULL);
+	__ATTR(type, 0660, vgt_port_type_show, vgt_port_type_store);
 
 static struct kobj_attribute vport_port_override_attrs =
 	__ATTR(port_override, 0660, vgt_vport_port_override_show, vgt_vport_port_override_store);
@@ -653,10 +711,10 @@ static struct bin_attribute port_edid_attr = {
 };
 
 static struct kobj_attribute pport_type_attrs =
-	__ATTR(type, 0440, vgt_port_type_show, NULL);
+	__ATTR(type, 0660, vgt_port_type_show, vgt_port_type_store);
 
 static struct kobj_attribute pport_connection_attrs =
-	__ATTR(connection, 0440, vgt_pport_connection_show, NULL);
+	__ATTR(connection, 0660, vgt_pport_connection_show, vgt_pport_connection_store);
 
 static struct attribute *vgt_pport_attrs[] = {
 	&pport_connection_attrs.attr,
@@ -929,6 +987,10 @@ static int vgt_add_state_sysfs(vgt_params_t vp)
 			retval = -EINVAL;
 			goto kobj_fail;
 		}
+	}
+
+	if ((propagate_monitor_to_guest) && (vgt->vm_id != 0)) {
+		vgt_detect_display(vgt, -1);
 	}
 
 	return retval;

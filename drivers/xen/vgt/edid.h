@@ -297,4 +297,6 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 				unsigned int offset,
 				VGT_DP_PORTS_IDX port_idx, void *p_data);
 
+bool vgt_is_edid_valid(u8 *raw_edid);
+
 #endif /*_VGT_EDID_H_*/

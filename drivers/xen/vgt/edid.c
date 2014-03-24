@@ -327,6 +327,28 @@ int vgt_edid_header_is_valid(const u8 *raw_edid)
 	return score;
 }
 
+bool vgt_is_edid_valid(u8 *raw_edid)
+{
+	bool is_valid = false;
+	int score, i;
+	u8 check_sum = 0;
+
+	score = vgt_edid_header_is_valid(raw_edid);
+
+	check_sum = 0;
+	for (i = 0; i < EDID_SIZE; ++i) {
+		check_sum += raw_edid[i];
+	}
+	if (check_sum) {
+		vgt_err("EDID check sum is invalid\n");
+	}
+
+	if ((score == 8) && (check_sum == 0)) {
+		is_valid = true;
+	}
+	return is_valid;
+}
+
 static inline void vgt_clear_edid(struct gt_port *port)
 {
 	if (port && port->edid && port->edid->data_valid) {

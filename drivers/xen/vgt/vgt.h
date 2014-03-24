@@ -578,6 +578,7 @@ struct port_cache {
 	bool valid;
 	vgt_edid_data_t		*edid;	/* per display EDID information */
 	enum vgt_port		port_override;
+	enum vgt_port_type	type;
 };
 
 struct gt_port {
@@ -588,6 +589,7 @@ struct gt_port {
 	enum vgt_port_type	type;
 	enum vgt_port		port_override;
 	struct port_cache	cache; /* the temporary updated information */
+	enum vgt_port physcal_port;
 };
 
 struct vgt_device {
@@ -768,6 +770,11 @@ enum vgt_uevent_type {
 	VGT_DISABLE_VGA,
 	VGT_DISPLAY_READY,
 	VGT_DISPLAY_UNREADY,
+	VGT_DETECT_PORT_A,
+	VGT_DETECT_PORT_B,
+	VGT_DETECT_PORT_C,
+	VGT_DETECT_PORT_D,
+	VGT_DETECT_PORT_E,
 	UEVENT_MAX
 };
 
@@ -2226,6 +2233,8 @@ extern void vgt_propagate_edid(struct vgt_device *vgt, int index);
 extern void vgt_probe_dpcd(struct pgt_device *pdev, int index, bool init);
 extern void vgt_propagate_dpcd(struct vgt_device *vgt, int index);
 void vgt_update_monitor_status(struct vgt_device *vgt);
+void vgt_detect_display(struct vgt_device *vgt, int index);
+
 
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);
 bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes);

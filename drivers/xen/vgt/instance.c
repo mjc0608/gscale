@@ -143,6 +143,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		vgt->ports[i].type = VGT_PORT_MAX;
 		vgt->ports[i].port_override = i;
 		vgt->ports[i].cache.port_override = i;
+		vgt->ports[i].physcal_port = i;
 	}
 
 	/* Hard code ballooning now. We can support non-ballooning too in the future */
