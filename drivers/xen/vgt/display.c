@@ -643,10 +643,10 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 	/*enable panel fitting only when the source mode does not eqaul to the target mode*/
 	if (src_width != target_width || src_height != target_height ) {
 		vgt_dbg("enable panel fitting for VM %d, pipe %d, src_width:%d, src_height: %d, tgt_width:%d, tgt_height:%d!\n",
-			vgt->vm_id, pipe, src_width, src_height, target_width, target_height);
+			vgt->vm_id, real_pipe, src_width, src_height, target_width, target_height);
 		pf_ctl = pf_ctl | _REGBIT_PF_ENABLE;
 	} else {
-		vgt_dbg("disable panel fitting for VM %d, for pipe %d!\n", vgt->vm_id, pipe);
+		vgt_dbg("disable panel fitting for VM %d, for pipe %d!\n", vgt->vm_id, real_pipe);
 	}
 
 	/* we need to increase Water Mark in down scaling case */

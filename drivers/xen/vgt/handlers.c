@@ -1195,6 +1195,7 @@ bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p
 	case _REG_DSPATILEOFF:
 	case _REG_SPRASURF:
 	case _REG_SPRA_CTL:
+	case _REG_PIPEASRC:
 		real_pipe = vgt->pipe_mapping[0];
 		virtual_pipe = PIPE_A;
 		break;
@@ -1215,6 +1216,7 @@ bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p
 	case _REG_DSPBTILEOFF:
 	case _REG_SPRBSURF:
 	case _REG_SPRB_CTL:
+	case _REG_PIPEBSRC:
 		real_pipe = vgt->pipe_mapping[1];
 		virtual_pipe = PIPE_B;
 		break;
@@ -1232,6 +1234,7 @@ bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p
 	case _REG_DSPCTILEOFF:
 	case _REG_SPRCSURF:
 	case _REG_SPRC_CTL:
+	case _REG_PIPECSRC:
 		real_pipe = vgt->pipe_mapping[2];
 		virtual_pipe = PIPE_C;
 		break;
@@ -2687,7 +2690,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_VTOTAL_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 {_REG_VBLANK_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 {_REG_VSYNC_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
-{_REG_PIPEASRC, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_PIPEASRC, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read, dpy_plane_mmio_write},
 {_REG_BCLRPAT_A, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_VSYNCSHIFT_A, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 
@@ -2697,7 +2700,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_VTOTAL_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 {_REG_VBLANK_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 {_REG_VSYNC_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
-{_REG_PIPEBSRC, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_PIPEBSRC, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read, dpy_plane_mmio_write},
 {_REG_BCLRPAT_B, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_VSYNCSHIFT_B, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 
@@ -2707,7 +2710,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_VTOTAL_C, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 {_REG_VBLANK_C, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 {_REG_VSYNC_C, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
-{_REG_PIPECSRC, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_PIPECSRC, 4, F_DPY, 0, D_ALL, dpy_plane_mmio_read, dpy_plane_mmio_write},
 {_REG_BCLRPAT_C, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_VSYNCSHIFT_C, 4, F_DPY, 0, D_ALL, NULL, dpy_modeset_mmio_write},
 
