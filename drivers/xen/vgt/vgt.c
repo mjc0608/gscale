@@ -495,6 +495,7 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	memset(pdev->ports, 0, sizeof(struct gt_port) * VGT_PORT_MAX);
 	for (i = 0; i < I915_MAX_PORTS; i ++) {
 		pdev->ports[i].type = VGT_PORT_MAX;
+		pdev->ports[i].cache.type = VGT_PORT_MAX;
 		pdev->ports[i].port_override = i;
 		pdev->ports[i].physcal_port = i;
 	}
