@@ -2067,7 +2067,7 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 				vgt->pdev->next_foreground_vm = vgt;
 				vgt_raise_request(vgt->pdev, VGT_REQUEST_DPY_SWITCH);
 			}
-			if (vgt->vm_id == 0 && event == VGT_DISPLAY_READY) {
+			if (propagate_monitor_to_guest && vgt->vm_id == 0 && event == VGT_DISPLAY_READY) {
 				vgt_detect_display(vgt, -1);
 			}
 			break;
