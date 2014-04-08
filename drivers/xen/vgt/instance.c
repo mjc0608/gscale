@@ -443,6 +443,9 @@ void vgt_release_instance(struct vgt_device *vgt)
 	if (vgt->pdev->enable_ppgtt)
 		vgt_destroy_shadow_ppgtt(vgt);
 
+	/* clear the gtt entries for GM of this vgt device */
+	vgt_clear_gtt(vgt);
+
 	free_vm_aperture_gm_and_fence(vgt);
 	free_vm_rsvd_aperture(vgt);
 	vgt_vmem_destroy(vgt);

@@ -908,6 +908,7 @@ struct pgt_device {
 
 	struct page *dummy_page;
 	struct page *(*rsvd_aperture_pages)[VGT_APERTURE_PAGES];
+	uint32_t dummy_pte;
 
 	uint64_t rsvd_aperture_sz;
 	uint64_t rsvd_aperture_base;
@@ -2380,6 +2381,7 @@ int vgt_hvm_map_aperture (struct vgt_device *vgt, int map);
 int setup_gtt(struct pgt_device *pdev);
 void check_gtt(struct pgt_device *pdev);
 void free_gtt(struct pgt_device *pdev);
+void vgt_clear_gtt(struct vgt_device *vgt);
 void vgt_save_gtt_and_fence(struct pgt_device *pdev);
 void vgt_restore_gtt_and_fence(struct pgt_device *pdev);
 uint64_t vgt_get_gtt_size(struct pci_bus *bus);
