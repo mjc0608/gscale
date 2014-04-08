@@ -178,7 +178,22 @@ static u32 translate_interrupt(struct vgt_irq_host_state *irq_hstate, struct vgt
 	u32 mapped_interrupt = interrupt;
 	u32 temp;
 
-	if (_REG_DEIMR == reg || _REG_DEIER == reg) {
+	if (_REG_DEIMR == reg) {
+		mapped_interrupt |= irq_hstate->pipe_mask;
+		mapped_interrupt |= (irq_hstate->pipe_mask << 5);
+		mapped_interrupt |= (irq_hstate->pipe_mask << 10);
+		for (i = 0; i < I915_MAX_PIPES; i++) {
+			if (vgt->pipe_mapping[i] == I915_MAX_PIPES)
+				continue;
+
+			mapped_interrupt &= ~(irq_hstate->pipe_mask <<
+				(vgt->pipe_mapping[i] * 5));
+
+			temp = interrupt >> (i * 5);
+			temp &= irq_hstate->pipe_mask;
+			mapped_interrupt |= temp << (vgt->pipe_mapping[i] * 5);
+		}
+	} else if (_REG_DEIER == reg) {
 		mapped_interrupt &= ~irq_hstate->pipe_mask;
 		mapped_interrupt &= ~(irq_hstate->pipe_mask<<5);
 		mapped_interrupt &= ~(irq_hstate->pipe_mask<<10);
