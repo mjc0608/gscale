@@ -1272,22 +1272,14 @@ static inline enum vgt_port vgt_get_port(struct vgt_device *vgt, struct gt_port 
 }
 
 static inline enum vgt_pipe vgt_get_pipe_from_port(struct vgt_device *vgt,
-						struct gt_port *port_ptr)
+						enum vgt_port port)
 {
 	enum vgt_pipe pipe;
-	enum vgt_port port;
 
-	if (!vgt || !port_ptr)
+	if (port == I915_MAX_PORTS)
 		return I915_MAX_PIPES;
 
-	port = vgt_get_port(vgt, port_ptr);
-
-	if (port == I915_MAX_PORTS) {
-		return I915_MAX_PIPES;
-	} else if (port == PORT_A) {
-		vgt_warn("Getting pipe info for PORT_A is not supported!\n");
-		return I915_MAX_PIPES;
-	}
+	ASSERT (port != PORT_A);
 
 	for (pipe = PIPE_A; pipe < I915_MAX_PIPES; ++ pipe) {
 		vgt_reg_t ddi_func_ctl;

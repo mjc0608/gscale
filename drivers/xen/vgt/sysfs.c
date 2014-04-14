@@ -657,17 +657,22 @@ static ssize_t vgt_vport_port_override_store(struct kobject *kobj, struct kobj_a
 static ssize_t vgt_vport_pipe_show(struct kobject *kobj, struct kobj_attribute *attr,
 				   char *buf)
 {
-	struct gt_port *port = kobj_to_port(kobj);
+	struct gt_port *port_ptr = kobj_to_port(kobj);
 	struct vgt_device *vgt = kobj_to_vgt(kobj->parent);
-	enum vgt_pipe pipe;
+	enum vgt_port port;
 	ssize_t buf_len;
 	int cpu;
 
 	mutex_lock(&vgt_sysfs_lock);
 	vgt_lock_dev(vgt->pdev, cpu);
 
-	pipe = vgt_get_pipe_from_port(vgt, port);
-	buf_len = sprintf(buf, "%s\n", VGT_PIPE_NAME(pipe));
+	port = vgt_get_port(vgt, port_ptr);
+	if (port == PORT_A)
+		buf_len = sprintf(buf, "PIPE_EDP\n");
+	else {
+		enum vgt_pipe pipe = vgt_get_pipe_from_port(vgt, port);
+		buf_len = sprintf(buf, "%s\n", VGT_PIPE_NAME(pipe));
+	}
 
 	vgt_unlock_dev(vgt->pdev, cpu);
 	mutex_unlock(&vgt_sysfs_lock);
