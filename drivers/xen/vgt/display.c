@@ -859,6 +859,14 @@ void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port)
 {
 	int port_idx;
 	enum vgt_port_type legacy_porttype;
+	int i;
+	unsigned int reg_ddi[4] ={
+		_REG_TRANS_DDI_FUNC_CTL_A,
+		_REG_TRANS_DDI_FUNC_CTL_B,
+		_REG_TRANS_DDI_FUNC_CTL_C,
+		_REG_TRANS_DDI_FUNC_CTL_EDP,
+	};
+
 
 	if (!vgt || !port)
 		return;
@@ -930,6 +938,13 @@ void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port)
 		}
 		
 		set_bit(legacy_porttype, vgt->presented_ports);
+		for (i = 0; i <= 3; i++) {
+			unsigned int ddi_value;
+			ddi_value = VGT_MMIO_READ(vgt->pdev, reg_ddi[i]);
+			if (_REGBIT_TRANS_DDI_FUNC_ENABLE & ddi_value) {
+				update_pipe_mapping(vgt, reg_ddi[i], ddi_value);
+			}
+		}
 	}
 	vgt_update_monitor_status(vgt);
 
