@@ -221,7 +221,7 @@ int vgt_decode_sprite_plane_format(struct vgt_device *vgt,
 
 	plane->drm_format = drm_format;
 
-	plane->base = __vreg(vgt, VGT_SPRSURFPIPE(pipe)) & GTT_PAGE_MASK;
+	plane->base = __vreg(vgt, VGT_SPRSURF(pipe)) & GTT_PAGE_MASK;
 	plane->width = __vreg(vgt, VGT_SPRSTRIDE(pipe)) &
 				_SPRITE_STRIDE_MASK;
 	plane->width /= plane->bpp / 8;	/* raw width in bytes */
