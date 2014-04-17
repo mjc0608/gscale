@@ -335,6 +335,11 @@ static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		ring_bitmap |= (1 << RING_BUFFER_BCS);
 	}
 
+	if (IS_HSW(vgt->pdev) && (data & _REGBIT_GEN6_GRDOM_VECS)) {
+		vgt_info("VM %d request GPU VECS Reset\n", vgt->vm_id);
+		ring_bitmap |= (1 << RING_BUFFER_VECS);
+	}
+
 	return handle_device_reset(vgt, offset, p_data, bytes, ring_bitmap);
 }
 
