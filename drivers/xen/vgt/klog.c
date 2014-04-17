@@ -213,6 +213,7 @@ static struct dentry *create_buf_file_handler(const char *filename,
 {
 	struct dentry *buf_file;
 
+	*is_global = 1;
 	buf_file = debugfs_create_file(filename, mode, parent, buf,
 					&relay_file_operations);
 
