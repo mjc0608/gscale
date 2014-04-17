@@ -322,17 +322,17 @@ static bool gen6_gdrst_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 	if (data & _REGBIT_GEN6_GRDOM_RENDER) {
 		vgt_info("VM %d request GPU Render Reset\n", vgt->vm_id);
-		ring_bitmap |= (1 << 0);
+		ring_bitmap |= (1 << RING_BUFFER_RCS);
 	}
 
 	if (data & _REGBIT_GEN6_GRDOM_MEDIA) {
 		vgt_info("VM %d request GPU Media Reset\n", vgt->vm_id);
-		ring_bitmap |= (1 << 2);
+		ring_bitmap |= (1 << RING_BUFFER_VCS);
 	}
 
 	if (data & _REGBIT_GEN6_GRDOM_BLT) {
 		vgt_info("VM %d request GPU BLT Reset\n", vgt->vm_id);
-		ring_bitmap |= (1 << 1);
+		ring_bitmap |= (1 << RING_BUFFER_BCS);
 	}
 
 	return handle_device_reset(vgt, offset, p_data, bytes, ring_bitmap);
