@@ -793,6 +793,27 @@ int vgt_resume(struct pci_dev *pdev)
 	state_vreg_init(vgt_dom0);
 
 	/* TODO, GMBUS inuse bit? */
+
+	spin_lock(&pgt->lock);
+
+	recalculate_and_update_imr(pgt, _REG_DEIMR);
+	recalculate_and_update_imr(pgt, _REG_GTIMR);
+	recalculate_and_update_imr(pgt, _REG_PMIMR);
+	recalculate_and_update_imr(pgt, _REG_SDEIMR);
+
+	recalculate_and_update_imr(pgt, _REG_RCS_IMR);
+	recalculate_and_update_imr(pgt, _REG_BCS_IMR);
+	recalculate_and_update_imr(pgt, _REG_VCS_IMR);
+
+	if (IS_HSW(pgt))
+		recalculate_and_update_imr(pgt, _REG_VECS_IMR);
+
+	recalculate_and_update_ier(pgt, _REG_GTIER);
+	recalculate_and_update_ier(pgt, _REG_PMIER);
+	recalculate_and_update_ier(pgt, _REG_SDEIER);
+
+	spin_unlock(&pgt->lock);
+
 	return 0;
 }
 EXPORT_SYMBOL(vgt_resume);
