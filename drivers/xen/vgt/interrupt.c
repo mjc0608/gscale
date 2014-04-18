@@ -257,12 +257,31 @@ u32 vgt_recalculate_ier(struct pgt_device *pdev, unsigned int reg)
 	return ier;
 }
 
+void recalculate_and_update_imr(struct pgt_device *pdev, vgt_reg_t reg)
+{
+	uint32_t new_imr;
+	unsigned long flags;
+
+	new_imr = vgt_recalculate_mask_bits(pdev, reg);
+	/*
+	 * may optimize by caching the old imr, and then only update
+	 * pReg when AND-ed value changes. but that requires link to
+	 * device specific irq info. So avoid the complexity here
+	 */
+	vgt_get_irq_lock(pdev, flags);
+
+	VGT_MMIO_WRITE(pdev, reg, new_imr);
+	VGT_POST_READ(pdev, reg);
+
+	vgt_put_irq_lock(pdev, flags);
+}
+
 /* general write handler for all level-1 imr registers */
 bool vgt_reg_imr_handler(struct vgt_device *vgt,
 	unsigned int reg, void *p_data, unsigned int bytes)
 {
 	uint32_t changed, masked, unmasked;
-	uint32_t imr = *(u32 *)p_data, new_imr;
+	uint32_t imr = *(u32 *)p_data;
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
@@ -283,22 +302,8 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 
 	__vreg(vgt, reg) = imr;
 
-	if (changed || device_is_reseting(pdev)) {
-		unsigned long flags;
-
-		new_imr = vgt_recalculate_mask_bits(pdev, reg);
-		/*
-		 * may optimize by caching the old imr, and then only update
-		 * pReg when AND-ed value changes. but that requires link to
-		 * device specific irq info. So avoid the complexity here
-		 */
-		vgt_get_irq_lock(pdev, flags);
-
-		VGT_MMIO_WRITE(pdev, reg, new_imr);
-		VGT_POST_READ(pdev, reg);
-
-		vgt_put_irq_lock(pdev, flags);
-	}
+	if (changed || device_is_reseting(pdev))
+		recalculate_and_update_imr(pdev, reg);
 
 	ops->check_pending_irq(vgt);
 	vgt_dbg("IRQ: new vIMR(%x), pIMR(%x)\n",
@@ -306,12 +311,34 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 	return true;
 }
 
+void recalculate_and_update_ier(struct pgt_device *pdev, vgt_reg_t reg)
+{
+	uint32_t new_ier;
+	unsigned long flags;
+
+	new_ier = vgt_recalculate_ier(pdev, reg);
+
+	if (device_is_reseting(pdev) && reg == _REG_DEIER)
+		new_ier &= ~_REGBIT_MASTER_INTERRUPT;
+	/*
+	 * may optimize by caching the old ier, and then only update
+	 * pReg when OR-ed value changes. but that requires link to
+	 * device specific irq info. So avoid the complexity here
+	 */
+	vgt_get_irq_lock(pdev, flags);
+
+	VGT_MMIO_WRITE(pdev, reg, new_ier);
+	VGT_POST_READ(pdev, reg);
+
+	vgt_put_irq_lock(pdev, flags);
+}
+
 /* general write handler for all level-1 ier registers */
 bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	unsigned int reg, void *p_data, unsigned int bytes)
 {
 	uint32_t changed, enabled, disabled;
-	uint32_t ier = *(u32 *)p_data, new_ier;
+	uint32_t ier = *(u32 *)p_data;
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
@@ -337,25 +364,8 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 		changed, enabled, disabled);
 	__vreg(vgt, reg) = ier;
 
-	if (changed || device_is_reseting(pdev)) {
-		unsigned long flags;
-
-		new_ier = vgt_recalculate_ier(pdev, reg);
-
-		if (device_is_reseting(pdev) && reg == _REG_DEIER)
-			new_ier &= ~_REGBIT_MASTER_INTERRUPT;
-		/*
-		 * may optimize by caching the old ier, and then only update
-		 * pReg when OR-ed value changes. but that requires link to
-		 * device specific irq info. So avoid the complexity here
-		 */
-		vgt_get_irq_lock(pdev, flags);
-
-		VGT_MMIO_WRITE(pdev, reg, new_ier);
-		VGT_POST_READ(pdev, reg);
-
-		vgt_put_irq_lock(pdev, flags);
-	}
+	if (changed || device_is_reseting(pdev))
+		recalculate_and_update_ier(pdev, reg);
 
 	ops->check_pending_irq(vgt);
 	vgt_dbg("IRQ: new vIER(%x), pIER(%x)\n",

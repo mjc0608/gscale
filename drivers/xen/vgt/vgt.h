@@ -2152,6 +2152,9 @@ void vgt_hotplug_udev_notify_func(struct work_struct *work);
 u32 vgt_recalculate_ier(struct pgt_device *pdev, unsigned int reg);
 u32 vgt_recalculate_mask_bits(struct pgt_device *pdev, unsigned int reg);
 
+void recalculate_and_update_imr(struct pgt_device *pdev, vgt_reg_t reg);
+void recalculate_and_update_ier(struct pgt_device *pdev, vgt_reg_t reg);
+
 bool vgt_reg_imr_handler(struct vgt_device *vgt,
 	unsigned int reg, void *p_data, unsigned int bytes);
 bool vgt_reg_ier_handler(struct vgt_device *vgt,
