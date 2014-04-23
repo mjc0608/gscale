@@ -46,7 +46,7 @@ static int vgt_restore_state(struct vgt_device *vgt, enum vgt_pipe pipe)
 	unsigned int pipe_ctrl = VGT_MMIO_READ(vgt->pdev, VGT_PIPECONF(pipe));
 	if (pipe_ctrl & _REGBIT_PIPE_ENABLE) {
 #endif
-		vgt_dbg ("start to restore pipe %d.\n", pipe + 1);
+		vgt_dbg (VGT_DBG_DPY, "start to restore pipe %d.\n", pipe + 1);
 		vgt_restore_sreg(vgt, VGT_DSPCNTR(pipe));
 		vgt_restore_sreg(vgt, VGT_DSPSTRIDE(pipe));
 		vgt_restore_sreg(vgt, VGT_DSPSURF(pipe));
@@ -56,10 +56,10 @@ static int vgt_restore_state(struct vgt_device *vgt, enum vgt_pipe pipe)
 		vgt_restore_sreg(vgt, VGT_CURPOS(pipe));
 		vgt_restore_sreg(vgt, VGT_CURCNTR(pipe));
 		vgt_restore_sreg(vgt, VGT_CURBASE(pipe));
-		vgt_dbg ("finished pipe %d restore.\n", pipe + 1);
+		vgt_dbg (VGT_DBG_DPY, "finished pipe %d restore.\n", pipe + 1);
 #if 0
 	} else {
-		vgt_dbg ("pipe %d is not enabled.\n", pipe + 1);
+		vgt_dbg (VGT_DBG_DPY, "pipe %d is not enabled.\n", pipe + 1);
 	}
 #endif
 	return 0;
@@ -121,7 +121,7 @@ void do_vgt_fast_display_switch(struct pgt_device *pdev)
 	struct vgt_device *to_vgt = pdev->next_foreground_vm;
 	enum vgt_pipe pipe;
 
-	vgt_dbg("vGT: doing display switch: from %p to %p\n",
+	vgt_dbg(VGT_DBG_DPY, "vGT: doing display switch: from %p to %p\n",
 			current_foreground_vm(pdev), to_vgt);
 
 	ASSERT(fastpath_dpy_switch);
@@ -357,17 +357,17 @@ void vgt_update_monitor_status(struct vgt_device *vgt)
 
 	if (test_bit(VGT_DP_B, vgt->presented_ports) ||
 		test_bit(VGT_HDMI_B, vgt->presented_ports)) {
-		vgt_dbg("enable B port monitor\n");
+		vgt_dbg(VGT_DBG_DPY, "enable B port monitor\n");
 		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_B_HOTPLUG;
 	}
 	if (test_bit(VGT_DP_C, vgt->presented_ports) ||
 		test_bit(VGT_HDMI_C, vgt->presented_ports)) {
-		vgt_dbg("enable C port monitor\n");
+		vgt_dbg(VGT_DBG_DPY, "enable C port monitor\n");
 		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_C_HOTPLUG;
 	}
 	if (test_bit(VGT_DP_D, vgt->presented_ports) ||
 		test_bit(VGT_HDMI_D, vgt->presented_ports)) {
-		vgt_dbg("enable D port monitor\n");
+		vgt_dbg(VGT_DBG_DPY, "enable D port monitor\n");
 		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_D_HOTPLUG;
 	}
 	if (test_bit(VGT_DP_A, vgt->presented_ports)) {
@@ -442,7 +442,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 		}
 		if (virtual_pipe != I915_MAX_PIPES) {
 			vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
-			vgt_dbg("vGT: delete pipe mapping %x\n", virtual_pipe);
+			vgt_dbg(VGT_DBG_DPY, "vGT: delete pipe mapping %x\n", virtual_pipe);
 			if (vgt_has_pipe_enabled(vgt, virtual_pipe))
 				vgt_update_frmcount(vgt, virtual_pipe);
 			vgt_calculate_frmcount_delta(vgt, virtual_pipe);
@@ -497,7 +497,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 
 	ASSERT(virtual_pipe != I915_MAX_PIPES);
 	vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
-	vgt_dbg("vGT: add pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
+	vgt_dbg(VGT_DBG_DPY, "vGT: add pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
 	if (vgt_has_pipe_enabled(vgt, virtual_pipe))
 		vgt_update_frmcount(vgt, virtual_pipe);
 	vgt_calculate_frmcount_delta(vgt, virtual_pipe);
@@ -524,7 +524,7 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 		for (i = 0; i < I915_MAX_PIPES; i ++) {
 			if(vgt->pipe_mapping[i] == physical_pipe) {
 				vgt_set_pipe_mapping(vgt, i, I915_MAX_PIPES);
-				vgt_dbg("vGT: Update mapping: delete pipe %x  \n", i);
+				vgt_dbg(VGT_DBG_DPY, "vGT: Update mapping: delete pipe %x  \n", i);
 				if (vgt_has_pipe_enabled(vgt, i))
 					vgt_update_frmcount(vgt, i);
 				vgt_calculate_frmcount_delta(vgt, i);
@@ -562,7 +562,7 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 
 	if (virtual_pipe != I915_MAX_PIPES) {
 		vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
-		vgt_dbg("vGT: Update pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
+		vgt_dbg(VGT_DBG_DPY, "vGT: Update pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
 		if (vgt_has_pipe_enabled(vgt, virtual_pipe))
 			vgt_update_frmcount(vgt, virtual_pipe);
 		vgt_calculate_frmcount_delta(vgt, virtual_pipe);
@@ -605,7 +605,7 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 	}
 
 	if (real_pipe == I915_MAX_PIPES) {
-		vgt_dbg("try to set panel fitting before pipe is mapped!\n");
+		vgt_dbg(VGT_DBG_DPY, "try to set panel fitting before pipe is mapped!\n");
 		return false;
 	}
 	if (((_PRI_PLANE_ENABLE & __vreg(vgt, VGT_DSPCNTR(pipe))) == 0) ||
@@ -644,11 +644,11 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 
 	/*enable panel fitting only when the source mode does not eqaul to the target mode*/
 	if (src_width != target_width || src_height != target_height ) {
-		vgt_dbg("enable panel fitting for VM %d, pipe %d, src_width:%d, src_height: %d, tgt_width:%d, tgt_height:%d!\n",
+		vgt_dbg(VGT_DBG_DPY, "enable panel fitting for VM %d, pipe %d, src_width:%d, src_height: %d, tgt_width:%d, tgt_height:%d!\n",
 			vgt->vm_id, real_pipe, src_width, src_height, target_width, target_height);
 		pf_ctl = pf_ctl | _REGBIT_PF_ENABLE;
 	} else {
-		vgt_dbg("disable panel fitting for VM %d, for pipe %d!\n", vgt->vm_id, real_pipe);
+		vgt_dbg(VGT_DBG_DPY, "disable panel fitting for VM %d, for pipe %d!\n", vgt->vm_id, real_pipe);
 	}
 
 	/* we need to increase Water Mark in down scaling case */
@@ -915,7 +915,7 @@ void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port)
 		port->edid->data_valid = true;
 		port->type = legacy_porttype;
 		port->port_override = port->cache.port_override;
-		if (vgt_debug) {
+		if (vgt_debug & VGT_DBG_DPY) {
 			vgt_info("Monitor detection:new monitor detected on %s\n", VGT_PORT_NAME(port->physcal_port));
 			vgt_print_edid(port->edid);
 		}
@@ -932,7 +932,7 @@ void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port)
 			memset(port->dpcd->data, 0, DPCD_SIZE);
 			memcpy(port->dpcd->data, dpcd_fix_data, DPCD_HEADER_SIZE);
 			port->dpcd->data_valid = true;
-			if (vgt_debug) {
+			if (vgt_debug & VGT_DBG_DPY) {
 				vgt_info("Monitor detection:assign fixed dpcd to port %s\n", VGT_PORT_NAME(port->physcal_port));
 			}
 		}

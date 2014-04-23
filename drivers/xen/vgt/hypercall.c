@@ -328,7 +328,7 @@ int vgt_hvm_vmem_init(struct vgt_device *vgt)
 
 		/* Don't warn on [0xa0000, 0x100000): a known non-RAM hole */
 		if (i < (0xa0000 >> PAGE_SHIFT))
-			vgt_dbg("vGT: VM%d: can't map GPFN %ld!\n",
+			vgt_dbg(VGT_DBG_GENERIC, "vGT: VM%d: can't map GPFN %ld!\n",
 				vgt->vm_id, i);
 	}
 
@@ -361,7 +361,7 @@ int vgt_hvm_vmem_init(struct vgt_device *vgt)
 
 			if (vgt->vmem_vma_4k[j]) {
 				count++;
-				vgt_dbg("map 4k gpa (%lx)\n", j << PAGE_SHIFT);
+				vgt_dbg(VGT_DBG_GENERIC, "map 4k gpa (%lx)\n", j << PAGE_SHIFT);
 			}
 		}
 
@@ -370,7 +370,7 @@ int vgt_hvm_vmem_init(struct vgt_device *vgt)
 		 * message if it's at every 64MB boundary or >4GB memory.
 		 */
 		if ((i % 64 == 0) || (i >= (1ULL << (32 - VMEM_BUCK_SHIFT))))
-			vgt_dbg("vGT: VM%d: can't map %ldKB\n",
+			vgt_dbg(VGT_DBG_GENERIC, "vGT: VM%d: can't map %ldKB\n",
 				vgt->vm_id, i);
 	}
 	printk("end vmem_map (%ld 4k mappings)\n", count);

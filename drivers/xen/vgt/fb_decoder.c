@@ -442,7 +442,7 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 
 	vgt_unlock_dev_flags(pdev, cpu, flags);
 
-	if(vgt_debug)
+	if(vgt_debug & VGT_DBG_GENERIC)
 	  vgt_show_fb_format(vmid, fb);
 	return ret;
 }

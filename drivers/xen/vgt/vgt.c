@@ -326,7 +326,7 @@ bool initial_phys_states(struct pgt_device *pdev)
 	uint64_t	bar0, bar1;
 	struct pci_dev *dev = pdev->pdev;
 
-	vgt_dbg("VGT: Initial_phys_states\n");
+	vgt_dbg(VGT_DBG_GENERIC, "VGT: Initial_phys_states\n");
 
 	pdev->gtt_size = vgt_get_gtt_size(pdev->pbus);
 	gm_sz(pdev) = vgt_get_gtt_size(pdev->pbus) * 1024;
@@ -340,9 +340,9 @@ bool initial_phys_states(struct pgt_device *pdev)
 
 	for (i=0; i<VGT_CFG_SPACE_SZ; i+=4) {
 		if (!(i % 16))
-			vgt_dbg("\n[%2x]: ", i);
+			vgt_dbg(VGT_DBG_GENERIC, "\n[%2x]: ", i);
 
-		vgt_dbg("%02x %02x %02x %02x ",
+		vgt_dbg(VGT_DBG_GENERIC, "%02x %02x %02x %02x ",
 			*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff,
 			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff00) >> 8,
 			(*((uint32_t *)&pdev->initial_cfg_space[i]) & 0xff0000) >> 16,
@@ -576,7 +576,7 @@ int vgt_initialize(struct pci_dev *dev)
 		goto err;
 
 	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
-	vgt_dbg("create dom0 instance succeeds\n");
+	vgt_dbg(VGT_DBG_GENERIC, "create dom0 instance succeeds\n");
 
 	//show_mode_settings(pdev);
 

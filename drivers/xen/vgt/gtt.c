@@ -374,11 +374,11 @@ vgt_ppgtt_pde_write(struct vgt_device *vgt, unsigned int g_gtt_index, u32 g_gtt_
 	u32 h_gtt_index;
 
 	if (vgt->shadow_pde_table[i].entry == g_gtt_val) {
-		vgt_dbg("write same PDE value?\n");
+		vgt_dbg(VGT_DBG_MEM, "write same PDE value?\n");
 		return;
 	}
 
-	vgt_dbg("write PDE[%d] old: 0x%x new: 0x%x\n", i, vgt->shadow_pde_table[i].entry, g_gtt_val);
+	vgt_dbg(VGT_DBG_MEM, "write PDE[%d] old: 0x%x new: 0x%x\n", i, vgt->shadow_pde_table[i].entry, g_gtt_val);
 
 	if (vgt->shadow_pde_table[i].entry & _REGBIT_PDE_VALID)
 		vgt_unset_wp_page(vgt, vgt->shadow_pde_table[i].virtual_phyaddr >> PAGE_SHIFT);
@@ -401,7 +401,7 @@ static bool gtt_mmio_read32(struct vgt_device *vgt, unsigned int off,
 	off -= vgt->pdev->mmio_size;
 	/*
 	if (off >= vgt->vgtt_sz) {
-		vgt_dbg("vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
+		vgt_dbg(VGT_DBG_MEM, "vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
 		return false;
 	}
 	*/
@@ -467,7 +467,7 @@ static bool gtt_mmio_write32(struct vgt_device *vgt, unsigned int off,
 
 		/* print info every 32MB */
 		if (!(count % 8192))
-			vgt_dbg("vGT(%d): capture ballooned write for %d times (%x)\n",
+			vgt_dbg(VGT_DBG_MEM, "vGT(%d): capture ballooned write for %d times (%x)\n",
 				vgt->vgt_id, count, off);
 
 		count++;
@@ -478,7 +478,7 @@ static bool gtt_mmio_write32(struct vgt_device *vgt, unsigned int off,
 	if (vgt->ppgtt_initialized &&
 			g_gtt_index >= vgt->ppgtt_base &&
 			g_gtt_index < vgt->ppgtt_base + VGT_PPGTT_PDE_ENTRIES) {
-		vgt_dbg("vGT(%d): Change PPGTT PDE %d!\n", vgt->vgt_id, g_gtt_index);
+		vgt_dbg(VGT_DBG_MEM, "vGT(%d): Change PPGTT PDE %d!\n", vgt->vgt_id, g_gtt_index);
 		vgt_ppgtt_pde_write(vgt, g_gtt_index, g_gtt_val);
 		goto out;
 	}
@@ -538,7 +538,7 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e
 
 	ASSERT(vgt->vm_id != 0);
 
-	vgt_dbg("PTE WP handler: offset 0x%x data 0x%lx bytes %d\n", offset, *(unsigned long *)p_data, bytes);
+	vgt_dbg(VGT_DBG_MEM, "PTE WP handler: offset 0x%x data 0x%lx bytes %d\n", offset, *(unsigned long *)p_data, bytes);
 
 	i = e->idx;
 
@@ -567,7 +567,7 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e
 	clflush((u8 *)pte + index * 4);
 	kunmap_atomic(pte);
 
-	vgt_dbg("WP: PDE[%d], PTE[%d], entry 0x%x, g_addr 0x%lx, h_addr 0x%lx\n", i, index, pte[index], g_addr, h_addr);
+	vgt_dbg(VGT_DBG_MEM, "WP: PDE[%d], PTE[%d], entry 0x%x, g_addr 0x%lx, h_addr 0x%lx\n", i, index, pte[index], g_addr, h_addr);
 
 	return true;
 }
@@ -597,7 +597,7 @@ static void vgt_init_ppgtt_hw(struct vgt_device *vgt, u32 base)
 void vgt_ppgtt_switch(struct vgt_device *vgt)
 {
 	u32 base = vgt->rb[0].sring_ppgtt_info.base;
-	vgt_dbg("vGT: VM(%d): switch to ppgtt base 0x%x\n", vgt->vm_id, base);
+	vgt_dbg(VGT_DBG_MEM, "vGT: VM(%d): switch to ppgtt base 0x%x\n", vgt->vm_id, base);
 	vgt_init_ppgtt_hw(vgt, base);
 }
 
@@ -647,7 +647,7 @@ bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 	/* only hvm guest needs shadowed PT pages */
 	ASSERT(vgt->vm_id != 0);
 
-	vgt_dbg("vgt_init_shadow_ppgtt for vm %d\n", vgt->vm_id);
+	vgt_dbg(VGT_DBG_MEM, "vgt_init_shadow_ppgtt for vm %d\n", vgt->vm_id);
 
 	/* each PDE entry has one shadow PTE page */
 	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
@@ -727,7 +727,7 @@ void vgt_try_setup_ppgtt(struct vgt_device *vgt)
 			return;
 		}
 	}
-	vgt_dbg("zhen: all rings are set PPGTT base and use single table!\n");
+	vgt_dbg(VGT_DBG_MEM, "zhen: all rings are set PPGTT base and use single table!\n");
 	vgt_setup_ppgtt(vgt);
 }
 
@@ -743,7 +743,7 @@ int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
 	__vreg(vgt, off) = mode;
 
 	if (reg_hw_access(vgt, off)) {
-		vgt_dbg("RING mode: offset 0x%x write 0x%x\n", off, s_info->mode);
+		vgt_dbg(VGT_DBG_MEM, "RING mode: offset 0x%x write 0x%x\n", off, s_info->mode);
 		VGT_MMIO_WRITE(vgt->pdev, off, s_info->mode);
 	}
 

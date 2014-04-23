@@ -298,7 +298,7 @@ static void vgt_restore_ringbuffer(struct vgt_device *vgt, int id)
 	if (!ring->need_switch)
 		return;
 
-	vgt_dbg("restore ring: [%x, %x, %x, %x] \n", srb->head, srb->tail,
+	vgt_dbg(VGT_DBG_RENDER, "restore ring: [%x, %x, %x, %x] \n", srb->head, srb->tail,
 		VGT_READ_HEAD(pdev, id),
 		VGT_READ_TAIL(pdev, id));
 
@@ -325,7 +325,7 @@ static void vgt_restore_ringbuffer(struct vgt_device *vgt, int id)
 	 * can further optimize by not switching unused ring.
 	 */
 	VGT_POST_READ_HEAD(pdev, id);
-	vgt_dbg("restore ring: [%x, %x]\n",
+	vgt_dbg(VGT_DBG_RENDER, "restore ring: [%x, %x]\n",
 		VGT_READ_HEAD(pdev, id),
 		VGT_READ_TAIL(pdev, id));
 }
@@ -501,7 +501,7 @@ static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *reg
 		{
 			__sreg(vgt, reg) = VGT_MMIO_READ(vgt->pdev, reg);
 			__vreg(vgt, reg) = mmio_h2g_gmadr(vgt, reg, __sreg(vgt, reg));
-			vgt_dbg("....save mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
+			vgt_dbg(VGT_DBG_RENDER, "....save mmio (%x) with (%x)\n", reg, __sreg(vgt, reg));
 		}
 	}
 }
@@ -547,7 +547,7 @@ static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs
 		 */
 		//if (!reg_hw_status(vgt->pdev, reg))
 		VGT_MMIO_WRITE(vgt->pdev, reg, val);
-		vgt_dbg("....restore mmio (%x) with (%x)\n", reg, val);
+		vgt_dbg(VGT_DBG_RENDER, "....restore mmio (%x) with (%x)\n", reg, val);
 
 		if(!vgt_validate_ctx_switch)
 			continue;
@@ -666,7 +666,7 @@ static bool vgt_setup_rsvd_ring(struct vgt_rsvd_ring *ring)
 		return false;
 	}
 
-	vgt_dbg("start vgt ring at 0x%x\n", ring->start);
+	vgt_dbg(VGT_DBG_RENDER, "start vgt ring at 0x%x\n", ring->start);
 	return true;
 }
 
@@ -1496,7 +1496,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	bool forcewake_got = false;
 
 	if (!(vgt_ctx_check(pdev) % threshold))
-		vgt_dbg("vGT: %lldth checks, %lld switches\n",
+		vgt_dbg(VGT_DBG_RENDER, "vGT: %lldth checks, %lld switches\n",
 			vgt_ctx_check(pdev), vgt_ctx_switch(pdev));
 	vgt_ctx_check(pdev)++;
 
@@ -1541,7 +1541,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 		goto err;
 	}
 
-	vgt_dbg("vGT: next vgt (%d)\n", next->vgt_id);
+	vgt_dbg(VGT_DBG_RENDER, "vGT: next vgt (%d)\n", next->vgt_id);
 	
 
 	/* variable exported by debugfs */
@@ -1750,7 +1750,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 	t0 = get_cycles();
 	stat->ring_mmio_wcnt++;
 
-	vgt_dbg("vGT:ring_mmio_write (0x%x) with val (0x%x)\n", off, *((u32 *)p_data));
+	vgt_dbg(VGT_DBG_RENDER, "vGT:ring_mmio_write (0x%x) with val (0x%x)\n", off, *((u32 *)p_data));
 	rel_off = off & ( sizeof(vgt_ringbuffer_t) - 1 );
 
 	ring_id = tail_to_ring_id (pdev, _tail_reg_(off) );

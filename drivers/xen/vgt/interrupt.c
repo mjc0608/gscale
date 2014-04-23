@@ -285,10 +285,10 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
-	vgt_dbg("IRQ: capture IMR write on reg (%x) with val (%x)\n",
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: capture IMR write on reg (%x) with val (%x)\n",
 		reg, imr);
 
-	vgt_dbg("IRQ: old vIMR(%x), pIMR(%x)\n",
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: old vIMR(%x), pIMR(%x)\n",
 		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
 
 	/* figure out newly masked/unmasked bits */
@@ -297,7 +297,7 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 	masked = (__vreg(vgt, reg) & changed) ^ changed;
 	unmasked = masked ^ changed;
 
-	vgt_dbg("IRQ: changed (%x), masked(%x), unmasked (%x)\n",
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: changed (%x), masked(%x), unmasked (%x)\n",
 		changed, masked, unmasked);
 
 	__vreg(vgt, reg) = imr;
@@ -306,7 +306,7 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 		recalculate_and_update_imr(pdev, reg);
 
 	ops->check_pending_irq(vgt);
-	vgt_dbg("IRQ: new vIMR(%x), pIMR(%x)\n",
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: new vIMR(%x), pIMR(%x)\n",
 		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
 	return true;
 }
@@ -342,10 +342,10 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
 
-	vgt_dbg("IRQ: capture IER write on reg (%x) with val (%x)\n",
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: capture IER write on reg (%x) with val (%x)\n",
 		reg, ier);
 
-	vgt_dbg("IRQ: old vIER(%x), pIER(%x)\n",
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: old vIER(%x), pIER(%x)\n",
 		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
 
 	if (likely(vgt_track_nest) && !vgt->vgt_id &&
@@ -360,7 +360,7 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	enabled = (__vreg(vgt, reg) & changed) ^ changed;
 	disabled = enabled ^ changed;
 
-	vgt_dbg("vGT_IRQ: changed (%x), enabled(%x), disabled(%x)\n",
+	vgt_dbg(VGT_DBG_IRQ, "vGT_IRQ: changed (%x), enabled(%x), disabled(%x)\n",
 		changed, enabled, disabled);
 	__vreg(vgt, reg) = ier;
 
@@ -368,7 +368,7 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 		recalculate_and_update_ier(pdev, reg);
 
 	ops->check_pending_irq(vgt);
-	vgt_dbg("IRQ: new vIER(%x), pIER(%x)\n",
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: new vIER(%x), pIER(%x)\n",
 		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
 	return true;
 }
@@ -378,7 +378,7 @@ bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 {
 	vgt_reg_t iir = *(vgt_reg_t *)p_data;
 
-	vgt_dbg("IRQ: capture IIR write on reg (%x) with val (%x)\n",
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: capture IIR write on reg (%x) with val (%x)\n",
 		reg, iir);
 
 	/* TODO: need use an atomic operation. Now it's safe due to big lock */
@@ -402,7 +402,7 @@ bool vgt_reg_isr_read(struct vgt_device *vgt, unsigned int reg,
 bool vgt_reg_isr_write(struct vgt_device *vgt, unsigned int reg,
 	void *p_data, unsigned int bytes)
 {
-	vgt_dbg("IRQ: capture ISR write on reg (%x) with val (%x)." \
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: capture ISR write on reg (%x) with val (%x)." \
 		" Will be ignored!\n", reg, *(vgt_reg_t *)p_data);
 
 	return true;
@@ -553,7 +553,7 @@ static void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 	info.domid = vgt->vm_id;
 	info.addr = *(uint32_t *)(cfg_space + MSI_CAP_ADDRESS);
 	info.data = *(uint16_t *)(cfg_space + MSI_CAP_DATA);
-	vgt_dbg("vGT: VM(%d): hvm injections. address (%llx) data(%x)!\n",
+	vgt_dbg(VGT_DBG_IRQ, "vGT: VM(%d): hvm injections. address (%llx) data(%x)!\n",
 		vgt->vm_id, info.addr, info.data);
 	r = HYPERVISOR_hvm_op(HVMOP_inject_msi, &info);
 	if (r < 0)
@@ -594,7 +594,7 @@ static void vgt_propagate_event(struct vgt_irq_host_state *hstate,
          * TODO: need check 2nd level IMR for render events
          */
 	if (!test_bit(bit, (void*)vgt_vreg(vgt, regbase_to_imr(reg_base)))) {
-		vgt_dbg("IRQ: set bit (%d) for (%s) for VM (%d)\n",
+		vgt_dbg(VGT_DBG_IRQ, "IRQ: set bit (%d) for (%s) for VM (%d)\n",
 			bit, vgt_irq_name[event], vgt->vm_id);
 		set_bit(bit, (void*)vgt_vreg(vgt, regbase_to_iir(reg_base)));
 
@@ -1246,7 +1246,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	pdev->stat.last_pirq = get_cycles();
 
 	spin_lock(&pdev->irq_lock);
-	vgt_dbg("IRQ: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
 		VGT_MMIO_READ(pdev, _REG_DEIIR),
 		VGT_MMIO_READ(pdev, _REG_GTIIR),
 		VGT_MMIO_READ(pdev, _REG_SDEIIR),
@@ -1258,7 +1258,7 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 
 	ret = hstate->ops->irq_handler(hstate);
 	if (ret == IRQ_NONE) {
-		vgt_dbg("Spurious interrupt received (or shared vector)\n");
+		vgt_dbg(VGT_DBG_IRQ, "Spurious interrupt received (or shared vector)\n");
 		goto out;
 	}
 

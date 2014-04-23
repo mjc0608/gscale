@@ -276,7 +276,7 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 					vgt_hvm_set_trap_area(vgt);
 				}
 			} else {
-				vgt_dbg("need to trap the PIO BAR? "
+				vgt_dbg(VGT_DBG_GENERIC, "need to trap the PIO BAR? "
 					"old_cmd=0x%x, cmd_changed=%0x",
 					old_cmd, cmd_changed);
 			}
@@ -367,7 +367,7 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 bool vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
 	unsigned int port, unsigned int bytes, unsigned long val)
 {
-	vgt_dbg("vgt_hvm_write_cf8_cfc %x %d %lx\n", port, bytes, val);
+	vgt_dbg(VGT_DBG_GENERIC, "vgt_hvm_write_cf8_cfc %x %d %lx\n", port, bytes, val);
 	if ( (port & ~3) == 0xcf8 ) {
 		ASSERT (bytes == 4);
 		ASSERT ((port & 3) == 0);
@@ -400,7 +400,7 @@ bool vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
 					&data, bytes);
 		memcpy(val, &data, bytes);
 	}
-	vgt_dbg("VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
+	vgt_dbg(VGT_DBG_GENERIC, "VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
 			port, bytes, *val);
 	return true;
 }

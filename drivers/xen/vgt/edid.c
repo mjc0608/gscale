@@ -519,7 +519,7 @@ void vgt_probe_edid(struct pgt_device *pdev, int index, bool init)
 		if (new_edid && new_edid->data_valid) {
 			set_bit(i, pdev->detected_ports);
 			pdev->ports[port_id].type = i;
-			if (vgt_debug) {
+			if (vgt_debug & VGT_DBG_DPY) {
 				vgt_info("EDID_PROBE: EDID[%s] is:\n",
 					vgt_port_name[i]);
 				vgt_print_edid(new_edid);
@@ -651,7 +651,7 @@ void vgt_probe_dpcd(struct pgt_device *pdev, int index, bool init)
 
 				set_bit(dp_port, pdev->detected_ports);
 				pdev->ports[i + PORT_A].type = dp_port;
-				if (vgt_debug) {
+				if (vgt_debug & VGT_DBG_DPY) {
 					vgt_info("DPCD_PROBE: DPCD is:\n");
 					vgt_print_dpcd(*dpcd);
 				}
@@ -721,7 +721,7 @@ void vgt_propagate_edid(struct vgt_device *vgt, int index)
 		port->port_override = index;
 		set_bit(type, vgt->presented_ports);
 
-		if (vgt_debug) {
+		if (vgt_debug & VGT_DBG_DPY) {
 			vgt_info("EDID_PROPAGATE: %s EDID[%s] is:\n",
 				VGT_PORT_NAME(index),
 				vgt_port_name[type]);
@@ -776,7 +776,7 @@ void vgt_propagate_dpcd(struct vgt_device *vgt, int index)
 		vgt->ports[index].dpcd->data[DPCD_SINK_COUNT] &=
 			~DPCD_CP_READY_MASK;
 
-		if (vgt_debug && vgt->ports[index].dpcd->data_valid) {
+		if ((vgt_debug & VGT_DBG_DPY) && vgt->ports[index].dpcd->data_valid) {
 			vgt_info("DPCD_PROPAGATE: DPCD[%d] is:\n", index);
 			vgt_print_dpcd(vgt->ports[index].dpcd);
 		}
@@ -1057,7 +1057,7 @@ void *p_data, unsigned int bytes)
 			i2c_bus->edid_slave.edid_data = i2c_bus->gmbus.pedid;
 
 		} else if (slave_addr != 0) {
-			vgt_dbg("vGT(%d): unsupported gmbus slave addr(%x)\n",
+			vgt_dbg(VGT_DBG_DPY, "vGT(%d): unsupported gmbus slave addr(%x)\n",
 					vgt->vgt_id, slave_addr);
 			i2c_bus->current_slave = (vgt_i2c_slave_t *)&i2c_bus->edid_slave;
 			i2c_bus->edid_slave.edid_data = i2c_bus->gmbus.pedid;

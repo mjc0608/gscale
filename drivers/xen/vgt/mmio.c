@@ -124,7 +124,7 @@ bool vgt_register_mmio_handler(unsigned int start, int bytes,
 
 	end = start + bytes -1;
 
-	vgt_dbg("start=0x%x end=0x%x\n", start, end);
+	vgt_dbg(VGT_DBG_GENERIC, "start=0x%x end=0x%x\n", start, end);
 
 	ASSERT((start & 3) == 0);
 	ASSERT(((end+1) & 3) == 0);
@@ -321,7 +321,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 		goto err_common_chk;
 
 	if (bytes > 4)
-		vgt_dbg("vGT: capture >4 bytes read to %x\n", offset);
+		vgt_dbg(VGT_DBG_GENERIC,"vGT: capture >4 bytes read to %x\n", offset);
 
 	vgt_lock_dev_flags(pdev, cpu, flags);
 
@@ -418,7 +418,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 		goto err_common_chk;
 
 	if (bytes > 4)
-		vgt_dbg("vGT: capture >4 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
+		vgt_dbg(VGT_DBG_GENERIC,"vGT: capture >4 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
 /*
 	if (reg_rdonly(pdev, offset & (~(bytes - 1)))) {
 		printk("vGT: captured write to read-only reg (%x)\n", offset);
@@ -466,7 +466,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	if (reg_mode_ctl(pdev, offset)) {
 		u32 mask = __vreg(vgt, offset) >> 16;
 
-		vgt_dbg("old mode (%x): %x/%x, mask(%x)\n", offset,
+		vgt_dbg(VGT_DBG_GENERIC,"old mode (%x): %x/%x, mask(%x)\n", offset,
 			__vreg(vgt, offset), __sreg(vgt, offset),
 			reg_aux_mode_mask(pdev, offset));
 		/*
@@ -476,14 +476,14 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 		reg_aux_mode_mask(pdev, offset) |= mask << 16;
 		__vreg(vgt, offset) = (old_vreg & ~mask) | (__vreg(vgt, offset) & mask);
 		__sreg(vgt, offset) = (old_sreg & ~mask) | (__sreg(vgt, offset) & mask);
-		vgt_dbg("new mode (%x): %x/%x, mask(%x)\n", offset,
+		vgt_dbg(VGT_DBG_GENERIC,"new mode (%x): %x/%x, mask(%x)\n", offset,
 			__vreg(vgt, offset), __sreg(vgt, offset),
 			reg_aux_mode_mask(pdev, offset));
 		//show_mode_settings(vgt->pdev);
 	}
 
 	if (offset == _REG_RCS_UHPTR)
-		vgt_dbg("vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
+		vgt_dbg(VGT_DBG_GENERIC,"vGT: write to UHPTR (%x,%x)\n", __vreg(vgt, offset), __sreg(vgt, offset));
 
 	reg_set_accessed(pdev, offset);
 	vgt_unlock_dev_flags(pdev, cpu, flags);
@@ -589,7 +589,7 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 			if (req->count != 1)
 				goto err_ioreq_count;
 
-			//vgt_dbg("HVM_MMIO_read: target register (%lx).\n",
+			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_read: target register (%lx).\n",
 			//	(unsigned long)req->addr);
 			if (!vgt_emulate_read(vgt, req->addr, &req->data, req->size))
 				return -EINVAL;
@@ -599,7 +599,7 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 			   || (req->addr + sign * req->count * req->size >=
 				base + vgt->state.bar_size[0]))
 				goto err_ioreq_range;
-			//vgt_dbg("HVM_MMIO_read: rep %d target memory %lx, slow!\n",
+			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_read: rep %d target memory %lx, slow!\n",
 			//	req->count, (unsigned long)req->addr);
 
 			for (i = 0; i < req->count; i++) {
@@ -613,7 +613,7 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 				if (gva != NULL && IS_HSW(vgt->pdev))
 					memcpy(gva, &tmp, req->size);
 				else
-					vgt_dbg("vGT: can not write gpa = 0x%lx!!!\n", gpa);
+					vgt_dbg(VGT_DBG_GENERIC,"vGT: can not write gpa = 0x%lx!!!\n", gpa);
 			}
 		}
 	}
@@ -621,7 +621,7 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 		if (!req->data_is_ptr) {
 			if (req->count != 1)
 				goto err_ioreq_count;
-			//vgt_dbg("HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
+			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
 			if (!vgt_emulate_write(vgt, req->addr, &req->data, req->size))
 				return -EINVAL;
 		}
@@ -630,7 +630,7 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 			    || (req->addr + sign * req->count * req->size >=
 				base + vgt->state.bar_size[0]))
 				goto err_ioreq_range;
-			//vgt_dbg("HVM_MMIO_write: rep %d target memory %lx, slow!\n",
+			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_write: rep %d target memory %lx, slow!\n",
 			//	req->count, (unsigned long)req->addr);
 
 			for (i = 0; i < req->count; i++) {
@@ -640,7 +640,7 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 					memcpy(&tmp, gva, req->size);
 				else {
 					tmp = 0;
-					vgt_dbg("vGT: can not read gpa = 0x%lx!!!\n", gpa);
+					vgt_dbg(VGT_DBG_GENERIC, "vGT: can not read gpa = 0x%lx!!!\n", gpa);
 				}
 				if (!vgt_emulate_write(vgt, req->addr + sign * i * req->size, &tmp, req->size))
 					return -EINVAL;
@@ -679,7 +679,7 @@ int _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 				return -EINVAL;
 		}
 		else {
-			vgt_dbg("VGT: _hvm_pio_emulation read data_ptr %lx\n",
+			vgt_dbg(VGT_DBG_GENERIC,"VGT: _hvm_pio_emulation read data_ptr %lx\n",
 			(long)ioreq->data);
 			goto err_data_ptr;
 #if 0
@@ -704,7 +704,7 @@ int _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 				return -EINVAL;
 		}
 		else {
-			vgt_dbg("VGT: _hvm_pio_emulation write data_ptr %lx\n",
+			vgt_dbg(VGT_DBG_GENERIC,"VGT: _hvm_pio_emulation write data_ptr %lx\n",
 			(long)ioreq->data);
 			goto err_data_ptr;
 #if 0
@@ -1001,7 +1001,7 @@ static void vgt_initialize_reg_attr(struct pgt_device *pdev,
 
 		cnt++;
 		if (track)
-			vgt_dbg("reg(%x): size(%x), device(%d), flags(%x), mask(%x), read(%llx), write(%llx)\n",
+			vgt_dbg(VGT_DBG_GENERIC,"reg(%x): size(%x), device(%d), flags(%x), mask(%x), read(%llx), write(%llx)\n",
 				attr->reg, attr->size, attr->device,
 				attr->flags,
 				attr->addr_mask,
@@ -1176,7 +1176,7 @@ void state_sreg_init(struct vgt_device *vgt)
 	for (i = 0; i < vgt->pdev->reg_num; i++) {
 		if (reg_addr_fix(vgt->pdev, i * REG_SIZE)) {
 			__sreg(vgt, i) = mmio_g2h_gmadr(vgt, i, __vreg(vgt, i));
-			vgt_dbg("vGT: address fix for reg (%x): (%x->%x)\n",
+			vgt_dbg(VGT_DBG_GENERIC,"vGT: address fix for reg (%x): (%x->%x)\n",
 				i, __vreg(vgt, i), __sreg(vgt, i));
 		}
 	}

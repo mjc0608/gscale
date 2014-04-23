@@ -342,7 +342,7 @@ bool is_vgt_rb_tailq_empty(struct vgt_device *vgt, int max_engines)
 		if (test_bit(ring_id, (void *)vgt->started_rings)
 				&& !is_vgt_tailq_empty(&vgt->rb_tailq[ring_id])) {
 			/* check how many tail-writings can be cached */
-			vgt_dbg("vGT(%d): rb(%d) tailq length(%d)\n",
+			vgt_dbg(VGT_DBG_RENDER, "vGT(%d): rb(%d) tailq length(%d)\n",
 					vgt->vgt_id, ring_id,
 					vgt_tailq_len(&vgt->rb_tailq[ring_id]));
 			return false;
@@ -565,7 +565,7 @@ static void vgt_alloc_tslice(struct vgt_device *vgt)
 	int64_t *ts = &(vgt->sched_info.time_slice);
 	if (*ts > 0)
 		return;
-	vgt_dbg("vgt(%d): allocate tslice %lld\n",
+	vgt_dbg(VGT_DBG_RENDER, "vgt(%d): allocate tslice %lld\n",
 			vgt->vgt_id,
 			VGT_DEFAULT_TSLICE);
 
@@ -700,7 +700,7 @@ void vgt_sched_ctx(struct pgt_device *pdev)
 
 	/* time slice not used up */
 	if (cur_time < ctx_end_time(cur_vgt)) {
-		vgt_dbg("vgt(%d): cur_time(%lld), [%lld, %lld]\n",
+		vgt_dbg(VGT_DBG_RENDER, "vgt(%d): cur_time(%lld), [%lld, %lld]\n",
 				cur_vgt->vgt_id,
 				cur_time,
 				ctx_start_time(cur_vgt),
@@ -709,7 +709,7 @@ void vgt_sched_ctx(struct pgt_device *pdev)
 		return;
 	}
 
-	vgt_dbg("vgt(%d): tslice used up, cur_time(%lld), ctx_end_time(%lld)\n",
+	vgt_dbg(VGT_DBG_RENDER, "vgt(%d): tslice used up, cur_time(%lld), ctx_end_time(%lld)\n",
 			cur_vgt->vgt_id,
 			cur_time,
 			ctx_end_time(cur_vgt));
@@ -728,8 +728,8 @@ void vgt_sched_ctx(struct pgt_device *pdev)
 			return;
 		}
 
-		vgt_dbg("try to switch to vgt(%d), cur_time(%lld)\n", next_vgt->vgt_id, cur_time);
-		vgt_dbg("vgt(%d): rb wait(%lld) to be empty\n",
+		vgt_dbg(VGT_DBG_RENDER, "try to switch to vgt(%d), cur_time(%lld)\n", next_vgt->vgt_id, cur_time);
+		vgt_dbg(VGT_DBG_RENDER, "vgt(%d): rb wait(%lld) to be empty\n",
 				cur_vgt->vgt_id,
 				ctx_rb_empty_delay(cur_vgt));
 
@@ -829,7 +829,7 @@ void vgt_submit_commands(struct vgt_device *vgt, int ring_id)
 	 * request will be recovered at end of ctx switch.
 	 */
 	if (ctx_switch_requested(pdev)) {
-		vgt_dbg("<%d>: Hold commands in render ctx switch (%d->%d)\n",
+		vgt_dbg(VGT_DBG_RENDER, "<%d>: Hold commands in render ctx switch (%d->%d)\n",
 			vgt->vm_id, current_render_owner(pdev)->vm_id,
 			pdev->next_sched_vgt->vm_id);
 		return;
@@ -848,7 +848,7 @@ void vgt_submit_commands(struct vgt_device *vgt, int ring_id)
 	cmd_nr = get_submission_id(rs, budget, &submission_id);
 	/* no valid cmd queued */
 	if (cmd_nr == MAX_CMD_BUDGET) {
-		vgt_dbg("VM(%d): tail write w/o cmd to submit\n",
+		vgt_dbg(VGT_DBG_RENDER, "VM(%d): tail write w/o cmd to submit\n",
 			vgt->vm_id);
 		return;
 	}

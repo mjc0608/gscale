@@ -142,7 +142,7 @@ static int add_patch_entry(struct parser_exec_state *s,
 		return -ENOSPC;
 	}
 
-	vgt_dbg("VM(%d): Add patch entry-%d (addr: %llx, val: %x, id: %lld\n",
+	vgt_dbg(VGT_DBG_CMD, "VM(%d): Add patch entry-%d (addr: %llx, val: %x, id: %lld\n",
 		s->vgt->vm_id, next, (uint64_t)addr, val, s->request_id);
 	patch = &list->patch[next];
 	patch->addr = addr;
@@ -242,7 +242,7 @@ static void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id)
 		if (patch->request_id > submission_id)
 			break;
 
-		vgt_dbg("submission-%lld: apply patch entry-%d (addr: %llx, val: %x->%x, id: %lld\n",
+		vgt_dbg(VGT_DBG_CMD, "submission-%lld: apply patch entry-%d (addr: %llx, val: %x->%x, id: %lld\n",
 			submission_id, next, (uint64_t)patch->addr,
 			patch->old_val, patch->new_val, patch->request_id);
 		apply_patch_entry(patch);
@@ -894,7 +894,7 @@ static bool vgt_flip_parameter_check(struct parser_exec_state *s,
 		(plane == PRIMARY_PLANE) &&
 		((stride_val & PITCH_MASK) !=
 			(phys_stride & stride_mask))) {
-		vgt_dbg("Stride value may not match display timing! "
+		vgt_dbg(VGT_DBG_CMD, "Stride value may not match display timing! "
 			"MI_DISPLAY_FLIP will be ignored!\n");
 		return false;
 	}
@@ -1000,7 +1000,7 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 		return 0;
 	}
 
-	vgt_dbg("VM %d: mi_display_flip to be ignored\n",
+	vgt_dbg(VGT_DBG_CMD, "VM %d: mi_display_flip to be ignored\n",
 		s->vgt->vm_id);
 
 	for (i = 1; i < length; i ++) {
@@ -1052,7 +1052,7 @@ static int vgt_handle_mi_wait_for_event(struct parser_exec_state *s)
 
 	if (s->vgt != current_foreground_vm(s->vgt->pdev)) {
 		rc |= add_patch_entry(s, cmd_ptr(s, 0), MI_NOOP);
-		vgt_dbg("VM %d: mi_wait_for_event to be ignored\n", s->vgt->vm_id);
+		vgt_dbg(VGT_DBG_CMD, "VM %d: mi_wait_for_event to be ignored\n", s->vgt->vm_id);
 		return rc;
 	}
 
@@ -1122,7 +1122,7 @@ static int vgt_cmd_handler_mi_update_gtt(struct parser_exec_state *s)
 	//entry = v_aperture(s->vgt->pdev, cmd_val(s,1));
 	entry = cmd_ptr(s, 2);
 	for (i=0; i<entry_num; i++){
-		vgt_dbg("vgt: update GTT entry %d\n", i);
+		vgt_dbg(VGT_DBG_CMD, "vgt: update GTT entry %d\n", i);
 		/*TODO: optimize by batch g2m translation*/
 		rc = gtt_p2m(s->vgt, entry[i], &entry[i] );
 		if (rc < 0){
@@ -2007,7 +2007,7 @@ static int cmd_hash_init(struct pgt_device *pdev)
 
 	for (i=0; i< ARRAY_SIZE(cmd_info); i++){
 		if (!(cmd_info[i].devices & gen_type)){
-			vgt_dbg("CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] not registered\n",
+			vgt_dbg(VGT_DBG_CMD, "CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] not registered\n",
 					cmd_info[i].name, cmd_info[i].opcode, cmd_info[i].flag,
 					cmd_info[i].devices, cmd_info[i].rings);
 			continue;
@@ -2028,7 +2028,7 @@ static int cmd_hash_init(struct pgt_device *pdev)
 
 		INIT_HLIST_NODE(&e->hlist);
 		vgt_add_cmd_entry(e);
-		vgt_dbg("CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] registered\n",
+		vgt_dbg(VGT_DBG_CMD, "CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] registered\n",
 				e->info->name,e->info->opcode, e->info->flag, e->info->devices,
 				e->info->rings);
 	}
@@ -2096,7 +2096,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 	 * future for performance considerations.
 	 */
 	if (unlikely(cmd_len > VGT_MAX_CMD_LENGTH)) {
-		vgt_dbg("cmd length exceed tracing limitation!\n");
+		vgt_dbg(VGT_DBG_CMD, "cmd length exceed tracing limitation!\n");
 		cmd_len = VGT_MAX_CMD_LENGTH;
 	}
 	for (i = 0; i < cmd_len; i++)
@@ -2188,7 +2188,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		return rc;
 
 	klog_printk("ring buffer scan start on ring %d\n", ring_id);
-	vgt_dbg("scan_start: start=%lx end=%lx\n", gma_head, gma_tail);
+	vgt_dbg(VGT_DBG_CMD, "scan_start: start=%lx end=%lx\n", gma_head, gma_tail);
 	while(s.ip_gma != gma_tail){
 		if (s.buf_type == RING_BUFFER_INSTRUCTION){
 			ASSERT((s.ip_gma >= base) && (s.ip_gma < gma_bottom));
@@ -2213,7 +2213,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	}
 
 	klog_printk("ring buffer scan end on ring %d\n", ring_id);
-	vgt_dbg("scan_end\n");
+	vgt_dbg(VGT_DBG_CMD, "scan_end\n");
 	return rc;
 }
 
@@ -2234,7 +2234,7 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 
 	if ( !(vring->ctl & _RING_CTL_ENABLE) ) {
 		/* Ring is enabled */
-		vgt_dbg("VGT-Parser.c vring head %x tail %x ctl %x\n",
+		vgt_dbg(VGT_DBG_CMD, "VGT-Parser.c vring head %x tail %x ctl %x\n",
 			vring->head, vring->tail, vring->ctl);
 		return 0;
 	}

@@ -45,7 +45,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	ASSERT((reg < _REG_FENCE_0_LOW) || (reg > _REG_FENCE_15_HIGH));
 
 	mask = reg_aux_addr_mask(pdev, reg);
-	vgt_dbg("vGT: address fix g->h for reg (0x%lx) value (0x%x) mask (0x%x)\n", reg, g_value, mask);
+	vgt_dbg(VGT_DBG_MEM, "vGT: address fix g->h for reg (0x%lx) value (0x%x) mask (0x%x)\n", reg, g_value, mask);
 	/*
 	 * NOTE: address ZERO is special, and sometimes the driver may hard
 	 * code address ZERO, e.g. in curbase setting (when the cursor becomes
@@ -53,7 +53,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	 * range of the VM. If this doesn't work, we need change the driver!
 	 */
 	if (!(g_value & mask)) {
-		vgt_dbg("vGT(%d): translate address ZERO for reg (%lx)\n",
+		vgt_dbg(VGT_DBG_MEM, "vGT(%d): translate address ZERO for reg (%lx)\n",
 			vgt->vgt_id, reg);
 		g_value = (vgt_guest_visible_gm_base(vgt) & mask) |
 			  (g_value & ~mask);
@@ -68,7 +68,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	 *  vgt_emulate_write(). Will fix this later.
 	 */
 	ASSERT_VM(!ret, vgt);
-	vgt_dbg("....(g)%x->(h)%llx\n", g_value, (h_value & mask) | (g_value & ~mask));
+	vgt_dbg(VGT_DBG_MEM, "....(g)%x->(h)%llx\n", g_value, (h_value & mask) | (g_value & ~mask));
 
 	return (h_value & mask) | (g_value & ~mask);
 }
@@ -87,7 +87,7 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	if (!reg_addr_fix(pdev, reg))
 		return h_value;
 
-	vgt_dbg("vGT: address fix h->g for reg (%lx)(%x)\n", reg, h_value);
+	vgt_dbg(VGT_DBG_MEM, "vGT: address fix h->g for reg (%lx)(%x)\n", reg, h_value);
 	mask = reg_aux_addr_mask(pdev, reg);
 
 	/*
@@ -96,12 +96,12 @@ vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_
 	 * doesn't matter.
 	 */
 	if (!h_gm_is_valid(vgt, h_value & mask)) {
-		vgt_dbg("!!!vGT: reg (%lx) doesn't contain a valid host address (%x)\n", reg, h_value);
+		vgt_dbg(VGT_DBG_MEM, "!!!vGT: reg (%lx) doesn't contain a valid host address (%x)\n", reg, h_value);
 		h_value = (vgt_visible_gm_base(vgt) & mask) | (h_value & ~mask);
 	}
 
 	g_value = h2g_gm(vgt, h_value & mask);
-	vgt_dbg("....(h)%x->(g)%x\n", h_value, (g_value & mask) | (h_value & ~mask));
+	vgt_dbg(VGT_DBG_MEM, "....(h)%x->(g)%x\n", h_value, (g_value & mask) | (h_value & ~mask));
 	return (g_value & mask) | (h_value & ~mask);
 }
 

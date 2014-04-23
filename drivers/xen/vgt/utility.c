@@ -329,11 +329,11 @@ uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
 	pci_write_config_dword(dev, bar_off, 0xFFFFFFFF);
 
 	pci_read_config_dword(dev, bar_off, (uint32_t *)&bar_size);
-	vgt_dbg("read back bar_size %lx\n", bar_size);
+	vgt_dbg(VGT_DBG_GENERIC, "read back bar_size %lx\n", bar_size);
 	bar_size &= ~0xf; /* bit 4-31 */
-	vgt_dbg("read back bar_size1 %lx\n", bar_size);
+	vgt_dbg(VGT_DBG_GENERIC, "read back bar_size1 %lx\n", bar_size);
 	bar_size = 1 << find_first_bit(&bar_size, BITS_PER_LONG);
-	vgt_dbg("read back bar_size2 %lx\n", bar_size);
+	vgt_dbg(VGT_DBG_GENERIC, "read back bar_size2 %lx\n", bar_size);
 
 	pci_write_config_dword(dev, bar_off, bar_s);
 
@@ -382,7 +382,7 @@ void check_gtt(struct pgt_device *pdev)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(addr); i++)
-		vgt_dbg("GMADR: 0x08%x, GTT INDEX: %x, GTT VALUE: %x\n",
+		vgt_dbg(VGT_DBG_MEM, "GMADR: 0x08%x, GTT INDEX: %x, GTT VALUE: %x\n",
 			addr[i], GTT_INDEX(pdev, addr[i]),
 			vgt_read_gtt(pdev, GTT_INDEX(pdev, addr[i])));
 }
@@ -485,9 +485,9 @@ int setup_gtt(struct pgt_device *pdev)
 	for (i = 0; i < gm_pages(pdev); i++)
 		vgt_write_gtt(pdev, i, pte);
 
-	vgt_dbg("content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
-	vgt_dbg("content at 0x64000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x64000));
-	vgt_dbg("content at 0x8064000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x8064000));
+	vgt_dbg(VGT_DBG_MEM, "content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
+	vgt_dbg(VGT_DBG_MEM, "content at 0x64000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x64000));
+	vgt_dbg(VGT_DBG_MEM, "content at 0x8064000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x8064000));
 
 	check_gtt(pdev);
 
@@ -506,7 +506,7 @@ int setup_gtt(struct pgt_device *pdev)
 		/* need a DMA flag? */
 		page = alloc_page(GFP_KERNEL | __GFP_ZERO);
 		if (!page) {
-			vgt_dbg("vGT: Failed to create page for setup_gtt!\n");
+			vgt_dbg(VGT_DBG_MEM, "vGT: Failed to create page for setup_gtt!\n");
 			ret = -ENOMEM;
 			goto err_out;
 		}
@@ -529,7 +529,7 @@ int setup_gtt(struct pgt_device *pdev)
 		vgt_write_gtt(pdev, index + i, pte);
 
 		if (!(i % 1024))
-			vgt_dbg("vGT: write GTT-%x phys: %llx, dma: %llx\n",
+			vgt_dbg(VGT_DBG_MEM, "vGT: write GTT-%x phys: %llx, dma: %llx\n",
 				index + i, page_to_phys(page), dma_addr);
 	}
 

@@ -205,8 +205,16 @@ enum transcoder {
 #define vgt_err(fmt, s...)	\
 	do { printk(KERN_ERR "vGT error:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
 
-#define vgt_dbg(fmt, s...)	\
-	do { if (vgt_debug) printk(KERN_DEBUG "vGT debug:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
+#define vgt_dbg(component, fmt, s...)	\
+	do { if (vgt_debug & component) printk(KERN_DEBUG "vGT debug:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
+
+#define VGT_DBG_GENERIC   (1<<0)
+#define VGT_DBG_DPY   (1<<1)
+#define VGT_DBG_MEM   (1<<2)
+#define VGT_DBG_RENDER   (1<<3)
+#define VGT_DBG_CMD   (1<<4)
+#define VGT_DBG_IRQ   (1<<5)
+#define VGT_DBG_ALL     (0xffff)
 
 /*
  * Define registers of a ring buffer per hardware register layout.

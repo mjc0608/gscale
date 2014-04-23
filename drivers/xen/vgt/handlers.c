@@ -110,13 +110,13 @@ static inline void set_vRC(struct vgt_device *vgt, int c)
 
 static void set_vRC_to_C6(struct vgt_device *vgt)
 {
-	vgt_dbg("Virtual Render C state set to C6\n");
+	vgt_dbg(VGT_DBG_GENERIC, "Virtual Render C state set to C6\n");
 	set_vRC(vgt, 3);
 }
 
 static void set_vRC_to_C0(struct vgt_device *vgt)
 {
-	vgt_dbg("Virtual Render C state set to C0\n");
+	vgt_dbg(VGT_DBG_GENERIC, "Virtual Render C state set to C0\n");
 	set_vRC(vgt, 0);
 }
 
@@ -180,7 +180,7 @@ static bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
 
 	data = (*(uint32_t*) p_data) & 1 ;
 
-	vgt_dbg("VM%d write register FORCE_WAKE with %x\n", vgt->vm_id, data);
+	vgt_dbg(VGT_DBG_GENERIC, "VM%d write register FORCE_WAKE with %x\n", vgt->vm_id, data);
 
 	if (IS_HSW(vgt->pdev)) {
 		__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = data;
@@ -215,7 +215,7 @@ static bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 
 	data = *(uint32_t*) p_data;
 
-	vgt_dbg("VM%d write register FORCE_WAKE_MT with %x\n", vgt->vm_id, data);
+	vgt_dbg(VGT_DBG_GENERIC, "VM%d write register FORCE_WAKE_MT with %x\n", vgt->vm_id, data);
 
 	if (!(__vreg(vgt, _REG_ECOBUS) & ECOBUS_FORCEWAKE_MT_ENABLE)){
 		__vreg(vgt, _REG_MUL_FORCEWAKE) = data;
@@ -575,7 +575,7 @@ static bool pp_dir_base_read(struct vgt_device *vgt, unsigned int off,
 
 	*(u32 *)p_data = v_info->base;
 
-	vgt_dbg("<ring-%d>PP_DIR_BASE read: 0x%x\n", ring_id, v_info->base);
+	vgt_dbg(VGT_DBG_RENDER, "<ring-%d>PP_DIR_BASE read: 0x%x\n", ring_id, v_info->base);
 	return true;
 }
 
@@ -587,7 +587,7 @@ static bool pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 	vgt_ring_ppgtt_t *s_info = &vgt->rb[ring_id].sring_ppgtt_info;
 
-	vgt_dbg("<ring-%d> PP_DIR_BASE write: 0x%x\n", ring_id, base);
+	vgt_dbg(VGT_DBG_RENDER, "<ring-%d> PP_DIR_BASE write: 0x%x\n", ring_id, base);
 
 	/* convert base which is in form of bit 31-16 in 64bytes cachelines,
 	 * it turns out to be ((((base >> 16) * 64) >> 2) << PAGE_SHIFT), which
@@ -618,7 +618,7 @@ static bool pp_dclv_write(struct vgt_device *vgt, unsigned int off,
 	__sreg(vgt, off) = dclv;
 
 	/* TODO: forward to pReg? */
-	vgt_dbg("PP_DCLV write: 0x%x\n", dclv);
+	vgt_dbg(VGT_DBG_RENDER, "PP_DCLV write: 0x%x\n", dclv);
 	return true;
 }
 
@@ -630,7 +630,7 @@ static bool ring_pp_mode_read(struct vgt_device *vgt, unsigned int off,
 	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
 
 	*(u32 *)p_data = v_info->mode;
-	vgt_dbg("<ring-%d>GFX_MODE read: 0x%x\n", ring_id, v_info->mode);
+	vgt_dbg(VGT_DBG_RENDER, "<ring-%d>GFX_MODE read: 0x%x\n", ring_id, v_info->mode);
 	return true;
 }
 
@@ -640,7 +640,7 @@ static bool ring_pp_mode_write(struct vgt_device *vgt, unsigned int off,
 	u32 mode = *(u32 *)p_data;
 	int ring_id = pp_mmio_to_ring_id(off);
 
-	vgt_dbg("<ring-%d>GFX_MODE write: 0x%x\n", ring_id, mode);
+	vgt_dbg(VGT_DBG_RENDER, "<ring-%d>GFX_MODE write: 0x%x\n", ring_id, mode);
 
 	if (ring_id == RING_BUFFER_VECS)
 		vgt->vebox_support = 1;
@@ -1251,7 +1251,7 @@ bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p
 
 	if(real_pipe == I915_MAX_PIPES)
 	{
-		vgt_dbg("the mapping for pipe %d is not ready or created!\n", virtual_pipe);
+		vgt_dbg(VGT_DBG_DPY, "the mapping for pipe %d is not ready or created!\n", virtual_pipe);
 		return false;
 	}
 
@@ -3227,7 +3227,7 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 	printk("post mmio hooks initialized\n");
 
 	if (pdev->enable_ppgtt) {
-		vgt_dbg("Hook up PPGTT register handlers\n");
+		vgt_dbg(VGT_DBG_MEM,"Hook up PPGTT register handlers\n");
 		/* trap PPGTT base register */
 		reg_update_handlers(pdev, _REG_RCS_PP_DIR_BASE_IVB, 4,
 				pp_dir_base_read, pp_dir_base_write);

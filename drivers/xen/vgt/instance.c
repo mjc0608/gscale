@@ -79,7 +79,7 @@ static int create_state_instance(struct vgt_device *vgt)
 	vgt_state_t	*state;
 	int i;
 
-	vgt_dbg("create_state_instance\n");
+	vgt_dbg(VGT_DBG_GENERIC, "create_state_instance\n");
 	state = &vgt->state;
 	state->vReg = vzalloc(vgt->pdev->mmio_size);
 	state->sReg = vzalloc(vgt->pdev->mmio_size);
@@ -386,12 +386,12 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	printk("check display ownership...\n");
 	if (!hvm_super_owner && (current_display_owner(pdev) == vgt)) {
-		vgt_dbg("switch display ownership back to dom0\n");
+		vgt_dbg(VGT_DBG_DPY, "switch display ownership back to dom0\n");
 		current_display_owner(pdev) = vgt_dom0;
 	}
 
 	if (!hvm_super_owner && (current_foreground_vm(pdev) == vgt)) {
-		vgt_dbg("switch foreground vm back to dom0\n");
+		vgt_dbg(VGT_DBG_DPY, "switch foreground vm back to dom0\n");
 		pdev->next_foreground_vm = vgt_dom0;
 		do_vgt_fast_display_switch(pdev);
 	}
