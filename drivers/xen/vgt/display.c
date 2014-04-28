@@ -419,6 +419,12 @@ enum vgt_pipe get_pipe(unsigned int reg, uint32_t wr_data)
 	return pipe;
 }
 
+static void vgt_update_irq_reg(struct vgt_device *vgt)
+{
+	recalculate_and_update_ier(vgt->pdev, _REG_DEIER);
+	recalculate_and_update_imr(vgt->pdev, _REG_DEIMR);
+}
+
 bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new_data, uint32_t old_data)
 {
 	vgt_reg_t hw_value;
@@ -442,6 +448,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 		}
 		if (virtual_pipe != I915_MAX_PIPES) {
 			vgt_set_pipe_mapping(vgt, virtual_pipe, I915_MAX_PIPES);
+			vgt_update_irq_reg(vgt);
 			vgt_dbg(VGT_DBG_DPY, "vGT: delete pipe mapping %x\n", virtual_pipe);
 			if (vgt_has_pipe_enabled(vgt, virtual_pipe))
 				vgt_update_frmcount(vgt, virtual_pipe);
@@ -498,6 +505,7 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 	ASSERT(virtual_pipe != I915_MAX_PIPES);
 	vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
 	vgt_dbg(VGT_DBG_DPY, "vGT: add pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
+	vgt_update_irq_reg(vgt);
 	if (vgt_has_pipe_enabled(vgt, virtual_pipe))
 		vgt_update_frmcount(vgt, virtual_pipe);
 	vgt_calculate_frmcount_delta(vgt, virtual_pipe);
@@ -530,6 +538,7 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 				vgt_calculate_frmcount_delta(vgt, i);
 			}
 		}
+		vgt_update_irq_reg(vgt);
 		return true;
 	}
 
@@ -563,6 +572,7 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 	if (virtual_pipe != I915_MAX_PIPES) {
 		vgt_set_pipe_mapping(vgt, virtual_pipe, physical_pipe);
 		vgt_dbg(VGT_DBG_DPY, "vGT: Update pipe mapping  %x - > %x \n", virtual_pipe, physical_pipe);
+		vgt_update_irq_reg(vgt);
 		if (vgt_has_pipe_enabled(vgt, virtual_pipe))
 			vgt_update_frmcount(vgt, virtual_pipe);
 		vgt_calculate_frmcount_delta(vgt, virtual_pipe);
