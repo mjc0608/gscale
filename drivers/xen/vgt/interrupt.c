@@ -182,6 +182,9 @@ static u32 translate_interrupt(struct vgt_irq_host_state *irq_hstate, struct vgt
 		mapped_interrupt |= irq_hstate->pipe_mask;
 		mapped_interrupt |= (irq_hstate->pipe_mask << 5);
 		mapped_interrupt |= (irq_hstate->pipe_mask << 10);
+		// clear the initial mask bit in DEIMR for VBLANKS, so that when pipe mapping
+		// is not valid, physically there are still vblanks generated.
+		mapped_interrupt &= ~((1 << 0) | (1 << 5) | (1 << 10));
 		for (i = 0; i < I915_MAX_PIPES; i++) {
 			if (vgt->pipe_mapping[i] == I915_MAX_PIPES)
 				continue;
