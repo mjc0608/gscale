@@ -510,7 +510,6 @@
 #define    _REGBIT_GEN6_GRDOM_RENDER		(1 << 1)
 #define    _REGBIT_GEN6_GRDOM_MEDIA		(1 << 2)
 #define    _REGBIT_GEN6_GRDOM_BLT		(1 << 3)
-#define    _REGBIT_GEN6_GRDOM_VECS		(1 << 4)
 
 #define _REG_GT_THREAD_STATUS	0x13805C
 #define _REG_GT_CORE_STATUS	0x138060
