@@ -545,6 +545,9 @@ bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint
 	/*enable case*/
 	if (physical_reg == _REG_TRANS_DDI_FUNC_CTL_EDP) {
 		pport = PORT_A;
+		if (vgt->ports[PORT_A].port_override == PORT_A) {
+			virtual_pipe = get_edp_input(__vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP));
+		}
 	} else {
 		pport = (physical_wr_data & _REGBIT_TRANS_DDI_PORT_MASK) >> _TRANS_DDI_PORT_SHIFT;
 	}
