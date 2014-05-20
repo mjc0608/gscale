@@ -188,12 +188,7 @@ xen_swiotlb_fixup(void *buf, size_t size, unsigned long nslabs)
 static unsigned long xen_set_nslabs(unsigned long nr_tbl)
 {
 	if (!nr_tbl) {
-#ifdef CONFIG_XEN_VGT_EMULATOR
-		/* double the table size since vGT will use quite some of it */
-		xen_io_tlb_nslabs = (128 * 1024 * 1024 >> IO_TLB_SHIFT);
-#else
 		xen_io_tlb_nslabs = (64 * 1024 * 1024 >> IO_TLB_SHIFT);
-#endif
 		xen_io_tlb_nslabs = ALIGN(xen_io_tlb_nslabs, IO_TLB_SEGSIZE);
 	} else
 		xen_io_tlb_nslabs = nr_tbl;
