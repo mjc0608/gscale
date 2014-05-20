@@ -549,9 +549,11 @@ static void __vgt_rendering_restore (struct vgt_device *vgt, int num_render_regs
 		VGT_MMIO_WRITE(vgt->pdev, reg, val);
 		vgt_dbg(VGT_DBG_RENDER, "....restore mmio (%x) with (%x)\n", reg, val);
 
+		/* Use this post-read as a workaround for a gpu hang issue */
+		res_val = VGT_MMIO_READ(vgt->pdev, reg);
+
 		if(!vgt_validate_ctx_switch)
 			continue;
-		res_val = VGT_MMIO_READ(vgt->pdev, reg);
 		if(res_val == val)
 			continue;
 		if (!reg_mode_ctl(pdev, reg) ||
