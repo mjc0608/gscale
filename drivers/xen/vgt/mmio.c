@@ -312,7 +312,6 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	int cpu;
 
 	t0 = get_cycles();
-	stat->mmio_rcnt++;
 
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
@@ -369,6 +368,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	trace_vgt_mmio_rw(VGT_TRACE_READ, vgt->vm_id, offset, p_data, bytes);
 
 	t1 = get_cycles();
+	stat->mmio_rcnt++;
 	stat->mmio_rcycles += t1 - t0;
 	return true;
 err_mmio:
@@ -398,7 +398,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	struct vgt_statistics *stat = &vgt->stat;
 
 	t0 = get_cycles();
-	stat->mmio_wcnt++;
 
 	/* PPGTT PTE WP comes here too. */
 	if (pdev->enable_ppgtt && vgt->vm_id != 0 && vgt->ppgtt_initialized) {
@@ -491,6 +490,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 
 	t1 = get_cycles();
 	stat->mmio_wcycles += t1 - t0;
+	stat->mmio_wcnt++;
 	return true;
 err_mmio:
 	vgt_unlock_dev_flags(pdev, cpu, flags);
