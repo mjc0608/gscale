@@ -477,6 +477,63 @@ static ssize_t vgt_pport_connection_show(struct kobject *kobj, struct kobj_attri
 	return buf_len;
 }
 
+static bool is_pport_present(struct pgt_device *pgt, struct gt_port *port)
+{
+
+	bool found = false;
+
+	switch (port->physcal_port) {
+	case PORT_A:
+		found = VGT_MMIO_READ(pgt, _REG_DDI_BUF_CTL_A) & _DDI_BUFCTL_DETECT_MASK;
+		break;
+	case PORT_B:
+		found = VGT_MMIO_READ(pgt,_REG_SFUSE_STRAP) & _REGBIT_SFUSE_STRAP_B_PRESENTED;
+		break;
+	case PORT_C:
+		found = VGT_MMIO_READ(pgt,_REG_SFUSE_STRAP) & _REGBIT_SFUSE_STRAP_C_PRESENTED;
+		break;
+	case PORT_D:
+		found = VGT_MMIO_READ(pgt,_REG_SFUSE_STRAP) & _REGBIT_SFUSE_STRAP_D_PRESENTED;
+		break;
+	case PORT_E:
+		found = true;
+		break;
+	default:
+		found = false;
+		break;
+	}
+
+	return found;
+
+}
+
+static ssize_t vgt_pport_presnece_show(struct kobject *kobj, struct kobj_attribute *attr,
+				   char *buf)
+{
+	struct pgt_device *pgt = &default_device;
+
+	ssize_t buf_len;
+	int i;
+
+        for (i = 0; i < I915_MAX_PORTS; i++) {
+                if (strcmp(VGT_PORT_NAME(i), kobj->name) == 0) {
+                        break;
+                }
+        }
+
+	if (i >= I915_MAX_PORTS) {
+		return 0;
+	}
+
+	mutex_lock(&vgt_sysfs_lock);
+
+	buf_len = sprintf(buf, "%s\n", is_pport_present(pgt, &(pgt->ports[i])) ?
+			"present" : "unpresent");
+	mutex_unlock(&vgt_sysfs_lock);
+
+	return buf_len;
+}
+
 static ssize_t vgt_pport_connection_store(struct kobject *kobj, struct kobj_attribute *attr,
 			const char *buf, size_t count)
 {
@@ -721,9 +778,13 @@ static struct kobj_attribute pport_type_attrs =
 static struct kobj_attribute pport_connection_attrs =
 	__ATTR(connection, 0660, vgt_pport_connection_show, vgt_pport_connection_store);
 
+static struct kobj_attribute pport_presence_attrs =
+	__ATTR(presence, 0440, vgt_pport_presnece_show, NULL);
+
 static struct attribute *vgt_pport_attrs[] = {
 	&pport_connection_attrs.attr,
 	&pport_type_attrs.attr,
+	&pport_presence_attrs.attr,
 	NULL,
 };
 
