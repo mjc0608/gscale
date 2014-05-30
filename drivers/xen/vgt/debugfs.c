@@ -1037,6 +1037,8 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		debugfs_create_u64_node ("vring_scan_cycles", 0444, perf_dir_entry, &(vgt->stat.vring_scan_cycles));
 		debugfs_create_u64_node ("vgt_gp_cnt", 0444, perf_dir_entry, &vgt_gp_cnt);
 		debugfs_create_u64_node ("vgt_gp_cycles", 0444, perf_dir_entry, &vgt_gp_cycles);
+		debugfs_create_u64_node ("ppgtt_wp_cnt", 0444, perf_dir_entry, &(vgt->stat.ppgtt_wp_cnt));
+		debugfs_create_u64_node ("ppgtt_wp_cycles", 0444, perf_dir_entry, &(vgt->stat.ppgtt_wp_cycles));
 
 		/* cmd statistics for ring/batch buffers */
 		cmdstat_dir_entry = debugfs_create_dir("ring", perf_dir_entry);

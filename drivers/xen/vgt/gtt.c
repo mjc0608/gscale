@@ -535,8 +535,12 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e
 	int index, i;
 	u32 *pte;
 	unsigned long g_val = 0, g_addr = 0, h_addr = 0;
+	struct vgt_statistics *stat = &vgt->stat;
+	cycles_t t0, t1;
 
 	ASSERT(vgt->vm_id != 0);
+
+	t0 = get_cycles();
 
 	vgt_dbg(VGT_DBG_MEM, "PTE WP handler: offset 0x%x data 0x%lx bytes %d\n", offset, *(unsigned long *)p_data, bytes);
 
@@ -568,6 +572,10 @@ bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e
 	kunmap_atomic(pte);
 
 	vgt_dbg(VGT_DBG_MEM, "WP: PDE[%d], PTE[%d], entry 0x%x, g_addr 0x%lx, h_addr 0x%lx\n", i, index, pte[index], g_addr, h_addr);
+
+	t1 = get_cycles();
+	stat->ppgtt_wp_cnt++;
+	stat->ppgtt_wp_cycles += t1 - t0;
 
 	return true;
 }
