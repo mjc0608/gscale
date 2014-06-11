@@ -544,6 +544,7 @@ static void do_inject_dom0_virtual_interrupt(void *info, int ipi)
 #define MSI_CAP_CONTROL (MSI_CAP_OFFSET + 2)
 #define MSI_CAP_ADDRESS (MSI_CAP_OFFSET + 4)
 #define MSI_CAP_DATA	(MSI_CAP_OFFSET + 8)
+#define MSI_CAP_EN 0x1
 static void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
@@ -551,8 +552,13 @@ static void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 	struct xen_hvm_inject_msi info;
 	int r;
 
+	/* Do not generate MSI if MSIEN is disable */
+	if (!(control & MSI_CAP_EN))
+		return;
+
 	/* FIXME: now only handle one MSI format */
 	ASSERT_NUM(!(control & 0xfffe), control);
+
 	info.domid = vgt->vm_id;
 	info.addr = *(uint32_t *)(cfg_space + MSI_CAP_ADDRESS);
 	info.data = *(uint16_t *)(cfg_space + MSI_CAP_DATA);
