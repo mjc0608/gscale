@@ -135,7 +135,7 @@ module_param_named(enable_panel_fitting, enable_panel_fitting, bool, 0600);
 bool enable_reset = true;
 module_param_named(enable_reset, enable_reset, bool, 0600);
 
-bool vgt_lock_irq = true;
+bool vgt_lock_irq = false;
 module_param_named(vgt_lock_irq, vgt_lock_irq, bool, 0400);
 
 static vgt_ops_t vgt_xops = {
