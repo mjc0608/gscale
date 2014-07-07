@@ -2240,7 +2240,7 @@ extern void vgt_probe_dpcd(struct pgt_device *pdev, int index, bool init);
 extern void vgt_propagate_dpcd(struct vgt_device *vgt, int index);
 void vgt_update_monitor_status(struct vgt_device *vgt);
 void vgt_detect_display(struct vgt_device *vgt, int index);
-
+void vgt_dpy_init_modes(vgt_reg_t *mmio_array);
 
 bool default_mmio_read(struct vgt_device *vgt, unsigned int offset,	void *p_data, unsigned int bytes);
 bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes);

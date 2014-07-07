@@ -986,3 +986,33 @@ void vgt_detect_display(struct vgt_device *vgt, int index)
 	vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
 }
 
+/* Set the initial plane/pipe/port state to be disabled,
+ * letting gfx driver's mode setting to configure them late.
+ * Notice that display owner could access physical MMIO states. Here
+ * the setting only works for VMs who are not display owner.
+ */
+void vgt_dpy_init_modes(vgt_reg_t *mmio_array)
+{
+	mmio_array[REG_INDEX(_REG_DDI_BUF_CTL_A)] &=
+				~_DDI_BUFCTL_DETECT_MASK;
+	mmio_array[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_A)] &=
+				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
+	mmio_array[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_B)] &=
+				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
+	mmio_array[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_C)] &=
+				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
+	mmio_array[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_EDP)] &=
+				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
+
+	mmio_array[REG_INDEX(_REG_PIPEACONF)] &=
+				~_REGBIT_PIPE_ENABLE;
+	mmio_array[REG_INDEX(_REG_PIPEBCONF)] &=
+				~_REGBIT_PIPE_ENABLE;
+	mmio_array[REG_INDEX(_REG_PIPECCONF)] &=
+				~_REGBIT_PIPE_ENABLE;
+	mmio_array[REG_INDEX(_REG_PIPE_EDP_CONF)] &=
+				~_REGBIT_PIPE_ENABLE;
+
+	mmio_array[REG_INDEX(_REG_DP_TP_CTL_E)] &=
+				~_REGBIT_DP_TP_ENABLE;
+}
