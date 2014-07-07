@@ -1024,4 +1024,6 @@ void vgt_dpy_init_modes(vgt_reg_t *mmio_array)
 				~_REGBIT_PIPE_ENABLE;
 
 	mmio_array[REG_INDEX(_REG_SPLL_CTL)] &= ~_REGBIT_SPLL_CTL_ENABLE;
+	mmio_array[REG_INDEX(_REG_WRPLL_CTL1)] &= ~_REGBIT_WRPLL_ENABLE;
+	mmio_array[REG_INDEX(_REG_WRPLL_CTL2)] &= ~_REGBIT_WRPLL_ENABLE;
 }

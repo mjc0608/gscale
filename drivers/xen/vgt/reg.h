@@ -1708,6 +1708,7 @@ static inline int port_type_to_port(int port_sel)
 
 #define _REG_WRPLL_CTL1		0x46040
 #define _REG_WRPLL_CTL2		0x46060
+#define  _REGBIT_WRPLL_ENABLE	(1 << 31)
 
 #define _REG_PORT_CLK_SEL_DDIA	0x46100
 #define _REG_PORT_CLK_SEL_DDIB	0x46104
