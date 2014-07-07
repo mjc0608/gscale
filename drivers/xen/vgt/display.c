@@ -993,26 +993,35 @@ void vgt_detect_display(struct vgt_device *vgt, int index)
  */
 void vgt_dpy_init_modes(vgt_reg_t *mmio_array)
 {
+	enum vgt_port port;
+	enum vgt_pipe pipe;
+	unsigned int offset;
+
 	mmio_array[REG_INDEX(_REG_DDI_BUF_CTL_A)] &=
 				~_DDI_BUFCTL_DETECT_MASK;
-	mmio_array[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_A)] &=
-				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
-	mmio_array[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_B)] &=
-				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
-	mmio_array[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_C)] &=
-				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
+
+	for (port = PORT_A; port <= PORT_E; ++ port) {
+		offset = VGT_DDI_BUF_CTL(port);
+		mmio_array[REG_INDEX(offset)] &= ~_REGBIT_DDI_BUF_ENABLE;
+		offset = VGT_DP_TP_CTL(port);
+		mmio_array[REG_INDEX(offset)] &= ~_REGBIT_DP_TP_ENABLE;
+	}
+
+	for (pipe = PIPE_A; pipe <= PIPE_C; ++ pipe) {
+		offset = _VGT_TRANS_DDI_FUNC_CTL(pipe);
+		mmio_array[REG_INDEX(offset)] &= ~_REGBIT_TRANS_DDI_FUNC_ENABLE;
+		offset = VGT_PIPECONF(pipe);
+		mmio_array[REG_INDEX(offset)] &= ~_REGBIT_PIPE_ENABLE;
+		offset = VGT_TRANSCONF(pipe);
+		mmio_array[REG_INDEX(offset)] &= ~_REGBIT_TRANS_ENABLE;
+		offset = VGT_PF_CTL(pipe);
+		mmio_array[REG_INDEX(offset)] &= ~_REGBIT_PF_ENABLE;
+	}
+
 	mmio_array[REG_INDEX(_REG_TRANS_DDI_FUNC_CTL_EDP)] &=
 				~_REGBIT_TRANS_DDI_FUNC_ENABLE;
-
-	mmio_array[REG_INDEX(_REG_PIPEACONF)] &=
-				~_REGBIT_PIPE_ENABLE;
-	mmio_array[REG_INDEX(_REG_PIPEBCONF)] &=
-				~_REGBIT_PIPE_ENABLE;
-	mmio_array[REG_INDEX(_REG_PIPECCONF)] &=
-				~_REGBIT_PIPE_ENABLE;
 	mmio_array[REG_INDEX(_REG_PIPE_EDP_CONF)] &=
 				~_REGBIT_PIPE_ENABLE;
 
-	mmio_array[REG_INDEX(_REG_DP_TP_CTL_E)] &=
-				~_REGBIT_DP_TP_ENABLE;
+	mmio_array[REG_INDEX(_REG_SPLL_CTL)] &= ~_REGBIT_SPLL_CTL_ENABLE;
 }

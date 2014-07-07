@@ -1242,6 +1242,8 @@ union _TRANS_CONFIG
 						_REG_DP_TP_STATUS_B)
 #define VGT_DP_TP_STATUS_PORT(reg)	_VGT_GET_PORT(reg, _REG_DP_TP_STATUS_A, \
 						_REG_DP_TP_STATUS_B)
+#define VGT_DDI_BUF_CTL(port)		_VGT_PORT(port, _REG_DDI_BUF_CTL_A, \
+						_REG_DDI_BUF_CTL_B)
 
 #define DRM_MODE_DPMS_ON		0
 
@@ -1702,6 +1704,7 @@ static inline int port_type_to_port(int port_sel)
 #define   _REGBIT_HSW_PWR_WELL_FORCE_ON			(1<<19)
 
 #define _REG_SPLL_CTL		0x46020
+#define  _REGBIT_SPLL_CTL_ENABLE	(1 << 31)
 
 #define _REG_WRPLL_CTL1		0x46040
 #define _REG_WRPLL_CTL2		0x46060
