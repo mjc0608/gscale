@@ -609,6 +609,13 @@ extern enum vgt_pipe surf_used_pipe;
 
 struct pgt_device;
 
+struct vgt_render_context_ops {
+	bool (*init_null_context)(struct pgt_device *pdev, int id);
+	bool (*save_hw_context)(int id, struct vgt_device *vgt);
+	bool (*restore_hw_context)(int id, struct vgt_device *vgt);
+};
+
+extern bool vgt_render_init(struct pgt_device *pdev);
 extern bool idle_rendering_engines(struct pgt_device *pdev, int *id);
 extern bool idle_render_engine(struct pgt_device *pdev, int id);
 extern bool vgt_do_render_context_switch(struct pgt_device *pdev);

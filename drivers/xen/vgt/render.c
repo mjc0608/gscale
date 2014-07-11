@@ -948,7 +948,7 @@ static u32 hsw_null_indirect_state[] = {
 	0x0, //0x124
 };
 
-static bool vgt_init_null_context(struct pgt_device *pdev, int id)
+static bool gen7_init_null_context(struct pgt_device *pdev, int id)
 {
 	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[id];
 	int i;
@@ -1082,7 +1082,7 @@ err:
 	return false;
 }
 
-static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
+static bool gen7_save_hw_context(int id, struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	vgt_state_ring_t *rb = &vgt->rb[id];
@@ -1340,7 +1340,7 @@ static bool vgt_reset_engine(struct pgt_device *pdev, int id)
 	return true;
 }
 
-static bool vgt_restore_hw_context(int id, struct vgt_device *vgt)
+static bool gen7_restore_hw_context(int id, struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	vgt_state_ring_t	*rb = &vgt->rb[id];
@@ -1544,6 +1544,22 @@ static void dump_regs_on_err(struct pgt_device *pdev)
 			VGT_MMIO_READ(pdev, regs[i]));
 }
 
+struct vgt_render_context_ops gen7_context_ops = {
+	.init_null_context = gen7_init_null_context,
+	.save_hw_context = gen7_save_hw_context,
+	.restore_hw_context = gen7_restore_hw_context,
+};
+
+static struct vgt_render_context_ops *context_ops;
+
+bool vgt_render_init(struct pgt_device *pdev)
+{
+	if (IS_PREBDW(pdev))
+		context_ops = &gen7_context_ops;
+
+	return true;
+}
+
 bool vgt_do_render_sched(struct pgt_device *pdev)
 {
 	int threshold = 500; /* print every 500 times */
@@ -1657,7 +1673,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 		start_ring(pdev, i);
 
 		/* STEP-2d: save HW render context for prev */
-		if (!vgt_save_hw_context(i, prev)) {
+		if (!context_ops->save_hw_context(i, prev)) {
 			vgt_err("Fail to save context\n");
 			goto err;
 		}
@@ -1668,7 +1684,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 		}
 
 		/* STEP-2e: restore HW render context for next */
-		if (!vgt_restore_hw_context(i, next)) {
+		if (!context_ops->restore_hw_context(i, next)) {
 			vgt_err("Fail to restore context\n");
 			goto err;
 		}
@@ -1904,7 +1920,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 			 * and then we can initialize the null context safely
 			 */
 			if (!pdev->ring_buffer[ring_id].null_context) {
-				if (!vgt_init_null_context(pdev, ring_id))
+				if (!context_ops->init_null_context(pdev, ring_id))
 					return false;
 			}
 
