@@ -874,7 +874,7 @@ static void do_device_reset(struct pgt_device *pdev)
 int vgt_handle_dom0_device_reset(void)
 {
 	struct pgt_device *pdev = &default_device;
-	struct drm_device *drm_dev = pci_get_drvdata(pdev->pdev);
+	struct drm_device *drm_dev;
 
 	unsigned long flags;
 	int cpu;
@@ -882,9 +882,13 @@ int vgt_handle_dom0_device_reset(void)
 	int id;
 	bool rc;
 
-	ASSERT(drm_dev);
+	if (!xen_initial_domain() || !vgt_enabled)
+		return 0;
 
 	vgt_info("DOM0 hangcheck timer request reset device.\n");
+
+	drm_dev = pci_get_drvdata(pdev->pdev);
+	ASSERT(drm_dev);
 
 	vgt_lock_dev_flags(pdev, cpu, flags);
 	rc = idle_rendering_engines(pdev, &id);
