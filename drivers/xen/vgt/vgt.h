@@ -75,7 +75,7 @@ extern int enable_video_switch;
 extern int dom0_low_gm_sz;
 extern int dom0_high_gm_sz;
 extern int dom0_fence_sz;
-extern bool bypass_scan;
+extern int bypass_scan_mask;
 extern bool bypass_dom0_addr_check;
 extern bool render_engine_reset;
 extern bool enable_panel_fitting;

@@ -123,8 +123,8 @@ module_param_named(dom0_high_gm_sz, dom0_high_gm_sz, int, 0600);
 int dom0_fence_sz = 4;
 module_param_named(dom0_fence_sz, dom0_fence_sz, int, 0600);
 
-bool bypass_scan = false;
-module_param_named(bypass_scan, bypass_scan, bool, 0600);
+int bypass_scan_mask = 0;
+module_param_named(bypass_scan, bypass_scan_mask, int, 0600);
 
 bool bypass_dom0_addr_check = false;
 module_param_named(bypass_dom0_addr_check, bypass_dom0_addr_check, bool, 0600);

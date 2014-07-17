@@ -2178,7 +2178,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 
 	s.request_id = rs->request_id;
 
-	if (bypass_scan) {
+	if (bypass_scan_mask & (1 << ring_id)) {
 		add_tail_entry(&s, tail, 100, 0);
 		return 0;
 	}
