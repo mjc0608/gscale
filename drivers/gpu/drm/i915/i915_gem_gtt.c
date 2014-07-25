@@ -1174,6 +1174,7 @@ alloc:
 		goto alloc;
 	}
 
+<<<<<<< HEAD
 	if (ppgtt->node.start < dev_priv->gtt.mappable_end)
 		DRM_DEBUG("Forced to use aperture for PDEs\n");
 
@@ -1185,6 +1186,17 @@ static int gen6_ppgtt_allocate_page_tables(struct i915_hw_ppgtt *ppgtt)
 {
 	int i;
 
+=======
+	ppgtt->base.pte_encode = dev_priv->gtt.base.pte_encode;
+	ppgtt->num_pd_entries = GEN6_PPGTT_PD_ENTRIES;
+	ppgtt->enable = gen6_ppgtt_enable;
+	ppgtt->base.clear_range = gen6_ppgtt_clear_range;
+	ppgtt->base.insert_entries = gen6_ppgtt_insert_entries;
+	ppgtt->base.cleanup = gen6_ppgtt_cleanup;
+	ppgtt->base.scratch = dev_priv->gtt.base.scratch;
+	ppgtt->base.start = 0;
+	ppgtt->base.total = GEN6_PPGTT_PD_ENTRIES * I915_PPGTT_PT_ENTRIES * PAGE_SIZE;
+>>>>>>> vgt: fix ballooning errors caused by rebase.
 	ppgtt->pt_pages = kcalloc(ppgtt->num_pd_entries, sizeof(struct page *),
 				  GFP_KERNEL);
 
@@ -1663,7 +1675,6 @@ static void gen6_ggtt_insert_entries(struct i915_address_space *vm,
 		i++;
 	}
 
-
 	/* XXX: This serves as a posting read to make sure that the PTE has
 	 * actually been updated. There is some concern that even though
 	 * registers and PTEs are within the same BAR that they are potentially
@@ -1897,8 +1908,7 @@ static int i915_gem_setup_global_gtt(struct drm_device *dev,
        if ( mappable_end > end )
                mappable_end = end;
 
-	/* Subtract the guard page ... */
-	drm_mm_init(&ggtt_vm->mm, start, end - start - PAGE_SIZE);
+	drm_mm_init(&ggtt_vm->mm, start, end - start);
 	if (!HAS_LLC(dev))
 		dev_priv->gtt.base.mm.color_adjust = i915_gtt_color_adjust;
 
