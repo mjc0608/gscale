@@ -11535,7 +11535,7 @@ static int intel_crtc_set_config(struct drm_mode_set *set)
 	unsigned modeset_pipes, prepare_pipes, disable_pipes;
 	int ret;
 	
-	drm_i915_private_t *dev_priv;
+	struct drm_i915_private *dev_priv;
 
 	BUG_ON(!set);
 	BUG_ON(!set->crtc);

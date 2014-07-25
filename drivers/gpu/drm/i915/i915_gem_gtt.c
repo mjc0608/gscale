@@ -30,6 +30,48 @@
 #include "i915_trace.h"
 #include "intel_drv.h"
 
+#define GEN6_PPGTT_PD_ENTRIES 512
+#define I915_PPGTT_PT_ENTRIES (PAGE_SIZE / sizeof(gen6_gtt_pte_t))
+typedef uint64_t gen8_gtt_pte_t;
+typedef gen8_gtt_pte_t gen8_ppgtt_pde_t;
+
+/* PPGTT stuff */
+#define GEN6_GTT_ADDR_ENCODE(addr)	((addr) | (((addr) >> 28) & 0xff0))
+#define HSW_GTT_ADDR_ENCODE(addr)	((addr) | (((addr) >> 28) & 0x7f0))
+
+#define GEN6_PDE_VALID			(1 << 0)
+/* gen6+ has bit 11-4 for physical addr bit 39-32 */
+#define GEN6_PDE_ADDR_ENCODE(addr)	GEN6_GTT_ADDR_ENCODE(addr)
+
+#define GEN6_PTE_VALID			(1 << 0)
+#define GEN6_PTE_UNCACHED		(1 << 1)
+#define HSW_PTE_UNCACHED		(0)
+#define GEN6_PTE_CACHE_LLC		(2 << 1)
+#define GEN7_PTE_CACHE_L3_LLC		(3 << 1)
+#define GEN6_PTE_ADDR_ENCODE(addr)	GEN6_GTT_ADDR_ENCODE(addr)
+#define HSW_PTE_ADDR_ENCODE(addr)	HSW_GTT_ADDR_ENCODE(addr)
+
+/* Cacheability Control is a 4-bit value. The low three bits are stored in *
+ * bits 3:1 of the PTE, while the fourth bit is stored in bit 11 of the PTE.
+ */
+#define HSW_CACHEABILITY_CONTROL(bits)	((((bits) & 0x7) << 1) | \
+					 (((bits) & 0x8) << (11 - 3)))
+#define HSW_WB_LLC_AGE3			HSW_CACHEABILITY_CONTROL(0x2)
+#define HSW_WB_LLC_AGE0			HSW_CACHEABILITY_CONTROL(0x3)
+#define HSW_WB_ELLC_LLC_AGE0		HSW_CACHEABILITY_CONTROL(0xb)
+#define HSW_WB_ELLC_LLC_AGE3		HSW_CACHEABILITY_CONTROL(0x8)
+#define HSW_WT_ELLC_LLC_AGE0		HSW_CACHEABILITY_CONTROL(0x6)
+#define HSW_WT_ELLC_LLC_AGE3		HSW_CACHEABILITY_CONTROL(0x7)
+
+#define GEN8_PTES_PER_PAGE		(PAGE_SIZE / sizeof(gen8_gtt_pte_t))
+#define GEN8_PDES_PER_PAGE		(PAGE_SIZE / sizeof(gen8_ppgtt_pde_t))
+#define GEN8_LEGACY_PDPS		4
+
+#define PPAT_UNCACHED_INDEX		(_PAGE_PWT | _PAGE_PCD)
+#define PPAT_CACHED_PDE_INDEX		0 /* WB LLC */
+#define PPAT_CACHED_INDEX		_PAGE_PAT /* WB LLCeLLC */
+#define PPAT_DISPLAY_ELLC_INDEX		_PAGE_PCD /* WT eLLC */
+
 #ifdef DRM_I915_VGT_SUPPORT
 struct _balloon_info_ {
 	/*
@@ -42,13 +84,13 @@ struct _balloon_info_ {
 	struct drm_mm_node space[4];
 } bl_info;
 
-static int i915_balloon_space (
+static int i915_balloon_space(
 			struct drm_mm *mm,
 			struct drm_mm_node *node,
 			unsigned long start,
 			unsigned long end)
 {
-	unsigned long  size = end - start;
+	unsigned long size = end - start;
 
 	if (start == end)
 		return -EEXIST;
@@ -65,11 +107,13 @@ static void i915_deballoon(struct drm_i915_private *dev_priv)
 {
 	int i;
 
-        printk("i915_deballoon...\n");
+	printk("i915 deballoon.\n");
+
 	for (i = 0; i < 4; i++) {
-		if ( bl_info.space[i].allocated)
+		if (bl_info.space[i].allocated)
 			drm_mm_remove_node(&bl_info.space[i]);
 	}
+
 	memset (&bl_info, 0, sizeof(bl_info));
 }
 
@@ -148,10 +192,13 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 
 	/* High GM ballooning */
 	if (high_gm_base > dev_priv->gtt.mappable_end) {
-	        fail |= i915_balloon_space(
+	        fail = i915_balloon_space(
 			&dev_priv->gtt.base.mm,
 			&bl_info.space[2],
 			dev_priv->gtt.mappable_end, high_gm_base);
+
+		if (fail)
+			goto err;
 	}
 
 	if (high_gm_end <= dev_priv->gtt.base.start + dev_priv->gtt.base.total) {
@@ -172,22 +219,28 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 			BUG_ON(high_gm_size != 0);
 		}
 
-	        fail |= i915_balloon_space(
+	        fail = i915_balloon_space(
 			&dev_priv->gtt.base.mm,
 			&bl_info.space[3],
 			high_gm_base + high_gm_size,
 			dev_priv->gtt.base.start + dev_priv->gtt.base.total);
+
+		if (fail)
+			goto err;
 	}
 
 	/* Low GM ballooning */
 	if (low_gm_base > dev_priv->gtt.base.start) {
-	        fail |= i915_balloon_space(
+	        fail = i915_balloon_space(
 			&dev_priv->gtt.base.mm,
 			&bl_info.space[0],
 			dev_priv->gtt.base.start, low_gm_base);
+
+		if (fail)
+			goto err;
 	}
 
-	if (low_gm_end <= dev_priv->gtt.mappable_end ) {
+	if (low_gm_end <= dev_priv->gtt.mappable_end) {
 		if (enable_ppgtt && !ppgtt_pdes_allocated &&
 				(low_gm_size >= rsvd_pg_sz_for_ppgtt)) {
 			/*
@@ -206,27 +259,30 @@ static int i915_balloon(struct drm_i915_private *dev_priv)
 			BUG_ON(low_gm_size != 0);
 		}
 
-	        fail |= i915_balloon_space(
+	        fail = i915_balloon_space(
 			&dev_priv->gtt.base.mm,
 			&bl_info.space[1],
 			low_gm_base + low_gm_size,
 			dev_priv->gtt.mappable_end);
+
+		if (fail)
+			goto err;
 	}
 
 	if (enable_ppgtt) {
 		if (!ppgtt_pdes_allocated) {
-			fail |= 1;
 			printk("vGT: can not get space for PPGTT table!\n");
+			goto err;
 		}
 	}
 
-	if (fail) {
-		printk(KERN_ERR "balloon fail!\n");
-		i915_deballoon(dev_priv);
-		return -ENOMEM;
-	}
 	printk("balloon successfully\n");
 	return 0;
+
+err:
+	printk(KERN_ERR "balloon fail!\n");
+	i915_deballoon(dev_priv);
+	return -ENOMEM;
 }
 #endif
 
@@ -1174,7 +1230,6 @@ alloc:
 		goto alloc;
 	}
 
-<<<<<<< HEAD
 	if (ppgtt->node.start < dev_priv->gtt.mappable_end)
 		DRM_DEBUG("Forced to use aperture for PDEs\n");
 
@@ -1186,17 +1241,6 @@ static int gen6_ppgtt_allocate_page_tables(struct i915_hw_ppgtt *ppgtt)
 {
 	int i;
 
-=======
-	ppgtt->base.pte_encode = dev_priv->gtt.base.pte_encode;
-	ppgtt->num_pd_entries = GEN6_PPGTT_PD_ENTRIES;
-	ppgtt->enable = gen6_ppgtt_enable;
-	ppgtt->base.clear_range = gen6_ppgtt_clear_range;
-	ppgtt->base.insert_entries = gen6_ppgtt_insert_entries;
-	ppgtt->base.cleanup = gen6_ppgtt_cleanup;
-	ppgtt->base.scratch = dev_priv->gtt.base.scratch;
-	ppgtt->base.start = 0;
-	ppgtt->base.total = GEN6_PPGTT_PD_ENTRIES * I915_PPGTT_PT_ENTRIES * PAGE_SIZE;
->>>>>>> vgt: fix ballooning errors caused by rebase.
 	ppgtt->pt_pages = kcalloc(ppgtt->num_pd_entries, sizeof(struct page *),
 				  GFP_KERNEL);
 

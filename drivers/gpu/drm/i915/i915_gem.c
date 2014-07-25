@@ -3592,7 +3592,7 @@ search_free:
 			goto search_free;
 
 		DRM_ERROR("fail to allocate space from %s GM space, size: %u.\n",
-				map_and_fenceable ? "low" : "whole",
+				obj->map_and_fenceable ? "low" : "whole",
 				size);
 
 		dump_stack();

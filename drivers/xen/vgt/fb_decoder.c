@@ -535,7 +535,7 @@ static int vgt_fb_event(struct notifier_block *nb,
 	m->len = data_sz;
 	memcpy(m + 1, msg, data_sz);
 
-	ret = cn_netlink_send(m, CN_IDX_VGT, GFP_ATOMIC);
+	ret = cn_netlink_send(m, 0, CN_IDX_VGT, GFP_ATOMIC);
 
 out:
 	kfree(m);

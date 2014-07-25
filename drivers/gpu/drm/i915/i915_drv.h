@@ -2316,6 +2316,7 @@ struct i915_params {
 	int modeset;
 	int panel_ignore_lid;
 	unsigned int powersave;
+	int raw_mmio;
 	int semaphores;
 	unsigned int lvds_downclock;
 	int lvds_channel_mode;
