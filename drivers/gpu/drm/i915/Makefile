@@ -29,7 +29,6 @@ i915-y += i915_cmd_parser.o \
 	  i915_gem.o \
 	  i915_gem_stolen.o \
 	  i915_gem_tiling.o \
-	  i915_gem_vgtbuffer.o \
 	  i915_gem_userptr.o \
 	  i915_gpu_error.o \
 	  i915_irq.o \

@@ -1542,8 +1542,6 @@ void i915_gem_restore_gtt_mappings(struct drm_device *dev)
 		if (!vma)
 			continue;
 
-		if(obj->has_vmfb_mapping)
-			continue;
 		i915_gem_clflush_object(obj, obj->pin_display);
 		/* The bind_vma code tries to be smart about tracking mappings.
 		 * Unfortunately above, we've just wiped out the mappings
@@ -1657,7 +1655,7 @@ static void gen6_ggtt_insert_entries(struct i915_address_space *vm,
 		(gen6_gtt_pte_t __iomem *)dev_priv->gtt.gsm + first_entry;
 	int i = 0;
 	struct sg_page_iter sg_iter;
-	dma_addr_t addr = 0;
+	dma_addr_t addr;
 
 	for_each_sg_page(st->sgl, &sg_iter, st->nents, 0) {
 		addr = sg_page_iter_dma_address(&sg_iter);
@@ -1735,7 +1733,6 @@ static void gen6_ggtt_clear_range(struct i915_address_space *vm,
 		iowrite32(scratch_pte, &gtt_base[i]);
 	readl(gtt_base);
 }
-
 
 static void i915_ggtt_bind_vma(struct i915_vma *vma,
 			       enum i915_cache_level cache_level,
