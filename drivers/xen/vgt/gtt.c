@@ -475,7 +475,7 @@ static bool gtt_mmio_write32(struct vgt_device *vgt, unsigned int off,
 		goto out;
 	}
 
-	if (vgt->ppgtt_initialized &&
+	if (vgt->ppgtt_initialized && vgt->vm_id &&
 			g_gtt_index >= vgt->ppgtt_base &&
 			g_gtt_index < vgt->ppgtt_base + VGT_PPGTT_PDE_ENTRIES) {
 		vgt_dbg(VGT_DBG_MEM, "vGT(%d): Change PPGTT PDE %d!\n", vgt->vgt_id, g_gtt_index);
