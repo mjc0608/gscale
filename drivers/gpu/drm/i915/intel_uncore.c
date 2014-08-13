@@ -744,8 +744,10 @@ hsw_unclaimed_reg_detect(struct drm_i915_private *dev_priv)
 	unsigned long irqflags; \
 	u##x val = 0; \
 	assert_device_not_suspended(dev_priv); \
-	if (i915.raw_mmio) {     \
+	if (dev_priv->in_xen_vgt) {     \
+		spin_lock_irqsave(&dev_priv->uncore.lock, irqflags); \
 		val = __raw_i915_read##x(dev_priv, reg); \
+		spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags); \
 		trace_i915_reg_rw(false, reg, val, sizeof(val), trace); \
 		return val; \
 	} \
@@ -910,8 +912,10 @@ __gen4_read(64)
 	unsigned long irqflags; \
 	trace_i915_reg_rw(true, reg, val, sizeof(val), trace); \
 	assert_device_not_suspended(dev_priv); \
-	if (i915.raw_mmio) { \
+	if (dev_priv->in_xen_vgt) { \
+		spin_lock_irqsave(&dev_priv->uncore.lock, irqflags); \
 		__raw_i915_write##x(dev_priv, reg, val); \
+		spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags); \
 		return; \
 	} \
 	spin_lock_irqsave(&dev_priv->uncore.lock, irqflags)

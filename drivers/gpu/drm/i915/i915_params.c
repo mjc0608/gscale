@@ -28,7 +28,6 @@ struct i915_params i915 __read_mostly = {
 	.modeset = -1,
 	.panel_ignore_lid = 1,
 	.powersave = 1,
-	.raw_mmio = 0,
 	.semaphores = -1,
 	.lvds_downclock = 0,
 	.lvds_channel_mode = 0,
@@ -68,10 +67,6 @@ MODULE_PARM_DESC(panel_ignore_lid,
 module_param_named(powersave, i915.powersave, int, 0600);
 MODULE_PARM_DESC(powersave,
 	"Enable powersavings, fbc, downclocking, etc. (default: true)");
-
-module_param_named(raw_mmio, i915.raw_mmio, int, 0600);
-MODULE_PARM_DESC(raw_mmio,
-               "Enable powersavings, fbc, downclocking, etc. (default: true)");
 
 module_param_named_unsafe(semaphores, i915.semaphores, int, 0400);
 MODULE_PARM_DESC(semaphores,
