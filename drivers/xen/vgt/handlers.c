@@ -670,7 +670,7 @@ static bool dpy_trans_ddi_ctl_write(struct vgt_device *vgt, unsigned int offset,
 	new_data = *((uint32_t *)p_data);
 
 	/* if it is to enable this pipe, then rebuild the mapping for this pipe*/
-	if (vgt->vm_id == 0) {
+	if (is_current_display_owner(vgt)) {
 		/*when dom0 change the physical pipe/port connection,
 		we need to rebuild pipe mapping for the vgt device.*/
 		for (i = 0; i < VGT_MAX_VMS; ++ i) {
@@ -3365,7 +3365,7 @@ int vgt_get_base_reg_num()
  * should be fine, since super owner mode is used for analyze
  * basic stability issues.
  */
-reg_list_t vgt_sticky_regs[] = {
+reg_list_t vgt_gen7_sticky_regs[] = {
 	/* interrupt control registers */
 	{_REG_GTIMR, 4},
 	{_REG_GTIER, 4},
@@ -3420,9 +3420,109 @@ reg_list_t vgt_sticky_regs[] = {
 	{_REG_CPU_VGACNTRL, 4},
 };
 
-int vgt_get_sticky_reg_num()
+reg_list_t vgt_gen8_sticky_regs[] = {
+	/* interrupt control registers */
+	{_REG_RCS_IMR, 4},
+	{_REG_BCS_IMR, 4},
+	{_REG_VCS_IMR, 4},
+	{_REG_VECS_IMR, 4},
+
+	{_REG_SDEIMR, 4},
+	{_REG_SDEIER, 4},
+	{_REG_SDEIIR, 4},
+	{_REG_SDEISR, 4},
+
+	/* Interrupt registers - BDW */
+	{_REG_GT_IMR(0), 4},
+	{_REG_GT_IER(0), 4},
+	{_REG_GT_IIR(0), 4},
+	{_REG_GT_ISR(0), 4},
+
+	{_REG_GT_IMR(1), 4},
+	{_REG_GT_IER(1), 4},
+	{_REG_GT_IIR(1), 4},
+	{_REG_GT_ISR(1), 4},
+
+	{_REG_GT_IMR(2), 4},
+	{_REG_GT_IER(2), 4},
+	{_REG_GT_IIR(2), 4},
+	{_REG_GT_ISR(2), 4},
+
+	{_REG_GT_IMR(3), 4},
+	{_REG_GT_IER(3), 4},
+	{_REG_GT_IIR(3), 4},
+	{_REG_GT_ISR(3), 4},
+
+	{_REG_DE_PIPE_IMR(PIPE_A), 4},
+	{_REG_DE_PIPE_IER(PIPE_A), 4},
+	{_REG_DE_PIPE_IIR(PIPE_A), 4},
+	{_REG_DE_PIPE_ISR(PIPE_A), 4},
+
+	{_REG_DE_PIPE_IMR(PIPE_B), 4},
+	{_REG_DE_PIPE_IER(PIPE_B), 4},
+	{_REG_DE_PIPE_IIR(PIPE_B), 4},
+	{_REG_DE_PIPE_ISR(PIPE_B), 4},
+
+	{_REG_DE_PIPE_IMR(PIPE_C), 4},
+	{_REG_DE_PIPE_IER(PIPE_C), 4},
+	{_REG_DE_PIPE_IIR(PIPE_C), 4},
+	{_REG_DE_PIPE_ISR(PIPE_C), 4},
+
+	{_REG_DE_PORT_IMR, 4},
+	{_REG_DE_PORT_IER, 4},
+	{_REG_DE_PORT_IIR, 4},
+	{_REG_DE_PORT_ISR, 4},
+
+	{_REG_DE_MISC_IMR, 4},
+	{_REG_DE_MISC_IER, 4},
+	{_REG_DE_MISC_IIR, 4},
+	{_REG_DE_MISC_ISR, 4},
+
+	{_REG_PCU_IMR, 4},
+	{_REG_PCU_IER, 4},
+	{_REG_PCU_IIR, 4},
+	{_REG_PCU_ISR, 4},
+
+	{_REG_MASTER_IRQ, 4},
+
+	/* PPGTT related registers */
+	{_REG_RCS_GFX_MODE_IVB, 4},
+	{_REG_VCS_MFX_MODE_IVB, 4},
+	{_REG_BCS_BLT_MODE_IVB, 4},
+	{_REG_VEBOX_MODE, 4},
+
+	/* forcewake */
+	{_REG_FORCEWAKE, 4},
+	{_REG_FORCEWAKE_ACK, 4},
+	{_REG_GT_CORE_STATUS, 4},
+	{_REG_GT_THREAD_STATUS, 4},
+	{_REG_GTFIFODBG, 4},
+	{_REG_GTFIFO_FREE_ENTRIES, 4},
+	{_REG_MUL_FORCEWAKE, 4},
+	{_REG_MUL_FORCEWAKE_ACK, 4},
+	{_REG_FORCEWAKE_ACK_HSW, 4},
+
+	/* misc */
+	{_REG_GEN6_GDRST, 4},
+	{_REG_FENCE_0_LOW, 0x80},
+	{VGT_PVINFO_PAGE, VGT_PVINFO_SIZE},
+	{_REG_CPU_VGACNTRL, 4},
+};
+
+reg_list_t *vgt_get_sticky_regs(struct pgt_device *pdev)
 {
-	return ARRAY_NUM(vgt_sticky_regs);
+	if (IS_PREBDW(pdev))
+		return vgt_gen7_sticky_regs;
+	else
+		return vgt_gen8_sticky_regs;
+}
+
+int vgt_get_sticky_reg_num(struct pgt_device *pdev)
+{
+	if (IS_PREBDW(pdev))
+		return ARRAY_NUM(vgt_gen7_sticky_regs);
+	else
+		return ARRAY_NUM(vgt_gen8_sticky_regs);
 }
 
 reg_addr_sz_t vgt_reg_addr_sz[] = {

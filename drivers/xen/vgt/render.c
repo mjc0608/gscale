@@ -1919,7 +1919,7 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 			 * So wait until dom0 enables ring for the 1st time,
 			 * and then we can initialize the null context safely
 			 */
-			if (!pdev->ring_buffer[ring_id].null_context) {
+			if (!hvm_render_owner && !pdev->ring_buffer[ring_id].null_context) {
 				if (!context_ops->init_null_context(pdev, ring_id))
 					return false;
 			}

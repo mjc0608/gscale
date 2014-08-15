@@ -620,6 +620,7 @@ void vgt_setup_reg_info(struct pgt_device *pdev)
 	int i, reg;
 	struct vgt_mmio_entry *mht;
 	reg_addr_sz_t *reg_addr_sz;
+	reg_list_t *reg_list = vgt_get_sticky_regs(pdev);
 
 	printk("vGT: setup tracked reg info\n");
 	vgt_initialize_reg_attr(pdev, vgt_base_reg_info,
@@ -630,9 +631,9 @@ void vgt_setup_reg_info(struct pgt_device *pdev)
 	if (mht)
 		mht->align_bytes = 1;
 
-	for (i = 0; i < vgt_get_sticky_reg_num(); i++) {
-		for (reg = vgt_sticky_regs[i].reg;
-		     reg < vgt_sticky_regs[i].reg + vgt_sticky_regs[i].size;
+	for (i = 0; i < vgt_get_sticky_reg_num(pdev); i++) {
+		for (reg = reg_list[i].reg;
+		     reg < reg_list[i].reg + reg_list[i].size;
 		     reg += REG_SIZE)
 			reg_set_sticky(pdev, reg);
 	}

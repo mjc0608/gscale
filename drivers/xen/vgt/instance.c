@@ -283,6 +283,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 			ASSERT(hvm_display_owner);
 			ASSERT(hvm_boot_foreground);
 			current_config_owner(pdev) = vgt;
+			current_foreground_vm(pdev) = vgt;
 		}
 	}
 	bitmap_zero(vgt->enabled_rings, MAX_ENGINES);
@@ -301,9 +302,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		goto err;
 	}
 
-	if (vgt->vm_id != 0) {
-		vgt_init_i2c_edid(vgt);
-	}
+	vgt_init_i2c_edid(vgt);
 
 	*ptr_vgt = vgt;
 

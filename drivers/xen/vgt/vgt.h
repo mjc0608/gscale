@@ -2626,11 +2626,11 @@ void vgt_destroy_mmio_dev(struct vgt_device *vgt);
 })
 
 extern reg_attr_t vgt_base_reg_info[];
-extern reg_list_t vgt_sticky_regs[];
 extern reg_addr_sz_t vgt_reg_addr_sz[];
 extern int vgt_get_base_reg_num(void);
-extern int vgt_get_sticky_reg_num(void);
 extern int vgt_get_reg_addr_sz_num(void);
+reg_list_t *vgt_get_sticky_regs(struct pgt_device *pdev);
+extern int vgt_get_sticky_reg_num(struct pgt_device *pdev);
 
 bool vgt_hvm_write_cfg_space(struct vgt_device *vgt,
        uint64_t addr, unsigned int bytes, unsigned long val);
