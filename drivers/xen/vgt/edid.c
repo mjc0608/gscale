@@ -333,55 +333,16 @@ void vgt_clear_port(struct vgt_device *vgt, int index)
  * EDID Slave implementation
  *
  *************************************************************************/
-static void edid_select(void)
-{
-	return;
-}
 
-static void edid_snap_read_byte(void *slave, unsigned char value)
-{
-	//TODO: Check edid state
-	vgt_edid_t *edid = (vgt_edid_t *)slave;
-	EDID_MSG(VGT_EDID_INFO, false,
-			"edid_snap_read_byte with offset %d and value %d\n",
-			edid->current_write,
-			value);
-	if (edid->current_write < EDID_SIZE) {
-		edid->edid_data->edid_block[edid->current_write] = value;
-		edid->current_write ++;
-	} else {
-		EDID_MSG(VGT_EDID_ERROR, false,
-			"edid_snap_read_byte() exceeds the size of EDID!\n");
-	}
-}
-
-static void edid_snap_write_byte(void *slave, unsigned char value)
-{
-	/*
-	 * Interface for the virtual EDID update operations.
-	 * In EDID case, which is read only, the only case
-	 * to have this is the writing of offset for reading.
-	 * The "current_write" below is the offset for snapshot
-	 * The "current_read" below is the offset for emulation
-	 * set them both to be the input value.
-	 */
-	vgt_edid_t *edid = (vgt_edid_t *)slave;
-		ASSERT((edid->current_write == 0) &&
-			(edid->current_read == 0));
-		edid->current_write = value;
-		edid->current_read = value;
-	return;
-}
-
-static unsigned char edid_get_snap_byte(void *slave)
+static unsigned char edid_get_byte(void *slave)
 {
 	vgt_edid_t *edid = (vgt_edid_t *)slave;
 	if (edid->current_read >= EDID_SIZE) {
 		EDID_MSG(VGT_EDID_ERROR, true,
-			"edid_get_snap_byte() exceeds the size of EDID!\n");
+			"edid_get_byte() exceeds the size of EDID!\n");
 	}
 	EDID_MSG(VGT_EDID_INFO, true,
-			"edid_get_snap_byte with offset %d and value %d\n",
+			"edid_get_byte with offset %d and value %d\n",
 			edid->current_read,
 			edid->edid_data->edid_block[edid->current_read]);
 	if (edid->edid_data && edid->edid_data->data_valid) {
@@ -389,69 +350,6 @@ static unsigned char edid_get_snap_byte(void *slave)
 	} else {
 		return 0;
 	}
-}
-
-/* edid_snap_stop()
- *
- * finalize the EDID result, check whether there are extensions.
- * Check whether the src(this) is a valid snapshot.
- * If so, assign the src to dest;
- * otherwise, free src directly.
- *
- * It is only called when not working in emulation mode.
- */
-static void edid_snap_stop(void *dst, vgt_i2c_slave_t *this)
-{
-	vgt_edid_data_t **dest = (vgt_edid_data_t **)dst;
-	vgt_edid_t *edid = (vgt_edid_t *)this;
-	if (!(edid->edid_data)) {
-		return;
-	}
-	// TODO, handle the EDID having extensions.
-	if (edid->current_write == EDID_SIZE) {
-		/* TODO, more validation of the result. Currently just
-		 * check the size.
-		 */
-		EDID_MSG(VGT_EDID_INFO, false,
-		"edid_snap_stop is called with successful EDID info!\n");
-		edid->current_write = edid->current_read = 0;
-		*dest = edid->edid_data;
-		edid->edid_data = NULL;
-	} else {
-		EDID_MSG(VGT_EDID_INFO, false,
-		"edid_snap_stop is called with failed EDID info! (size:%d)\n",
-		edid->current_write);
-		kfree(edid->edid_data);
-		edid->edid_data = NULL;
-	}
-	return;
-}
-
-vgt_edid_data_t *vgt_create_edid(void)
-{
-	vgt_edid_data_t *edid = NULL;
-#if 0
-	/* The creation of edid is disabled for two reasons:
-	 * 1, The edid creation dynamically is only needed in EDID snapshot.
-	 *   with the new approach of reading once in init code, the snapshot
-	 *   is not needed any more.
-	 *
-	 * 2, the snapshot approach has potential memory leak issue if
-	 *   driver code does not trigger stop function as expected. So if
-	 *   snapshot is needed in future for some reason, we need to handle
-	 *   the issue, although it is not a big problem.
-	 */
-
-	edid = kmalloc(sizeof(vgt_edid_data_t), GFP_ATOMIC);
-	if (!edid) {
-		EDID_MSG(VGT_EDID_ERROR, false,
-				"Failed to allocate edid memory!\n");
-		return NULL;
-	}
-
-	memset(edid, 0, sizeof(vgt_edid_data_t));
-#endif
-	return edid;
 }
 
 /**************************************************************************
@@ -580,9 +478,7 @@ void *p_data, unsigned int bytes)
 		}
 
 		if (wvalue & _GMBUS_CYCLE_INDEX) {
-			i2c_bus->current_slave->snap_write_byte(
-					i2c_bus->current_slave,
-					gmbus1_slave_index(wvalue));
+			i2c_bus->edid_slave.current_read = gmbus1_slave_index(wvalue);
 		}
 
 		i2c_bus->gmbus.cycle_type = gmbus1_bus_cycle(wvalue);
@@ -672,7 +568,7 @@ bool vgt_gmbus3_mmio_read(struct vgt_device *vgt, unsigned int offset,
 		if (byte_count > 4)
 			byte_count = 4;
 		for (i = 0; i< byte_count; i++) {
-			byte_data = i2c_bus->current_slave->get_byte_from_snap(
+			byte_data = i2c_bus->current_slave->get_byte(
 					i2c_bus->current_slave);
 			reg_data |= (byte_data << (i << 3));
 		}
@@ -924,8 +820,8 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 			/* seems that data burst of aux_ch for i2c can only work
 			 * for write. The read can always read just one byte
 			 */
-			unsigned char val = i2c_bus->current_slave->
-				get_byte_from_snap(i2c_bus->current_slave);
+			unsigned char val =
+				i2c_bus->current_slave->get_byte(i2c_bus->current_slave);
 			aux_data_for_write = (val << 16);
 		}
 	}
@@ -951,13 +847,8 @@ void vgt_init_i2c_bus(vgt_i2c_bus_t *i2c_bus)
 
 	/* initialize the edid_slave
 	 */
-	i2c_bus->edid_slave.slave.select = edid_select;
-	i2c_bus->edid_slave.slave.snap_read_byte = edid_snap_read_byte;
-	i2c_bus->edid_slave.slave.snap_write_byte = edid_snap_write_byte;
-	i2c_bus->edid_slave.slave.get_byte_from_snap = edid_get_snap_byte;
-	i2c_bus->edid_slave.slave.snap_stop = edid_snap_stop;
+	i2c_bus->edid_slave.slave.get_byte = edid_get_byte;
 	i2c_bus->edid_slave.current_read = 0;
-	i2c_bus->edid_slave.current_write = 0;
 	i2c_bus->edid_slave.edid_data = NULL;
 
 	memset(&i2c_bus->gmbus, 0, sizeof(vgt_i2c_gmbus_t));

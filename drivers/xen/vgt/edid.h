@@ -213,31 +213,7 @@ typedef struct {
  * Interface of I2C slave
  */
 typedef struct VGT_I2C_SLAVE_T{
-	void (*start) (void);
-	void (*select) (void);
-
-	/*
-	 * It is interface used during snapshot when a byte transmission
-	 * has finished from slave to master. People could define its
-	 * logic here to capture the byte value.
-	 */
-	void (*snap_read_byte) (void *slave, unsigned char value);
-
-	/*
-	 * It is interface used when a byte transmission has finished
-	 * from master to slave. People could define its logic here
-	 * to modify the snopshot for the device. In the case that the
-	 * snapshot is not built, the function usually does nothing.
-	 */
-	void (*snap_write_byte) (void *slave, unsigned char value);
-
-	/* It is interface to get a snapshot byte. The snapshot must
-	 * be available when calling this function.
-	 */
-	unsigned char (*get_byte_from_snap) (void *slave);
-
-	void (*snap_stop) (void *dest,
-			struct VGT_I2C_SLAVE_T *src);
+	unsigned char (*get_byte) (void *slave);
 } vgt_i2c_slave_t;
 
 /*
@@ -258,7 +234,6 @@ typedef enum {
 typedef struct {
 	vgt_i2c_slave_t slave;
 	int current_read;
-	int current_write;
 	vgt_edid_data_t *edid_data;
 }vgt_edid_t;
 
@@ -277,8 +252,6 @@ typedef struct {
 	vgt_i2c_gmbus_t gmbus;
 	vgt_i2c_aux_ch_t aux_ch;
 }vgt_i2c_bus_t;
-
-vgt_edid_data_t *vgt_create_edid(void);
 
 void vgt_init_i2c_bus(vgt_i2c_bus_t *i2c_bus);
 
