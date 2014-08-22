@@ -29,14 +29,6 @@
 
 #include "vgt.h"
 
-#define DEBUG_VGT_EDID
-
-typedef enum {
-	VGT_EDID_INFO = 1,
-	VGT_EDID_WARN = 2,
-	VGT_EDID_ERROR = 3,
-} vgt_edid_log_t;
-
 static const char *vgt_port_name[] = {
 	"CRT",
 	"DP_A",
@@ -47,57 +39,6 @@ static const char *vgt_port_name[] = {
 	"HDMI_C",
 	"HDMI_D"
 };
-
-#define EDID_LOG(log, emu, fmt, args...)			\
-	do {							\
-		printk("[VGT_EDID");				\
-		if (emu == 0x12345678)				\
-			printk("]");				\
-		else if (emu)					\
-			printk("-EM]");				\
-		else						\
-			printk("-HW]");				\
-		if (log == VGT_EDID_INFO) {			\
-			printk("INFO: ");			\
-		} else if (log == VGT_EDID_WARN) {		\
-			printk("WARN: ");			\
-		} else if (log == VGT_EDID_ERROR) {		\
-			printk("ERROR: ");			\
-		}						\
-		printk(fmt, ##args);				\
-		if (log == VGT_EDID_ERROR) {			\
-			BUG();					\
-		}						\
-	} while (0)
-
-#ifdef DEBUG_VGT_EDID
-
-static int vgt_edid_log_level = 2;
-
-#define EDID_MSG(log, emu, fmt, args...)			\
-	do {							\
-		if (log >= vgt_edid_log_level) {		\
-			EDID_LOG(log, emu, fmt, ##args);	\
-		}						\
-	} while (0)
-
-#define EDID_MSG_EH(log, fmt, args...)				\
-	EDID_MSG(log, 0x12345678, fmt, ##args)
-
-#else /* DEBUG_VGT_EDID */
-
-#define ASSERT(x)
-#define EDID_MSG(log, emu, fmt, args...)			\
-	do {							\
-		if (log >= VGT_EDID_WARN) {			\
-			EDID_LOG(log, emu, fmt, ##args);	\
-		}						\
-	} while (0)
-
-#define EDID_MSG_EH(log, fmt, args...)				\
-	EDID_MSG(log, 0x12345678, fmt, ##args)
-
-#endif /* DEBUG_VGT_EDID */
 
 #define IS_SHARED_PORT(port) \
 	(((port) >= VGT_DP_B && (port) <= VGT_DP_D) ||	\
@@ -338,10 +279,9 @@ static unsigned char edid_get_byte(void *slave)
 {
 	vgt_edid_t *edid = (vgt_edid_t *)slave;
 	if (edid->current_read >= EDID_SIZE) {
-		EDID_MSG(VGT_EDID_ERROR, true,
-			"edid_get_byte() exceeds the size of EDID!\n");
+		vgt_err("edid_get_byte() exceeds the size of EDID!\n");
 	}
-	EDID_MSG(VGT_EDID_INFO, true,
+	vgt_dbg(VGT_DBG_EDID,
 			"edid_get_byte with offset %d and value %d\n",
 			edid->current_read,
 			edid->edid_data->edid_block[edid->current_read]);
@@ -728,14 +668,12 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 				VGT_DP_PORTS_IDX port_idx, void *p_data)
 {
 	int msg_length, ret_msg_size;
-	bool edid_presented;
 	int msg, addr, ctrl, op;
 	int value = *(int *)p_data;
 	int aux_data_for_write = 0;
 	AUX_CH_REGISTERS reg = vgt_get_aux_ch_reg(offset);
-	edid_presented = (edid && edid->data_valid);
 
-	EDID_MSG(VGT_EDID_INFO, edid_presented,
+	vgt_dbg(VGT_DBG_EDID,
 	"vgt_i2c_handle_aux_ch_write with offset:0x%x, port_idx:0x%x, value:0x%x\n",
 		offset, port_idx, value);
 
@@ -765,29 +703,29 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 	if (msg_length == 3) {
 		if (!(op & VGT_AUX_I2C_MOT)) {
 			/* stop */
-			EDID_MSG(VGT_EDID_INFO, edid_presented,
+			vgt_dbg(VGT_DBG_EDID,
 				"AUX_CH: stop. reset I2C!\n");
 			vgt_init_i2c_bus(i2c_bus);
 		} else {
 			/* start or restart */
-			EDID_MSG(VGT_EDID_INFO, edid_presented,
+			vgt_dbg(VGT_DBG_EDID,
 				"AUX_CH: start or restart I2C!\n");
 			i2c_bus->aux_ch.i2c_over_aux_ch = true;
 			i2c_bus->aux_ch.aux_ch_mot = true;
 			if (addr == 0) {
 				/* reset the address */
-				EDID_MSG(VGT_EDID_INFO, edid_presented,
+				vgt_dbg(VGT_DBG_EDID,
 					"AUX_CH: reset I2C!\n");
 				vgt_init_i2c_bus(i2c_bus);
 			} else if (addr == EDID_ADDR) {
-				EDID_MSG(VGT_EDID_INFO, edid_presented,
+				vgt_dbg(VGT_DBG_EDID,
 					"AUX_CH: setting EDID_ADDR!\n");
 				i2c_bus->current_slave_addr = EDID_ADDR;
 				i2c_bus->current_slave =
 					(vgt_i2c_slave_t *)&i2c_bus->edid_slave;
 				i2c_bus->edid_slave.edid_data = edid;
 			} else {
-				EDID_MSG(VGT_EDID_WARN, edid_presented,
+				vgt_dbg(VGT_DBG_EDID,
 		"Not supported address access [0x%x]with I2C over AUX_CH!\n",
 				addr);
 			}
@@ -805,7 +743,7 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 
 		write_length = msg_length - 4;
 
-		EDID_MSG(VGT_EDID_INFO, edid_presented,
+		vgt_dbg(VGT_DBG_EDID,
 			"AUX_CH WRITE length is:%d\n", write_length);
 
 		ASSERT(write_length == 1);
