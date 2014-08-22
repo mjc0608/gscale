@@ -204,13 +204,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 			continue;
 		}
 
-		if (hotplug_cmd.action == 0x1) {
-			/* plug in */
-			if (propagate_monitor_to_guest) {
-				vgt_propagate_edid(vgt, port_idx);
-				vgt_propagate_dpcd(vgt, port_idx);
-			}
-		} else {
+		if (hotplug_cmd.action != 0x1) {
 			/* pull out */
 			vgt_clear_port(vgt, port_idx);
 		}

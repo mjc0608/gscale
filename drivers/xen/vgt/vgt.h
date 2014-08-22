@@ -2235,8 +2235,6 @@ void vgt_release_instance(struct vgt_device *vgt);
 int vgt_init_sysfs(struct pgt_device *pdev);
 void vgt_destroy_sysfs(void);
 extern void vgt_clear_port(struct vgt_device *vgt, int index);
-extern void vgt_propagate_edid(struct vgt_device *vgt, int index);
-extern void vgt_propagate_dpcd(struct vgt_device *vgt, int index);
 void vgt_update_monitor_status(struct vgt_device *vgt);
 void vgt_detect_display(struct vgt_device *vgt, int index);
 void vgt_dpy_init_modes(vgt_reg_t *mmio_array);
