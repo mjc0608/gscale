@@ -200,7 +200,7 @@ void vgt_trigger_display_hot_plug(struct pgt_device *dev,
 				continue;
 		}
 
-		if (vgt->vm_id == 0) {
+		if (is_current_display_owner(vgt)) {
 			continue;
 		}
 
@@ -345,28 +345,26 @@ void vgt_hotplug_udev_notify_func(struct work_struct *work)
 
 void vgt_update_monitor_status(struct vgt_device *vgt)
 {
+	ASSERT(!is_current_display_owner(vgt));
+
 	__vreg(vgt, _REG_SDEISR) &= ~(_REGBIT_DP_B_HOTPLUG |
 					_REGBIT_DP_C_HOTPLUG |
 					_REGBIT_DP_D_HOTPLUG);
 
-	if (test_bit(VGT_DP_B, vgt->presented_ports) ||
-		test_bit(VGT_HDMI_B, vgt->presented_ports)) {
+	if (dpy_has_monitor_on_port(vgt, PORT_B)) {
 		vgt_dbg(VGT_DBG_DPY, "enable B port monitor\n");
 		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_B_HOTPLUG;
 	}
-	if (test_bit(VGT_DP_C, vgt->presented_ports) ||
-		test_bit(VGT_HDMI_C, vgt->presented_ports)) {
+	if (dpy_has_monitor_on_port(vgt, PORT_C)) {
 		vgt_dbg(VGT_DBG_DPY, "enable C port monitor\n");
 		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_C_HOTPLUG;
 	}
-	if (test_bit(VGT_DP_D, vgt->presented_ports) ||
-		test_bit(VGT_HDMI_D, vgt->presented_ports)) {
+	if (dpy_has_monitor_on_port(vgt, PORT_D)) {
 		vgt_dbg(VGT_DBG_DPY, "enable D port monitor\n");
 		__vreg(vgt, _REG_SDEISR) |= _REGBIT_DP_D_HOTPLUG;
 	}
-	if (test_bit(VGT_DP_A, vgt->presented_ports)) {
+	if (dpy_has_monitor_on_port(vgt, PORT_A))
 		__vreg(vgt, _REG_DDI_BUF_CTL_A) |= _DDI_BUFCTL_DETECT_MASK;
-	}
 }
 
 enum vgt_pipe get_edp_input(uint32_t wr_data)
@@ -915,7 +913,6 @@ void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port)
 			port->dpcd->data_valid = false;
 		port->type = VGT_PORT_MAX;
 		port->port_override = I915_MAX_PORTS;
-		clear_bit(legacy_porttype, vgt->presented_ports);
 	} else {
 		memcpy(port->edid->edid_block,
 			port->cache.edid->edid_block, EDID_SIZE);
@@ -944,7 +941,6 @@ void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port)
 			}
 		}
 		
-		set_bit(legacy_porttype, vgt->presented_ports);
 		for (i = 0; i <= 3; i++) {
 			unsigned int ddi_value;
 			ddi_value = VGT_MMIO_READ(vgt->pdev, reg_ddi[i]);

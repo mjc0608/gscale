@@ -651,7 +651,7 @@ static void vgt_handle_crt_hotplug_virt(struct vgt_irq_host_state *hstate,
 		if (!is_current_display_owner(vgt)) {
 			__vreg(vgt, _REG_PCH_ADPA) &=
 				~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-			if (test_bit(VGT_CRT, vgt->presented_ports))
+			if (dpy_has_monitor_on_port(vgt, PORT_E))
 				__vreg(vgt, _REG_PCH_ADPA) |=
 					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 		}

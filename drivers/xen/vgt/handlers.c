@@ -1078,7 +1078,7 @@ static bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		/* emulate the status based on monitor connection information */
 		new &= ~_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER;
 
-		if (test_bit(VGT_CRT, vgt->presented_ports))
+		if (dpy_has_monitor_on_port(vgt, PORT_E))
 			new |= _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 		else
 			new &= ~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;

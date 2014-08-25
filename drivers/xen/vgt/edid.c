@@ -99,11 +99,6 @@ void vgt_clear_port(struct vgt_device *vgt, int index)
 	vgt_clear_edid(port);
 	vgt_clear_dpcd(port);
 	
-	if (port->type >= 0 && port->type < VGT_PORT_MAX) {
-		clear_bit(vgt->ports[index].type,
-			  vgt->presented_ports);
-	}
-
 	port->type = VGT_PORT_MAX;
 }
 

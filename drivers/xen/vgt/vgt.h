@@ -615,8 +615,6 @@ struct vgt_device {
 	struct gt_port		ports[I915_MAX_PORTS]; /* one port per PIPE */
 	vgt_i2c_bus_t		vgt_i2c_bus;	/* i2c bus state emulaton for reading EDID */
 
-	DECLARE_BITMAP(presented_ports, VGT_PORT_MAX);
-
 	uint64_t	aperture_base;
 	void		*aperture_base_va;
 	uint64_t	aperture_sz;
@@ -902,7 +900,6 @@ struct pgt_device {
 	u8 ring_xxx_valid;
 
 	struct gt_port ports[I915_MAX_PORTS];
-	DECLARE_BITMAP(detected_ports, VGT_PORT_MAX);
 
 	 /* 1 bit corresponds to 1MB in the GM space */
 	DECLARE_BITMAP(gm_bitmap, VGT_GM_BITMAP_BITS);
@@ -998,6 +995,9 @@ struct pgt_device {
 		(pdev && ((pipe) >= PIPE_A) && ((pipe) < I915_MAX_PIPES) &&	\
 		(__vreg(current_display_owner(pdev),				\
 			VGT_PIPECONF(pipe)) & _REGBIT_PIPE_ENABLE))
+#define dpy_has_monitor_on_port(vgt, port)					\
+		(vgt && (port >= PORT_A) && (port < I915_MAX_PORTS) &&		\
+		vgt->ports[port].edid && vgt->ports[port].edid->data_valid)
 
 extern int prepare_for_display_switch(struct pgt_device *pdev);
 extern void do_vgt_fast_display_switch(struct pgt_device *pdev);

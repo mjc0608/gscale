@@ -487,8 +487,6 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 		pdev->ring_xxx_valid = 1;
 	}
 
-	/* clean port status, 0 means not plugged in */
-	memset(pdev->detected_ports, 0, sizeof(pdev->detected_ports));
 	bitmap_zero(pdev->dpy_emul_request, VGT_MAX_VMS);
 
 	/* initialize ports */

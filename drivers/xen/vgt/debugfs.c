@@ -505,7 +505,7 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 		struct vgt_device *vgt)
 {
 	enum vgt_pipe pipe;
-	int port;
+	enum vgt_port port;
 	const char *str;
 	unsigned int reg;
 	vgt_reg_t val;
@@ -651,34 +651,21 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 		seq_printf(m, "\t\teDP select: %s\n", str);
 	}
 	seq_printf(m, "\n");
+	
+	if (is_current_display_owner(vgt)) {
+		return;
+	}
 
-	seq_printf(m, "----port:\n");
+	seq_printf(m, "---- virtual port:\n");
 
-	for_each_set_bit(port,
-		(vgt ? vgt->presented_ports : pdev->detected_ports),
-		VGT_PORT_MAX) {
-		switch (port) {
-			case VGT_CRT:
-				str = "Port CRT"; break;
-			case VGT_DP_A:
-				str = "Port A"; break;
-			case VGT_DP_B:
-				str = "Port B DP"; break;
-			case VGT_DP_C:
-				str = "Port C DP"; break;
-			case VGT_DP_D:
-				str = "Port D DP"; break;
-			case VGT_HDMI_B:
-				str = "Port B HDMI"; break;
-			case VGT_HDMI_C:
-				str = "Port C HDMI"; break;
-			case VGT_HDMI_D:
-				str = "Port D HDMI"; break;
-			default:
-				str = "Port INV";
-		}
-		seq_printf(m, "\t%s connected to monitors.\n", str);
-		if (port == VGT_CRT) {
+	for (port = PORT_A; port < I915_MAX_PORTS; ++ port) {
+		if (!dpy_has_monitor_on_port(vgt, port))
+			continue;
+
+		seq_printf(m, "\t%s connected to monitors.\n",
+			VGT_PORT_NAME(port));
+
+		if (port == PORT_E) {
 			reg = _REG_PCH_ADPA;
 			val = vgt_get_mmio_value(pdev, vgt, reg);
 			enabled = !!(val & _REGBIT_ADPA_DAC_ENABLE);
@@ -696,7 +683,6 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 			seq_printf(m, "\tPCH TRANS_CONF(0x%x): 0x%08x (%s)\n",
 				reg, val, (enabled ? "enabled" : "disabled"));
 		}
-		seq_printf(m, "\n");
 	}
 }
 
