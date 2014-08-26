@@ -1053,60 +1053,10 @@ static bool dp_tp_status_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
-/*
- * DAC_CTL is special regarding to that its bits containing multiple
- * policies:
- *	- CRT control bits like enabling, transcoder selection belong
- *	  to display owner
- *	- hotplug status bits are fully virtualized like other interrupt
- *	  status bits
- *	- force hotplug trigger bit is also fully virtualized in the MMIO
- *	  write. XenGT will determin what status bits will look like based
- *	  on the monitor connection information. From driver's point of
- *	  view, the force hotplug will always succeed immediately(bit is
- *	  cleared immediately) and status bits contains the expected
- *	  information.
- *
- * Let's take this as one example how this category may be abstracted
- * in the future
- */
-static bool pch_adpa_mmio_read(struct vgt_device *vgt, unsigned int offset,
-			void *p_data, unsigned int bytes)
-{
-	unsigned int reg;
-	vgt_reg_t adpa_value;
-
-	reg = offset & ~(bytes - 1);
-
-	/*
-	 * the channel status bit is updated by interrupt handler,
-	 * or the write handler.
-	 */
-
-	if (reg_hw_access(vgt, reg)) {
-
-		adpa_value = VGT_MMIO_READ(vgt->pdev, _REG_PCH_ADPA);
-
-		/* force trigger bit was fully virtualized. Should always be zero */
-		ASSERT (!(adpa_value & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER));
-
-		__vreg(vgt, reg) &= _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER |
-					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-		__vreg(vgt, reg) |= adpa_value &
-					~(_REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER |
-					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK);
-	}
-
-	memcpy(p_data, (char *)vgt->state.vReg + offset, bytes);
-
-	return true;
-}
-
 static bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	vgt_reg_t old, new;
-	struct pgt_device *pdev = vgt->pdev;
 
 	new = *(vgt_reg_t *)p_data;
 	old = __vreg(vgt, offset);
@@ -1114,11 +1064,10 @@ static bool pch_adpa_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	/* Clear the bits of 'force hotplug trigger' and status because they
 	 * will be fully virtualized. Other bits will be written to hardware.
 	 */
-	if (reg_hw_access(vgt, offset)) {
-		VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, new &
-				~(_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK |
-				 _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER));
-	}
+	default_mmio_write(vgt, offset, p_data, bytes);
+
+	if (reg_hw_access(vgt, offset))
+		return true;
 
 	if (new & _REGBIT_ADPA_CRT_HOTPLUG_FORCE_TRIGGER) {
 
@@ -2818,7 +2767,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PCH_DPD_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL,
 	dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
 
-{_REG_PCH_ADPA, 4, F_DPY, 0, D_ALL, pch_adpa_mmio_read, pch_adpa_mmio_write},
+{_REG_PCH_ADPA, 4, F_DPY, 0, D_ALL, NULL, pch_adpa_mmio_write},
 {_REG_DP_B_CTL, 4, F_DPY, 0, D_SNB|D_IVB, NULL, dp_ctl_mmio_write},
 {_REG_DP_C_CTL, 4, F_DPY, 0, D_SNB|D_IVB, NULL, dp_ctl_mmio_write},
 {_REG_DP_D_CTL, 4, F_DPY, 0, D_SNB|D_IVB, NULL, dp_ctl_mmio_write},

@@ -648,13 +648,10 @@ static void vgt_handle_crt_hotplug_virt(struct vgt_irq_host_state *hstate,
 	/* update channel status */
 	if (__vreg(vgt, _REG_PCH_ADPA) & _REGBIT_ADPA_CRT_HOTPLUG_ENABLE) {
 
-		__vreg(vgt, _REG_PCH_ADPA) &=
+		if (!is_current_display_owner(vgt)) {
+			__vreg(vgt, _REG_PCH_ADPA) &=
 				~_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-		if (is_current_display_owner(vgt)) {
-			__vreg(vgt, _REG_PCH_ADPA) |=
-					vgt_get_event_val(hstate, event) &
-					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
-		} else if (test_bit(VGT_CRT, vgt->presented_ports)) {
+			if (test_bit(VGT_CRT, vgt->presented_ports))
 				__vreg(vgt, _REG_PCH_ADPA) |=
 					_REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK;
 		}
@@ -801,9 +798,6 @@ static void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
 		vgt_warn("IRQ: captured CRT hotplug event when CRT is disabled\n");
 	}
 
-	/* write back value to clear channel status */
-	VGT_MMIO_WRITE(pdev, _REG_PCH_ADPA, adpa_ctrl);
-
 	/* check blue/green channel status for attachment status */
 	if (adpa_ctrl & _REGBIT_ADPA_CRT_HOTPLUG_MONITOR_MASK) {
 		vgt_info("IRQ: detect crt insert event!\n");
@@ -813,7 +807,6 @@ static void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
 		vgt_set_uevent(vgt_dom0, CRT_HOTPLUG_OUT);
 	}
 
-	vgt_set_event_val(hstate, event, adpa_ctrl);
 	/* send out udev events when handling physical interruts */
 	vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
 
