@@ -1438,6 +1438,24 @@ static bool dpy_modeset_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static bool south_chicken2_write(struct vgt_device *vgt, unsigned int offset,
+		void *p_data, unsigned int bytes)
+{
+	if (!default_mmio_write(vgt, offset, p_data, bytes))
+		return false;
+
+	if (!reg_hw_access(vgt, offset)) {
+		if (__vreg(vgt, offset) & _REGBIT_MPHY_IOSFSB_RESET_CTL)
+			__vreg(vgt, offset) |= _REGBIT_FDI_MPHY_IOSFSB_RESET_STATUS;
+		else
+			__vreg(vgt, offset) &= ~_REGBIT_FDI_MPHY_IOSFSB_RESET_STATUS;
+
+		__sreg(vgt, offset) = __vreg(vgt, offset);
+	}
+
+	return true;
+}
+
 static bool surflive_mmio_read(struct vgt_device *vgt, unsigned int offset,
 			void *p_data, unsigned int bytes, enum vgt_plane_type plane)
 {
@@ -2907,7 +2925,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_DSPCLK_GATE_D, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
 {_REG_SOUTH_CHICKEN1, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_SOUTH_CHICKEN2, 4, F_DPY, 0, D_ALL, NULL, NULL},
+{_REG_SOUTH_CHICKEN2, 4, F_DPY, 0, D_ALL, NULL, south_chicken2_write},
 {_REG_TRANSA_CHICKEN1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_TRANSB_CHICKEN1, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_SOUTH_DSPCLK_GATE_D, 4, F_DPY, 0, D_ALL, NULL, NULL},
