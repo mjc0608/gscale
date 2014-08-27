@@ -80,17 +80,9 @@ static inline void vgt_clear_dpcd(struct gt_port *port)
 
 void vgt_clear_port(struct vgt_device *vgt, int index)
 {
-	int i;
 	struct gt_port *port;
 
-	if (index == -1) { /* -1 index means "ALL" */
-		for (i = 0; i < I915_MAX_PORTS; i++) {
-			vgt_clear_port(vgt, i);
-		}
-		return;
-	}
-
-	if (index < 0 || index >= I915_MAX_PORTS) {
+	if (!dpy_is_valid_port(index)) {
 		vgt_warn("Wrong port index input! Will do nothing!\n");
 		return;
 	}
@@ -102,27 +94,38 @@ void vgt_clear_port(struct vgt_device *vgt, int index)
 	port->type = VGT_PORT_MAX;
 }
 
-/**************************************************************************
- *
- * EDID Slave implementation
- *
- *************************************************************************/
-
-static unsigned char edid_get_byte(void *slave)
+static unsigned char edid_get_byte(struct vgt_device *vgt)
 {
-	vgt_edid_t *edid = (vgt_edid_t *)slave;
-	if (edid->current_read >= EDID_SIZE) {
-		vgt_err("edid_get_byte() exceeds the size of EDID!\n");
-	}
-	vgt_dbg(VGT_DBG_EDID,
-			"edid_get_byte with offset %d and value %d\n",
-			edid->current_read,
-			edid->edid_data->edid_block[edid->current_read]);
-	if (edid->edid_data && edid->edid_data->data_valid) {
-		return edid->edid_data->edid_block[edid->current_read ++];
-	} else {
+	unsigned char chr = 0;
+	struct vgt_i2c_edid_t *edid = &vgt->vgt_i2c_edid;
+
+	if (edid->state == I2C_NOT_SPECIFIED || !edid->slave_selected) {
+		vgt_warn("Driver tries to read EDID without proper sequence!\n");
 		return 0;
 	}
+	if (edid->current_edid_read >= EDID_SIZE) {
+		vgt_warn("edid_get_byte() exceeds the size of EDID!\n");
+		return 0;
+	}
+
+	if (!edid->edid_available) {
+		vgt_warn("Reading EDID but EDID is not available!"
+			" Will return 0.\n");
+		return 0;
+	}
+
+	if (dpy_has_monitor_on_port(vgt, edid->port)) {
+		struct vgt_edid_data_t *edid_data = vgt->ports[edid->port].edid;
+		chr = edid_data->edid_block[edid->current_edid_read];
+		vgt_dbg(VGT_DBG_EDID,
+			"edid_get_byte with offset %d and value %d\n",
+			edid->current_edid_read, chr);
+		edid->current_edid_read ++;
+	} else {
+		vgt_warn("No EDID available during the reading?\n");
+	}
+
+	return chr;
 }
 
 /**************************************************************************
@@ -130,57 +133,57 @@ static unsigned char edid_get_byte(void *slave)
  * GMBUS interface for I2C access
  *
  *************************************************************************/
+static inline enum vgt_port vgt_get_port_from_gmbus0(vgt_reg_t gmbus0)
+{
+	enum vgt_port port = I915_MAX_PORTS;
+	int port_select = gmbus0 & _GMBUS_PIN_SEL_MASK;
+
+	if (port_select == 2)
+		port = PORT_E;
+	else if (port_select == 4)
+		port = PORT_C;
+	else if (port_select == 5)
+		port = PORT_B;
+	else if (port_select == 6)
+		port = PORT_D;
+
+	return port;
+}
 
 /* GMBUS0 */
-static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_data, unsigned int bytes)
+static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt,
+			unsigned int offset, void *p_data, unsigned int bytes)
 {
-	vgt_edid_data_t *edid_data = NULL;
 	vgt_reg_t wvalue = *(vgt_reg_t *)p_data;
-	struct gt_port *port = NULL;
+	enum vgt_port port = I915_MAX_PORTS;
+	int pin_select = wvalue & _GMBUS_PIN_SEL_MASK;
 
-	switch (wvalue & _GMBUS_PIN_SEL_MASK) {
-	case 0: /* disabled. Be treated as reset */
-		edid_data = NULL;
-		break;
-	case 1: /* LCTRCLK */
-		printk("vGT(%d): WARNING: Accessing LCTRCLK which is not supported!\n",
-			vgt->vgt_id);
-		break;
-	case 2: /* Analog Mon */
-		port = &vgt->ports[port_type_to_port(VGT_CRT)];
-		break;
-	case 4: /* Port C use */
-		port = &vgt->ports[port_type_to_port(VGT_HDMI_C)];
-		break;
-	case 5: /* Port B use */
-		port = &vgt->ports[port_type_to_port(VGT_HDMI_B)];
-		break;
-	case 6: /* Port D use */
-		port = &vgt->ports[port_type_to_port(VGT_HDMI_D)];
-		break;
-	case 7:
-		printk("vGT(%d): WARNING: GMBUS accessing reserved port!!!!\n", vgt->vgt_id);
-		break;
-	default:
-		printk("vGT(%d): EDID unknown ERROR!\n", vgt->vgt_id);
+	vgt_init_i2c_edid(vgt);
+
+	if (pin_select == 0)
+		return true;
+
+	vgt->vgt_i2c_edid.state = I2C_GMBUS;
+	port = vgt_get_port_from_gmbus0(pin_select);
+	if (!dpy_is_valid_port(port)) {
+		vgt_dbg(VGT_DBG_EDID,
+			"VM(%d): Driver tries GMBUS write not on valid port!\n"
+			"gmbus write value is: 0x%x\n", vgt->vgt_id, wvalue);
+		return true;
 	}
 
-	if (port) 
-		edid_data = port->edid;
+	vgt->vgt_i2c_edid.gmbus.phase = GMBUS_IDLE_PHASE;
 
-	vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
-	//vgt->vgt_i2c_bus.state = VGT_I2C_SEND;
-	vgt->vgt_i2c_bus.gmbus.phase = GMBUS_IDLE_PHASE;
-
-	/* Initialize status reg
-	 * FIXME: never clear _GMBUS_HW_WAIT */
+	/* FIXME: never clear _GMBUS_HW_WAIT */
 	__vreg(vgt, _REG_PCH_GMBUS2) &= ~ _GMBUS_ACTIVE;
 	__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_RDY | _GMBUS_HW_WAIT;
-	if (edid_data && edid_data->data_valid && !(port->dpcd && port->dpcd->data_valid)) {
+
+	if (dpy_has_monitor_on_port(vgt, port) && !dpy_port_is_dp(vgt, port)) {
+		vgt->vgt_i2c_edid.edid_available = true;
 		__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_NAK;
-		vgt->vgt_i2c_bus.gmbus.pedid = edid_data;
-	} else
+	} else {
 		__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_NAK;
+	}
 
 	memcpy(p_data, (char *)vgt->state.vReg + offset, bytes);
 	return true;
@@ -193,13 +196,13 @@ void vgt_reset_gmbus_controller(struct vgt_device *vgt)
 	//__vreg(vgt, _REG_PCH_GMBUS0) = 0;
 	//__vreg(vgt, _REG_PCH_GMBUS1) = 0;
 	__vreg(vgt, _REG_PCH_GMBUS2) = _GMBUS_HW_RDY;
-	if (!vgt->vgt_i2c_bus.gmbus.pedid) {
+	if (!vgt->vgt_i2c_edid.edid_available) {
 		__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_NAK;
 	}
 	//__vreg(vgt, _REG_PCH_GMBUS3) = 0;
 	//__vreg(vgt, _REG_PCH_GMBUS4) = 0;
 	//__vreg(vgt, _REG_PCH_GMBUS5) = 0;
-	vgt->vgt_i2c_bus.gmbus.phase = GMBUS_IDLE_PHASE;
+	vgt->vgt_i2c_edid.gmbus.phase = GMBUS_IDLE_PHASE;
 }
 
 
@@ -207,7 +210,7 @@ static bool vgt_gmbus1_mmio_write(struct vgt_device *vgt, unsigned int offset,
 void *p_data, unsigned int bytes)
 {
 	u32 slave_addr;
-	vgt_i2c_bus_t *i2c_bus = &vgt->vgt_i2c_bus;
+	struct vgt_i2c_edid_t *i2c_edid = &vgt->vgt_i2c_edid;
 
 	vgt_reg_t wvalue = *(vgt_reg_t *)p_data;
 	if (__vreg(vgt, offset) & _GMBUS_SW_CLR_INT) {
@@ -233,28 +236,25 @@ void *p_data, unsigned int bytes)
 		if (wvalue & _GMBUS_SW_RDY)
 			wvalue &= ~_GMBUS_SW_RDY;
 
-		i2c_bus->gmbus.total_byte_count =
+		i2c_edid->gmbus.total_byte_count =
 			gmbus1_total_byte_count(wvalue);
 		slave_addr = gmbus1_slave_addr(wvalue);
-		i2c_bus->current_slave_addr = slave_addr;
 
 		/* vgt gmbus only support EDID */
 		if (slave_addr == EDID_ADDR) {
-			i2c_bus->current_slave = (vgt_i2c_slave_t *)&i2c_bus->edid_slave;
-			i2c_bus->edid_slave.edid_data = i2c_bus->gmbus.pedid;
-
+			i2c_edid->slave_selected = true;
 		} else if (slave_addr != 0) {
-			vgt_dbg(VGT_DBG_DPY, "vGT(%d): unsupported gmbus slave addr(%x)\n",
+			vgt_dbg(VGT_DBG_DPY,
+				"vGT(%d): unsupported gmbus slave addr(0x%x)\n"
+				"	gmbus operations will be ignored.\n",
 					vgt->vgt_id, slave_addr);
-			i2c_bus->current_slave = (vgt_i2c_slave_t *)&i2c_bus->edid_slave;
-			i2c_bus->edid_slave.edid_data = i2c_bus->gmbus.pedid;
 		}
 
 		if (wvalue & _GMBUS_CYCLE_INDEX) {
-			i2c_bus->edid_slave.current_read = gmbus1_slave_index(wvalue);
+			i2c_edid->current_edid_read = gmbus1_slave_index(wvalue);
 		}
 
-		i2c_bus->gmbus.cycle_type = gmbus1_bus_cycle(wvalue);
+		i2c_edid->gmbus.cycle_type = gmbus1_bus_cycle(wvalue);
 		switch (gmbus1_bus_cycle(wvalue)) {
 			case GMBUS_NOCYCLE:
 				break;
@@ -266,14 +266,14 @@ void *p_data, unsigned int bytes)
 				WAIT phase
 				 */
 				if (gmbus1_bus_cycle(__vreg(vgt, offset)) != GMBUS_NOCYCLE) {
-					vgt_init_i2c_bus(i2c_bus);
+					vgt_init_i2c_edid(vgt);
 					/* After the 'stop' cycle, hw state would become
 					 * 'stop phase' and then 'idle phase' after a few
 					 * milliseconds. In emulation, we just set it as
 					 * 'idle phase' ('stop phase' is not
 					 * visible in gmbus interface)
 					 */
-					i2c_bus->gmbus.phase = GMBUS_IDLE_PHASE;
+					i2c_edid->gmbus.phase = GMBUS_IDLE_PHASE;
 					/*
 					FIXME: never clear _GMBUS_WAIT
 					__vreg(vgt, _REG_PCH_GMBUS2) &=
@@ -290,7 +290,7 @@ void *p_data, unsigned int bytes)
 				 * transition like this:
 				 * START (-->INDEX) -->DATA
 				 */
-				i2c_bus->gmbus.phase = GMBUS_DATA_PHASE;
+				i2c_edid->gmbus.phase = GMBUS_DATA_PHASE;
 				__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_ACTIVE;
 				/* FIXME: never clear _GMBUS_WAIT */
 				//__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_HW_WAIT;
@@ -317,19 +317,20 @@ void *p_data, unsigned int bytes)
 bool vgt_gmbus3_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	BUG();
+	ASSERT_VM(0, vgt);
 	return true;
 }
 
 bool vgt_gmbus3_mmio_read(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
-	vgt_i2c_bus_t *i2c_bus = &vgt->vgt_i2c_bus;
-	int byte_left = i2c_bus->gmbus.total_byte_count
-		- i2c_bus->edid_slave.current_read;
-	int i, byte_count = byte_left;
-	vgt_reg_t reg_data = 0;
+	int i;
 	unsigned char byte_data;
+	struct vgt_i2c_edid_t *i2c_edid = &vgt->vgt_i2c_edid;
+	int byte_left = i2c_edid->gmbus.total_byte_count -
+				i2c_edid->current_edid_read;
+	int byte_count = byte_left;
+	vgt_reg_t reg_data = 0;
 
 	/* Data can only be recevied if previous settings correct */
 	if (__vreg(vgt, _REG_PCH_GMBUS1) & _GMBUS_SLAVE_READ) {
@@ -341,8 +342,7 @@ bool vgt_gmbus3_mmio_read(struct vgt_device *vgt, unsigned int offset,
 		if (byte_count > 4)
 			byte_count = 4;
 		for (i = 0; i< byte_count; i++) {
-			byte_data = i2c_bus->current_slave->get_byte(
-					i2c_bus->current_slave);
+			byte_data = edid_get_byte(vgt);
 			reg_data |= (byte_data << (i << 3));
 		}
 
@@ -350,21 +350,21 @@ bool vgt_gmbus3_mmio_read(struct vgt_device *vgt, unsigned int offset,
 		memcpy((char *)vgt->state.vReg + offset, (char *)&reg_data, byte_count);
 
 		if (byte_left <= 4) {
-			switch (i2c_bus->gmbus.cycle_type) {
+			switch (i2c_edid->gmbus.cycle_type) {
 				case NIDX_STOP:
 				case IDX_STOP:
-					i2c_bus->gmbus.phase = GMBUS_IDLE_PHASE;
+					i2c_edid->gmbus.phase = GMBUS_IDLE_PHASE;
 					break;
 				case NIDX_NS_W:
 				case IDX_NS_W:
 				default:
-					i2c_bus->gmbus.phase = GMBUS_WAIT_PHASE;
+					i2c_edid->gmbus.phase = GMBUS_WAIT_PHASE;
 					break;
 			}
 			//if (i2c_bus->gmbus.phase == GMBUS_WAIT_PHASE)
 			//__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_WAIT;
 
-			vgt_init_i2c_bus(i2c_bus);
+			vgt_init_i2c_edid(vgt);
 		}
 
 		/* Read GMBUS3 during send operation, return the latest written value */
@@ -475,49 +475,30 @@ static inline AUX_CH_REGISTERS vgt_get_aux_ch_reg(unsigned int offset)
 	return reg;
 }
 
-void vgt_i2c_handle_aux_ch_read(vgt_i2c_bus_t *i2c_bus,
-				unsigned int offset,
-				VGT_DP_PORTS_IDX port_idx, void *p_data)
-{
-	AUX_CH_REGISTERS reg;
-
-	if (!i2c_bus->aux_ch.i2c_over_aux_ch || !i2c_bus->aux_ch.aux_ch_mot) {
-		return;
-	}
-
-	reg = vgt_get_aux_ch_reg(offset);
-	*(unsigned int *)p_data = *i2c_bus->aux_ch.aux_registers[port_idx][reg];
-
-	return;
-}
-
 #define AUX_CTL_MSG_LENGTH(reg) \
 	((reg & _DP_AUX_CH_CTL_MESSAGE_SIZE_MASK) >> \
 		_DP_AUX_CH_CTL_MESSAGE_SIZE_SHIFT)
 
-void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
-				vgt_edid_data_t *edid,
+void vgt_i2c_handle_aux_ch_write(struct vgt_device *vgt,
+				enum vgt_port port_idx,
 				unsigned int offset,
-				VGT_DP_PORTS_IDX port_idx, void *p_data)
+				void *p_data)
 {
+	struct vgt_i2c_edid_t *i2c_edid = &vgt->vgt_i2c_edid;
 	int msg_length, ret_msg_size;
 	int msg, addr, ctrl, op;
 	int value = *(int *)p_data;
 	int aux_data_for_write = 0;
 	AUX_CH_REGISTERS reg = vgt_get_aux_ch_reg(offset);
 
-	vgt_dbg(VGT_DBG_EDID,
-	"vgt_i2c_handle_aux_ch_write with offset:0x%x, port_idx:0x%x, value:0x%x\n",
-		offset, port_idx, value);
-
 	if (reg != AUX_CH_CTL) {
-		*i2c_bus->aux_ch.aux_registers[port_idx][reg] = value;
+		__vreg(vgt, offset) = value;
 		return;
 	}
 
 	msg_length = AUX_CTL_MSG_LENGTH(value);
 	// check the msg in DATA register.
-	msg = *i2c_bus->aux_ch.aux_registers[port_idx][reg + 1];
+	msg = __vreg(vgt, offset + 4);
 	addr = (msg >> 8) & 0xffff;
 	ctrl = (msg >> 24)& 0xff;
 	op = ctrl >> 4;
@@ -528,7 +509,7 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 
 	/* Always set the wanted value for vms. */
 	ret_msg_size = (((op & 0x1) == VGT_AUX_I2C_READ) ? 2 : 1);
-	*i2c_bus->aux_ch.aux_registers[port_idx][reg] =
+	__vreg(vgt, offset) =
 		_REGBIT_DP_AUX_CH_CTL_DONE |
 		((ret_msg_size << _DP_AUX_CH_CTL_MESSAGE_SIZE_SHIFT) &
 		_DP_AUX_CH_CTL_MESSAGE_SIZE_MASK);
@@ -538,25 +519,27 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 			/* stop */
 			vgt_dbg(VGT_DBG_EDID,
 				"AUX_CH: stop. reset I2C!\n");
-			vgt_init_i2c_bus(i2c_bus);
+			vgt_init_i2c_edid(vgt);
 		} else {
 			/* start or restart */
 			vgt_dbg(VGT_DBG_EDID,
 				"AUX_CH: start or restart I2C!\n");
-			i2c_bus->aux_ch.i2c_over_aux_ch = true;
-			i2c_bus->aux_ch.aux_ch_mot = true;
+			i2c_edid->aux_ch.i2c_over_aux_ch = true;
+			i2c_edid->aux_ch.aux_ch_mot = true;
 			if (addr == 0) {
 				/* reset the address */
 				vgt_dbg(VGT_DBG_EDID,
 					"AUX_CH: reset I2C!\n");
-				vgt_init_i2c_bus(i2c_bus);
+				vgt_init_i2c_edid(vgt);
 			} else if (addr == EDID_ADDR) {
 				vgt_dbg(VGT_DBG_EDID,
 					"AUX_CH: setting EDID_ADDR!\n");
-				i2c_bus->current_slave_addr = EDID_ADDR;
-				i2c_bus->current_slave =
-					(vgt_i2c_slave_t *)&i2c_bus->edid_slave;
-				i2c_bus->edid_slave.edid_data = edid;
+				i2c_edid->state = I2C_AUX_CH;
+				i2c_edid->port = port_idx;
+				i2c_edid->slave_selected = true;
+				if (dpy_has_monitor_on_port(vgt, port_idx) &&
+					dpy_port_is_dp(vgt, port_idx))
+					i2c_edid->edid_available = true;
 			} else {
 				vgt_dbg(VGT_DBG_EDID,
 		"Not supported address access [0x%x]with I2C over AUX_CH!\n",
@@ -570,29 +553,11 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 		 * the WRITE operation is ignored. It is good enough to
 		 * support the gfx driver to do EDID access.
 		 */
-#if 0
-		int write_length;
-		int write_value;
-
-		write_length = msg_length - 4;
-
-		vgt_dbg(VGT_DBG_EDID,
-			"AUX_CH WRITE length is:%d\n", write_length);
-
-		ASSERT(write_length == 1);
-		write_value = *i2c_bus->aux_ch.aux_registers[port_idx][reg + 2]
-				 & 0xff;
-		ASSERT(write_value == 0);
-#endif
 	} else {
 		ASSERT((op & 0x1) == VGT_AUX_I2C_READ);
 		ASSERT(msg_length == 4);
-		if (i2c_bus->current_slave) {
-			/* seems that data burst of aux_ch for i2c can only work
-			 * for write. The read can always read just one byte
-			 */
-			unsigned char val =
-				i2c_bus->current_slave->get_byte(i2c_bus->current_slave);
+		if (i2c_edid->edid_available && i2c_edid->slave_selected) {
+			unsigned char val = edid_get_byte(vgt);
 			aux_data_for_write = (val << 16);
 		}
 	}
@@ -602,31 +567,24 @@ void vgt_i2c_handle_aux_ch_write(vgt_i2c_bus_t *i2c_bus,
 	 * returned byte if it is READ
 	 */
 	aux_data_for_write |= (VGT_AUX_I2C_REPLY_ACK & 0xff) << 24;
-	*i2c_bus->aux_ch.aux_registers[port_idx][reg + 1] = aux_data_for_write;
+	__vreg(vgt, offset + 4) = aux_data_for_write;
 
 	return;
 }
 
-/**************************************************************************
- * I2C
- *************************************************************************/
-void vgt_init_i2c_bus(vgt_i2c_bus_t *i2c_bus)
+void vgt_init_i2c_edid(struct vgt_device *vgt)
 {
-	i2c_bus->current_slave_addr = 0;
-	i2c_bus->current_slave = NULL;
-	i2c_bus->state = VGT_I2C_STOP;
+	struct vgt_i2c_edid_t *edid = &vgt->vgt_i2c_edid;
 
-	/* initialize the edid_slave
-	 */
-	i2c_bus->edid_slave.slave.get_byte = edid_get_byte;
-	i2c_bus->edid_slave.current_read = 0;
-	i2c_bus->edid_slave.edid_data = NULL;
+	edid->state = I2C_NOT_SPECIFIED;
 
-	memset(&i2c_bus->gmbus, 0, sizeof(vgt_i2c_gmbus_t));
+	edid->port = I915_MAX_PORTS;
+	edid->slave_selected = false;
+	edid->edid_available = false;
+	edid->current_edid_read = 0;
+	
+	memset(&edid->gmbus, 0, sizeof(struct vgt_i2c_gmbus_t));
 
-	i2c_bus->aux_ch.i2c_over_aux_ch = false;
-	i2c_bus->aux_ch.aux_ch_mot = false;
-	/*two arrays of aux_shadow_reg and aux_registers are initialized once
-	 * in vgt_init_aux_ch_vregs(), which is not supposed to change again
-	 */
+	edid->aux_ch.i2c_over_aux_ch = false;
+	edid->aux_ch.aux_ch_mot = false;
 }

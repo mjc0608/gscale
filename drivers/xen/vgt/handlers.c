@@ -649,25 +649,6 @@ static bool ring_pp_mode_write(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
-/* FIXME: add EDID virtualization in the future
- */
-static bool dp_aux_ch_ctl_mmio_read(struct vgt_device *vgt, unsigned int offset,
-	void *p_data, unsigned int bytes)
-{
-	bool rc = true;
-	VGT_DP_PORTS_IDX port_idx;
-
-	ASSERT(bytes == 4);
-	ASSERT((offset & (bytes - 1)) == 0);
-
-	rc = default_mmio_read(vgt, offset, p_data, bytes);
-
-	port_idx = vgt_get_dp_port_idx(offset);
-	vgt_i2c_handle_aux_ch_read(&vgt->vgt_i2c_bus, offset, port_idx, p_data);
-
-	return rc;
-}
-
 static bool dpy_trans_ddi_ctl_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -1545,9 +1526,8 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 	unsigned int reg = 0;
 	vgt_reg_t value = *(vgt_reg_t *)p_data;
 	int msg, addr, ctrl, op, len;
-	vgt_edid_data_t *edid = NULL;
 	struct vgt_dpcd_data *dpcd = NULL;
-	VGT_DP_PORTS_IDX port_idx = vgt_get_dp_port_idx(offset);
+	enum vgt_port port_idx = vgt_get_dp_port_idx(offset);
 	struct gt_port *port = NULL;
 
 	ASSERT(bytes == 4);
@@ -1575,28 +1555,15 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 		return true;
 	}
 
-	switch (port_idx) {
-	case VGT_DPA_IDX:
-		port = &vgt->ports[port_type_to_port(VGT_DP_A)];
-		break;
-	case VGT_DPB_IDX:
-		port = &vgt->ports[port_type_to_port(VGT_DP_B)];
-		break;
-	case VGT_DPC_IDX:
-		port = &vgt->ports[port_type_to_port(VGT_DP_C)];
-		break;
-	case VGT_DPD_IDX:
-		port = &vgt->ports[port_type_to_port(VGT_DP_D)];
-		break;
-	default:
+	if (!dpy_is_valid_port(port_idx)) {
 		vgt_warn("vGT(%d): Unsupported DP port access!\n",
 				vgt->vgt_id);
-		BUG();
-		break;
+		return true;
 	}
 
+	port = &vgt->ports[port_idx];
+
 	if (port) {
-		edid = port->edid;
 		dpcd = port->dpcd;
 	}
 
@@ -1721,42 +1688,10 @@ static bool dp_aux_ch_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset
 	}
 
 	/* i2c transaction starts */
-	if (!(dpcd && dpcd->data_valid)) {
-		edid = NULL;
-	}
-
-	vgt_i2c_handle_aux_ch_write(&vgt->vgt_i2c_bus, edid,
-				offset, port_idx, p_data);
+	vgt_i2c_handle_aux_ch_write(vgt, port_idx, offset, p_data);
 
 	dp_aux_ch_trigger_interrupt_on_done(vgt, value, reg);
 	return true;
-}
-
-static inline void vgt_aux_register_assign(aux_reg_t *dst[AUX_REGISTER_NUM],
-					vgt_reg_t *reg_base)
-{
-	int i;
-	AUX_CH_REGISTERS reg_idx = AUX_CH_CTL;
-
-	for (i = 0; i < AUX_REGISTER_NUM; i ++) {
-		dst[reg_idx] = (aux_reg_t *)((char *)reg_base + (i << 2));
-		reg_idx ++;
-	}
-}
-
-void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs)
-{
-	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DPA_IDX],
-		(vgt_reg_t *)((char *)vregs + _REG_DPA_AUX_CH_CTL));
-
-	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DPB_IDX],
-		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPB_AUX_CH_CTL));
-
-	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DPC_IDX],
-		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPC_AUX_CH_CTL));
-
-	vgt_aux_register_assign(i2c_bus->aux_ch.aux_registers[VGT_DPD_IDX],
-		(vgt_reg_t *)((char *)vregs + _REG_PCH_DPD_AUX_CH_CTL));
 }
 
 static void vgt_dpy_stat_notify(struct vgt_device *vgt,
@@ -2760,12 +2695,9 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_DP_BUFTRANS, 0x28, F_DPY, 0, D_ALL, NULL, NULL},
 
-{_REG_PCH_DPB_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL,
-	dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
-{_REG_PCH_DPC_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL,
-	dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
-{_REG_PCH_DPD_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL,
-	dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
+{_REG_PCH_DPB_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL, NULL, dp_aux_ch_ctl_mmio_write},
+{_REG_PCH_DPC_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL, NULL, dp_aux_ch_ctl_mmio_write},
+{_REG_PCH_DPD_AUX_CH_CTL, 6*4, F_DPY, 0, D_ALL, NULL, dp_aux_ch_ctl_mmio_write},
 
 {_REG_PCH_ADPA, 4, F_DPY, 0, D_ALL, NULL, pch_adpa_mmio_write},
 {_REG_DP_B_CTL, 4, F_DPY, 0, D_SNB|D_IVB, NULL, dp_ctl_mmio_write},
@@ -2973,7 +2905,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIXCLK_GATE, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {0xF200C, 4, F_DPY, 0, D_SNB, NULL, NULL},
 
-{_REG_DPA_AUX_CH_CTL, 6*4, F_DPY, 0, D_HSW, dp_aux_ch_ctl_mmio_read, dp_aux_ch_ctl_mmio_write},
+{_REG_DPA_AUX_CH_CTL, 6*4, F_DPY, 0, D_HSW, NULL, dp_aux_ch_ctl_mmio_write},
 
 {_REG_DDI_BUF_CTL_A, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},
 {_REG_DDI_BUF_CTL_B, 4, F_DPY, 0, D_HSW, NULL, ddi_buf_ctl_mmio_write},

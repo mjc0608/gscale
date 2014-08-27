@@ -308,10 +308,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	}
 
 	if (vgt->vm_id != 0) {
-		/* initialize i2c states */
-		vgt_init_i2c_bus(&vgt->vgt_i2c_bus);
-		/* assign aux_ch vregs for aux_ch virtualization */
-		vgt_init_aux_ch_vregs(&vgt->vgt_i2c_bus, vgt->state.vReg);
+		vgt_init_i2c_edid(vgt);
 	}
 
 	*ptr_vgt = vgt;

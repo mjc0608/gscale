@@ -438,7 +438,6 @@ extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
 extern int vgt_hvm_enable(struct vgt_device *vgt);
 extern int vgt_pause_domain(struct vgt_device *vgt);
 extern void vgt_shutdown_domain(struct vgt_device *vgt);
-extern void vgt_init_aux_ch_vregs(vgt_i2c_bus_t *i2c_bus, vgt_reg_t *vregs);
 
 struct vgt_irq_virt_state;
 
@@ -587,7 +586,7 @@ struct sbi_registers {
 
 struct port_cache {
 	bool valid;
-	vgt_edid_data_t		*edid;	/* per display EDID information */
+	struct vgt_edid_data_t	*edid;	/* per display EDID information */
 	enum vgt_port		port_override;
 	enum vgt_port_type	type;
 };
@@ -595,7 +594,7 @@ struct port_cache {
 struct gt_port {
 	struct kobject  	kobj;
 
-	vgt_edid_data_t		*edid;	/* per display EDID information */
+	struct vgt_edid_data_t	*edid;	/* per display EDID information */
 	struct vgt_dpcd_data	*dpcd;	/* per display DPCD information */
 	enum vgt_port_type	type;
 	enum vgt_port		port_override;
@@ -613,7 +612,7 @@ struct vgt_device {
 	vgt_state_ring_t	rb[MAX_ENGINES];	/* ring buffer state */
 
 	struct gt_port		ports[I915_MAX_PORTS]; /* one port per PIPE */
-	vgt_i2c_bus_t		vgt_i2c_bus;	/* i2c bus state emulaton for reading EDID */
+	struct vgt_i2c_edid_t	vgt_i2c_edid;	/* i2c bus state emulaton for reading EDID */
 
 	uint64_t	aperture_base;
 	void		*aperture_base_va;
@@ -995,9 +994,19 @@ struct pgt_device {
 		(pdev && ((pipe) >= PIPE_A) && ((pipe) < I915_MAX_PIPES) &&	\
 		(__vreg(current_display_owner(pdev),				\
 			VGT_PIPECONF(pipe)) & _REGBIT_PIPE_ENABLE))
+#define dpy_is_valid_port(port)							\
+		(((port) >= PORT_A) && ((port) < I915_MAX_PORTS))
+
 #define dpy_has_monitor_on_port(vgt, port)					\
-		(vgt && (port >= PORT_A) && (port < I915_MAX_PORTS) &&		\
+		(vgt && dpy_is_valid_port(port) &&				\
 		vgt->ports[port].edid && vgt->ports[port].edid->data_valid)
+
+#define dpy_port_is_dp(vgt, port)						\
+		((vgt) && dpy_is_valid_port(port)				\
+		&& ((vgt->ports[port].type == VGT_DP_A) ||			\
+		    (vgt->ports[port].type == VGT_DP_B) ||			\
+		    (vgt->ports[port].type == VGT_DP_C) ||			\
+		    (vgt->ports[port].type == VGT_DP_D)))
 
 extern int prepare_for_display_switch(struct pgt_device *pdev);
 extern void do_vgt_fast_display_switch(struct pgt_device *pdev);
@@ -2393,7 +2402,7 @@ int vgt_hvm_vmem_init(struct vgt_device *vgt);
 void vgt_vmem_destroy(struct vgt_device *vgt);
 void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 struct vgt_device *vmid_2_vgt_device(int vmid);
-extern void vgt_print_edid(vgt_edid_data_t *edid);
+extern void vgt_print_edid(struct vgt_edid_data_t *edid);
 extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);
 int vgt_fb_notifier_call_chain(unsigned long val, void *data);
 void vgt_init_fb_notify(void);

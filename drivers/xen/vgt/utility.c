@@ -627,7 +627,7 @@ static void _hex_dump(const char *data, size_t size)
 	}
 }
 
-void vgt_print_edid(vgt_edid_data_t *edid)
+void vgt_print_edid(struct vgt_edid_data_t *edid)
 {
 	if (edid && edid->data_valid) {
 		_hex_dump(edid->edid_block, EDID_SIZE);

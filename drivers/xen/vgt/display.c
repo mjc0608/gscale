@@ -900,7 +900,7 @@ void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port)
 	}
 
 	if (port->edid == NULL) {
-		port->edid = kmalloc(sizeof(vgt_edid_data_t), GFP_ATOMIC);
+		port->edid = kmalloc(sizeof(struct vgt_edid_data_t), GFP_ATOMIC);
 	}
 	if (port->edid == NULL) {
 		vgt_err("Memory allocation fail for EDID block!\n");

@@ -304,7 +304,7 @@ static ssize_t vgt_port_edid_show(struct file *filp, struct kobject *kobj,
 				  size_t count)
 {
 	struct gt_port *port = kobj_to_port(kobj);
-	vgt_edid_data_t *edid;
+	struct vgt_edid_data_t *edid;
 
 	if (off >= EDID_SIZE) {
 		return 0;
@@ -350,7 +350,7 @@ vgt_port_edid_store(struct file* filp, struct kobject *kobj,
 	mutex_lock(&vgt_sysfs_lock);
 
 	if (port->cache.edid == NULL) {
-		port->cache.edid = kmalloc(sizeof(vgt_edid_data_t),
+		port->cache.edid = kmalloc(sizeof(struct vgt_edid_data_t),
 			      GFP_ATOMIC);
 	}
 
@@ -401,7 +401,7 @@ vgt_port_edid_text_store(struct kobject *kobj, struct kobj_attribute *attr,
 	mutex_lock(&vgt_sysfs_lock);
 
 	if (port->cache.edid == NULL) {
-		port->cache.edid = kmalloc(sizeof(vgt_edid_data_t),
+		port->cache.edid = kmalloc(sizeof(struct vgt_edid_data_t),
 			      GFP_ATOMIC);
 	}
 
