@@ -438,6 +438,7 @@ extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
 extern int vgt_hvm_enable(struct vgt_device *vgt);
 extern int vgt_pause_domain(struct vgt_device *vgt);
 extern void vgt_shutdown_domain(struct vgt_device *vgt);
+extern bool vgt_prepare_vbios_general_definition(struct vgt_device *vgt);
 
 struct vgt_irq_virt_state;
 

@@ -836,8 +836,18 @@ static bool vgt_hvm_opregion_resinit(struct vgt_device *vgt, uint32_t gpa)
 
 int vgt_hvm_opregion_init(struct vgt_device *vgt, uint32_t gpa)
 {
-	if (vgt_hvm_opregion_resinit(vgt, gpa))
+
+	if (vgt_hvm_opregion_resinit(vgt, gpa)) {
+
+		/* modify the vbios parameters for PORTs,
+		 * Let guest see full port capability.
+		 */
+		if (!propagate_monitor_to_guest && !is_current_display_owner(vgt)) {
+			vgt_prepare_vbios_general_definition(vgt);
+		}
+
 		return vgt_hvm_opregion_map(vgt, 1);
+	}
 
 	return false;
 }

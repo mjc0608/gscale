@@ -2199,6 +2199,21 @@ bool fpga_dbg_mmio_write(struct vgt_device *vgt, unsigned int reg,
 	return true;
 }
 
+static bool sfuse_strap_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc = default_mmio_read(vgt, offset, p_data, bytes);
+	/*
+	 * VM guest driver using _REG_SFUSE_STRAP to detect PORT_B/C/D,
+	 * for indirect mode, we provide full PORT B,C,D capability to VM
+	 */
+	if (!propagate_monitor_to_guest && !is_current_display_owner(vgt)) {
+		*(vgt_reg_t*)p_data |=  (_REGBIT_SFUSE_STRAP_B_PRESENTED
+			| _REGBIT_SFUSE_STRAP_C_PRESENTED | _REGBIT_SFUSE_STRAP_D_PRESENTED);
+	}
+	return rc;
+}
+
 /*
  * Track policies of all captured registers
  *
@@ -2898,7 +2913,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_HSW_VIDEO_DIP_CTL_C, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_HSW_VIDEO_DIP_CTL_EDP, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
-{_REG_SFUSE_STRAP, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_SFUSE_STRAP, 4, F_DPY, 0, D_HSW, sfuse_strap_mmio_read, NULL},
 {_REG_SBI_ADDR, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_SBI_DATA, 4, F_DPY, 0, D_HSW, sbi_mmio_data_read, NULL},
 {_REG_SBI_CTL_STAT, 4, F_DPY, 0, D_HSW, NULL, sbi_mmio_ctl_write},
