@@ -65,6 +65,7 @@ struct decode_info{
 #define OP_MI_TOPOLOGY_FILTER               0xD  /* IVB+ */
 #define OP_MI_SET_APPID                     0xE  /* IVB+ */
 #define OP_MI_RS_CONTEXT                    0xF  /* HSW+ */
+#define OP_MI_LOAD_SCAN_LINES_INCL          0x12 /* HSW+ */
 #define OP_MI_DISPLAY_FLIP                  0x14
 #define OP_MI_SEMAPHORE_MBOX                0x16
 #define OP_MI_SET_CONTEXT                   0x18
