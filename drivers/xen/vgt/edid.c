@@ -179,6 +179,7 @@ static bool vgt_gmbus0_mmio_write(struct vgt_device *vgt,
 	__vreg(vgt, _REG_PCH_GMBUS2) |= _GMBUS_HW_RDY | _GMBUS_HW_WAIT;
 
 	if (dpy_has_monitor_on_port(vgt, port) && !dpy_port_is_dp(vgt, port)) {
+		vgt->vgt_i2c_edid.port = port;
 		vgt->vgt_i2c_edid.edid_available = true;
 		__vreg(vgt, _REG_PCH_GMBUS2) &= ~_GMBUS_NAK;
 	} else {
