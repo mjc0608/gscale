@@ -490,7 +490,7 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	bitmap_zero(pdev->dpy_emul_request, VGT_MAX_VMS);
 
 	/* initialize ports */
-	memset(pdev->ports, 0, sizeof(struct gt_port) * VGT_PORT_MAX);
+	memset(pdev->ports, 0, sizeof(struct gt_port) * I915_MAX_PORTS);
 	for (i = 0; i < I915_MAX_PORTS; i ++) {
 		pdev->ports[i].type = VGT_PORT_MAX;
 		pdev->ports[i].cache.type = VGT_PORT_MAX;
