@@ -63,7 +63,7 @@ struct block_header{
 #define DEVTYPE_FLAG_NOT_HDMI 0x0800 /* BIT11 */
 
 enum efp_port_type{
-	NOTVALID = 0,
+	INVALID = 0,
 	EFP_HDMI_B = 1,
 	EFP_HDMI_C = 2,
 	EFP_HDMI_D = 3,
@@ -93,8 +93,8 @@ struct child_devices
 	u8 is_dvi_compatible:1;
 	u8 reservedbit:5;
 	/* end of compatibility byte */
-
-	u8 reserved3[8];
+	u8 aux_channel;
+	u8 reserved3[7];
 }__attribute__((packed));
 
 
