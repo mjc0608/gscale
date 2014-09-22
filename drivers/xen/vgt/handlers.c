@@ -3306,8 +3306,12 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 {
 	printk("post mmio hooks initialized\n");
 
-	if (pdev->enable_ppgtt) {
-		vgt_dbg(VGT_DBG_MEM,"Hook up PPGTT register handlers\n");
+	if (!pdev->enable_ppgtt)
+		return true;
+
+	vgt_dbg(VGT_DBG_MEM,"Hook up PPGTT register handlers\n");
+
+	if (IS_PREBDW(pdev)) {
 		/* trap PPGTT base register */
 		reg_update_handlers(pdev, _REG_RCS_PP_DIR_BASE_IVB, 4,
 				pp_dir_base_read, pp_dir_base_write);
@@ -3323,26 +3327,28 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 		reg_update_handlers(pdev, _REG_VCS_PP_DCLV, 4,
 				pp_dclv_read, pp_dclv_write);
 
-		/* XXX cache register? */
-		/* PPGTT enable register */
-		reg_update_handlers(pdev, _REG_RCS_GFX_MODE_IVB, 4,
-				ring_pp_mode_read, ring_pp_mode_write);
-		reg_update_handlers(pdev, _REG_BCS_BLT_MODE_IVB, 4,
-				ring_pp_mode_read, ring_pp_mode_write);
-		reg_update_handlers(pdev, _REG_VCS_MFX_MODE_IVB, 4,
-				ring_pp_mode_read, ring_pp_mode_write);
-
 		if (IS_HSW(pdev)) {
 			reg_update_handlers(pdev, _REG_VECS_PP_DIR_BASE, 4,
 					pp_dir_base_read,
 					pp_dir_base_write);
 			reg_update_handlers(pdev, _REG_VECS_PP_DCLV, 4,
 					pp_dclv_read, pp_dclv_write);
-			reg_update_handlers(pdev, _REG_VEBOX_MODE, 4,
-					ring_pp_mode_read,
-					ring_pp_mode_write);
 		}
 	}
+
+	/* XXX cache register? */
+	/* PPGTT enable register */
+	reg_update_handlers(pdev, _REG_RCS_GFX_MODE_IVB, 4,
+			ring_pp_mode_read, ring_pp_mode_write);
+	reg_update_handlers(pdev, _REG_BCS_BLT_MODE_IVB, 4,
+			ring_pp_mode_read, ring_pp_mode_write);
+	reg_update_handlers(pdev, _REG_VCS_MFX_MODE_IVB, 4,
+			ring_pp_mode_read, ring_pp_mode_write);
+
+	if (IS_HSW(pdev) || IS_BDWPLUS(pdev))
+		reg_update_handlers(pdev, _REG_VEBOX_MODE, 4,
+				ring_pp_mode_read,
+				ring_pp_mode_write);
 
 	return true;
 }
