@@ -698,6 +698,13 @@ static void vgt_handle_default_event_virt(struct vgt_irq_host_state *hstate,
 	vgt->stat.events[event]++;
 }
 
+static void vgt_handle_ring_empty_notify_virt(struct vgt_irq_host_state *hstate,
+       enum vgt_event_type event, struct vgt_device *vgt)
+{
+	vgt_check_pending_context_switch(vgt);
+	vgt_handle_default_event_virt(hstate, event, vgt);
+}
+
 static void vgt_handle_phase_in_virt(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event, struct vgt_device *vgt)
 {
@@ -1399,6 +1406,13 @@ static void vgt_init_events(
 	SET_V_HANDLER(hstate, DP_B_HOTPLUG, vgt_handle_port_hotplug_virt);
 	SET_V_HANDLER(hstate, DP_C_HOTPLUG, vgt_handle_port_hotplug_virt);
 	SET_V_HANDLER(hstate, DP_D_HOTPLUG, vgt_handle_port_hotplug_virt);
+
+	SET_V_HANDLER(hstate, RCS_MI_USER_INTERRUPT, vgt_handle_ring_empty_notify_virt);
+	SET_V_HANDLER(hstate, VCS_MI_USER_INTERRUPT, vgt_handle_ring_empty_notify_virt);
+	SET_V_HANDLER(hstate, BCS_MI_USER_INTERRUPT, vgt_handle_ring_empty_notify_virt);
+	SET_V_HANDLER(hstate, RCS_PIPE_CONTROL, vgt_handle_ring_empty_notify_virt);
+	SET_V_HANDLER(hstate, VCS_MI_FLUSH_DW, vgt_handle_ring_empty_notify_virt);
+	SET_V_HANDLER(hstate, VECS_MI_FLUSH_DW, vgt_handle_ring_empty_notify_virt);
 
 	/* for engine specific reset */
 	SET_POLICY_DOM0(hstate, RCS_WATCHDOG_EXCEEDED);
