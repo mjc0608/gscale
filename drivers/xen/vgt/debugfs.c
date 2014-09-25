@@ -555,6 +555,12 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 			P, reg, val, (enabled ? "enabled" : "disabled"));
 
 		if (enabled) {
+			reg = VGT_PIPESRC(pipe);
+			val = vgt_get_mmio_value(pdev, vgt, reg);
+			seq_printf(m, "\tPIPE_SRC_%c(0x%x): 0x%08x "
+					"(width : %d, height: %d)\n",
+				P, reg, val, ((val >> 16) & 0xfff) + 1,
+						((val & 0xfff) + 1));
 			reg = VGT_HTOTAL(pipe);
 			val = vgt_get_mmio_value(pdev, vgt, reg);
 			seq_printf(m, "\tPIPE_HTOTAL_%c(0x%x): 0x%08x (total: %d)\n",
