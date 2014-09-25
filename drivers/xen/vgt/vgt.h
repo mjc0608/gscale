@@ -968,6 +968,8 @@ struct pgt_device {
 	int dom0_irq_cpu;
 
 	struct hotplug_work hpd_work;
+
+	bool ctx_switch_pending;
 };
 
 /*

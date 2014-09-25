@@ -195,6 +195,64 @@ bool idle_render_engine(struct pgt_device *pdev, int id)
 	return true;
 }
 
+static bool vgt_ring_check_offset_passed(struct pgt_device *pdev, int ring_id,
+	u32 head, u32 tail, u32 offset)
+{
+	bool rc = true;
+	/*
+	 * Check if ring buffer is wrapped, otherwise there
+	 * are remaining instruction in ringbuffer, but no
+	 * interrupt anymore, so switch to polling mode.
+	 */
+	rc = (head > tail) ? false : true;
+
+	if (head > offset)
+		rc = (offset > tail) ? true : rc;
+	else
+		rc = (offset > tail) ? rc : false;
+
+	return rc;
+}
+
+static bool vgt_rings_need_idle_notification(struct pgt_device *pdev)
+{
+	int i;
+	u32 head, tail, offset;
+	struct cmd_general_info *tail_list;
+        struct vgt_device *vgt = current_render_owner(pdev);
+
+	for (i=0; i < pdev->max_engines; i++) {
+		if (pdev->ring_buffer[i].need_irq) {
+			head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, i)) & RB_HEAD_OFF_MASK;
+			tail_list = &vgt->rb[i].tail_list;
+			tail = tail_list->cmd[tail_list->head].tail;
+			if (head != tail) {
+				offset = pdev->ring_buffer[i].ip_offset;
+				if (!vgt_ring_check_offset_passed(pdev, i, head, tail, offset))
+					break;
+			}
+		}
+	}
+	/*
+	 * If all the rings has been checked, mean there are no more user
+	 * interrupt instructions remain in the ring buffer, so switch to
+	 * polling mode, otherwise return false and wait for next interrupt.
+	 */
+	return (i == pdev->max_engines) ? true : false;
+}
+
+void vgt_check_pending_context_switch(struct vgt_device *vgt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+
+	if (pdev->ctx_switch_pending) {
+		if (vgt_rings_need_idle_notification(pdev)) {
+			pdev->ctx_switch_pending = false;
+			vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+		}
+	}
+}
+
 bool idle_rendering_engines(struct pgt_device *pdev, int *id)
 {
 	int i;
@@ -1513,7 +1571,10 @@ bool vgt_do_render_sched(struct pgt_device *pdev)
 	vgt_schedule(pdev);
 
 	if (ctx_switch_requested(pdev)) {
-		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+		if ((!irq_based_ctx_switch) || vgt_rings_need_idle_notification(pdev))
+			vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+		else
+			pdev->ctx_switch_pending = true;
 	}
 
 	vgt_unlock_dev(pdev, cpu);
