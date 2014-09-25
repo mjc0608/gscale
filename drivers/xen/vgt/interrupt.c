@@ -424,11 +424,19 @@ extern int resend_irq_on_evtchn(unsigned int i915_irq);
 static void pend_dom0_virtual_interrupt(struct vgt_device *vgt)
 {
 	struct pgt_device *pdev = vgt->pdev;
+	int i915_irq = pdev->irq_hstate->i915_irq;
 
 	ASSERT(spin_is_locked(&pdev->lock));
 
+	/*
+	 * Some wired devices leave dirty IIR bits before system
+	 * booting. It will trigger unexpected interrupt injection
+	 * before VGT irq framework works.
+	 */
+	if (i915_irq == -1)
+		return;
+
 	if (unlikely(!vgt_track_nest)) {
-		int i915_irq = pdev->irq_hstate->i915_irq;
 		unsigned long flags;
 		/* resend irq may unmask events which requires irq disabled */
 		local_irq_save(flags);
@@ -1396,7 +1404,7 @@ int vgt_irq_init(struct pgt_device *pdev)
 	spin_lock_init(&pdev->irq_lock);
 
 	hstate->pdev = pdev;
-	//hstate.i915_irq = IRQ_INVALID;
+	hstate->i915_irq = -1;
 	//hstate.pirq = IRQ_INVALID;
 
 	/* common event initialization */
