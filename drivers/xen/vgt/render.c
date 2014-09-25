@@ -1488,14 +1488,11 @@ static void dump_regs_on_err(struct pgt_device *pdev)
 			VGT_MMIO_READ(pdev, regs[i]));
 }
 
-bool vgt_do_render_context_switch(struct pgt_device *pdev)
+bool vgt_do_render_sched(struct pgt_device *pdev)
 {
-	struct vgt_device *next, *prev;
 	int threshold = 500; /* print every 500 times */
-	int i;
-	cycles_t t0, t1, t2;
 	int cpu;
-	bool forcewake_got = false;
+	bool rc = true;
 
 	if (!(vgt_ctx_check(pdev) % threshold))
 		vgt_dbg(VGT_DBG_RENDER, "vGT: %lldth checks, %lld switches\n",
@@ -1515,6 +1512,23 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 
 	vgt_schedule(pdev);
 
+	if (ctx_switch_requested(pdev)) {
+		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+	}
+
+	vgt_unlock_dev(pdev, cpu);
+	return rc;
+}
+
+bool vgt_do_render_context_switch(struct pgt_device *pdev)
+{
+	int i = 0;
+	int cpu;
+	struct vgt_device *next, *prev;
+	cycles_t t0, t1, t2;
+	bool forcewake_got = false;
+
+	vgt_lock_dev(pdev, cpu);
 	if (!ctx_switch_requested(pdev))
 		goto out;
 

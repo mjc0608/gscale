@@ -370,7 +370,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 			vgt->vgt_id);
 		vgt->force_removal = 1;
 		pdev->next_sched_vgt = vgt_dom0;
-		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+		vgt_raise_request(pdev, VGT_REQUEST_SCHED);
 		wmb();
 	}
 

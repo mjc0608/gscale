@@ -111,8 +111,9 @@ static enum hrtimer_restart vgt_tbs_timer_fn(struct hrtimer *data)
 
 	ASSERT(pdev);
 
-	if (vgt_nr_in_runq(pdev) > 1)
-		vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+	if (vgt_nr_in_runq(pdev) > 1) {
+		vgt_raise_request(pdev, VGT_REQUEST_SCHED);
+	}
 	hrtimer_add_expires_ns(&hrtimer->timer, hrtimer->period);
 	return HRTIMER_RESTART;
 }

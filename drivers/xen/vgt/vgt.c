@@ -265,7 +265,7 @@ static int vgt_thread(void *priv)
 			else {
 				vgt_lock_dev(pdev, cpu);
 				pdev->next_sched_vgt = vgt_dom0;
-				vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+				vgt_raise_request(pdev, VGT_REQUEST_SCHED);
 				vgt_unlock_dev(pdev, cpu);
 			}
 		}
@@ -297,7 +297,23 @@ static int vgt_thread(void *priv)
 			vgt_unlock_dev(pdev, cpu);
 		}
 
-		/* Handle render context switch request */
+		/* Handle render engine scheduling */
+		if (vgt_ctx_switch &&
+		    test_and_clear_bit(VGT_REQUEST_SCHED,
+				(void *)&pdev->request)) {
+			if (!vgt_do_render_sched(pdev)) {
+				if (enable_reset) {
+					vgt_err("Hang in render sched, try to reset device.\n");
+
+					vgt_reset_device(pdev);
+				} else {
+					vgt_err("Hang in render sched, panic the system.\n");
+					ASSERT(0);
+				}
+			}
+		}
+
+		/* Handle render context switch */
 		if (vgt_ctx_switch &&
 		    test_and_clear_bit(VGT_REQUEST_CTX_SWITCH,
 				(void *)&pdev->request)) {

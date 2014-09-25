@@ -426,6 +426,7 @@ struct pgt_device;
 extern bool idle_rendering_engines(struct pgt_device *pdev, int *id);
 extern bool idle_render_engine(struct pgt_device *pdev, int id);
 extern bool vgt_do_render_context_switch(struct pgt_device *pdev);
+extern bool vgt_do_render_sched(struct pgt_device *pdev);
 extern void vgt_destroy(void);
 extern void vgt_destroy_debugfs(struct vgt_device *vgt);
 extern void vgt_release_debugfs(void);
@@ -1180,6 +1181,7 @@ static inline void reg_update_handlers(struct pgt_device *pdev,
 #define VGT_REQUEST_EMUL_DPY_EVENTS	3
 #define VGT_REQUEST_DPY_SWITCH	4	/* immediate reschedule(display switch) requested */
 #define VGT_REQUEST_DEVICE_RESET 5
+#define VGT_REQUEST_SCHED	6
 
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {
@@ -1896,7 +1898,7 @@ static inline void vgt_disable_ring(struct vgt_device *vgt, int ring_id)
 		ASSERT(spin_is_locked(&pdev->lock));
 		if (current_render_owner(pdev) == vgt) {
 			pdev->next_sched_vgt = vgt_dom0;
-			vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+			vgt_raise_request(pdev, VGT_REQUEST_SCHED);
 		} else
 			vgt_disable_render(vgt);
 	}
