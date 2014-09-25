@@ -247,6 +247,10 @@ struct vgt_rsvd_ring {
 	bool	stateless;
 	/* whether the engine requires context switch */
 	bool	need_switch;
+	/* whether the engine end with user interrupt instruction */
+	bool	need_irq;
+	/* memory offset of the user interrupt instruction */
+	u32	ip_offset;
 };
 
 #define _tail_reg_(ring_reg_off)	\

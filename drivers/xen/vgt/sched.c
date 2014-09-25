@@ -821,6 +821,8 @@ void vgt_submit_commands(struct vgt_device *vgt, int ring_id)
 	vgt_state_ring_t	*rs = &vgt->rb[ring_id];
 	int budget;
 	uint64_t submission_id;
+	bool need_irq = rs->tail_list.cmd[rs->tail_list.tail].flags & F_CMDS_ISSUE_IRQ;
+	unsigned long ip_offset = rs->tail_list.cmd[rs->tail_list.tail].ip_offset;
 
 	/*
 	 * No commands submision when context switch is in
@@ -859,6 +861,8 @@ void vgt_submit_commands(struct vgt_device *vgt, int ring_id)
 	 * old tail which must take real effect.
 	 */
 	apply_tail_list(vgt, ring_id, submission_id);
+	pdev->ring_buffer[ring_id].need_irq = need_irq;
+	pdev->ring_buffer[ring_id].ip_offset = ip_offset;
 	vgt->total_cmds += cmd_nr;
 	vgt->submitted_cmds += cmd_nr;
 }

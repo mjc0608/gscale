@@ -447,6 +447,9 @@ struct parser_exec_state{
 	   used when ret from 2nd level batch buffer */
 	gtt_addr_t saved_buf_addr_type;
 
+	/* indicate the command has user interrupt*/
+	bool cmd_issue_irq;
+
 	struct cmd_info* info;
 };
 
@@ -471,6 +474,9 @@ struct cmd_tail_info {
 	uint64_t request_id;
 	uint32_t tail;
 	uint32_t cmd_nr;
+	uint32_t ip_offset;
+
+#define F_CMDS_ISSUE_IRQ (1<<0)
 	uint32_t flags;
 };
 

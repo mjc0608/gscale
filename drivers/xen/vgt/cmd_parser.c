@@ -180,7 +180,7 @@ static int add_post_handle_entry(struct parser_exec_state *s,
 }
 
 static int add_tail_entry(struct parser_exec_state *s,
-	uint32_t tail, uint32_t cmd_nr, uint32_t flags)
+	uint32_t tail, uint32_t cmd_nr, uint32_t flags, uint32_t ip_offset)
 {
 	vgt_state_ring_t* rs = &s->vgt->rb[s->ring_id];
 	struct cmd_general_info *list = &rs->tail_list;
@@ -198,6 +198,7 @@ static int add_tail_entry(struct parser_exec_state *s,
 	entry->tail = tail;
 	entry->cmd_nr = cmd_nr;
 	entry->flags = flags;
+	entry->ip_offset = ip_offset;
 
 	list->tail = next;
 	return 0;
@@ -702,6 +703,14 @@ static int vgt_cmd_handler_pipe_control(struct parser_exec_state *s)
 	else if (cmd_val(s, 1) & (3 << 14))
 		reg_set_cmd_access(pdev, _REG_RCS_TIMESTAMP);
 
+	s->cmd_issue_irq = (cmd_val(s, 1) & PIPE_CONTROL_NOTIFY) ? true : false;
+
+	return 0;
+}
+
+static int vgt_cmd_handler_mi_user_interrupt(struct parser_exec_state *s)
+{
+	s->cmd_issue_irq = true;
 	return 0;
 }
 
@@ -1140,6 +1149,8 @@ static int vgt_cmd_handler_mi_flush_dw(struct parser_exec_state* s)
 	/* Check post-sync bit */
 	if ( (cmd_val(s,0) >> 14) & 0x3)
 		address_fixup(s, 1);
+	/* Check notify bit */
+	s->cmd_issue_irq = ( cmd_val(s,0) & (1 << 8)) ? true : false;
 
 	len = cmd_length(s);
 	for (i=2; i<len; i++)
@@ -1383,7 +1394,7 @@ static struct cmd_info cmd_info[] = {
 	{"MI_SET_PREDICATE", OP_MI_SET_PREDICATE, F_LEN_CONST, R_ALL, D_HSW_PLUS,
 		0, 1, NULL},
 
-	{"MI_USER_INTERRUPT", OP_MI_USER_INTERRUPT, F_LEN_CONST, R_ALL, D_ALL, 0, 1, NULL},
+	{"MI_USER_INTERRUPT", OP_MI_USER_INTERRUPT, F_LEN_CONST, R_ALL, D_ALL, 0, 1, vgt_cmd_handler_mi_user_interrupt},
 
 	{"MI_WAIT_FOR_EVENT", OP_MI_WAIT_FOR_EVENT, F_LEN_CONST | F_POST_HANDLE, R_RCS | R_BCS,
 		D_ALL, 0, 1, vgt_handle_mi_wait_for_event},
@@ -2162,6 +2173,8 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	int rc=0;
 	uint64_t cmd_nr = 0;
 	vgt_state_ring_t *rs = &vgt->rb[ring_id];
+	u32 cmd_flags = 0;
+	unsigned long ip_gma = 0;
 
 	/* ring base is page aligned */
 	ASSERT((base & (PAGE_SIZE-1)) == 0);
@@ -2182,7 +2195,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	s.request_id = rs->request_id;
 
 	if (bypass_scan_mask & (1 << ring_id)) {
-		add_tail_entry(&s, tail, 100, 0);
+		add_tail_entry(&s, tail, 100, 0, 0);
 		return 0;
 	}
 
@@ -2193,6 +2206,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 	klog_printk("ring buffer scan start on ring %d\n", ring_id);
 	vgt_dbg(VGT_DBG_CMD, "scan_start: start=%lx end=%lx\n", gma_head, gma_tail);
 	while(s.ip_gma != gma_tail){
+		s.cmd_issue_irq = false;
 		if (s.buf_type == RING_BUFFER_INSTRUCTION){
 			ASSERT((s.ip_gma >= base) && (s.ip_gma < gma_bottom));
 			if (gma_out_of_range(s.ip_gma, gma_head, gma_tail)){
@@ -2208,10 +2222,25 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 			vgt_err("cmd parser error\n");
 			break;
 		}
+
+		if (irq_based_ctx_switch &&
+			(s.buf_type == RING_BUFFER_INSTRUCTION)) {
+		/* record the status of irq instruction in ring buffer */
+			if (s.cmd_issue_irq) {
+				cmd_flags |= F_CMDS_ISSUE_IRQ;
+				ip_gma = s.ip_gma;
+			}
+		}
 	}
 
 	if (!rc) {
-		add_tail_entry(&s, tail, cmd_nr, 0);
+		/*
+		 * Set flag to indicate the command buffer is end with user interrupt,
+		 * and save the instruction's offset in ring buffer.
+		 */
+		if (cmd_flags & F_CMDS_ISSUE_IRQ)
+			ip_gma = ip_gma - base;
+		add_tail_entry(&s, tail, cmd_nr, cmd_flags, ip_gma);
 		rs->cmd_nr++;
 	}
 
