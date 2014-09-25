@@ -573,7 +573,6 @@ int vgt_initialize(struct pci_dev *dev)
 	if (create_vgt_instance(pdev, &vgt_dom0, vp) < 0)
 		goto err;
 
-	pdev->owner[VGT_OT_DISPLAY] = vgt_dom0;
 	vgt_dbg(VGT_DBG_GENERIC, "create dom0 instance succeeds\n");
 
 	//show_mode_settings(pdev);
@@ -588,9 +587,9 @@ int vgt_initialize(struct pci_dev *dev)
 	else
 		vgt_ctx_switch = 0;
 
+	current_foreground_vm(pdev) = vgt_dom0;
 	if (!hvm_display_owner) {
 		current_display_owner(pdev) = vgt_dom0;
-		current_foreground_vm(pdev) = vgt_dom0;
 	}
 
 	if (hvm_super_owner) {

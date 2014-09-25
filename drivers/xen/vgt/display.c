@@ -345,7 +345,8 @@ void vgt_hotplug_udev_notify_func(struct work_struct *work)
 
 void vgt_update_monitor_status(struct vgt_device *vgt)
 {
-	ASSERT(!is_current_display_owner(vgt));
+	if (is_current_display_owner(vgt))
+		return;
 
 	__vreg(vgt, _REG_SDEISR) &= ~(_REGBIT_DP_B_HOTPLUG |
 					_REGBIT_DP_C_HOTPLUG |
