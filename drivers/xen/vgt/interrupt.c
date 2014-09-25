@@ -260,10 +260,52 @@ u32 vgt_recalculate_ier(struct pgt_device *pdev, unsigned int reg)
 	return ier;
 }
 
+static enum vgt_irq_type irq_reg_to_info(struct pgt_device *pdev, vgt_reg_t reg)
+{
+	enum vgt_irq_type irq_type;
+
+	switch (reg) {
+	case _REG_GTIMR:
+	case _REG_GTIIR:
+	case _REG_GTIER:
+	case _REG_GTISR:
+	case _REG_RCS_IMR:
+	case _REG_BCS_IMR:
+	case _REG_VCS_IMR:
+	case _REG_VECS_IMR:
+		irq_type = IRQ_INFO_GT;
+		break;
+	case _REG_DEIMR:
+	case _REG_DEIIR:
+	case _REG_DEIER:
+	case _REG_DEISR:
+		irq_type = IRQ_INFO_DPY;
+		break;
+	case _REG_SDEIMR:
+	case _REG_SDEIIR:
+	case _REG_SDEIER:
+	case _REG_SDEISR:
+		irq_type = IRQ_INFO_PCH;
+		break;
+	case _REG_PMIMR:
+	case _REG_PMIIR:
+	case _REG_PMIER:
+	case _REG_PMISR:
+		irq_type = IRQ_INFO_PM;
+		break;
+	default:
+		irq_type = IRQ_INFO_MAX;
+		break;
+	}
+	return irq_type;
+}
+
 void recalculate_and_update_imr(struct pgt_device *pdev, vgt_reg_t reg)
 {
 	uint32_t new_imr;
 	unsigned long flags;
+	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
+	enum vgt_irq_type irq_type;
 
 	new_imr = vgt_recalculate_mask_bits(pdev, reg);
 	/*
@@ -272,6 +314,15 @@ void recalculate_and_update_imr(struct pgt_device *pdev, vgt_reg_t reg)
 	 * device specific irq info. So avoid the complexity here
 	 */
 	vgt_get_irq_lock(pdev, flags);
+
+	/*
+	 * unmask the default bits and update imr
+	 */
+	if (irq_based_ctx_switch) {
+		irq_type = irq_reg_to_info(pdev, reg);
+		ASSERT(irq_type != IRQ_INFO_MAX);
+		new_imr &= ~(hstate->info[irq_type]->default_enabled_events);
+	}
 
 	VGT_MMIO_WRITE(pdev, reg, new_imr);
 	VGT_POST_READ(pdev, reg);
@@ -318,6 +369,8 @@ void recalculate_and_update_ier(struct pgt_device *pdev, vgt_reg_t reg)
 {
 	uint32_t new_ier;
 	unsigned long flags;
+	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
+	enum vgt_irq_type irq_type;
 
 	new_ier = vgt_recalculate_ier(pdev, reg);
 
@@ -329,6 +382,15 @@ void recalculate_and_update_ier(struct pgt_device *pdev, vgt_reg_t reg)
 	 * device specific irq info. So avoid the complexity here
 	 */
 	vgt_get_irq_lock(pdev, flags);
+
+	/*
+	 * enable the default bits and update ier
+	 */
+	if (irq_based_ctx_switch) {
+		irq_type = irq_reg_to_info(pdev, reg);
+		ASSERT(irq_type != IRQ_INFO_MAX);
+		new_ier |= hstate->info[irq_type]->default_enabled_events;
+	}
 
 	VGT_MMIO_WRITE(pdev, reg, new_ier);
 	VGT_POST_READ(pdev, reg);
@@ -982,6 +1044,10 @@ static void vgt_base_init_irq(
 		s->info[i]->bit_to_event[b] = e;\
 	} while (0);
 
+#define SET_DEFAULT_ENABLED_EVENTS(s, e, i)			      \
+	set_bit(s->events[e].bit, &(s->info[i]->default_enabled_events));\
+
+
 	hstate->pipe_mask = REGBIT_INTERRUPT_PIPE_MASK;
 
 	hstate->info[IRQ_INFO_GT] = &vgt_base_gt_info;
@@ -1049,6 +1115,16 @@ static void vgt_base_init_irq(
 	SET_BIT_INFO(hstate, 25, AUX_CHENNEL_B, IRQ_INFO_PCH);
 	SET_BIT_INFO(hstate, 26, AUX_CHENNEL_C, IRQ_INFO_PCH);
 	SET_BIT_INFO(hstate, 27, AUX_CHENNEL_D, IRQ_INFO_PCH);
+
+	SET_DEFAULT_ENABLED_EVENTS(hstate, RCS_MI_USER_INTERRUPT, IRQ_INFO_GT);
+	SET_DEFAULT_ENABLED_EVENTS(hstate, RCS_PIPE_CONTROL, IRQ_INFO_GT);
+	SET_DEFAULT_ENABLED_EVENTS(hstate, VCS_MI_USER_INTERRUPT, IRQ_INFO_GT);
+	SET_DEFAULT_ENABLED_EVENTS(hstate, VCS_MI_FLUSH_DW, IRQ_INFO_GT);
+	SET_DEFAULT_ENABLED_EVENTS(hstate, BCS_MI_USER_INTERRUPT, IRQ_INFO_GT);
+
+	if (IS_HSW(pdev))
+		SET_DEFAULT_ENABLED_EVENTS(hstate, VECS_MI_FLUSH_DW, IRQ_INFO_PM);
+
 }
 
 struct vgt_irq_ops vgt_base_irq_ops = {

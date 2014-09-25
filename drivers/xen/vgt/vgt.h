@@ -82,6 +82,7 @@ extern bool enable_panel_fitting;
 extern bool enable_reset;
 extern bool vgt_lock_irq;
 extern bool propagate_monitor_to_guest;
+extern bool irq_based_ctx_switch;
 
 enum vgt_event_type {
 	// GT
@@ -1997,6 +1998,7 @@ struct vgt_irq_info {
 	int reg_base;
 	enum vgt_event_type bit_to_event[VGT_IRQ_BITWIDTH];
 	unsigned long warned;
+	unsigned long default_enabled_events;
 };
 
 #define	EVENT_FW_ALL 0	/* event forwarded to all instances */

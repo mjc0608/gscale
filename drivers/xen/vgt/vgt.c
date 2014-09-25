@@ -91,6 +91,10 @@ bool propagate_monitor_to_guest = true;
 module_param_named(propagate_monitor_to_guest, propagate_monitor_to_guest, bool, 0600);
 MODULE_PARM_DESC(propagate_monitor_to_guest, "Propagate monitor information to guest by XenGT, other than dom0 services to do so");
 
+bool irq_based_ctx_switch = true;
+module_param_named(irq_based_ctx_switch, irq_based_ctx_switch, bool, 0600);
+MODULE_PARM_DESC(irq_based_ctx_switch, "Use user interrupt based context switch (default: true)");
+
 /*
  * FIXME: now video ring switch has weird issue. The cmd
  * parser may enter endless loop even when head/tail is
