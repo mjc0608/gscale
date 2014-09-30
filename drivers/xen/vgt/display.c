@@ -414,8 +414,20 @@ enum vgt_pipe get_pipe(unsigned int reg, uint32_t wr_data)
 
 static void vgt_update_irq_reg(struct vgt_device *vgt)
 {
-	recalculate_and_update_ier(vgt->pdev, _REG_DEIER);
-	recalculate_and_update_imr(vgt->pdev, _REG_DEIMR);
+	if (IS_PREBDW(vgt->pdev)) {
+		recalculate_and_update_ier(vgt->pdev, _REG_DEIER);
+		recalculate_and_update_imr(vgt->pdev, _REG_DEIMR);
+	} else {
+		recalculate_and_update_ier(vgt->pdev, _REG_DE_PIPE_IER(PIPE_A));
+		recalculate_and_update_ier(vgt->pdev, _REG_DE_PIPE_IER(PIPE_B));
+		recalculate_and_update_ier(vgt->pdev, _REG_DE_PIPE_IER(PIPE_C));
+
+		recalculate_and_update_imr(vgt->pdev, _REG_DE_PIPE_IMR(PIPE_A));
+		recalculate_and_update_imr(vgt->pdev, _REG_DE_PIPE_IMR(PIPE_B));
+		recalculate_and_update_imr(vgt->pdev, _REG_DE_PIPE_IMR(PIPE_C));
+	}
+
+	return;
 }
 
 bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new_data, uint32_t old_data)
