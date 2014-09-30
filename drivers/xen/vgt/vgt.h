@@ -2511,6 +2511,7 @@ extern void i915_handle_error(struct drm_device *dev, bool wedged,
 extern int i915_wait_error_work_complete(struct drm_device *dev);
 
 int vgt_reset_device(struct pgt_device *pgt);
+void reset_cached_interrupt_registers(struct pgt_device *pdev);
 
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp);
 void vgt_release_instance(struct vgt_device *vgt);

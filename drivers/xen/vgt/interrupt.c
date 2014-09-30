@@ -169,6 +169,51 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[EVENT_RESERVED] = "RESERVED EVENTS!!!",
 };
 
+void reset_cached_interrupt_registers(struct pgt_device *pdev)
+{
+	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
+	struct vgt_irq_info *info;
+	u32 reg_base, ier, imr;
+	int i;
+
+	for (i = 0; i < IRQ_INFO_MAX; i++) {
+		info = hstate->info[i];
+		if (!info)
+			continue;
+
+		reg_base = hstate->info[i]->reg_base;
+
+		imr = regbase_to_imr(reg_base);
+		ier = regbase_to_ier(reg_base);
+
+		__sreg(vgt_dom0, imr) = VGT_MMIO_READ(pdev, imr);
+		__sreg(vgt_dom0, ier) = VGT_MMIO_READ(pdev, ier);
+	}
+
+	for (i = 0; i < pdev->max_engines; i++) {
+		imr = pdev->ring_mmio_base[i] - 0x30 + 0xa8;
+		__sreg(vgt_dom0, imr) = VGT_MMIO_READ(pdev, imr);
+	}
+}
+
+static inline void vgt_write_cached_interrupt_register(struct pgt_device *pdev,
+		vgt_reg_t reg, u32 v)
+{
+	unsigned long flags;
+
+	if (__sreg(vgt_dom0, reg) == v)
+		return;
+
+	__sreg(vgt_dom0, reg) = v;
+
+	vgt_get_irq_lock(pdev, flags);
+
+	VGT_MMIO_WRITE(pdev, reg, v);
+	VGT_POST_READ(pdev, reg);
+
+	vgt_put_irq_lock(pdev, flags);
+}
+
 /* we need to translate interrupts that is pipe related.
 * for DE IMR or DE IER, bit 0~4 is interrupts for Pipe A, bit 5~9 is interrupts for Pipe B, bit 10~14 is interrupts
 * for pipe C. we can move the interrupts to the right bits when translating interrupts
@@ -311,19 +356,9 @@ static enum vgt_irq_type irq_reg_to_info(struct pgt_device *pdev, vgt_reg_t reg)
 
 void recalculate_and_update_imr(struct pgt_device *pdev, vgt_reg_t reg)
 {
-	uint32_t new_imr;
-	unsigned long flags;
-	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
-	enum vgt_irq_type irq_type;
+	u32 new_imr;
 
 	new_imr = vgt_recalculate_mask_bits(pdev, reg);
-	/*
-	 * may optimize by caching the old imr, and then only update
-	 * pReg when AND-ed value changes. but that requires link to
-	 * device specific irq info. So avoid the complexity here
-	 */
-	vgt_get_irq_lock(pdev, flags);
-
 	/*
 	 * unmask the default bits and update imr
 	 */
@@ -333,10 +368,7 @@ void recalculate_and_update_imr(struct pgt_device *pdev, vgt_reg_t reg)
 		new_imr &= ~(hstate->info[irq_type]->default_enabled_events);
 	}
 
-	VGT_MMIO_WRITE(pdev, reg, new_imr);
-	VGT_POST_READ(pdev, reg);
-
-	vgt_put_irq_lock(pdev, flags);
+	vgt_write_cached_interrupt_register(pdev, reg, new_imr);
 }
 
 static inline struct vgt_irq_info *regbase_to_irq_info(struct pgt_device *pdev,
@@ -391,21 +423,9 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 
 void recalculate_and_update_ier(struct pgt_device *pdev, vgt_reg_t reg)
 {
-	uint32_t new_ier;
-	unsigned long flags;
-	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
-	enum vgt_irq_type irq_type;
+	u32 new_ier;
 
 	new_ier = vgt_recalculate_ier(pdev, reg);
-
-	if (device_is_reseting(pdev) && reg == _REG_DEIER)
-		new_ier &= ~_REGBIT_MASTER_INTERRUPT;
-	/*
-	 * may optimize by caching the old ier, and then only update
-	 * pReg when OR-ed value changes. but that requires link to
-	 * device specific irq info. So avoid the complexity here
-	 */
-	vgt_get_irq_lock(pdev, flags);
 
 	/*
 	 * enable the default bits and update ier
@@ -416,10 +436,17 @@ void recalculate_and_update_ier(struct pgt_device *pdev, vgt_reg_t reg)
 		new_ier |= hstate->info[irq_type]->default_enabled_events;
 	}
 
-	VGT_MMIO_WRITE(pdev, reg, new_ier);
-	VGT_POST_READ(pdev, reg);
+	if (device_is_reseting(pdev)) {
+		if (IS_BDWPLUS(pdev)) {
+			if (reg == _REG_GEN8_MASTER_IRQ)
+				new_ier &= ~_REGBIT_GEN8_MASTER_IRQ_CONTROL;
+		} else {
+			if (reg == _REG_DEIER)
+				new_ier &= ~_REGBIT_MASTER_INTERRUPT;
+		}
+	}
 
-	vgt_put_irq_lock(pdev, flags);
+	vgt_write_cached_interrupt_register(pdev, reg, new_ier);
 }
 
 bool vgt_reg_master_irq_handler(struct vgt_device *vgt,

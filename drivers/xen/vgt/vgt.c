@@ -669,6 +669,8 @@ static int vgt_initialize(struct pci_dev *dev)
 	if (create_vgt_instance(pdev, &vgt_dom0, vp) < 0)
 		goto err;
 
+	reset_cached_interrupt_registers(pdev);
+
 	vgt_dbg(VGT_DBG_GENERIC, "create dom0 instance succeeds\n");
 
 	//show_mode_settings(pdev);
@@ -1071,6 +1073,8 @@ int vgt_reset_device(struct pgt_device *pdev)
 
 	spin_lock_irqsave(&pdev->lock, flags);
 	vgt_get_irq_lock(pdev, flags);
+
+	reset_cached_interrupt_registers(pdev);
 
 	ier = vgt_recalculate_ier(pdev, _REG_DEIER);
 	VGT_MMIO_WRITE(pdev, _REG_DEIER, ier);
