@@ -699,6 +699,13 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 
 	intel_uncore_init(dev);
 
+#ifdef DRM_I915_VGT_SUPPORT
+	i915_check_vgt(dev_priv);
+
+	if (USES_VGT(dev))
+		i915.enable_fbc = 0;
+#endif
+
 	ret = i915_gem_gtt_init(dev);
 	if (ret)
 		goto out_regs;
@@ -775,13 +782,6 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 		ret = -ENOMEM;
 		goto out_freewq;
 	}
-
-#ifdef DRM_I915_VGT_SUPPORT
-	i915_check_vgt(dev_priv);
-
-	if (USES_VGT(dev))
-		i915.enable_fbc = 0;
-#endif
 
 	intel_irq_init(dev_priv);
 	intel_uncore_sanitize(dev);
