@@ -495,7 +495,7 @@ mi_set_context(struct intel_engine_cs *ring,
 	}
 
 	/* These flags are for resource streamer on HSW+ */
-	if (!IS_HASWELL(ring->dev) && INTEL_INFO(ring->dev)->gen < 8)
+	if ((!IS_HASWELL(ring->dev) || USES_VGT(ring->dev)) && INTEL_INFO(ring->dev)->gen < 8)
 		flags |= (MI_SAVE_EXT_STATE_EN | MI_RESTORE_EXT_STATE_EN);
 
 
