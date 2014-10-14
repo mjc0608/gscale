@@ -303,7 +303,10 @@ static int sanitize_enable_ppgtt(struct drm_device *dev, int enable_ppgtt)
 	has_full_ppgtt = INTEL_INFO(dev)->gen >= 7;
 	if (IS_GEN8(dev))
 		has_full_ppgtt = false; /* XXX why? */
-
+#ifdef DRM_I915_VGT_SUPPORT
+	if (USES_VGT(dev))
+		has_full_ppgtt = false;
+#endif
 	/*
 	 * We don't allow disabling PPGTT for gen9+ as it's a requirement for
 	 * execlists, the sole mechanism available to submit work.
