@@ -978,6 +978,17 @@ static int hsw_mm_switch(struct i915_hw_ppgtt *ppgtt,
 {
 	int ret;
 
+#ifdef DRM_I915_VGT_SUPPORT
+	if (USES_VGT(ring->dev)) {
+		struct drm_i915_private *dev_priv = ring->dev->dev_private;
+
+		I915_WRITE(RING_PP_DIR_DCLV(ring), PP_DIR_DCLV_2G);
+		I915_WRITE(RING_PP_DIR_BASE(ring), get_pd_offset(ppgtt));
+
+		return 0;
+	}
+#endif
+
 	/* NB: TLBs must be flushed and invalidated before a switch */
 	ret = ring->flush(ring, I915_GEM_GPU_DOMAINS, I915_GEM_GPU_DOMAINS);
 	if (ret)
