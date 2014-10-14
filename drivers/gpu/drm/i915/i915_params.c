@@ -52,6 +52,7 @@ struct i915_params i915 __read_mostly = {
 	.disable_vtd_wa = 0,
 	.use_mmio_flip = 0,
 	.mmio_debug = 0,
+	.enable_vgt = 0,
 };
 
 module_param_named(modeset, i915.modeset, int, 0400);

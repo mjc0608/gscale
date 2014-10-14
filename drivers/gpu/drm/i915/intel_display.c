@@ -11643,7 +11643,7 @@ static int intel_crtc_set_config(struct drm_mode_set *set)
 	}
 
 #ifdef DRM_I915_VGT_SUPPORT
-		if (dev_priv->in_xen_vgt == true) {
+		if (USES_VGT(dev)) {
 			/*
 			 * Tell VGT that we have a valid surface to show
 			 * after modesetting. We doesn't distinguish DOM0 and

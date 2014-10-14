@@ -630,7 +630,7 @@ void assert_force_wake_inactive(struct drm_i915_private *dev_priv)
 
 /* We give fast paths for the really cool registers */
 #define NEEDS_FORCE_WAKE(dev_priv, reg) \
-	 ((!(dev_priv)->in_xen_vgt) && (reg) < 0x40000 && (reg) != FORCEWAKE)
+	 ((!USES_VGT((dev_priv)->dev)) && (reg) < 0x40000 && (reg) != FORCEWAKE)
 
 #define REG_RANGE(reg, start, end) ((reg) >= (start) && (reg) < (end))
 
@@ -744,7 +744,7 @@ hsw_unclaimed_reg_detect(struct drm_i915_private *dev_priv)
 	unsigned long irqflags; \
 	u##x val = 0; \
 	assert_device_not_suspended(dev_priv); \
-	if (dev_priv->in_xen_vgt) {     \
+	if (USES_VGT(dev_priv->dev)) {     \
 		spin_lock_irqsave(&dev_priv->uncore.lock, irqflags); \
 		val = __raw_i915_read##x(dev_priv, reg); \
 		spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags); \
@@ -912,7 +912,7 @@ __gen4_read(64)
 	unsigned long irqflags; \
 	trace_i915_reg_rw(true, reg, val, sizeof(val), trace); \
 	assert_device_not_suspended(dev_priv); \
-	if (dev_priv->in_xen_vgt) { \
+	if (USES_VGT(dev_priv->dev)) { \
 		spin_lock_irqsave(&dev_priv->uncore.lock, irqflags); \
 		__raw_i915_write##x(dev_priv, reg, val); \
 		spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags); \

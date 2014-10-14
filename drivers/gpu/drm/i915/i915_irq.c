@@ -3157,7 +3157,7 @@ static void ironlake_irq_reset(struct drm_device *dev)
 #ifdef DRM_I915_VGT_SUPPORT
 	/* a hacky hook to vGT driver */
 	printk("vGT: setup vGT irq hook in %s\n", __FUNCTION__);
-	if (dev_priv->in_xen_vgt)
+	if (USES_VGT(dev))
 		vgt_install_irq(dev->pdev);
 #endif
 }
@@ -3357,7 +3357,7 @@ static int ironlake_irq_postinstall(struct drm_device *dev)
 		 * Do not enable ERR_INT for VGT temporarily,
 		 * as VGT doesn't handle this.
 		 */
-		if (dev_priv->in_xen_vgt)
+		if (USES_VGT(dev))
 			extra_mask &= ~DE_ERR_INT_IVB;
 	} else {
 		display_mask = (DE_MASTER_IRQ_CONTROL | DE_GSE | DE_PCH_EVENT |

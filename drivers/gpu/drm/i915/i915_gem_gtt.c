@@ -134,7 +134,7 @@ void i915_check_vgt(struct drm_i915_private *dev_priv)
 			I915_READ16(vgt_info_off(version_minor));
 
 	if (version == VGT_IF_VERSION)
-		dev_priv->in_xen_vgt = true;
+		i915.enable_vgt = 1;
 }
 
 static int sanitize_enable_ppgtt(struct drm_device *dev, int enable_ppgtt);
@@ -295,7 +295,7 @@ static int sanitize_enable_ppgtt(struct drm_device *dev, int enable_ppgtt)
 	bool has_full_ppgtt;
 	/* Disable ppgtt on SNB since it isn't supported by vgt on SNB */
 	struct drm_i915_private *dev_priv = dev->dev_private;
-	if (INTEL_INFO(dev)->gen == 6 && dev_priv->in_xen_vgt)
+	if (INTEL_INFO(dev)->gen == 6 && USES_VGT(dev))
 		return false;
 
 
@@ -1963,7 +1963,7 @@ static int i915_gem_setup_global_gtt(struct drm_device *dev,
 	/*
 	 * Do ballooning before touching GEM gtt space.
 	 */
-	if (dev_priv->in_xen_vgt)
+	if (USES_VGT(dev))
 		ret = i915_balloon(dev_priv);
 #endif
 

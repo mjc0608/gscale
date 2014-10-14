@@ -1795,8 +1795,6 @@ struct drm_i915_private {
 		void (*stop_ring)(struct intel_engine_cs *ring);
 	} gt;
 
-	bool in_xen_vgt;
-
 	/*
 	 * NOTE: This is the dri1/ums dungeon, don't add stuff here. Your patch
 	 * will be rejected. Instead look for a better place.
@@ -2232,6 +2230,7 @@ struct drm_i915_cmd_table {
 				 __I915__(dev)->ellc_size)
 #define I915_NEED_GFX_HWS(dev)	(INTEL_INFO(dev)->need_gfx_hws)
 
+#define USES_VGT(dev)		(i915.enable_vgt)
 #define HAS_HW_CONTEXTS(dev)	(INTEL_INFO(dev)->gen >= 6)
 #define HAS_LOGICAL_RING_CONTEXTS(dev)	(INTEL_INFO(dev)->gen >= 8)
 #define USES_PPGTT(dev)		(i915.enable_ppgtt)
@@ -2341,6 +2340,7 @@ struct i915_params {
 	bool disable_vtd_wa;
 	int use_mmio_flip;
 	bool mmio_debug;
+	int enable_vgt;
 };
 extern struct i915_params i915 __read_mostly;
 
