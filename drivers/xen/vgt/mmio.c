@@ -1107,6 +1107,9 @@ bool vgt_initial_mmio_setup (struct pgt_device *pdev)
 
 	vgt_dpy_init_modes(pdev->initial_mmio_state);
 
+	pdev->initial_mmio_state[REG_INDEX(_REG_WRPLL_CTL1)] &= ~(1 << 31);
+	pdev->initial_mmio_state[REG_INDEX(_REG_WRPLL_CTL2)] &= ~(1 << 31);
+
 	return true;
 }
 
