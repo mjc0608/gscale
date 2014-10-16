@@ -450,6 +450,45 @@ static bool vgt_set_device_type(struct pgt_device *pdev)
 	return false;
 }
 
+static bool vgt_initialize_device_info(struct pgt_device *pdev)
+{
+	struct vgt_device_info *info = &pdev->device_info;
+
+	if (!vgt_set_device_type(pdev))
+		return false;
+
+	if (!IS_HSW(pdev)) {
+		vgt_err("Unsupported gen_dev_type(%s)!\n",
+			IS_IVB(pdev) ?
+			"IVB" : "SNB(or unknown GEN types)");
+		return false;
+	}
+
+	info->gen = MKGEN(7, 5, 0);
+	info->max_gtt_gm_sz = (1UL << 31);	/* 2G */
+	/*
+	 * The layout of BAR0 in PreBDW:
+	 * |< - MMIO 2MB ->|<- MAX GTT 2MB ->|
+	 *
+	 * GTT offset in BAR0 starts from 2MB to 4MB
+	 */
+	info->gtt_start_offset = (1UL << 21);
+	info->max_gtt_size = (1UL << 22);
+	info->gtt_entry_size = 4;
+	info->gtt_entry_size_shift = 2;
+
+	printk("GEN device info:\n");
+	printk("	major: %u minor: %u rev: %u\n", GEN_MAJOR(info->gen),
+			GEN_MINOR(info->gen), GEN_REV(info->gen));
+	printk("	max_gtt_gm_sz: %llx\n", info->max_gtt_gm_sz);
+	printk("	gtt_start_offset: %x\n", info->gtt_start_offset);
+	printk("	max_gtt_size: %x\n", info->max_gtt_size);
+	printk("	gtt_size_entry: %x\n", info->gtt_entry_size);
+	printk("	gtt_entry_size_shift: %x.\n", info->gtt_entry_size_shift);
+
+	return true;
+}
+
 static bool vgt_initialize_platform(struct pgt_device *pdev)
 {
 	/* check PPGTT enabling. */
@@ -502,13 +541,8 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	pdev->pdev = dev;
 	pdev->pbus = dev->bus;
 
-	if (!vgt_set_device_type(pdev))
-		return false;
-
-	if (!IS_HSW(pdev)) {
-		vgt_err("Unsupported gen_dev_type(%s)!\n",
-			IS_IVB(pdev) ?
-			"IVB" : "SNB(or unknown GEN types)");
+	if (!vgt_initialize_device_info(pdev)) {
+		vgt_err("failed to initalize device info.\n");
 		return false;
 	}
 

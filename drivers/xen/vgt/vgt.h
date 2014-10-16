@@ -395,32 +395,6 @@ enum vgt_ring_id {
 
 extern enum vgt_pipe surf_used_pipe;
 
-struct vgt_intel_device_info {
-	u8 gen;
-	u8 pch;
-	u8 is_mobile:1;
-	u8 is_i85x:1;
-	u8 is_i915g:1;
-	u8 is_i945gm:1;
-	u8 is_g33:1;
-	u8 need_gfx_hws:1;
-	u8 is_g4x:1;
-	u8 is_pineview:1;
-	u8 is_broadwater:1;
-	u8 is_crestline:1;
-	u8 is_ivybridge:1;
-	u8 is_haswell:1;
-	u8 has_fbc:1;
-	u8 has_pipe_cxsr:1;
-	u8 has_hotplug:1;
-	u8 cursor_needs_physical:1;
-	u8 has_overlay:1;
-	u8 overlay_needs_physical:1;
-	u8 supports_tv:1;
-	u8 has_bsd_ring:1;
-	u8 has_blt_ring:1;
-};
-
 struct pgt_device;
 
 extern bool idle_rendering_engines(struct pgt_device *pdev, int *id);
@@ -862,9 +836,28 @@ enum {
 #define device_is_reseting(pdev) \
 	test_bit(DEVICE_RESET_INPROGRESS, &pdev->device_reset_flags)
 
+#define MKGEN(major, minor, rev) \
+	((major << 16) | (minor << 8) | (rev))
+
+#define GEN_MAJOR(gen) ((gen >> 16) & 0xff)
+#define GEN_MINOR(gen) ((gen >> 8) & 0xff)
+#define GEN_REV(gen) ((gen) & 0xff)
+
+/* Describe the limitation of HW.*/
+struct vgt_device_info {
+	u32 gen;
+	u64 max_gtt_gm_sz;
+	u32 gtt_start_offset;
+	u32 max_gtt_size;
+	u32 gtt_entry_size;
+	u32 gtt_entry_size_shift;
+};
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list; /* list node for 'pgt_devices' */
+
+	struct vgt_device_info device_info;
 
 	struct pci_bus *pbus;	/* parent bus of the device */
 	struct pci_dev *pdev;	/* the gfx device bound to */
