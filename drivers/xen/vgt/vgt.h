@@ -266,7 +266,10 @@ struct vgt_rsvd_ring {
 #define VGT_MAX_VMS			4
 #define VGT_RSVD_APERTURE_SZ		(8*SIZE_1MB)	/* reserve 8MB for vGT itself */
 
-#define VGT_MAX_GM_SIZE			(2*SIZE_1MB*SIZE_1KB)
+/*
+ * The maximum GM size supported by VGT GM resource allocator.
+ */
+#define VGT_MAX_GM_SIZE			(1UL << 32)
 #define VGT_GM_BITMAP_BITS		(VGT_MAX_GM_SIZE/SIZE_1MB)
 #define VGT_MAX_NUM_FENCES		16
 #define VGT_FENCE_BITMAP_BITS	VGT_MAX_NUM_FENCES

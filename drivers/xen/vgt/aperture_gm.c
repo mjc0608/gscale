@@ -195,10 +195,12 @@ ssize_t get_avl_vm_aperture_gm_and_fence(struct pgt_device *pdev, char *buf,
 int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp)
 {
 	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_device_info *info = &pdev->device_info;
+
 	unsigned long *gm_bitmap = pdev->gm_bitmap;
 	unsigned long *fence_bitmap = pdev->fence_bitmap;
 	unsigned long guard = hidden_gm_base(vgt->pdev)/SIZE_1MB;
-	unsigned long gm_bitmap_total_bits = VGT_GM_BITMAP_BITS;
+	unsigned long gm_bitmap_total_bits = info->max_gtt_gm_sz >> 20;
 	unsigned long aperture_search_start = 0;
 	unsigned long visable_gm_start, hidden_gm_start = guard;
 	unsigned long fence_base;
@@ -307,6 +309,7 @@ void free_vm_rsvd_aperture(struct vgt_device *vgt)
 
 void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev)
 {
+	struct vgt_device_info *info = &pdev->device_info;
 	unsigned long *gm_bitmap = pdev->gm_bitmap;
 
 	vgt_info("total aperture: 0x%x bytes, total GM space: 0x%llx bytes\n",
@@ -314,12 +317,13 @@ void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev)
 
 	ASSERT(phys_aperture_sz(pdev) % SIZE_1MB == 0);
 	ASSERT(gm_sz(pdev) % SIZE_1MB == 0);
-	ASSERT(phys_aperture_sz(pdev) <= gm_sz(pdev) && gm_sz(pdev) <= VGT_MAX_GM_SIZE);
+	ASSERT(phys_aperture_sz(pdev) <= gm_sz(pdev) && gm_sz(pdev) <= info->max_gtt_gm_sz);
+	ASSERT(info->max_gtt_gm_sz <= VGT_MAX_GM_SIZE);
 
 	// mark the non-available space as non-available.
-	if (gm_sz(pdev) < VGT_MAX_GM_SIZE)
-		bitmap_set(gm_bitmap, gm_sz(pdev)/SIZE_1MB,
-			(VGT_MAX_GM_SIZE-gm_sz(pdev))/SIZE_1MB);
+	if (gm_sz(pdev) < info->max_gtt_gm_sz)
+		bitmap_set(gm_bitmap, gm_sz(pdev) / SIZE_1MB,
+			(info->max_gtt_gm_sz - gm_sz(pdev)) / SIZE_1MB);
 
 	pdev->rsvd_aperture_sz = VGT_RSVD_APERTURE_SZ;
 	pdev->rsvd_aperture_base = phys_aperture_base(pdev) + hidden_gm_base(pdev) -
