@@ -450,6 +450,12 @@ static bool vgt_set_device_type(struct pgt_device *pdev)
 		return true;
 	}
 
+	if (_is_broadwell(pdev->pdev->device)) {
+		pdev->gen_dev_type = XEN_IGD_BDW;
+		vgt_info("Detected Broadwell\n");
+		return true;
+	}
+
 	vgt_err("Unknown chip 0x%x\n", pdev->pdev->device);
 	return false;
 }

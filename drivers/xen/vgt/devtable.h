@@ -116,4 +116,32 @@ static inline int _is_haswell(int devid)
 	return ret;
 }
 
+static inline int _is_broadwell(int devid)
+{
+	switch ((devid >> 4) & 0xf) {
+		case 0:
+		case 1:
+		case 2:
+			break;
+		default:
+			return 0;
+	}
+
+	devid &= ~0xf0;
+
+	switch (devid) {
+		case 0x1602:
+		case 0x1606:
+		case 0x160B:
+		case 0x160E:
+		case 0x160A:
+		case 0x160D:
+			break;
+		default:
+			return 0;
+	}
+
+	return 1;
+}
+
 #endif  /* _VGT_DEVTABLE_H */

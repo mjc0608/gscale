@@ -480,7 +480,9 @@ DEFINE_GUEST_HANDLE_STRUCT(xenpf_core_parking);
 #define XEN_IGD_SNB     1
 #define XEN_IGD_IVB     2
 #define XEN_IGD_HSW     3
-#define XEN_IGD_MAX     3   /* the max GEN dev type supported */
+#define XEN_IGD_BDW     4
+
+#define XEN_IGD_MAX     4   /* the max GEN dev type supported */
 struct xenpf_vgt_info {
 	unsigned int gen_dev_bdf;
 	unsigned int gen_dev_type;

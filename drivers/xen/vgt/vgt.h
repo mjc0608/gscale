@@ -1231,15 +1231,27 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 #define IS_SNB(pdev)	((pdev)->gen_dev_type == XEN_IGD_SNB)
 #define IS_IVB(pdev)	((pdev)->gen_dev_type == XEN_IGD_IVB)
 #define IS_HSW(pdev)	((pdev)->gen_dev_type == XEN_IGD_HSW)
+#define IS_BDW(pdev)	((pdev)->gen_dev_type == XEN_IGD_BDW)
+
+#define IS_PREBDW(pdev) (IS_SNB(pdev) || IS_IVB(pdev) || IS_HSW(pdev))
+#define IS_BDWPLUS(pdev) (IS_BDW(pdev))
 
 #define D_SNB	(1 << 0)
 #define D_IVB	(1 << 1)
 #define D_HSW	(1 << 2)
-#define D_GEN7PLUS	(D_IVB | D_HSW)
-#define D_GEN75PLUS	(D_HSW)
-#define D_HSW_PLUS	(D_HSW)
-#define D_IVB_PLUS	(D_IVB | D_HSW)
-#define D_ALL	(D_SNB | D_IVB | D_HSW)
+#define D_BDW	(1 << 3)
+
+#define D_GEN8PLUS	(D_BDW)
+#define D_GEN75PLUS	(D_HSW | D_BDW)
+#define D_GEN7PLUS	(D_IVB | D_HSW | D_BDW)
+
+#define D_BDW_PLUS	(D_BDW)
+#define D_HSW_PLUS	(D_HSW | D_BDW)
+#define D_IVB_PLUS	(D_IVB | D_HSW | D_BDW)
+
+#define D_PRE_BDW	(D_SNB | D_IVB | D_HSW)
+
+#define D_ALL		(D_SNB | D_IVB | D_HSW | D_BDW)
 
 typedef struct {
 	u32			reg;
@@ -1280,6 +1292,8 @@ static inline unsigned int vgt_gen_dev_type(struct pgt_device *pdev)
 		return D_IVB;
 	if (IS_HSW(pdev))
 		return D_HSW;
+	if (IS_BDW(pdev))
+		return D_BDW;
 	WARN_ONCE(1, KERN_ERR "vGT: unknown GEN type!\n");
 	return 0;
 }
