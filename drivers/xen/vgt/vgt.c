@@ -342,6 +342,7 @@ static int vgt_thread(void *priv)
 
 bool initial_phys_states(struct pgt_device *pdev)
 {
+	struct vgt_device_info *info = &pdev->device_info;
 	int i;
 	uint64_t	bar0, bar1;
 	struct pci_dev *dev = pdev->pdev;
@@ -349,7 +350,10 @@ bool initial_phys_states(struct pgt_device *pdev)
 	vgt_dbg(VGT_DBG_GENERIC, "VGT: Initial_phys_states\n");
 
 	pdev->gtt_size = vgt_get_gtt_size(pdev->pbus);
-	gm_sz(pdev) = vgt_get_gtt_size(pdev->pbus) * 1024;
+	gm_sz(pdev) = pdev->gtt_size >> info->gtt_entry_size_shift << GTT_PAGE_SHIFT;
+
+	ASSERT(gm_sz(pdev) <= info->max_gtt_gm_sz);
+
 	pdev->saved_gtt = vzalloc(pdev->gtt_size);
 	if (!pdev->saved_gtt)
 		return false;

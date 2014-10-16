@@ -108,6 +108,7 @@ static int create_state_instance(struct vgt_device *vgt)
  */
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp)
 {
+	struct vgt_device_info *info = &pdev->device_info;
 	int cpu;
 	struct vgt_device *vgt;
 	char *cfg_space;
@@ -163,9 +164,9 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		vgt->aperture_offset;
 
 	if (vgt->ballooning)
-		vgt->vgtt_sz = (gm_sz(pdev) >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
+		vgt->vgtt_sz = (gm_sz(pdev) >> GTT_PAGE_SHIFT) * info->gtt_entry_size;
 	else
-		vgt->vgtt_sz = (vgt->gm_sz >> GTT_PAGE_SHIFT) * GTT_ENTRY_SIZE;
+		vgt->vgtt_sz = (vgt->gm_sz >> GTT_PAGE_SHIFT) * info->gtt_entry_size;
 	vgt_info("Virtual GTT size: 0x%lx\n", (long)vgt->vgtt_sz);
 	vgt->vgtt = vzalloc(vgt->vgtt_sz);
 	if (!vgt->vgtt) {

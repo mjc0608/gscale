@@ -1654,18 +1654,14 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 }
 #endif
 
-#define GTT_SIZE				(2* SIZE_1MB)
 #define reg_is_mmio(pdev, reg)	\
 	(reg >= 0 && reg < pdev->mmio_size)
 #define reg_is_gtt(pdev, reg)	\
-	(reg >= pdev->mmio_size && reg < pdev->mmio_size + pdev->gtt_size)
-
-#define GTT_ENTRY_SIZE		4
+	(reg >= pdev->device_info.gtt_start_offset \
+	&& reg < pdev->device_info.gtt_start_offset + pdev->gtt_size)
 
 #define GTT_INDEX(pdev, addr)		\
 	((u32)((addr - gm_base(pdev)) >> GTT_PAGE_SHIFT))
-
-#define GTT_OFFSET_TO_INDEX(offset)		((offset) >> 2)
 
 static inline uint32_t g2h_gtt_index(struct vgt_device *vgt, uint32_t g_index)
 {
@@ -1949,12 +1945,34 @@ extern void vgt_ring_init(struct pgt_device *pdev, int id);
 
 static inline u32 vgt_read_gtt(struct pgt_device *pdev, u32 index)
 {
-	return VGT_MMIO_READ(pdev, pdev->mmio_size + index*GTT_ENTRY_SIZE);
+	struct vgt_device_info *info = &pdev->device_info;
+	unsigned int off = index << info->gtt_entry_size_shift;
+
+	return VGT_MMIO_READ(pdev, info->gtt_start_offset + off);
 }
 
 static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 {
-	VGT_MMIO_WRITE(pdev, pdev->mmio_size + index*GTT_ENTRY_SIZE , val);
+	struct vgt_device_info *info = &pdev->device_info;
+	unsigned int off = index << info->gtt_entry_size_shift;
+
+	VGT_MMIO_WRITE(pdev, info->gtt_start_offset + off, val);
+}
+
+static inline u64 vgt_read_gtt64(struct pgt_device *pdev, u32 index)
+{
+	struct vgt_device_info *info = &pdev->device_info;
+	unsigned int off = index << info->gtt_entry_size_shift;
+
+	return VGT_MMIO_READ64(pdev, info->gtt_start_offset + off, val);
+}
+
+static inline void vgt_write_gtt64(struct pgt_device *pdev, u32 index, u64 val)
+{
+	struct vgt_device_info *info = &pdev->device_info;
+	unsigned int off = index << info->gtt_entry_size_shift;
+
+	VGT_MMIO_WRITE64(pdev, info->gtt_start_offset + off, val);
 }
 
 static inline void vgt_pci_bar_write_32(struct vgt_device *vgt, uint32_t bar_offset, uint32_t val)

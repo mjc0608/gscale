@@ -394,11 +394,12 @@ vgt_ppgtt_pde_write(struct vgt_device *vgt, unsigned int g_gtt_index, u32 g_gtt_
 static bool gtt_mmio_read32(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
+	struct vgt_device_info *info = &vgt->pdev->device_info;
 	uint32_t g_gtt_index;
 
 	ASSERT(bytes == 4);
 
-	off -= vgt->pdev->mmio_size;
+	off -= info->gtt_start_offset;
 	/*
 	if (off >= vgt->vgtt_sz) {
 		vgt_dbg(VGT_DBG_MEM, "vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
@@ -406,7 +407,7 @@ static bool gtt_mmio_read32(struct vgt_device *vgt, unsigned int off,
 	}
 	*/
 
-	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
+	g_gtt_index = off >> info->gtt_entry_size_shift;
 	*(uint32_t*)p_data = vgt->vgtt[g_gtt_index];
 	if (vgt->vm_id == 0) {
 		*(uint32_t*)p_data = vgt_read_gtt(vgt->pdev,
@@ -448,15 +449,16 @@ bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
 static bool gtt_mmio_write32(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
+	struct vgt_device_info *info = &vgt->pdev->device_info;
 	uint32_t g_gtt_val, h_gtt_val, g_gtt_index, h_gtt_index;
 	int rc;
 	uint64_t g_addr;
 
 	ASSERT(bytes == 4);
 
-	off -= vgt->pdev->mmio_size;
+	off -= info->gtt_start_offset;
 
-	g_gtt_index = GTT_OFFSET_TO_INDEX(off);
+	g_gtt_index = off >> info->gtt_entry_size_shift;
 	g_gtt_val = *(uint32_t*)p_data;
 	vgt->vgtt[g_gtt_index] = g_gtt_val;
 
