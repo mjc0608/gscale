@@ -266,6 +266,11 @@ struct vgt_rsvd_ring {
 #define VGT_MAX_VMS			4
 #define VGT_RSVD_APERTURE_SZ		(8*SIZE_1MB)	/* reserve 8MB for vGT itself */
 
+#define GTT_PAGE_SHIFT		12
+#define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
+#define GTT_PAGE_MASK		(~(GTT_PAGE_SIZE-1))
+#define GTT_PAE_MASK		((1UL <<12) - (1UL << 4)) /* bit 11:4 */
+
 /*
  * The maximum GM size supported by VGT GM resource allocator.
  */
@@ -273,8 +278,8 @@ struct vgt_rsvd_ring {
 #define VGT_GM_BITMAP_BITS		(VGT_MAX_GM_SIZE/SIZE_1MB)
 #define VGT_MAX_NUM_FENCES		16
 #define VGT_FENCE_BITMAP_BITS	VGT_MAX_NUM_FENCES
-#define VGT_RSVD_APERTURE_BITMAP_BITS (VGT_RSVD_APERTURE_SZ/PAGE_SIZE)
-#define VGT_APERTURE_PAGES	(VGT_RSVD_APERTURE_SZ >> PAGE_SHIFT)
+#define VGT_RSVD_APERTURE_BITMAP_BITS (VGT_RSVD_APERTURE_SZ / GTT_PAGE_SIZE)
+#define VGT_APERTURE_PAGES	(VGT_RSVD_APERTURE_SZ >> GTT_PAGE_SHIFT)
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
 #define SZ_CONTEXT_AREA_PER_RING	(4096*64)	/* use 256 KB for now */
@@ -1655,10 +1660,6 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 #define reg_is_gtt(pdev, reg)	\
 	(reg >= pdev->mmio_size && reg < pdev->mmio_size + pdev->gtt_size)
 
-#define GTT_PAGE_SHIFT		12
-#define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
-#define GTT_PAGE_MASK		(~(GTT_PAGE_SIZE-1))
-#define GTT_PAE_MASK		((1UL <<12) - (1UL << 4)) /* bit 11:4 */
 #define GTT_ENTRY_SIZE		4
 
 #define GTT_INDEX(pdev, addr)		\
