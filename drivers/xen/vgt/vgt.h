@@ -2087,6 +2087,7 @@ struct vgt_irq_host_state {
 	DECLARE_BITMAP(pending_events, EVENT_MAX);
 	struct vgt_emul_timer dpy_timer;
 	u32  pipe_mask;
+	bool installed;
 };
 
 #define vgt_get_event_phys_handler(h, e)	(h->events[e].p_handler)

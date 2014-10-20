@@ -847,6 +847,9 @@ int vgt_suspend(struct pci_dev *pdev)
 
 	vgt_reset_dom0_ppgtt_state();
 
+	if (pgt->irq_hstate->installed)
+		pdev->irq = pgt->irq_hstate->pirq;
+
 	return 0;
 }
 EXPORT_SYMBOL(vgt_suspend);
@@ -914,6 +917,9 @@ int vgt_resume(struct pci_dev *pdev)
 	recalculate_and_update_ier(pgt, _REG_GTIER);
 	recalculate_and_update_ier(pgt, _REG_PMIER);
 	recalculate_and_update_ier(pgt, _REG_SDEIER);
+
+	if (pgt->irq_hstate->installed)
+		pdev->irq = pgt->irq_hstate->i915_irq;
 
 	spin_unlock(&pgt->lock);
 

@@ -576,7 +576,7 @@ static void pend_dom0_virtual_interrupt(struct vgt_device *vgt)
 	 * booting. It will trigger unexpected interrupt injection
 	 * before VGT irq framework works.
 	 */
-	if (i915_irq == -1)
+	if (!pdev->irq_hstate->installed)
 		return;
 
 	if (unlikely(!vgt_track_nest)) {
@@ -1639,6 +1639,12 @@ void vgt_install_irq(struct pci_dev *pdev)
 
 	printk("vGT: found matching pgt_device when registering irq for dev (0x%x)\n", pdev->devfn);
 
+	hstate = pgt->irq_hstate;
+	if (hstate->installed) {
+		printk("vGT: IRQ has been installed already.\n");
+		return;
+	}
+
 	irq = bind_virq_to_irq(VIRQ_VGT_GFX, 0);
 	if (irq < 0) {
 		printk("vGT: fail to bind virq\n");
@@ -1652,10 +1658,11 @@ void vgt_install_irq(struct pci_dev *pdev)
 		return;
 	}
 
-	hstate = pgt->irq_hstate;
 	hstate->pirq = pdev->irq;
 	hstate->i915_irq = irq;
 	pdev->irq = irq;
+
+	hstate->installed = true;
 
 	printk("vGT: allocate virq (%d) for i915, while keep original irq (%d) for vgt\n",
 		hstate->i915_irq, hstate->pirq);
@@ -1687,16 +1694,23 @@ void vgt_uninstall_irq(struct pci_dev *pdev)
 		return;
 	}
 
+	hstate = pgt->irq_hstate;
+	if (!hstate->installed) {
+		printk("vGT: IRQ hasn't been installed yet.\n");
+		return;
+	}
+
 	/* Mask all GEN interrupts */
 	VGT_MMIO_WRITE(pgt, _REG_DEIER,
 		VGT_MMIO_READ(pgt, _REG_DEIER) & ~_REGBIT_MASTER_INTERRUPT);
 
-	hstate = pgt->irq_hstate;
 
 	free_irq(hstate->pirq, pgt);
 	//unbind_from_irq(hstate->pirq);
 
 	pdev->irq = hstate->pirq; /* needed by __pci_restore_msi_state() */
+
+	hstate->installed = false;
 }
 
 void vgt_inject_flip_done(struct vgt_device *vgt, enum vgt_pipe pipe)
