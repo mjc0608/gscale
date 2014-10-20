@@ -993,6 +993,8 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 		__sreg(s->vgt, surf_reg) = __vreg(s->vgt, surf_reg);
 	}
 
+	__vreg(s->vgt, VGT_PIPE_FLIPCOUNT(pipe))++;
+
 	msg.vm_id = s->vgt->vm_id;
 	msg.pipe_id = pipe;
 	msg.plane_id = plane;

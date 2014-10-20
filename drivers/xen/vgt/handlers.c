@@ -1267,6 +1267,8 @@ static bool pri_surf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	ret_val = vgt_surf_base_range_check(vgt, pipe, PRIMARY_PLANE);
 	__sreg(vgt, offset) = ret_val ? ret_val : __vreg(vgt, offset);
 
+	__vreg(vgt, VGT_PIPE_FLIPCOUNT(pipe))++;
+
 	if (current_foreground_vm(vgt->pdev) == vgt &&
 		vgt_map_plane_reg(vgt, offset, &real_offset)) {
 		VGT_MMIO_WRITE(vgt->pdev, real_offset, __sreg(vgt, offset));
@@ -2441,16 +2443,19 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIPEASTAT, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_DSPARB, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PIPEA_FRMCOUNT, 4, F_DPY, 0, D_ALL, pipe_frmcount_mmio_read, NULL},
+{_REG_PIPEA_FLIPCOUNT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
 {_REG_PIPEBDSL, 4, F_DPY, 0, D_ALL, pipe_dsl_mmio_read, NULL},
 {_REG_PIPEBCONF, 4, F_DPY, 0, D_ALL, NULL, pipe_conf_mmio_write},
 {_REG_PIPEBSTAT, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PIPEB_FRMCOUNT, 4, F_DPY, 0, D_ALL, pipe_frmcount_mmio_read, NULL},
+{_REG_PIPEB_FLIPCOUNT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
 {_REG_PIPECDSL, 4, F_DPY, 0, D_HSW, pipe_dsl_mmio_read, NULL},
 {_REG_PIPECCONF, 4, F_DPY, 0, D_HSW, NULL, pipe_conf_mmio_write},
 {_REG_PIPECSTAT, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_PIPEC_FRMCOUNT, 4, F_DPY, 0, D_HSW, pipe_frmcount_mmio_read, NULL},
+{_REG_PIPEC_FLIPCOUNT, 4, F_VIRT, 0, D_HSW, NULL, NULL},
 
 {_REG_PIPE_EDP_CONF, 4, F_DPY, 0, D_HSW, NULL, pipe_conf_mmio_write},
 
