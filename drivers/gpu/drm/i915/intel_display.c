@@ -11642,17 +11642,6 @@ static int intel_crtc_set_config(struct drm_mode_set *set)
 			intel_modeset_check_state(set->crtc->dev);
 	}
 
-#ifdef DRM_I915_VGT_SUPPORT
-		if (USES_VGT(dev)) {
-			/*
-			 * Tell VGT that we have a valid surface to show
-			 * after modesetting. We doesn't distinguish DOM0 and
-			 * Linux guest here, The PVINFO write handler will
-			 * handle this.
-			 */
-			I915_WRITE(vgt_info_off(display_ready), 1);		
-		}
-#endif
 	if (ret) {
 		DRM_DEBUG_KMS("failed to set mode on [CRTC:%d], err = %d\n",
 			      set->crtc->base.id, ret);

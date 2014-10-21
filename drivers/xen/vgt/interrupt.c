@@ -968,6 +968,9 @@ static void vgt_handle_crt_hotplug_phys(struct vgt_irq_host_state *hstate,
 		vgt_set_uevent(vgt_dom0, CRT_HOTPLUG_OUT);
 	}
 
+	if (propagate_monitor_to_guest)
+		vgt_set_uevent(vgt_dom0, VGT_DETECT_PORT_E);
+
 	/* send out udev events when handling physical interruts */
 	vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
 
@@ -980,21 +983,25 @@ static void vgt_handle_port_hotplug_phys(struct vgt_irq_host_state *hstate,
 	vgt_reg_t hotplug_ctrl;
 	vgt_reg_t enable_mask, status_mask, tmp;
 	enum vgt_uevent_type hotplug_event;
+	enum vgt_uevent_type detect_event;
 	struct pgt_device *pdev = hstate->pdev;
 
 	if (event == DP_B_HOTPLUG) {
 		enable_mask = _REGBIT_DP_B_ENABLE;
 		status_mask = _REGBIT_DP_B_STATUS;
 		hotplug_event = PORT_B_HOTPLUG_IN;
+		detect_event = VGT_DETECT_PORT_B;
 	} else if (event == DP_C_HOTPLUG) {
 		enable_mask = _REGBIT_DP_C_ENABLE;
 		status_mask = _REGBIT_DP_C_STATUS;
 		hotplug_event = PORT_C_HOTPLUG_IN;
+		detect_event = VGT_DETECT_PORT_C;
 	} else {
 		ASSERT(event == DP_D_HOTPLUG);
 		enable_mask = _REGBIT_DP_D_ENABLE;
 		status_mask = _REGBIT_DP_D_STATUS;
 		hotplug_event = PORT_D_HOTPLUG_IN;
+		detect_event = VGT_DETECT_PORT_D;
 	}
 
 	hotplug_ctrl = VGT_MMIO_READ(pdev, _REG_SHOTPLUG_CTL);
@@ -1017,6 +1024,9 @@ static void vgt_handle_port_hotplug_phys(struct vgt_irq_host_state *hstate,
 		vgt_info("IRQ: detect monitor removal eventon port!\n");
 		vgt_set_uevent(vgt_dom0, hotplug_event + 1);
 	}
+
+	if (propagate_monitor_to_guest)
+		vgt_set_uevent(vgt_dom0, detect_event);
 
 	vgt_set_event_val(hstate, event, hotplug_ctrl);
 	/* send out udev events when handling physical interruts */
