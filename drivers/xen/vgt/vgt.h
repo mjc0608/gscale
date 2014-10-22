@@ -1605,7 +1605,7 @@ static inline int g2h_gm_range(struct vgt_device *vgt, uint64_t *addr, uint32_t 
 	if (vgt->bypass_addr_check)
 		return 0;
 
-	if ((!g_gm_is_valid(vgt, *addr)) || (!g_gm_is_valid(vgt, *addr + size - 1))) {
+	if ((!g_gm_is_valid(vgt, *addr)) || (size && !g_gm_is_valid(vgt, *addr + size - 1))) {
 		vgt_err("VM(%d): invalid address range: g_addr(0x%llx), size(0x%x)\n",
 			vgt->vm_id, *addr, size);
 		return -EACCES;
