@@ -317,6 +317,9 @@ struct decode_info{
 
 #define OP_MFD_MPEG2_BSD_OBJECT                    OP_MFX(2, 3, 1, 8) /* ALL */
 
+#define OP_MFC_MPEG2_SLICEGROUP_STATE              OP_MFX(2, 3, 2, 3) /* ALL */
+#define OP_MFC_MPEG2_PAK_OBJECT                    OP_MFX(2, 3, 2, 9) /* ALL */
+
 #define OP_MFX_2_6_0_0                             OP_MFX(2, 6, 0, 0) /* IVB+ */
 #define OP_MFX_2_6_0_8                             OP_MFX(2, 6, 0, 8) /* IVB+ */
 #define OP_MFX_2_6_0_9                             OP_MFX(2, 6, 0, 9) /* IVB+ */
