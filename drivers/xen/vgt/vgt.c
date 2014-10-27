@@ -888,7 +888,7 @@ static void do_device_reset(struct pgt_device *pdev)
 	return;
 }
 
-int vgt_handle_dom0_device_reset(void)
+bool vgt_handle_dom0_device_reset(void)
 {
 	struct pgt_device *pdev = &default_device;
 	struct drm_device *drm_dev;
@@ -900,7 +900,7 @@ int vgt_handle_dom0_device_reset(void)
 	bool rc;
 
 	if (!xen_initial_domain() || !vgt_enabled)
-		return 0;
+		return false;
 
 	vgt_info("DOM0 hangcheck timer request reset device.\n");
 
@@ -919,7 +919,7 @@ int vgt_handle_dom0_device_reset(void)
 		i915_handle_error(drm_dev, true, "VGT DOM0 device reset");
 	}
 
-	return 0;
+	return true;
 }
 
 int vgt_reset_device(struct pgt_device *pdev)

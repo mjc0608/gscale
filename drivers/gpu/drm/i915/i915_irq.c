@@ -3066,11 +3066,11 @@ static void i915_hangcheck_elapsed(unsigned long data)
 
 	if (rings_hung) {
 #ifdef DRM_I915_VGT_SUPPORT
-		if (dev_priv->in_xen_vgt)
-			vgt_handle_dom0_device_reset();
-		else
+		if (USES_VGT(dev) && vgt_handle_dom0_device_reset())
+			return;
 #endif
-			i915_handle_error(dev, true, "Ring hung");
+		i915_handle_error(dev, true, "Ring hung");
+		return;
 	}
 
 	if (busy_count)

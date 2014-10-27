@@ -127,7 +127,7 @@ static inline void vgt_exit(int cpu)
 	put_cpu();
 }
 
-extern int vgt_handle_dom0_device_reset(void);
+extern bool vgt_handle_dom0_device_reset(void);
 // MMIO definitions
 
 #endif	/* _VGT_H_ */
