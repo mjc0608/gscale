@@ -2810,7 +2810,7 @@ reg_attr_t vgt_base_reg_info[] = {
 	dpy_reg_mmio_read_2, NULL},
 {0xE6E1C, 4, F_DPY, 0, D_ALL,
 	dpy_reg_mmio_read_3, NULL},
-{_REG_SHOTPLUG_CTL, 4, F_DPY, 0, D_ALL, NULL, shotplug_ctl_mmio_write},
+{_REG_SHOTPLUG_CTL, 4, F_VIRT, 0, D_ALL, NULL, shotplug_ctl_mmio_write},
 {_REG_LCPLL_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_HSW_FUSE_STRAP, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_DP_A_HOTPLUG_CNTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
