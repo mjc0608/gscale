@@ -60,6 +60,23 @@ get_drm_name () {
 	fi
 }
 
+wait_for_edid () {
+	EDID=""
+	for try in 1 2 3 4 5 6 7 8 9 10
+	do
+		EDID=`cat $1`
+		if [ -z "$EDID" ]; then
+			sleep 1;
+		else
+			break;
+		fi
+	done
+
+	if [ -z "$EDID" ]; then
+		echo "Did not get EDID for a connected monitor from $1! Hotplug may not work properly!"
+	fi
+}
+
 count=0
 
 connector_count[0]=1
@@ -177,12 +194,14 @@ if [ x"$1" == x"--detect-display" ]; then
 		fi
 
 		if [ -d $src1 ] && [ `cat $src1/status` == "connected" ]; then
+			wait_for_edid $src1/edid
 			dd if=$src1/edid of=$target/edid bs=128 count=1
 			echo $type > $target/type
 			connect=1
 		fi
 
 		if [ -d $src2 ] && [ $check_src2 -eq 1 ] && [ `cat $src2/status` == "connected" ]; then
+			wait_for_edid $src2/edid
 			dd if=$src2/edid of=$target/edid bs=128 count=1
 			type=`expr $type + 3`
 			echo $type > $target/type
