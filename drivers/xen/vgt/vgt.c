@@ -841,6 +841,7 @@ int vgt_suspend(struct pci_dev *pdev)
 	/* ... */
 
 	pgt->saved_rrmr = VGT_MMIO_READ(pgt, _REG_DE_RRMR);
+	pgt->saved_shotplug_ctl = VGT_MMIO_READ(pgt, _REG_SHOTPLUG_CTL);
 
 	/* save GTT and FENCE information */
 	vgt_save_gtt_and_fence(pgt);
@@ -884,6 +885,7 @@ int vgt_resume(struct pci_dev *pdev)
 	vgt_restore_gtt_and_fence(pgt);
 
 	VGT_MMIO_WRITE(pgt, _REG_DE_RRMR, pgt->saved_rrmr);
+	VGT_MMIO_WRITE(pgt, _REG_SHOTPLUG_CTL, pgt->saved_shotplug_ctl);
 
 	/* redo the MMIO snapshot */
 	vgt_initial_mmio_setup(pgt);

@@ -900,6 +900,7 @@ struct pgt_device {
 	uint64_t saved_fences[VGT_MAX_NUM_FENCES];
 
 	uint32_t saved_rrmr;
+	uint32_t saved_shotplug_ctl;
 
 	int max_engines;	/* supported max engines */
 	u32 ring_mmio_base[MAX_ENGINES];
