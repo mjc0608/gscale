@@ -450,29 +450,11 @@ static bool vgt_set_device_type(struct pgt_device *pdev)
 	return false;
 }
 
-static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
+static bool vgt_initialize_platform(struct pgt_device *pdev)
 {
-	int i;
-
-	pdev->pdev = dev;
-	pdev->pbus = dev->bus;
-
-	if (!vgt_set_device_type(pdev))
-		return false;
-
-	if (!IS_HSW(pdev)) {
-		vgt_err("Unsupported gen_dev_type(%s)!\n",
-			IS_IVB(pdev) ?
-			"IVB" : "SNB(or unknown GEN types)");
-		return false;
-	}
-
 	/* check PPGTT enabling. */
 	if (IS_IVB(pdev) || IS_HSW(pdev))
 		pdev->enable_ppgtt = 1;
-
-	INIT_LIST_HEAD(&pdev->rendering_runq_head);
-	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
 
 	pdev->max_engines = 3;
 	pdev->ring_mmio_base[RING_BUFFER_RCS] = _REG_RCS_TAIL;
@@ -505,7 +487,38 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 		pdev->ring_xxx_bit[RING_BUFFER_BCS] = 2;
 		pdev->ring_xxx_bit[RING_BUFFER_VECS] = 10;
 		pdev->ring_xxx_valid = 1;
+	} else {
+		vgt_err("Unsupported platform.\n");
+		return false;
 	}
+
+	return true;
+}
+
+static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pdev)
+{
+	int i;
+
+	pdev->pdev = dev;
+	pdev->pbus = dev->bus;
+
+	if (!vgt_set_device_type(pdev))
+		return false;
+
+	if (!IS_HSW(pdev)) {
+		vgt_err("Unsupported gen_dev_type(%s)!\n",
+			IS_IVB(pdev) ?
+			"IVB" : "SNB(or unknown GEN types)");
+		return false;
+	}
+
+	if (!vgt_initialize_platform(pdev)) {
+		vgt_err("failed to initialize platform\n");
+		return false;
+	}
+
+	INIT_LIST_HEAD(&pdev->rendering_runq_head);
+	INIT_LIST_HEAD(&pdev->rendering_idleq_head);
 
 	bitmap_zero(pdev->dpy_emul_request, VGT_MAX_VMS);
 
