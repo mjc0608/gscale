@@ -1681,8 +1681,10 @@ static inline int port_type_to_port(int port_sel)
  * Configuration register definition for BDF: 0:0:0.
  */
 #define _REG_GMCH_CONTRL		0x50
-#define    _REGBIT_GMCH_GMS_SHIFT	3
-#define	   _REGBIT_GMCH_GMS_MASK	0x1f
+#define    _REGBIT_SNB_GMCH_GMS_SHIFT   3 /* Graphics Mode Select */
+#define    _REGBIT_SNB_GMCH_GMS_MASK    0x1f
+#define    _REGBIT_BDW_GMCH_GMS_SHIFT   8
+#define    _REGBIT_BDW_GMCH_GMS_MASK    0xff
 
 /* HSW */
 #define _REG_LCPLL_CTL		0x130040

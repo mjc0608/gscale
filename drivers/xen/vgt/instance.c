@@ -112,6 +112,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	int cpu;
 	struct vgt_device *vgt;
 	char *cfg_space;
+	u16 *gmch_ctl;
 	int rc = -ENOMEM;
 	int i;
 
@@ -187,7 +188,14 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	cfg_space = &vgt->state.cfg_space[0];
 	memcpy (cfg_space, pdev->initial_cfg_space, VGT_CFG_SPACE_SZ);
 	cfg_space[VGT_REG_CFG_SPACE_MSAC] = vgt->state.bar_size[1];
-	cfg_space[_REG_GMCH_CONTRL] &= ~(_REGBIT_GMCH_GMS_MASK << _REGBIT_GMCH_GMS_SHIFT);
+
+	/* Show guest that there isn't any stolen memory.*/
+	gmch_ctl = (u16 *)(cfg_space + _REG_GMCH_CONTRL);
+	if (IS_PREBDW(pdev))
+		*gmch_ctl &= ~(_REGBIT_SNB_GMCH_GMS_MASK << _REGBIT_SNB_GMCH_GMS_SHIFT);
+	else
+		*gmch_ctl &= ~(_REGBIT_BDW_GMCH_GMS_MASK << _REGBIT_BDW_GMCH_GMS_SHIFT);
+
 	vgt_pci_bar_write_32(vgt, VGT_REG_CFG_SPACE_BAR1, phys_aperture_base(pdev) );
 
 	/* mark HVM's GEN device's IO as Disabled. hvmloader will enable it */
