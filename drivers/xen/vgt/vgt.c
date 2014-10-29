@@ -554,6 +554,14 @@ static bool vgt_initialize_platform(struct pgt_device *pdev)
 		pdev->ring_xxx_bit[RING_BUFFER_BCS] = 2;
 		pdev->ring_xxx_bit[RING_BUFFER_VECS] = 10;
 		pdev->ring_xxx_valid = 1;
+	} else if (IS_BDW(pdev)) {
+		/*
+		 * FIXME: BDW GT3 has 2 VCS rings.
+		 */
+		pdev->max_engines = 4;
+		pdev->ring_mmio_base[RING_BUFFER_VECS] = _REG_VECS_TAIL;
+		pdev->ring_mi_mode[RING_BUFFER_VECS] = _REG_VECS_MI_MODE;
+		pdev->ring_xxx_valid = 0;
 	} else {
 		vgt_err("Unsupported platform.\n");
 		return false;
