@@ -2436,7 +2436,7 @@ void free_gtt(struct pgt_device *pdev);
 void vgt_clear_gtt(struct vgt_device *vgt);
 void vgt_save_gtt_and_fence(struct pgt_device *pdev);
 void vgt_restore_gtt_and_fence(struct pgt_device *pdev);
-uint64_t vgt_get_gtt_size(struct pci_bus *bus);
+uint64_t vgt_get_gtt_size(struct pgt_device *pdev);
 uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off);
 int vgt_get_hvm_max_gpfn(int vm_id);
 int vgt_hvm_vmem_init(struct vgt_device *vgt);

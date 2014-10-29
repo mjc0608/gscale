@@ -349,7 +349,7 @@ bool initial_phys_states(struct pgt_device *pdev)
 
 	vgt_dbg(VGT_DBG_GENERIC, "VGT: Initial_phys_states\n");
 
-	pdev->gtt_size = vgt_get_gtt_size(pdev->pbus);
+	pdev->gtt_size = vgt_get_gtt_size(pdev);
 	gm_sz(pdev) = pdev->gtt_size >> info->gtt_entry_size_shift << GTT_PAGE_SHIFT;
 
 	ASSERT(gm_sz(pdev) <= info->max_gtt_gm_sz);

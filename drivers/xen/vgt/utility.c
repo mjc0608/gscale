@@ -350,22 +350,41 @@ uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
 	return bar_size;
 }
 
-uint64_t vgt_get_gtt_size(struct pci_bus *bus)
+uint64_t vgt_get_gtt_size(struct pgt_device *pdev)
 {
+	struct pci_bus *bus = pdev->pbus;
 	uint16_t gmch_ctrl;
 
 	ASSERT(!bus->number);
+
 	/* GTT size is within GMCH. */
 	pci_bus_read_config_word(bus, 0, _REG_GMCH_CONTRL, &gmch_ctrl);
-	switch ( (gmch_ctrl >> 8) & 3 ) {
-	case	1:
-		return 1 * SIZE_1MB;
-	case	2:
-		return 2 * SIZE_1MB;
-	default:
-		printk("Wrong GTT memory size\n");
-		break;
+
+	if (IS_PREBDW(pdev)) {
+		gmch_ctrl = (gmch_ctrl >> 8) & 3;
+		switch (gmch_ctrl) {
+			case 1:
+			case 2:
+				return gmch_ctrl << 20;
+			default:
+				vgt_err("Invalid GTT memory size: %d\n", gmch_ctrl);
+				break;
+		}
+	} else {
+		gmch_ctrl = (gmch_ctrl >> 6) & 3;
+		if (gmch_ctrl)
+			gmch_ctrl = 1 << gmch_ctrl;
+		switch (gmch_ctrl) {
+			case 2:
+			case 4:
+			case 8:
+				return gmch_ctrl << 20;
+			default:
+				vgt_err("Invalid GTT memory size: %d\n", gmch_ctrl);
+				break;
+		}
 	}
+
 	return 0;
 }
 
