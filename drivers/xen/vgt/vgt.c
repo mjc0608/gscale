@@ -467,25 +467,43 @@ static bool vgt_initialize_device_info(struct pgt_device *pdev)
 	if (!vgt_set_device_type(pdev))
 		return false;
 
-	if (!IS_HSW(pdev)) {
+	if (!IS_HSW(pdev) && !IS_BDW(pdev)) {
 		vgt_err("Unsupported gen_dev_type(%s)!\n",
 			IS_IVB(pdev) ?
 			"IVB" : "SNB(or unknown GEN types)");
 		return false;
 	}
 
-	info->gen = MKGEN(7, 5, 0);
-	info->max_gtt_gm_sz = (1UL << 31);	/* 2G */
-	/*
-	 * The layout of BAR0 in PreBDW:
-	 * |< - MMIO 2MB ->|<- MAX GTT 2MB ->|
-	 *
-	 * GTT offset in BAR0 starts from 2MB to 4MB
-	 */
-	info->gtt_start_offset = (1UL << 21);
-	info->max_gtt_size = (1UL << 22);
-	info->gtt_entry_size = 4;
-	info->gtt_entry_size_shift = 2;
+	if (IS_HSW(pdev)) {
+		info->gen = MKGEN(7, 5, 0);
+		info->max_gtt_gm_sz = (1UL << 31);	/* 2G */
+		/*
+		 * The layout of BAR0 in PreBDW:
+		 * |< - MMIO 2MB ->|<- MAX GTT 2MB ->|
+		 *
+		 * GTT offset in BAR0 starts from 2MB to 4MB
+		 */
+		info->gtt_start_offset = (1UL << 21);
+		info->max_gtt_size = (1UL << 22);
+		info->gtt_entry_size = 4;
+		info->gtt_entry_size_shift = 2;
+	} else if (IS_BDW(pdev)) {
+		info->gen = MKGEN(8, 0, ((pdev->pdev->device >> 4) & 0xf) + 1);
+		info->max_gtt_gm_sz = (1UL << 32);
+		/*
+		 * The layout of BAR0 in BDW:
+		 * |< - MMIO 2MB ->|<- Reserved 6MB ->|<- MAX GTT 8MB->|
+		 *
+		 * GTT offset in BAR0 starts from 8MB to 16MB, and
+		 * Whatever GTT size is configured in BIOS,
+		 * the size of BAR0 is always 16MB. The actual configured
+		 * GTT size can be found in GMCH_CTRL.
+		 */
+		info->gtt_start_offset = (1UL << 23);
+		info->max_gtt_size = (1UL << 23);
+		info->gtt_entry_size = 8;
+		info->gtt_entry_size_shift = 3;
+	}
 
 	printk("GEN device info:\n");
 	printk("	major: %u minor: %u rev: %u\n", GEN_MAJOR(info->gen),
