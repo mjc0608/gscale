@@ -3352,6 +3352,43 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {0x45260, 4, F_DPY, 0, D_BDW, NULL, NULL},
 {0x6f800, 4, F_DPY, 0, D_BDW, NULL, NULL},
+
+/* TODO policy not cleared yet */
+{0x1a098, 4, F_DOM0, 0x0, D_ALL, NULL, NULL},
+
+{0x66c00, 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+{0x66c04, 4, F_VIRT, 0, D_BDW, NULL, NULL},
+
+{0x4024, 4, F_VIRT, 0, D_BDW, NULL, NULL},
+
+{0x9134, 4, F_VIRT, 0, D_BDW, NULL, NULL},
+{0x9138, 4, F_VIRT, 0, D_BDW, NULL, NULL},
+{0x913c, 4, F_VIRT, 0, D_BDW, NULL, NULL},
+
+/* WA */
+{0xfdc, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0xe4f0, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0xe4f4, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0x9430, 4, F_RDR, 0, D_BDW, NULL, NULL},
+
+/* L3 */
+{0xb1f0, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0xb1c0, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0xb118, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0xb100, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0xb10c, 4, F_RDR, 0, D_BDW, NULL, NULL},
+
+/* NON-PRIV */
+{0x24d0, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0x24d4, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0x24d8, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0x24dc, 4, F_RDR, 0, D_BDW, NULL, NULL},
+
+{0x83a4, 4, F_RDR, 0, D_BDW, NULL, NULL},
+
+/* UCG */
+{0x8430, 4, F_PT, 0, D_BDW, NULL, NULL},
+
 };
 
 bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
