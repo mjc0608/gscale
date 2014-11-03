@@ -94,6 +94,7 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[VCS_WATCHDOG_EXCEEDED] = "Video Command Streamer Watchdog counter exceeded",
 	[VCS_PAGE_DIRECTORY_FAULT] = "Video page directory faults",
 	[VCS_AS_CONTEXT_SWITCH] = "Video AS Context Switch Interrupt",
+	[VCS2_AS_CONTEXT_SWITCH] = "VCS2 Context Switch Interrupt",
 
 	[BCS_MI_USER_INTERRUPT] = "Blitter Command Streamer MI USER INTERRUPT",
 	[BCS_MMIO_SYNC_FLUSH] = "Billter MMIO sync flush status",
@@ -103,6 +104,7 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[BCS_AS_CONTEXT_SWITCH] = "Blitter AS Context Switch Interrupt",
 
 	[VECS_MI_FLUSH_DW] = "Video Enhanced Streamer MI FLUSH DW notify",
+	[VECS_AS_CONTEXT_SWITCH] = "VECS Context Switch Interrupt",
 
 	// DISPLAY
 	[PIPE_A_FIFO_UNDERRUN] = "Pipe A FIFO underrun",
