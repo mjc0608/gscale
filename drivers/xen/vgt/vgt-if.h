@@ -57,6 +57,12 @@
 enum vgt_g2v_type {
 	VGT_G2V_DISPLAY_REFRESH,
 	VGT_G2V_SET_POINTER_SHAPE,
+	VGT_G2V_PPGTT_L3_PAGE_TABLE_CREATE,
+	VGT_G2V_PPGTT_L3_PAGE_TABLE_DESTROY,
+	VGT_G2V_PPGTT_L4_PAGE_TABLE_CREATE,
+	VGT_G2V_PPGTT_L4_PAGE_TABLE_DESTROY,
+	VGT_G2V_EXECLIST_CONTEXT_ELEMENT_CREATE,
+	VGT_G2V_EXECLIST_CONTEXT_ELEMENT_DESTROY,
 	VGT_G2V_MAX,
 };
 
@@ -137,14 +143,26 @@ struct vgt_if {
      * Cursor hotspot info
      */
     uint32_t  xhot;
-    uint32_t  yhot;;
+    uint32_t  yhot;
+
+    uint32_t pdp0_lo;
+    uint32_t pdp0_hi;
+    uint32_t pdp1_lo;
+    uint32_t pdp1_hi;
+    uint32_t pdp2_lo;
+    uint32_t pdp2_hi;
+    uint32_t pdp3_lo;
+    uint32_t pdp3_hi;
+
+    uint32_t execlist_context_descriptor_lo;
+    uint32_t execlist_context_descriptor_hi;
 
     /*
      * scratch space for debugging
      */
     uint32_t  scratch;;
 
-    uint32_t  rsv6[0x200-15];    /* pad to one page */
+    uint32_t  rsv6[0x200-25];    /* pad to one page */
 };
 
 #define vgt_info_off(x)        (VGT_PVINFO_PAGE + (long)&((struct vgt_if*) NULL)->x)
