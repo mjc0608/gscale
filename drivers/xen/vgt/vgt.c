@@ -1138,8 +1138,8 @@ static void vgt_param_check(void)
 	if (dom0_low_gm_sz + dom0_high_gm_sz > 2048)
 		dom0_high_gm_sz = 2048 - dom0_low_gm_sz;
 
-	if (dom0_fence_sz > 16)
-		dom0_fence_sz = 16;
+	if (dom0_fence_sz > VGT_MAX_NUM_FENCES)
+		dom0_fence_sz = VGT_MAX_NUM_FENCES;
 }
 
 static int __init vgt_init_module(void)

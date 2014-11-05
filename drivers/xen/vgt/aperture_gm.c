@@ -42,7 +42,7 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 	if (!reg_addr_fix(pdev, reg))
 		return g_value;
 
-	ASSERT((reg < _REG_FENCE_0_LOW) || (reg > _REG_FENCE_15_HIGH));
+	ASSERT((reg < _REG_FENCE_0_LOW) || (reg >= _REG_FENCE_0_LOW + VGT_FENCE_REGION_SIZE));
 
 	mask = reg_aux_addr_mask(pdev, reg);
 	vgt_dbg(VGT_DBG_MEM, "vGT: address fix g->h for reg (0x%lx) value (0x%x) mask (0x%x)\n", reg, g_value, mask);
