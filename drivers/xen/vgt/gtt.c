@@ -1687,3 +1687,77 @@ int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
 
 	return 0;
 }
+
+struct vgt_mm *gen8_find_ppgtt_mm(struct vgt_device *vgt,
+		int page_table_level, void *root_entry)
+{
+	struct list_head *pos;
+	struct vgt_mm *mm;
+	u64 *src, *dst;
+
+	list_for_each(pos, &vgt->gtt.mm_list_head) {
+		mm = container_of(pos, struct vgt_mm, list);
+		if (mm->type != VGT_MM_PPGTT)
+			continue;
+
+		if (mm->page_table_level != page_table_level)
+			continue;
+
+		src = root_entry;
+		dst = mm->virtual_page_table;
+
+		if (page_table_level == 3) {
+			if (src[0] == dst[0]
+					&& src[1] == dst[1]
+					&& src[2] == dst[2]
+					&& src[3] == dst[3])
+				return mm;
+		} else {
+			if (src[0] == dst[0])
+				return mm;
+		}
+	}
+
+	return NULL;
+}
+
+bool vgt_g2v_create_ppgtt_mm(struct vgt_device *vgt, int page_table_level)
+{
+	u64 *pdp = (u64 *)&__vreg64(vgt, vgt_info_off(pdp0_lo));
+	gtt_type_t root_entry_type = page_table_level == 4 ?
+		GTT_TYPE_PPGTT_ROOT_L4_ENTRY : GTT_TYPE_PPGTT_ROOT_L3_ENTRY;
+
+	struct vgt_mm *mm;
+
+	ASSERT(page_table_level == 4 || page_table_level == 3);
+
+	mm = gen8_find_ppgtt_mm(vgt, page_table_level, pdp);
+	if (mm) {
+		atomic_inc(&mm->refcount);
+	} else {
+		mm = vgt_create_mm(vgt, VGT_MM_PPGTT, root_entry_type,
+				pdp, page_table_level, 0);
+		if (!mm)
+			return false;
+	}
+
+	return true;
+}
+
+bool vgt_g2v_destroy_ppgtt_mm(struct vgt_device *vgt, int page_table_level)
+{
+	u64 *pdp = (u64 *)&__vreg64(vgt, vgt_info_off(pdp0_lo));
+	struct vgt_mm *mm;
+
+	ASSERT(page_table_level == 4 || page_table_level == 3);
+
+	mm = gen8_find_ppgtt_mm(vgt, page_table_level, pdp);
+	if (!mm) {
+		vgt_err("fail to find ppgtt instance.\n");
+		return false;
+	}
+
+	vgt_destroy_mm(mm);
+
+	return true;
+}

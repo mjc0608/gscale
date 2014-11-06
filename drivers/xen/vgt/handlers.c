@@ -1989,8 +1989,16 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 				msg.plane_id = CURSOR_PLANE;
 				msg.pipe_id = 0;
 				vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
+			} else if (val == VGT_G2V_PPGTT_L3_PAGE_TABLE_CREATE) {
+				rc = vgt_g2v_create_ppgtt_mm(vgt, 3);
+			} else if (val == VGT_G2V_PPGTT_L3_PAGE_TABLE_DESTROY) {
+				rc = vgt_g2v_destroy_ppgtt_mm(vgt, 3);
+			} else if (val == VGT_G2V_PPGTT_L4_PAGE_TABLE_CREATE) {
+				rc = vgt_g2v_create_ppgtt_mm(vgt, 4);
+			} else if (val == VGT_G2V_PPGTT_L4_PAGE_TABLE_DESTROY) {
+				rc = vgt_g2v_destroy_ppgtt_mm(vgt, 4);
 			} else {
-				vgt_warn("INVALID_WRITE_NOTIFICATION %x\n", val);
+				vgt_warn("Invalid PV notification. %x\n", val);
 			}
 			break;
 		case vgt_info_off(xhot):
@@ -2003,6 +2011,19 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 				vgt_fb_notifier_call_chain(FB_DISPLAY_FLIP, &msg);
 			}
 			break;
+
+                case vgt_info_off(pdp0_lo):
+                case vgt_info_off(pdp0_hi):
+                case vgt_info_off(pdp1_lo):
+                case vgt_info_off(pdp1_hi):
+                case vgt_info_off(pdp2_lo):
+                case vgt_info_off(pdp2_hi):
+                case vgt_info_off(pdp3_lo):
+                case vgt_info_off(pdp3_hi):
+                case vgt_info_off(execlist_context_descriptor_lo):
+                case vgt_info_off(execlist_context_descriptor_hi):
+                        break;
+
 		default:
 			/* keep rc's default value: true.
 			 * NOTE: returning false will crash the VM.

@@ -574,6 +574,12 @@ struct vgt_vgtt_info {
 extern bool vgt_init_vgtt(struct vgt_device *vgt);
 extern void vgt_clean_vgtt(struct vgt_device *vgt);
 
+extern bool vgt_g2v_create_ppgtt_mm(struct vgt_device *vgt, int page_table_level);
+extern bool vgt_g2v_destroy_ppgtt_mm(struct vgt_device *vgt, int page_table_level);
+
+extern struct vgt_mm *gen8_find_ppgtt_mm(struct vgt_device *vgt,
+                int page_table_level, void *root_entry);
+
 typedef bool guest_page_handler_t(void *gp, uint64_t pa, void *p_data, int bytes);
 
 struct guest_page {
