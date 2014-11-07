@@ -1147,6 +1147,43 @@ static void gen6_ppgtt_clear_range(struct i915_address_space *vm,
 	}
 }
 
+static void gen6_ppgtt_insert_vmfb_entries(struct i915_address_space *vm,
+					   uint32_t num_pages,
+					   uint64_t start,
+					   unsigned vmfb_offset)
+{
+	struct i915_hw_ppgtt *ppgtt =
+		container_of(vm, struct i915_hw_ppgtt, base);
+	gen6_gtt_pte_t *pt_vaddr;
+	unsigned first_entry = start >> PAGE_SHIFT;
+	unsigned act_pt = first_entry / I915_PPGTT_PT_ENTRIES;
+	unsigned act_pte = first_entry % I915_PPGTT_PT_ENTRIES;
+
+	pt_vaddr = NULL;
+
+	struct drm_i915_private *dev_priv = ppgtt->base.dev->dev_private;
+	uint32_t __iomem *vmfb_start = dev_priv->gtt.gsm;
+	vmfb_start += vmfb_offset;
+
+	int i;
+	for (i = 0; i < num_pages; i++) {
+		if (pt_vaddr == NULL)
+			pt_vaddr = kmap_atomic(ppgtt->pt_pages[act_pt]);
+
+		pt_vaddr[act_pte] = readl(vmfb_start);
+		vmfb_start++;
+
+		if (++act_pte == I915_PPGTT_PT_ENTRIES) {
+			kunmap_atomic(pt_vaddr);
+			pt_vaddr = NULL;
+			act_pt++;
+			act_pte = 0;
+		}
+	}
+	if (pt_vaddr)
+		kunmap_atomic(pt_vaddr);
+}
+
 static void gen6_ppgtt_insert_entries(struct i915_address_space *vm,
 				      struct sg_table *pages,
 				      uint64_t start,
@@ -1483,8 +1520,14 @@ ppgtt_bind_vma(struct i915_vma *vma,
 	if (vma->obj->gt_ro)
 		flags |= PTE_READ_ONLY;
 
-	vma->vm->insert_entries(vma->vm, vma->obj->pages, vma->node.start,
-				cache_level, flags);
+	if (vma->obj->has_vmfb_mapping)
+		gen6_ppgtt_insert_vmfb_entries(vma->vm,
+					       vma->obj->base.size >> PAGE_SHIFT,
+					       vma->node.start,
+					       i915_gem_obj_ggtt_offset(vma->obj) >> PAGE_SHIFT);
+	else
+		vma->vm->insert_entries(vma->vm, vma->obj->pages, vma->node.start,
+					cache_level, flags);
 }
 
 static void ppgtt_unbind_vma(struct i915_vma *vma)
@@ -1647,7 +1690,7 @@ void i915_gem_restore_gtt_mappings(struct drm_device *dev)
 
 int i915_gem_gtt_prepare_object(struct drm_i915_gem_object *obj)
 {
-	if (obj->has_dma_mapping)
+	if (obj->has_dma_mapping || obj->has_vmfb_mapping)
 		return 0;
 
 	if (!dma_map_sg(&obj->base.dev->pdev->dev,
@@ -1812,7 +1855,8 @@ static void i915_ggtt_bind_vma(struct i915_vma *vma,
 		AGP_USER_MEMORY : AGP_USER_CACHED_MEMORY;
 
 	BUG_ON(!i915_is_ggtt(vma->vm));
-	intel_gtt_insert_sg_entries(vma->obj->pages, entry, flags);
+	if (!vma->obj->has_vmfb_mapping)
+		intel_gtt_insert_sg_entries(vma->obj->pages, entry, flags);
 	vma->bound = GLOBAL_BIND;
 }
 
@@ -1833,7 +1877,8 @@ static void i915_ggtt_unbind_vma(struct i915_vma *vma)
 
 	BUG_ON(!i915_is_ggtt(vma->vm));
 	vma->bound = 0;
-	intel_gtt_clear_range(first, size);
+	if (!vma->obj->has_vmfb_mapping)
+		intel_gtt_clear_range(first, size);
 }
 
 static void ggtt_bind_vma(struct i915_vma *vma,
@@ -1862,9 +1907,10 @@ static void ggtt_bind_vma(struct i915_vma *vma,
 	if (!dev_priv->mm.aliasing_ppgtt || flags & GLOBAL_BIND) {
 		if (!(vma->bound & GLOBAL_BIND) ||
 		    (cache_level != obj->cache_level)) {
-			vma->vm->insert_entries(vma->vm, obj->pages,
-						vma->node.start,
-						cache_level, flags);
+			if (!obj->has_vmfb_mapping)
+				vma->vm->insert_entries(vma->vm, obj->pages,
+							vma->node.start,
+							cache_level, flags);
 			vma->bound |= GLOBAL_BIND;
 		}
 	}
@@ -1873,10 +1919,16 @@ static void ggtt_bind_vma(struct i915_vma *vma,
 	    (!(vma->bound & LOCAL_BIND) ||
 	     (cache_level != obj->cache_level))) {
 		struct i915_hw_ppgtt *appgtt = dev_priv->mm.aliasing_ppgtt;
-		appgtt->base.insert_entries(&appgtt->base,
-					    vma->obj->pages,
-					    vma->node.start,
-					    cache_level, flags);
+		if (obj->has_vmfb_mapping)
+			gen6_ppgtt_insert_vmfb_entries(&appgtt->base,
+						       obj->base.size >> PAGE_SHIFT,
+						       vma->node.start,
+						       i915_gem_obj_ggtt_offset(obj) >> PAGE_SHIFT);
+		else
+			appgtt->base.insert_entries(&appgtt->base,
+							    vma->obj->pages,
+							    vma->node.start,
+							    cache_level, flags);
 		vma->bound |= LOCAL_BIND;
 	}
 }
@@ -1888,19 +1940,21 @@ static void ggtt_unbind_vma(struct i915_vma *vma)
 	struct drm_i915_gem_object *obj = vma->obj;
 
 	if (vma->bound & GLOBAL_BIND) {
-		vma->vm->clear_range(vma->vm,
-				     vma->node.start,
-				     obj->base.size,
-				     true);
+		if (!obj->has_vmfb_mapping)
+			vma->vm->clear_range(vma->vm,
+					     vma->node.start,
+					     obj->base.size,
+					     true);
 		vma->bound &= ~GLOBAL_BIND;
 	}
 
 	if (vma->bound & LOCAL_BIND) {
 		struct i915_hw_ppgtt *appgtt = dev_priv->mm.aliasing_ppgtt;
-		appgtt->base.clear_range(&appgtt->base,
-					 vma->node.start,
-					 obj->base.size,
-					 true);
+		if (!obj->has_vmfb_mapping)
+			appgtt->base.clear_range(&appgtt->base,
+						 vma->node.start,
+						 obj->base.size,
+						 true);
 		vma->bound &= ~LOCAL_BIND;
 	}
 }

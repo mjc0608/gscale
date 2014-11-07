@@ -57,6 +57,7 @@
 #ifdef DRM_I915_VGT_SUPPORT
 #include <xen/vgt.h>
 #include <xen/vgt-if.h>
+#include <xen/fb_decoder.h>
 #endif
 
 /* General customization:
@@ -1942,6 +1943,8 @@ struct drm_i915_gem_object {
 
 	unsigned int has_dma_mapping:1;
 
+	unsigned int has_vmfb_mapping:1;
+
 	unsigned int frontbuffer_bits:INTEL_FRONTBUFFER_BITS;
 
 	struct sg_table *pages;
@@ -2455,6 +2458,8 @@ int i915_gem_throttle_ioctl(struct drm_device *dev, void *data,
 			    struct drm_file *file_priv);
 int i915_gem_madvise_ioctl(struct drm_device *dev, void *data,
 			   struct drm_file *file_priv);
+int i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data,
+			     struct drm_file *file);
 int i915_gem_set_tiling(struct drm_device *dev, void *data,
 			struct drm_file *file_priv);
 int i915_gem_get_tiling(struct drm_device *dev, void *data,
@@ -2513,11 +2518,15 @@ static inline struct page *i915_gem_object_get_page(struct drm_i915_gem_object *
 }
 static inline void i915_gem_object_pin_pages(struct drm_i915_gem_object *obj)
 {
+	if (obj->has_vmfb_mapping)
+		return;
 	BUG_ON(obj->pages == NULL);
 	obj->pages_pin_count++;
 }
 static inline void i915_gem_object_unpin_pages(struct drm_i915_gem_object *obj)
 {
+	if (obj->has_vmfb_mapping)
+		return;
 	BUG_ON(obj->pages_pin_count == 0);
 	obj->pages_pin_count--;
 }
