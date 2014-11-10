@@ -154,10 +154,14 @@ static inline uint32_t __RING_REG(int32_t ring_id, uint32_t rcs_reg)
 #define _REG_RCS_GFX_MODE_IVB	0x0229C
 #define _REG_VCS_MFX_MODE_IVB	0x1229C
 #define _REG_VCS2_MFX_MODE_BDW	0x1c29C
+#define  _REGBIT_EXECLIST_ENABLE       (1 << 15)
 #define _REG_CACHE_MODE_0_IVB	0x7000
 #define _REG_CACHE_MODE_1_IVB	0x7004
 #define _REG_GT_MODE_IVB	0x7008
 #define _REG_VEBOX_MODE		0x1A29C
+
+#define GFX_MODE_BIT_SET_IN_MASK(val, bit) \
+		((((bit) & 0xffff0000) == 0) && !!((val) & (((bit) << 16))))
 
 /* PPGTT entry */
 #define _REGBIT_PDE_VALID	(1<<0)

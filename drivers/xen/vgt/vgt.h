@@ -355,6 +355,7 @@ typedef struct {
 	vgt_ring_ppgtt_t	sring_ppgtt_info; /* shadow info */
 	u8 has_ppgtt_base_set : 1;	/* Is PP dir base set? */
 	u8 has_ppgtt_mode_enabled : 1;	/* Is ring's mode reg PPGTT enable set? */
+	u8 has_execlist_enabled : 1;
 	struct vgt_mm *active_ppgtt_mm;
 	int ppgtt_root_pointer_type;
 	int ppgtt_page_table_level;
@@ -1143,6 +1144,7 @@ struct pgt_device {
 
 	u8 enable_ppgtt : 1;
 	u8 in_ctx_switch : 1;
+	u8 enable_execlist : 1;
 
 	vgt_aux_entry_t vgt_aux_table[VGT_AUX_TABLE_NUM];
 	int at_index;

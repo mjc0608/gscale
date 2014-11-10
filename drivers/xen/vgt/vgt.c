@@ -512,6 +512,12 @@ static bool vgt_initialize_platform(struct pgt_device *pdev)
 	if (IS_IVB(pdev) || IS_HSW(pdev) || IS_BDW(pdev))
 		pdev->enable_ppgtt = 1;
 
+	/* execlist depends on ppgtt */
+	if (pdev->enable_ppgtt) {
+		if (IS_BDWPLUS(pdev))
+			pdev->enable_execlist = 1;
+	}
+
 	pdev->max_engines = 3;
 	pdev->ring_mmio_base[RING_BUFFER_RCS] = _REG_RCS_TAIL;
 	pdev->ring_mmio_base[RING_BUFFER_VCS] = _REG_VCS_TAIL;

@@ -673,6 +673,19 @@ static bool ring_pp_mode_write(struct vgt_device *vgt, unsigned int off,
 	if (ring_id == RING_BUFFER_VECS)
 		vgt->vebox_support = 1;
 
+	/* check for execlist */
+	if (GFX_MODE_BIT_SET_IN_MASK(mode, _REGBIT_EXECLIST_ENABLE)) {
+		bool ring_execlist = !!(mode & _REGBIT_EXECLIST_ENABLE);
+
+		/* execlist mode is enabled if anyone wants execlist mode*/
+		if (ring_execlist)
+			vgt->pdev->enable_execlist = true;
+
+		vgt->rb[ring_id].has_execlist_enabled = ring_execlist;
+		vgt_info("EXECLIST %s on ring %d.\n",
+			(ring_execlist ? "enabling" : "disabling"), ring_id);
+	}
+
 	ring_ppgtt_mode(vgt, ring_id, off, mode);
 	return true;
 }
