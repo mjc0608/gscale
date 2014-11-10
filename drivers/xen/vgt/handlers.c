@@ -217,7 +217,7 @@ static bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 
 	vgt_dbg(VGT_DBG_GENERIC, "VM%d write register FORCE_WAKE_MT with %x\n", vgt->vm_id, data);
 
-	if (!(__vreg(vgt, _REG_ECOBUS) & ECOBUS_FORCEWAKE_MT_ENABLE)){
+	if (!IS_BDWPLUS(vgt->pdev) && !(__vreg(vgt, _REG_ECOBUS) & ECOBUS_FORCEWAKE_MT_ENABLE)) {
 		__vreg(vgt, _REG_MUL_FORCEWAKE) = data;
 		return true;
 	}
@@ -233,7 +233,7 @@ static bool mul_force_wake_write(struct vgt_device *vgt, unsigned int offset,
 	new_wake = (old_wake & ~mask) + (wake & mask);
 	__vreg(vgt, _REG_MUL_FORCEWAKE) = (data & 0xFFFF0000) + new_wake;
 
-	if (IS_HSW(vgt->pdev)) {
+	if (IS_HSW(vgt->pdev) || IS_BDWPLUS(vgt->pdev)) {
 		__vreg(vgt, _REG_FORCEWAKE_ACK_HSW) = new_wake;
 	} else {
 		/* IVB */
@@ -2974,7 +2974,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_GTFIFO_FREE_ENTRIES, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_MUL_FORCEWAKE, 4, F_VIRT, 0, D_ALL, NULL, mul_force_wake_write},
 {_REG_MUL_FORCEWAKE_ACK, 4, F_VIRT, 0, D_SNB|D_IVB, mul_force_wake_ack_read, NULL},
-{_REG_FORCEWAKE_ACK_HSW, 4, F_VIRT, 0, D_HSW, mul_force_wake_ack_read, NULL},
+{_REG_FORCEWAKE_ACK_HSW, 4, F_VIRT, 0, D_HSW_PLUS, mul_force_wake_ack_read, NULL},
 {_REG_ECOBUS, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 {_REG_RC_CONTROL, 4, F_DOM0, 0, D_ALL, NULL, rc_state_ctrl_1_mmio_write},
 {_REG_RC_STATE, 4, F_DOM0, 0, D_ALL, NULL, rc_state_ctrl_1_mmio_write},
