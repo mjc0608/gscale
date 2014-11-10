@@ -2022,6 +2022,8 @@ struct vgt_irq_ops {
 	void (*init_irq) (struct vgt_irq_host_state *hstate);
 	irqreturn_t (*irq_handler) (struct vgt_irq_host_state *hstate);
 	void (*check_pending_irq) (struct vgt_device *vgt);
+	void (*disable_irq) (struct vgt_irq_host_state *hstate);
+	void (*enable_irq) (struct vgt_irq_host_state *hstate);
 };
 
 /* the list of physical interrupt control register groups */

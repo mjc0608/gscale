@@ -1076,6 +1076,9 @@ static irqreturn_t vgt_base_irq_handler(struct vgt_irq_host_state *hstate)
 	de_iir = VGT_MMIO_READ(pdev, _REG_DEIIR);
 	pm_iir = VGT_MMIO_READ(pdev, _REG_PMIIR);
 
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: receive interrupt (de-%x, gt-%x, pm-%x)\n",
+			de_iir, gt_iir, pm_iir);
+
 	if (!gt_iir && !de_iir && !pm_iir)
 		return IRQ_NONE;
 
@@ -1228,10 +1231,32 @@ static void vgt_base_init_irq(
 
 }
 
+static void vgt_base_disable_irq(struct vgt_irq_host_state *hstate)
+{
+	struct pgt_device *pdev = hstate->pdev;
+
+	ASSERT(spin_is_locked(&pdev->irq_lock));
+
+	VGT_MMIO_WRITE(pdev, _REG_DEIER,
+			VGT_MMIO_READ(pdev, _REG_DEIER) & ~_REGBIT_MASTER_INTERRUPT);
+}
+
+static void vgt_base_enable_irq(struct vgt_irq_host_state *hstate)
+{
+	struct pgt_device *pdev = hstate->pdev;
+
+	ASSERT(spin_is_locked(&pdev->irq_lock));
+
+	VGT_MMIO_WRITE(pdev, _REG_DEIER,
+			VGT_MMIO_READ(pdev, _REG_DEIER) | _REGBIT_MASTER_INTERRUPT);
+}
+
 struct vgt_irq_ops vgt_base_irq_ops = {
 	.irq_handler = vgt_base_irq_handler,
 	.init_irq = vgt_base_init_irq,
 	.check_pending_irq = vgt_base_check_pending_irq,
+	.disable_irq = vgt_base_disable_irq,
+	.enable_irq = vgt_base_enable_irq,
 };
 
 /* ======================common event logic====================== */
@@ -1423,7 +1448,6 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 {
 	struct pgt_device *pdev = (struct pgt_device *)data;
 	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
-	u32 de_ier;
 	irqreturn_t ret;
 	int cpu;
 
@@ -1433,15 +1457,9 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 	pdev->stat.last_pirq = get_cycles();
 
 	spin_lock(&pdev->irq_lock);
-	vgt_dbg(VGT_DBG_IRQ, "IRQ: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
-		VGT_MMIO_READ(pdev, _REG_DEIIR),
-		VGT_MMIO_READ(pdev, _REG_GTIIR),
-		VGT_MMIO_READ(pdev, _REG_SDEIIR),
-		VGT_MMIO_READ(pdev, _REG_PMIIR));
 
 	/* avoid nested handling by disabling master interrupt */
-	de_ier = VGT_MMIO_READ(pdev, _REG_DEIER);
-	VGT_MMIO_WRITE(pdev, _REG_DEIER, de_ier & ~_REGBIT_MASTER_INTERRUPT);
+	hstate->ops->disable_irq(hstate);
 
 	ret = hstate->ops->irq_handler(hstate);
 	if (ret == IRQ_NONE) {
@@ -1453,7 +1471,8 @@ static irqreturn_t vgt_interrupt(int irq, void *data)
 
 out:
 	/* re-enable master interrupt */
-	VGT_MMIO_WRITE(pdev, _REG_DEIER, de_ier);
+	hstate->ops->enable_irq(hstate);
+
 	spin_unlock(&pdev->irq_lock);
 
 	pdev->stat.pirq_cycles += get_cycles() - pdev->stat.last_pirq;
