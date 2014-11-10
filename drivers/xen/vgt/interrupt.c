@@ -254,8 +254,15 @@ u32 vgt_recalculate_ier(struct pgt_device *pdev, unsigned int reg)
 	ASSERT(spin_is_locked(&pdev->lock));
 	for (i = 0; i < VGT_MAX_VMS; i++) {
 		if (pdev->device[i]) {
-			mapped_interrupt =  translate_interrupt(pdev->irq_hstate,
-				pdev->device[i], reg, __vreg(pdev->device[i], reg));
+			if (reg == _REG_MASTER_IRQ) {
+				ier |= __vreg(pdev->device[i], reg)
+					& _REGBIT_MASTER_IRQ_CONTROL;
+				continue;
+			}
+
+			mapped_interrupt = translate_interrupt(pdev->irq_hstate,
+					pdev->device[i], reg,
+					__vreg(pdev->device[i], reg));
 			ier |= mapped_interrupt;
 		}
 	}
@@ -414,6 +421,55 @@ void recalculate_and_update_ier(struct pgt_device *pdev, vgt_reg_t reg)
 	VGT_POST_READ(pdev, reg);
 
 	vgt_put_irq_lock(pdev, flags);
+}
+
+bool vgt_reg_master_irq_handler(struct vgt_device *vgt,
+	unsigned int reg, void *p_data, unsigned int bytes)
+{
+	uint32_t changed, enabled, disabled;
+	uint32_t ier = *(u32 *)p_data;
+	uint32_t virtual_ier = __vreg(vgt, reg);
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
+
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: capture master irq write on reg (%x) with val (%x)\n",
+		reg, ier);
+
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: old vreg(%x), preg(%x)\n",
+		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
+
+	if (likely(vgt_track_nest) && !vgt->vgt_id &&
+		__get_cpu_var(in_vgt) != 1) {
+		vgt_err("i915 virq happens in nested vgt context(%d)!!!\n",
+			__get_cpu_var(in_vgt));
+		ASSERT(0);
+	}
+
+	/*
+	 * _REG_MASTER_IRQ is a special irq register,
+	 * only bit 31 is allowed to be modified
+	 * and treated as an IER bit.
+	 */
+	ier &= _REGBIT_MASTER_IRQ_CONTROL;
+	virtual_ier &= _REGBIT_MASTER_IRQ_CONTROL;
+	__vreg(vgt, reg) &= ~_REGBIT_MASTER_IRQ_CONTROL;
+	__vreg(vgt, reg) |= ier;
+
+	/* figure out newly enabled/disable bits */
+	changed = virtual_ier ^ ier;
+	enabled = (virtual_ier & changed) ^ changed;
+	disabled = enabled ^ changed;
+
+	vgt_dbg(VGT_DBG_IRQ, "vGT_IRQ: changed (%x), enabled(%x), disabled(%x)\n",
+			changed, enabled, disabled);
+
+	if (changed || device_is_reseting(pdev))
+		recalculate_and_update_ier(pdev, reg);
+
+	ops->check_pending_irq(vgt);
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: new vreg(%x), preg(%x)\n",
+		 __vreg(vgt, reg), VGT_MMIO_READ(pdev, reg));
+	return true;
 }
 
 /* general write handler for all level-1 ier registers */

@@ -2247,15 +2247,88 @@ static bool sfuse_strap_mmio_read(struct vgt_device *vgt, unsigned int offset,
  */
 reg_attr_t vgt_base_reg_info[] = {
 
-	/* -------render regs---------- */
-{_REG_GTIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
-{_REG_GTIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
-{_REG_GTIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
-{_REG_GTISR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_RCS_IMR, 4, F_RDR, 0, D_ALL, NULL, vgt_reg_imr_handler},
-{_REG_BCS_IMR, 4, F_RDR, 0, D_ALL, NULL, vgt_reg_imr_handler},
-{_REG_VCS_IMR, 4, F_RDR, 0, D_ALL, NULL, vgt_reg_imr_handler},
+/* Interrupt registers - GT */
+{_REG_GTIMR, 4, F_VIRT, 0, D_PRE_BDW, NULL, vgt_reg_imr_handler},
+{_REG_GTIER, 4, F_VIRT, 0, D_PRE_BDW, NULL, vgt_reg_ier_handler},
+{_REG_GTIIR, 4, F_VIRT, 0, D_PRE_BDW, NULL, vgt_reg_iir_handler},
+{_REG_GTISR, 4, F_VIRT, 0, D_PRE_BDW, NULL, NULL},
+{_REG_RCS_IMR, 4, F_RDR, 0, D_HSW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_BCS_IMR, 4, F_RDR, 0, D_HSW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_VCS_IMR, 4, F_RDR, 0, D_HSW_PLUS, NULL, vgt_reg_imr_handler},
 {_REG_VECS_IMR, 4, F_RDR, 0, D_HSW_PLUS, NULL, vgt_reg_imr_handler},
+
+/* Interrupt registers - Display */
+{_REG_DEIMR, 4, F_VIRT, 0, D_PRE_BDW, NULL, vgt_reg_imr_handler},
+{_REG_DEIER, 4, F_VIRT, 0, D_PRE_BDW, NULL, vgt_reg_ier_handler},
+{_REG_DEIIR, 4, F_VIRT, 0, D_PRE_BDW, NULL, vgt_reg_iir_handler},
+{_REG_DEISR, 4, F_VIRT, 0, D_PRE_BDW, NULL, NULL},
+
+/* Interrupt registers - PM */
+{_REG_PMIMR, 4, F_VIRT, 0, D_PRE_BDW, NULL, vgt_reg_imr_handler},
+{_REG_PMIER, 4, F_VIRT, 0, D_PRE_BDW, NULL, vgt_reg_ier_handler},
+{_REG_PMIIR, 4, F_VIRT, 0, D_PRE_BDW, NULL, vgt_reg_iir_handler},
+{_REG_PMISR, 4, F_VIRT, 0, D_PRE_BDW, NULL, NULL},
+
+/* Interrupt registers - PCH */
+{_REG_SDEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
+{_REG_SDEIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
+{_REG_SDEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
+{_REG_SDEISR, 4, F_VIRT, 0, D_ALL, vgt_reg_isr_read, vgt_reg_isr_write},
+
+/* Interrupt registers - BDW */
+{_REG_GT_IMR(0), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_GT_IER(0), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_ier_handler},
+{_REG_GT_IIR(0), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_iir_handler},
+{_REG_GT_ISR(0), 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+
+{_REG_GT_IMR(1), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_GT_IER(1), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_ier_handler},
+{_REG_GT_IIR(1), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_iir_handler},
+{_REG_GT_ISR(1), 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+
+{_REG_GT_IMR(2), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_GT_IER(2), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_ier_handler},
+{_REG_GT_IIR(2), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_iir_handler},
+{_REG_GT_ISR(2), 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+
+{_REG_GT_IMR(3), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_GT_IER(3), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_ier_handler},
+{_REG_GT_IIR(3), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_iir_handler},
+{_REG_GT_ISR(3), 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+
+{_REG_DE_PIPE_IMR(PIPE_A), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_DE_PIPE_IER(PIPE_A), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_ier_handler},
+{_REG_DE_PIPE_IIR(PIPE_A), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_iir_handler},
+{_REG_DE_PIPE_ISR(PIPE_A), 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+
+{_REG_DE_PIPE_IMR(PIPE_B), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_DE_PIPE_IER(PIPE_B), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_ier_handler},
+{_REG_DE_PIPE_IIR(PIPE_B), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_iir_handler},
+{_REG_DE_PIPE_ISR(PIPE_B), 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+
+{_REG_DE_PIPE_IMR(PIPE_C), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_DE_PIPE_IER(PIPE_C), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_ier_handler},
+{_REG_DE_PIPE_IIR(PIPE_C), 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_iir_handler},
+{_REG_DE_PIPE_ISR(PIPE_C), 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+
+{_REG_DE_PORT_IMR, 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_DE_PORT_IER, 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_ier_handler},
+{_REG_DE_PORT_IIR, 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_iir_handler},
+{_REG_DE_PORT_ISR, 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+
+{_REG_DE_MISC_IMR, 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_DE_MISC_IER, 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_ier_handler},
+{_REG_DE_MISC_IIR, 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_iir_handler},
+{_REG_DE_MISC_ISR, 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+
+{_REG_PCU_IMR, 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_PCU_IER, 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_ier_handler},
+{_REG_PCU_IIR, 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_iir_handler},
+{_REG_PCU_ISR, 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
+
+{_REG_MASTER_IRQ, 4, F_VIRT, 0, D_BDW_PLUS, NULL, vgt_reg_master_irq_handler},
+
+/* -------render regs---------- */
 {_REG_RCS_HWSTAM, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_VCS_HWSTAM, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_BCS_HWSTAM, 4, F_RDR, 0, D_ALL, NULL, NULL},
@@ -2422,15 +2495,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_VGA_PD, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
 {0x42080, 4, F_DOM0, 0, D_HSW, NULL, NULL},
-{_REG_DEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
-{_REG_DEIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
-{_REG_DEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
-{_REG_DEISR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_SDEIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
-{_REG_SDEIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
-{_REG_SDEIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
-{_REG_SDEISR, 4, F_VIRT, 0, D_ALL, vgt_reg_isr_read, vgt_reg_isr_write},
-
 {0xc4040, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
 {_REG_DE_RRMR, 4, F_VIRT, 0, D_ALL, NULL, rrmr_mmio_write},
@@ -2962,10 +3026,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x6F410, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
 	/* -------others---------- */
-{_REG_PMIMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_imr_handler},
-{_REG_PMIER, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_ier_handler},
-{_REG_PMIIR, 4, F_VIRT, 0, D_ALL, NULL, vgt_reg_iir_handler},
-{_REG_PMISR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_FORCEWAKE, 4, F_VIRT, 0, D_ALL, NULL, force_wake_write},
 {_REG_FORCEWAKE_ACK, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_GT_CORE_STATUS, 4, F_VIRT, 0, D_ALL, NULL, NULL},
