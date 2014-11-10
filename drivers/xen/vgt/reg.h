@@ -1796,4 +1796,47 @@ static inline int port_type_to_port(int port_sel)
 #define _REG_FPGA_DBG				0x42300
 #define _REGBIT_FPGA_DBG_RM_NOCLAIM		(1 << 31)
 
+/* GEN8 interrupt registers definations */
+#define _REG_MASTER_IRQ			0x44200
+#define  _REGBIT_MASTER_IRQ_CONTROL	(1<<31)
+#define  _REGBIT_PCU_IRQ			(1<<30)
+#define  _REGBIT_DE_PCH_IRQ		(1<<23)
+#define  _REGBIT_DE_MISC_IRQ		(1<<22)
+#define  _REGBIT_DE_PORT_IRQ		(1<<20)
+#define  _REGBIT_DE_PIPE_C_IRQ		(1<<18)
+#define  _REGBIT_DE_PIPE_B_IRQ		(1<<17)
+#define  _REGBIT_DE_PIPE_A_IRQ		(1<<16)
+#define  _REGBIT_GT_VECS_IRQ		(1<<6)
+#define  _REGBIT_GT_VCS2_IRQ		(1<<3)
+#define  _REGBIT_GT_VCS1_IRQ		(1<<2)
+#define  _REGBIT_GT_BCS_IRQ		(1<<1)
+#define  _REGBIT_GT_RCS_IRQ		(1<<0)
+
+#define _REG_GT_ISR(which) (0x44300 + (0x10 * (which)))
+#define _REG_GT_IMR(which) (0x44304 + (0x10 * (which)))
+#define _REG_GT_IIR(which) (0x44308 + (0x10 * (which)))
+#define _REG_GT_IER(which) (0x4430c + (0x10 * (which)))
+
+#define _REG_DE_PIPE_ISR(pipe) (0x44400 + (0x10 * (pipe)))
+#define _REG_DE_PIPE_IMR(pipe) (0x44404 + (0x10 * (pipe)))
+#define _REG_DE_PIPE_IIR(pipe) (0x44408 + (0x10 * (pipe)))
+#define _REG_DE_PIPE_IER(pipe) (0x4440c + (0x10 * (pipe)))
+
+#define _REG_DE_PORT_ISR 0x44440
+#define _REG_DE_PORT_IMR 0x44444
+#define _REG_DE_PORT_IIR 0x44448
+#define _REG_DE_PORT_IER 0x4444c
+#define  _REGBIT_PORT_DP_A_HOTPLUG	(1 << 3)
+#define  _REGBIT_AUX_CHANNEL_A	(1 << 0)
+
+#define _REG_DE_MISC_ISR 0x44460
+#define _REG_DE_MISC_IMR 0x44464
+#define _REG_DE_MISC_IIR 0x44468
+#define _REG_DE_MISC_IER 0x4446c
+
+#define _REG_PCU_ISR 0x444e0
+#define _REG_PCU_IMR 0x444e4
+#define _REG_PCU_IIR 0x444e8
+#define _REG_PCU_IER 0x444ec
+
 #endif	/* _VGT_REG_H_ */
