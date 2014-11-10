@@ -3231,6 +3231,13 @@ static void gen8_irq_reset(struct drm_device *dev)
 	GEN5_IRQ_RESET(GEN8_PCU_);
 
 	ibx_irq_reset(dev);
+
+#ifdef DRM_I915_VGT_SUPPORT
+	/* a hacky hook to vGT driver */
+	printk("vGT: setup vGT irq hook in %s\n", __FUNCTION__);
+	if (USES_VGT(dev))
+		vgt_install_irq(dev->pdev);
+#endif
 }
 
 void gen8_irq_power_well_post_enable(struct drm_i915_private *dev_priv)
