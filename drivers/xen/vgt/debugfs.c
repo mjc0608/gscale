@@ -400,30 +400,8 @@ static int vgt_show_irqinfo(struct seq_file *m, void *data)
 		vgt = pdev->device[i];
 		vstat = &vgt->stat;
 
-		seq_printf(m, "....vreg (deier: %x, deiir: %x, deimr: %x, deisr: %x)\n",
-				__vreg(vgt, _REG_DEIER),
-				__vreg(vgt, _REG_DEIIR),
-				__vreg(vgt, _REG_DEIMR),
-				__vreg(vgt, _REG_DEISR));
-		seq_printf(m, "....vreg (gtier: %x, gtiir: %x, gtimr: %x, gtisr: %x)\n",
-				__vreg(vgt, _REG_GTIER),
-				__vreg(vgt, _REG_GTIIR),
-				__vreg(vgt, _REG_GTIMR),
-				__vreg(vgt, _REG_GTISR));
-		seq_printf(m, "....vreg (sdeier: %x, sdeiir: %x, sdeimr: %x, sdeisr: %x)\n",
-				__vreg(vgt, _REG_SDEIER),
-				__vreg(vgt, _REG_SDEIIR),
-				__vreg(vgt, _REG_SDEIMR),
-				__vreg(vgt, _REG_SDEISR));
-		seq_printf(m, "....vreg (pmier: %x, pmiir: %x, pmimr: %x, pmisr: %x)\n",
-				__vreg(vgt, _REG_PMIER),
-				__vreg(vgt, _REG_PMIIR),
-				__vreg(vgt, _REG_PMIMR),
-				__vreg(vgt, _REG_PMISR));
-		seq_printf(m, "....vreg (rcs_imr: %x, vcs_imr: %x, bcs_imr: %x\n",
-				__vreg(vgt, _REG_RCS_IMR),
-				__vreg(vgt, _REG_VCS_IMR),
-				__vreg(vgt, _REG_BCS_IMR));
+		show_virtual_interrupt_regs(vgt, m);
+
 		seq_printf(m, "%16lld: Last injection\n",
 			vstat->last_injection);
 

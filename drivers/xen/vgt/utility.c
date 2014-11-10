@@ -320,6 +320,44 @@ void show_interrupt_regs(struct pgt_device *pdev,
 #undef P
 }
 
+void show_virtual_interrupt_regs(struct vgt_device *vgt,
+		struct seq_file *seq)
+{
+#define P(fmt, args...) \
+	do { \
+		if (!seq) \
+			vgt_info(fmt, ##args); \
+		else \
+			seq_printf(seq, fmt, ##args); \
+	}while(0)
+
+	P("....vreg (deier: %x, deiir: %x, deimr: %x, deisr: %x)\n",
+			__vreg(vgt, _REG_DEIER),
+			__vreg(vgt, _REG_DEIIR),
+			__vreg(vgt, _REG_DEIMR),
+			__vreg(vgt, _REG_DEISR));
+	P("....vreg (gtier: %x, gtiir: %x, gtimr: %x, gtisr: %x)\n",
+			__vreg(vgt, _REG_GTIER),
+			__vreg(vgt, _REG_GTIIR),
+			__vreg(vgt, _REG_GTIMR),
+			__vreg(vgt, _REG_GTISR));
+	P("....vreg (sdeier: %x, sdeiir: %x, sdeimr: %x, sdeisr: %x)\n",
+			__vreg(vgt, _REG_SDEIER),
+			__vreg(vgt, _REG_SDEIIR),
+			__vreg(vgt, _REG_SDEIMR),
+			__vreg(vgt, _REG_SDEISR));
+	P("....vreg (pmier: %x, pmiir: %x, pmimr: %x, pmisr: %x)\n",
+			__vreg(vgt, _REG_PMIER),
+			__vreg(vgt, _REG_PMIIR),
+			__vreg(vgt, _REG_PMIMR),
+			__vreg(vgt, _REG_PMISR));
+	P("....vreg (rcs_imr: %x, vcs_imr: %x, bcs_imr: %x\n",
+			__vreg(vgt, _REG_RCS_IMR),
+			__vreg(vgt, _REG_VCS_IMR),
+			__vreg(vgt, _REG_BCS_IMR));
+#undef P
+}
+
 uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
 {
 	unsigned long bar_s, bar_size=0;
