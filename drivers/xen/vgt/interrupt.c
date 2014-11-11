@@ -67,7 +67,7 @@
  *   e) setup virt/phys handler in vgt_init_events
  */
 static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
-	enum vgt_irq_type type);
+		struct vgt_irq_info *info);
 
 static int vgt_irq_warn_once[VGT_MAX_VMS+1][EVENT_MAX];
 
@@ -472,6 +472,38 @@ bool vgt_reg_isr_write(struct vgt_device *vgt, unsigned int reg,
 
 	return true;
 }
+
+#define IIR_WRITE_MAX	5
+
+static bool process_irq(struct vgt_irq_host_state *hstate,
+		struct vgt_irq_info *info)
+{
+	struct pgt_device *pdev = hstate->pdev;
+	u32 val;
+	u32 reg;
+	int count = 0;
+
+	reg = regbase_to_iir(info->reg_base);
+	val = VGT_MMIO_READ(pdev, reg);
+	if (!val)
+		return false;
+
+	vgt_handle_events(hstate, &val, info);
+
+	if (reg != _REG_SDEIIR) {
+		VGT_MMIO_WRITE(pdev, reg, val);
+	} else {
+		while((count < IIR_WRITE_MAX) && (val != 0)) {
+			VGT_MMIO_WRITE(pdev, _REG_SDEIIR, val);
+			val = VGT_MMIO_READ(pdev, _REG_SDEIIR);
+			count ++;
+		}
+	}
+
+	return true;
+}
+
+
 
 /* =======================vEvent injection===================== */
 
@@ -1061,52 +1093,25 @@ static void vgt_base_check_pending_irq(struct vgt_device *vgt)
 	}
 }
 
-#define IIR_WRITE_MAX	5
-
 /* base interrupt handler, for snb/ivb/hsw */
 static irqreturn_t vgt_base_irq_handler(struct vgt_irq_host_state *hstate)
 {
-	u32 gt_iir, pm_iir, de_iir, pch_iir, de_iir_tmp;
-	int pch_bit;
-	int count = 0;
 	struct pgt_device *pdev = hstate->pdev;
+	bool rc = false;
 
-	/* read physical IIRs */
-	gt_iir = VGT_MMIO_READ(pdev, _REG_GTIIR);
-	de_iir = VGT_MMIO_READ(pdev, _REG_DEIIR);
-	pm_iir = VGT_MMIO_READ(pdev, _REG_PMIIR);
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: receive interrupt (de-%x, gt-%x, pch-%x, pm-%x)\n",
+			VGT_MMIO_READ(pdev, _REG_DEIIR),
+			VGT_MMIO_READ(pdev, _REG_GTIIR),
+			VGT_MMIO_READ(pdev, _REG_SDEIIR),
+			VGT_MMIO_READ(pdev, _REG_PMIIR));
 
-	vgt_dbg(VGT_DBG_IRQ, "IRQ: receive interrupt (de-%x, gt-%x, pm-%x)\n",
-			de_iir, gt_iir, pm_iir);
+	rc |= process_irq(hstate, hstate->info[IRQ_INFO_GT]);
+	rc |= process_irq(hstate, hstate->info[IRQ_INFO_DPY]);
+	rc |= process_irq(hstate, hstate->info[IRQ_INFO_PM]);
+	if (test_bit(PCH_IRQ, hstate->pending_events))
+		rc |= process_irq(hstate, hstate->info[IRQ_INFO_PCH]);
 
-	if (!gt_iir && !de_iir && !pm_iir)
-		return IRQ_NONE;
-
-	vgt_handle_events(hstate, &gt_iir, IRQ_INFO_GT);
-
-	pch_bit = hstate->events[PCH_IRQ].bit;
-	ASSERT(hstate->events[PCH_IRQ].info);
-	de_iir_tmp = de_iir & (~(1 << pch_bit));
-	vgt_handle_events(hstate, &de_iir_tmp, IRQ_INFO_DPY);
-
-	vgt_handle_events(hstate, &pm_iir, IRQ_INFO_PM);
-
-	if (de_iir & (1 << pch_bit)) {
-		pch_iir = VGT_MMIO_READ(pdev, _REG_SDEIIR);
-		vgt_handle_events(hstate, &pch_iir, IRQ_INFO_PCH);
-
-		while((count < IIR_WRITE_MAX) && (pch_iir != 0)) {
-			VGT_MMIO_WRITE(pdev, _REG_SDEIIR, pch_iir);
-			pch_iir = VGT_MMIO_READ(pdev, _REG_SDEIIR);
-			count ++;
-		}
-	}
-
-	VGT_MMIO_WRITE(pdev, _REG_GTIIR, gt_iir);
-	VGT_MMIO_WRITE(pdev, _REG_PMIIR, pm_iir);
-	VGT_MMIO_WRITE(pdev, _REG_DEIIR, de_iir);
-
-	return IRQ_HANDLED;
+	return rc ? IRQ_HANDLED : IRQ_NONE;
 }
 
 /* SNB/IVB/HSW share the similar interrupt register scheme */
@@ -1410,11 +1415,10 @@ void vgt_emulate_dpy_events(struct pgt_device *pdev)
  * registered handler accordingly
  */
 static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
-	enum vgt_irq_type type)
+		struct vgt_irq_info *info)
 {
 	int bit;
 	enum vgt_event_type event;
-	struct vgt_irq_info *info = hstate->info[type];
 	vgt_event_phys_handler_t handler;
 	struct pgt_device *pdev = hstate->pdev;
 
