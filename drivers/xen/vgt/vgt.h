@@ -2083,6 +2083,12 @@ struct vgt_emul_timer {
 
 #define REGBIT_INTERRUPT_PIPE_MASK    0x1f
 
+struct vgt_irq_map {
+	int up_irq_event;
+	int down_irq_group;
+	u32 down_irq_bitmask;
+};
+
 /* structure containing device specific IRQ state */
 struct vgt_irq_host_state {
 	struct pgt_device *pdev;
@@ -2096,6 +2102,7 @@ struct vgt_irq_host_state {
 	struct vgt_emul_timer dpy_timer;
 	u32  pipe_mask;
 	bool installed;
+	struct vgt_irq_map *irq_map;
 };
 
 #define vgt_get_event_phys_handler(h, e)	(h->events[e].p_handler)

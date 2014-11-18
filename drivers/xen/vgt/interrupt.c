@@ -504,7 +504,10 @@ static bool process_irq(struct vgt_irq_host_state *hstate,
 	return true;
 }
 
-
+struct vgt_irq_map base_irq_map[] = {
+	{ PCH_IRQ, IRQ_INFO_PCH, ~0 },
+	{ -1, -1, ~0},
+};
 
 /* =======================vEvent injection===================== */
 
@@ -1607,9 +1610,10 @@ int vgt_irq_init(struct pgt_device *pdev)
 	if (hstate == NULL)
 		return -ENOMEM;
 
-	if (IS_SNB(pdev) || IS_IVB(pdev) || IS_HSW(pdev))
+	if (IS_SNB(pdev) || IS_IVB(pdev) || IS_HSW(pdev)) {
 		hstate->ops = &vgt_base_irq_ops;
-	else {
+		hstate->irq_map = base_irq_map;
+	} else {
 		vgt_err("Unsupported device\n");
 		kfree(hstate);
 		return -EINVAL;
