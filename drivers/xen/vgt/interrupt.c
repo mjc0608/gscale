@@ -69,6 +69,9 @@
 static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
 		struct vgt_irq_info *info);
 
+static void update_upstream_irq(struct vgt_device *vgt,
+		struct vgt_irq_info *info);
+
 static int vgt_irq_warn_once[VGT_MAX_VMS+1][EVENT_MAX];
 
 char *vgt_irq_name[EVENT_MAX] = {
@@ -330,7 +333,21 @@ void recalculate_and_update_imr(struct pgt_device *pdev, vgt_reg_t reg)
 	vgt_put_irq_lock(pdev, flags);
 }
 
-/* general write handler for all level-1 imr registers */
+static inline struct vgt_irq_info *regbase_to_irq_info(struct pgt_device *pdev,
+		unsigned int reg)
+{
+	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
+	int i;
+
+	for_each_set_bit(i, hstate->irq_info_bitmap, IRQ_INFO_MAX) {
+		if (hstate->info[i]->reg_base == reg)
+			return hstate->info[i];
+	}
+
+	return NULL;
+}
+
+/* general write handler for all imr registers */
 bool vgt_reg_imr_handler(struct vgt_device *vgt,
 	unsigned int reg, void *p_data, unsigned int bytes)
 {
@@ -407,6 +424,7 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	uint32_t ier = *(u32 *)p_data;
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_irq_ops *ops = vgt_get_irq_ops(pdev);
+	struct vgt_irq_info *info;
 
 	vgt_dbg(VGT_DBG_IRQ, "IRQ: capture IER write on reg (%x) with val (%x)\n",
 		reg, ier);
@@ -427,8 +445,15 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 	disabled = enabled ^ changed;
 
 	vgt_dbg(VGT_DBG_IRQ, "vGT_IRQ: changed (%x), enabled(%x), disabled(%x)\n",
-		changed, enabled, disabled);
+			changed, enabled, disabled);
 	__vreg(vgt, reg) = ier;
+
+	info = regbase_to_irq_info(pdev, ier_to_regbase(reg));
+	if (!info)
+		return false;
+
+	if (info->has_upstream_irq)
+		update_upstream_irq(vgt, info);
 
 	if (changed || device_is_reseting(pdev))
 		recalculate_and_update_ier(pdev, reg);
@@ -442,13 +467,21 @@ bool vgt_reg_ier_handler(struct vgt_device *vgt,
 bool vgt_reg_iir_handler(struct vgt_device *vgt, unsigned int reg,
 	void *p_data, unsigned int bytes)
 {
+	struct vgt_irq_info *info = regbase_to_irq_info(vgt->pdev, iir_to_regbase(reg));
 	vgt_reg_t iir = *(vgt_reg_t *)p_data;
 
 	vgt_dbg(VGT_DBG_IRQ, "IRQ: capture IIR write on reg (%x) with val (%x)\n",
 		reg, iir);
 
+	if (!info)
+		return false;
+
 	/* TODO: need use an atomic operation. Now it's safe due to big lock */
 	__vreg(vgt, reg) &= ~iir;
+
+	if (info->has_upstream_irq)
+		update_upstream_irq(vgt, info);
+
 	return true;
 }
 
@@ -508,6 +541,90 @@ struct vgt_irq_map base_irq_map[] = {
 	{ PCH_IRQ, IRQ_INFO_PCH, ~0 },
 	{ -1, -1, ~0},
 };
+
+static inline bool has_downstream_irq(struct vgt_irq_host_state *hstate,
+		enum vgt_event_type event)
+{
+	struct vgt_irq_info *info = hstate->events[event].info;
+	int bit = hstate->events[event].bit;
+
+	return test_bit(bit, info->downstream_irq_bitmap);
+}
+
+static void process_downstream_irq(struct vgt_irq_host_state *hstate,
+		enum vgt_event_type event)
+{
+	struct vgt_irq_map *map;
+
+	for (map = hstate->irq_map; map->up_irq_event != -1; map++) {
+		if (map->up_irq_event != event)
+			continue;
+
+		process_irq(hstate, hstate->info[map->down_irq_group]);
+	}
+}
+
+static void update_upstream_irq(struct vgt_device *vgt,
+		struct vgt_irq_info *info)
+{
+	struct vgt_irq_host_state *hstate = vgt->pdev->irq_hstate;
+	struct vgt_irq_map *map = hstate->irq_map;
+	struct vgt_irq_info *up_irq_info = NULL;
+	u32 set_bits = 0;
+	u32 clear_bits = 0;
+	int bit;
+	u32 imr, iir;
+	u32 val = __vreg(vgt, regbase_to_iir(info->reg_base))
+			& __vreg(vgt, regbase_to_ier(info->reg_base));
+
+	if (!info->has_upstream_irq)
+		return;
+
+	for (map = hstate->irq_map; map->up_irq_event != -1; map++) {
+		if (info->group != map->down_irq_group)
+			continue;
+
+		if (!up_irq_info)
+			up_irq_info = hstate->events[map->up_irq_event].info;
+		else
+			ASSERT(up_irq_info == hstate->events[map->up_irq_event].info);
+
+		bit = hstate->events[map->up_irq_event].bit;
+
+		if (val & map->down_irq_bitmask)
+			set_bits |= (1 << bit);
+		else
+			clear_bits |= (1 << bit);
+	}
+
+	iir = regbase_to_iir(up_irq_info->reg_base);
+	imr = regbase_to_imr(up_irq_info->reg_base);
+	__vreg(vgt, iir) |= (set_bits & ~__vreg(vgt, imr));
+
+	if (up_irq_info->has_upstream_irq)
+		update_upstream_irq(vgt, up_irq_info);
+}
+
+static void vgt_irq_map_init(struct vgt_irq_host_state *hstate)
+{
+	struct vgt_irq_map *map;
+	struct vgt_irq_info *up_info, *down_info;
+	int event, up_bit;
+
+	for (map = hstate->irq_map; map->up_irq_event != -1; map++) {
+		event = map->up_irq_event;
+		up_info = hstate->events[event].info;
+		up_bit = hstate->events[event].bit;
+		down_info = hstate->info[map->down_irq_group];
+
+		set_bit(up_bit, up_info->downstream_irq_bitmap);
+		down_info->has_upstream_irq = true;
+
+		printk("vGT: build irq map: [upstream] -> [downstream]\n");
+		printk("[upstream]   group: %d bit: %d, event: %s.\n", up_info->group, up_bit, vgt_irq_name[event]);
+		printk("[downstream] group: %d bitmask: 0x%x.\n", down_info->group, map->down_irq_bitmask);
+	}
+}
 
 /* =======================vEvent injection===================== */
 
@@ -796,11 +913,6 @@ static void vgt_propagate_event(struct vgt_irq_host_state *hstate,
 		vgt_dbg(VGT_DBG_IRQ, "IRQ: set bit (%d) for (%s) for VM (%d)\n",
 			bit, vgt_irq_name[event], vgt->vm_id);
 		set_bit(bit, (void*)vgt_vreg(vgt, regbase_to_iir(reg_base)));
-
-		/* enabled PCH events needs queue in level-1 display */
-		if (info == hstate->info[IRQ_INFO_PCH] &&
-			test_bit(bit, (void*)vgt_vreg(vgt, regbase_to_ier(reg_base))))
-			vgt_propagate_event(hstate, PCH_IRQ, vgt);
 	}
 }
 
@@ -1081,13 +1193,14 @@ static void vgt_handle_port_hotplug_phys(struct vgt_irq_host_state *hstate,
 static void vgt_base_check_pending_irq(struct vgt_device *vgt)
 {
 	struct vgt_irq_host_state *hstate = vgt->pdev->irq_hstate;
+	struct vgt_irq_info *info = hstate->info[IRQ_INFO_PCH];
 
 	if (!(__vreg(vgt, _REG_DEIER) & _REGBIT_MASTER_INTERRUPT))
 		return;
 
-	/* first try 2nd level PCH pending events */
-	if ((__vreg(vgt, _REG_SDEIIR) & __vreg(vgt, _REG_SDEIER)))
-		vgt_propagate_event(hstate, PCH_IRQ, vgt);
+	if ((__vreg(vgt, regbase_to_iir(info->reg_base))
+				& __vreg(vgt, regbase_to_ier(info->reg_base))))
+		update_upstream_irq(vgt, info);
 
 	/* then check 1st level pending events */
 	if ((__vreg(vgt, _REG_DEIIR) & __vreg(vgt, _REG_DEIER)) ||
@@ -1112,8 +1225,6 @@ static irqreturn_t vgt_base_irq_handler(struct vgt_irq_host_state *hstate)
 	rc |= process_irq(hstate, hstate->info[IRQ_INFO_GT]);
 	rc |= process_irq(hstate, hstate->info[IRQ_INFO_DPY]);
 	rc |= process_irq(hstate, hstate->info[IRQ_INFO_PM]);
-	if (test_bit(PCH_IRQ, hstate->pending_events))
-		rc |= process_irq(hstate, hstate->info[IRQ_INFO_PCH]);
 
 	return rc ? IRQ_HANDLED : IRQ_NONE;
 }
@@ -1436,15 +1547,20 @@ static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
 
 	for_each_set_bit(bit, iir, VGT_IRQ_BITWIDTH) {
 		event = info->bit_to_event[bit];
-		pdev->stat.events[event]++;
 
 		if (unlikely(event == EVENT_RESERVED)) {
 			if (!test_and_set_bit(bit, &info->warned))
 				vgt_err("IRQ: abandon non-registered [%s, bit-%d] event (%s)\n",
-					info->name, bit, vgt_irq_name[event]);
+						info->name, bit, vgt_irq_name[event]);
 			continue;
 		}
 
+		if (has_downstream_irq(hstate, event)) {
+			process_downstream_irq(hstate, event);
+			continue;
+		}
+
+		pdev->stat.events[event]++;
 		handler = vgt_get_event_phys_handler(hstate, event);
 		ASSERT(handler);
 
@@ -1630,6 +1746,8 @@ int vgt_irq_init(struct pgt_device *pdev)
 
 	/* gen specific initialization */
 	hstate->ops->init_irq(hstate);
+
+	vgt_irq_map_init(hstate);
 
 	pdev->irq_hstate = hstate;
 	pdev->dom0_irq_cpu = -1;

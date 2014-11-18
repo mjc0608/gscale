@@ -2045,6 +2045,8 @@ struct vgt_irq_info {
 	unsigned long warned;
 	unsigned long default_enabled_events;
 	int group;
+	DECLARE_BITMAP(downstream_irq_bitmap, VGT_IRQ_BITWIDTH);
+	bool has_upstream_irq;
 };
 
 #define	EVENT_FW_ALL 0	/* event forwarded to all instances */
@@ -2118,6 +2120,9 @@ struct vgt_irq_host_state {
 #define regbase_to_imr(base)	(base + 0x4)
 #define regbase_to_iir(base)	(base + 0x8)
 #define regbase_to_ier(base)	(base + 0xC)
+
+#define iir_to_regbase(iir)    (iir - 0x8)
+#define ier_to_regbase(ier)    (ier - 0xC)
 
 static inline void vgt_clear_all_vreg_bit(struct pgt_device *pdev, unsigned int value, unsigned int offset)
 {
