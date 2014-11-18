@@ -2044,6 +2044,7 @@ struct vgt_irq_info {
 	enum vgt_event_type bit_to_event[VGT_IRQ_BITWIDTH];
 	unsigned long warned;
 	unsigned long default_enabled_events;
+	int group;
 };
 
 #define	EVENT_FW_ALL 0	/* event forwarded to all instances */
@@ -2089,6 +2090,7 @@ struct vgt_irq_host_state {
 	int i915_irq;
 	int pirq;
 	struct vgt_irq_info	*info[IRQ_INFO_MAX];
+	DECLARE_BITMAP(irq_info_bitmap, IRQ_INFO_MAX);
 	struct vgt_event_info	events[EVENT_MAX];
 	DECLARE_BITMAP(pending_events, EVENT_MAX);
 	struct vgt_emul_timer dpy_timer;

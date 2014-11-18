@@ -1156,13 +1156,19 @@ static void vgt_base_init_irq(
 #define SET_DEFAULT_ENABLED_EVENTS(s, e, i)			      \
 	set_bit(s->events[e].bit, &(s->info[i]->default_enabled_events));\
 
+#define SET_IRQ_GROUP(s, g, i) \
+	do { \
+		s->info[g] = i; \
+		(i)->group = g; \
+		set_bit(g, s->irq_info_bitmap); \
+	} while (0);
 
 	hstate->pipe_mask = REGBIT_INTERRUPT_PIPE_MASK;
 
-	hstate->info[IRQ_INFO_GT] = &vgt_base_gt_info;
-	hstate->info[IRQ_INFO_DPY] = &vgt_base_dpy_info;
-	hstate->info[IRQ_INFO_PCH] = &vgt_base_pch_info;
-	hstate->info[IRQ_INFO_PM] = &vgt_base_pm_info;
+	SET_IRQ_GROUP(hstate, IRQ_INFO_GT, &vgt_base_gt_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_DPY, &vgt_base_dpy_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_PM, &vgt_base_pm_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_PCH, &vgt_base_pch_info);
 
 	/* Render events */
 	SET_BIT_INFO(hstate, 0, RCS_MI_USER_INTERRUPT, IRQ_INFO_GT);
