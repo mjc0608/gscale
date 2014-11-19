@@ -611,6 +611,23 @@ struct vgt_irq_map base_irq_map[] = {
 	{ -1, -1, ~0},
 };
 
+struct vgt_irq_map gen8_irq_map[] = {
+	{ RCS_IRQ, IRQ_INFO_GT0, 0xffff },
+	{ BCS_IRQ, IRQ_INFO_GT0, 0xffff0000 },
+	{ VCS_IRQ, IRQ_INFO_GT1, 0xffff },
+	{ VCS2_IRQ, IRQ_INFO_GT1, 0xffff0000 },
+	{ PM_IRQ, IRQ_INFO_GT2, 0xffff },
+	{ VECS_IRQ, IRQ_INFO_GT3, 0xffff },
+	{ DE_PIPE_A_IRQ, IRQ_INFO_DE_PIPE_A, ~0 },
+	{ DE_PIPE_B_IRQ, IRQ_INFO_DE_PIPE_B, ~0 },
+	{ DE_PIPE_C_IRQ, IRQ_INFO_DE_PIPE_C, ~0 },
+	{ DE_PORT_IRQ, IRQ_INFO_DE_PORT, ~0 },
+	{ DE_MISC_IRQ, IRQ_INFO_DE_MISC, ~0 },
+	{ PCU_IRQ, IRQ_INFO_PCU, ~0 },
+	{ PCH_IRQ, IRQ_INFO_PCH, ~0 },
+	{ -1, -1, ~0 },
+};
+
 static inline bool has_downstream_irq(struct vgt_irq_host_state *hstate,
 		enum vgt_event_type event)
 {
@@ -2000,6 +2017,7 @@ int vgt_irq_init(struct pgt_device *pdev)
 		hstate->irq_map = base_irq_map;
 	} else if (IS_BDW(pdev)) {
 		hstate->ops = &vgt_gen8_irq_ops;
+		hstate->irq_map = gen8_irq_map;
 	} else {
 		vgt_err("Unsupported device\n");
 		kfree(hstate);
