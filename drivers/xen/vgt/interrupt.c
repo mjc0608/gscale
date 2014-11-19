@@ -1454,6 +1454,206 @@ struct vgt_irq_ops vgt_base_irq_ops = {
 	.enable_irq = vgt_base_enable_irq,
 };
 
+/* GEN8 interrupt routines. */
+
+#define DEFINE_VGT_GEN8_IRQ_INFO(regname, regbase) \
+       static struct vgt_irq_info vgt_gen8_##regname##_info = { \
+               .name = #regname"-IRQ", \
+               .reg_base = regbase, \
+               .bit_to_event = {[0 ... VGT_IRQ_BITWIDTH-1] = EVENT_RESERVED}, \
+       };
+
+DEFINE_VGT_GEN8_IRQ_INFO(gt0, _REG_GT_ISR(0));
+DEFINE_VGT_GEN8_IRQ_INFO(gt1, _REG_GT_ISR(1));
+DEFINE_VGT_GEN8_IRQ_INFO(gt2, _REG_GT_ISR(2));
+DEFINE_VGT_GEN8_IRQ_INFO(gt3, _REG_GT_ISR(3));
+DEFINE_VGT_GEN8_IRQ_INFO(de_pipe_a, _REG_DE_PIPE_ISR(PIPE_A));
+DEFINE_VGT_GEN8_IRQ_INFO(de_pipe_b, _REG_DE_PIPE_ISR(PIPE_B));
+DEFINE_VGT_GEN8_IRQ_INFO(de_pipe_c, _REG_DE_PIPE_ISR(PIPE_C));
+DEFINE_VGT_GEN8_IRQ_INFO(de_port, _REG_DE_PORT_ISR);
+DEFINE_VGT_GEN8_IRQ_INFO(de_misc, _REG_DE_MISC_ISR);
+DEFINE_VGT_GEN8_IRQ_INFO(pcu, _REG_PCU_ISR);
+DEFINE_VGT_GEN8_IRQ_INFO(master, _REG_MASTER_IRQ);
+
+static void vgt_gen8_check_pending_irq(struct vgt_device *vgt)
+{
+	struct vgt_irq_host_state *hstate = vgt->pdev->irq_hstate;
+	int i;
+
+	if (!(__vreg(vgt, _REG_MASTER_IRQ) &
+				_REGBIT_MASTER_IRQ_CONTROL))
+		return;
+
+	for_each_set_bit(i, hstate->irq_info_bitmap, IRQ_INFO_MAX) {
+		struct vgt_irq_info *info = hstate->info[i];
+
+		if ((__vreg(vgt, regbase_to_iir(info->reg_base))
+					& __vreg(vgt, regbase_to_ier(info->reg_base))))
+			update_upstream_irq(vgt, info);
+	}
+
+	if (__vreg(vgt, _REG_MASTER_IRQ) & ~_REGBIT_MASTER_IRQ_CONTROL)
+		vgt_inject_virtual_interrupt(vgt);
+}
+
+/* GEN8 interrupt handler */
+static irqreturn_t vgt_gen8_irq_handler(struct vgt_irq_host_state *hstate)
+{
+	struct pgt_device *pdev = hstate->pdev;
+	u32 master_ctl;
+	bool rc;
+
+	master_ctl = VGT_MMIO_READ(pdev, _REG_MASTER_IRQ);
+	master_ctl &= ~_REGBIT_MASTER_IRQ_CONTROL;
+
+	if (!master_ctl)
+		return IRQ_NONE;
+
+	vgt_dbg(VGT_DBG_IRQ, "IRQ: receive interrupt master_ctl %x\n", master_ctl);
+
+	rc = process_irq(hstate, hstate->info[IRQ_INFO_MASTER]);
+
+	return rc ? IRQ_HANDLED : IRQ_NONE;
+}
+
+static void vgt_gen8_init_irq(
+		struct vgt_irq_host_state *hstate)
+{
+	struct pgt_device *pdev = hstate->pdev;
+	struct vgt_device_info *device_info = &pdev->device_info;
+
+	hstate->pipe_mask = REGBIT_INTERRUPT_PIPE_MASK;
+
+	hstate->info[IRQ_INFO_MASTER] = &vgt_gen8_master_info;
+	hstate->info[IRQ_INFO_MASTER]->group = IRQ_INFO_MASTER;
+
+	SET_IRQ_GROUP(hstate, IRQ_INFO_GT0, &vgt_gen8_gt0_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_GT1, &vgt_gen8_gt1_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_GT2, &vgt_gen8_gt2_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_GT3, &vgt_gen8_gt3_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_DE_PIPE_A, &vgt_gen8_de_pipe_a_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_DE_PIPE_B, &vgt_gen8_de_pipe_b_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_DE_PIPE_C, &vgt_gen8_de_pipe_c_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_DE_PORT, &vgt_gen8_de_port_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_DE_MISC, &vgt_gen8_de_misc_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_PCU, &vgt_gen8_pcu_info);
+	SET_IRQ_GROUP(hstate, IRQ_INFO_PCH, &vgt_base_pch_info);
+
+	/* GEN8 level 1 interrupts. */
+	SET_BIT_INFO(hstate, 0, RCS_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 1, BCS_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 2, VCS_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 3, VCS2_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 4, PM_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 6, VECS_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 16, DE_PIPE_A_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 17, DE_PIPE_B_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 18, DE_PIPE_C_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 20, DE_PORT_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 22, DE_MISC_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 23, PCH_IRQ, IRQ_INFO_MASTER);
+	SET_BIT_INFO(hstate, 30, PCU_IRQ, IRQ_INFO_MASTER);
+
+	/* GEN8 level 2 interrupts. */
+
+	/* GEN8 interrupt GT0 events */
+	SET_BIT_INFO(hstate, 0, RCS_MI_USER_INTERRUPT, IRQ_INFO_GT0);
+	SET_BIT_INFO(hstate, 4, RCS_PIPE_CONTROL, IRQ_INFO_GT0);
+	SET_BIT_INFO(hstate, 8, RCS_AS_CONTEXT_SWITCH, IRQ_INFO_GT0);
+
+	SET_BIT_INFO(hstate, 16, BCS_MI_USER_INTERRUPT, IRQ_INFO_GT0);
+	SET_BIT_INFO(hstate, 20, BCS_MI_FLUSH_DW, IRQ_INFO_GT0);
+	SET_BIT_INFO(hstate, 24, BCS_AS_CONTEXT_SWITCH, IRQ_INFO_GT0);
+
+	/* GEN8 interrupt GT1 events */
+	SET_BIT_INFO(hstate, 0, VCS_MI_USER_INTERRUPT, IRQ_INFO_GT1);
+	SET_BIT_INFO(hstate, 4, VCS_MI_FLUSH_DW, IRQ_INFO_GT1);
+	SET_BIT_INFO(hstate, 8, VCS_AS_CONTEXT_SWITCH, IRQ_INFO_GT1);
+
+	if (GEN_REV(device_info->gen) == 3) {
+		SET_BIT_INFO(hstate, 16, VCS2_MI_USER_INTERRUPT, IRQ_INFO_GT1);
+		SET_BIT_INFO(hstate, 20, VCS2_MI_FLUSH_DW, IRQ_INFO_GT1);
+		SET_BIT_INFO(hstate, 24, VCS2_AS_CONTEXT_SWITCH, IRQ_INFO_GT1);
+	}
+
+	/* GEN8 interrupt GT2 events */
+	SET_BIT_INFO(hstate, 1, GV_DOWN_INTERVAL, IRQ_INFO_GT2);
+	SET_BIT_INFO(hstate, 2, GV_UP_INTERVAL, IRQ_INFO_GT2);
+	SET_BIT_INFO(hstate, 4, RP_DOWN_THRESHOLD, IRQ_INFO_GT2);
+	SET_BIT_INFO(hstate, 5, RP_UP_THRESHOLD, IRQ_INFO_GT2);
+	SET_BIT_INFO(hstate, 6, FREQ_DOWNWARD_TIMEOUT_RC6, IRQ_INFO_GT2);
+
+	/* GEN8 interrupt GT3 events */
+	SET_BIT_INFO(hstate, 0, VECS_MI_USER_INTERRUPT, IRQ_INFO_GT3);
+	SET_BIT_INFO(hstate, 4, VECS_MI_FLUSH_DW, IRQ_INFO_GT3);
+	SET_BIT_INFO(hstate, 8, VECS_AS_CONTEXT_SWITCH, IRQ_INFO_GT3);
+
+	SET_BIT_INFO(hstate, 0, PIPE_A_VBLANK, IRQ_INFO_DE_PIPE_A);
+	SET_BIT_INFO(hstate, 4, PRIMARY_A_FLIP_DONE, IRQ_INFO_DE_PIPE_A);
+	SET_BIT_INFO(hstate, 5, SPRITE_A_FLIP_DONE, IRQ_INFO_DE_PIPE_A);
+
+	SET_BIT_INFO(hstate, 0, PIPE_B_VBLANK, IRQ_INFO_DE_PIPE_B);
+	SET_BIT_INFO(hstate, 4, PRIMARY_B_FLIP_DONE, IRQ_INFO_DE_PIPE_B);
+	SET_BIT_INFO(hstate, 5, SPRITE_B_FLIP_DONE, IRQ_INFO_DE_PIPE_B);
+
+	SET_BIT_INFO(hstate, 0, PIPE_C_VBLANK, IRQ_INFO_DE_PIPE_C);
+	SET_BIT_INFO(hstate, 4, PRIMARY_C_FLIP_DONE, IRQ_INFO_DE_PIPE_C);
+	SET_BIT_INFO(hstate, 5, SPRITE_C_FLIP_DONE, IRQ_INFO_DE_PIPE_C);
+
+	/* GEN8 interrupt DE PORT events */
+	SET_BIT_INFO(hstate, 0, AUX_CHANNEL_A, IRQ_INFO_DE_PORT);
+	SET_BIT_INFO(hstate, 3, DP_A_HOTPLUG, IRQ_INFO_DE_PORT);
+
+	/* GEN8 interrupt DE MISC events */
+	SET_BIT_INFO(hstate, 0, GSE, IRQ_INFO_DE_MISC);
+
+	/* PCH events */
+	SET_BIT_INFO(hstate, 17, GMBUS, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 19, CRT_HOTPLUG, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 21, DP_B_HOTPLUG, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 22, DP_C_HOTPLUG, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 23, DP_D_HOTPLUG, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 25, AUX_CHENNEL_B, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 26, AUX_CHENNEL_C, IRQ_INFO_PCH);
+	SET_BIT_INFO(hstate, 27, AUX_CHENNEL_D, IRQ_INFO_PCH);
+
+	/* GEN8 interrupt PCU events */
+	SET_BIT_INFO(hstate, 24, PCU_THERMAL, IRQ_INFO_PCU);
+	SET_BIT_INFO(hstate, 25, PCU_PCODE2DRIVER_MAILBOX, IRQ_INFO_PCU);
+}
+
+static void vgt_gen8_disable_irq(struct vgt_irq_host_state *hstate)
+{
+	struct pgt_device *pdev = hstate->pdev;
+
+	ASSERT(spin_is_locked(&pdev->irq_lock));
+
+	VGT_MMIO_WRITE(pdev, _REG_MASTER_IRQ,
+			(VGT_MMIO_READ(pdev, _REG_MASTER_IRQ)
+			 & ~_REGBIT_MASTER_IRQ_CONTROL));
+	VGT_POST_READ(pdev, _REG_MASTER_IRQ);
+}
+
+static void vgt_gen8_enable_irq(struct vgt_irq_host_state *hstate)
+{
+	struct pgt_device *pdev = hstate->pdev;
+
+	ASSERT(spin_is_locked(&pdev->irq_lock));
+
+	VGT_MMIO_WRITE(pdev, _REG_MASTER_IRQ,
+			(VGT_MMIO_READ(pdev, _REG_MASTER_IRQ)
+			 | _REGBIT_MASTER_IRQ_CONTROL));
+	VGT_POST_READ(pdev, _REG_MASTER_IRQ);
+}
+
+struct vgt_irq_ops vgt_gen8_irq_ops = {
+	.irq_handler = vgt_gen8_irq_handler,
+	.init_irq = vgt_gen8_init_irq,
+	.check_pending_irq = vgt_gen8_check_pending_irq,
+	.disable_irq = vgt_gen8_disable_irq,
+	.enable_irq = vgt_gen8_enable_irq,
+};
+
 /* ======================common event logic====================== */
 
 /*
@@ -1798,6 +1998,8 @@ int vgt_irq_init(struct pgt_device *pdev)
 	if (IS_SNB(pdev) || IS_IVB(pdev) || IS_HSW(pdev)) {
 		hstate->ops = &vgt_base_irq_ops;
 		hstate->irq_map = base_irq_map;
+	} else if (IS_BDW(pdev)) {
+		hstate->ops = &vgt_gen8_irq_ops;
 	} else {
 		vgt_err("Unsupported device\n");
 		kfree(hstate);
