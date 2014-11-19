@@ -1546,9 +1546,6 @@ static inline uint64_t h2g_aperture(struct vgt_device *vgt, uint64_t h_addr)
 /* check whether a guest GM address is within the CPU visible range */
 static inline bool g_gm_is_visible(struct vgt_device *vgt, uint64_t g_addr)
 {
-	if (vgt->bypass_addr_check)
-		return true;
-
 	return (g_addr >= vgt_guest_visible_gm_base(vgt)) &&
 		(g_addr <= vgt_guest_visible_gm_end(vgt));
 }
@@ -1556,15 +1553,15 @@ static inline bool g_gm_is_visible(struct vgt_device *vgt, uint64_t g_addr)
 /* check whether a guest GM address is out of the CPU visible range */
 static inline bool g_gm_is_hidden(struct vgt_device *vgt, uint64_t g_addr)
 {
-	if (vgt->bypass_addr_check)
-		return true;
-
 	return (g_addr >= vgt_guest_hidden_gm_base(vgt)) &&
 		(g_addr <= vgt_guest_hidden_gm_end(vgt));
 }
 
 static inline bool g_gm_is_valid(struct vgt_device *vgt, uint64_t g_addr)
 {
+	if (vgt->bypass_addr_check)
+		return false;
+
 	return g_gm_is_visible(vgt, g_addr) || g_gm_is_hidden(vgt, g_addr);
 }
 
@@ -1681,6 +1678,9 @@ extern void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start,
 static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 	uint64_t g_start, uint64_t size)
 {
+	if (vgt->bypass_addr_check)
+		return false;
+
 	if (!vgt_hidden_gm_offset(vgt))
 		return false;
 
