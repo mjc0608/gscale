@@ -125,7 +125,6 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[GSE] = "GSE",
 	[DP_A_HOTPLUG] = "DP A Hotplug",
 	[AUX_CHANNEL_A] = "AUX Channel A",
-	[PCH_IRQ] = "PCH Display interrupt event",
 	[PERF_COUNTER] = "Performance counter",
 	[POISON] = "Poison",
 	[GTT_FAULT] = "GTT fault",
@@ -166,6 +165,20 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[AUDIO_POWER_STATE_CHANGE_B] = "Audio Power State change Port B",
 	[AUDIO_POWER_STATE_CHANGE_C] = "Audio Power State change Port C",
 	[AUDIO_POWER_STATE_CHANGE_D] = "Audio Power State change Port D",
+
+	[PCH_IRQ] = "PCH Display Interrupt Event",
+	[RCS_IRQ] = "RCS Interrupt Event",
+	[BCS_IRQ] = "BCS Interrupt Event",
+	[VCS_IRQ] = "VCS Interrupt Event",
+	[VCS2_IRQ] = "VCS2 Interrupt Event",
+	[PM_IRQ] = "PM Interrupt Event",
+	[VECS_IRQ] = "VECS Interrupt Event",
+	[DE_PIPE_A_IRQ] = "Display Pipe A Interrupt Event",
+	[DE_PIPE_B_IRQ] = "Display Pipe B Interrupt Event",
+	[DE_PIPE_C_IRQ] = "Display Pipe C Interrupt Event",
+	[DE_PORT_IRQ] = "Display Port Interrupt Event",
+	[DE_MISC_IRQ] = "Display Misc Interrupt Event",
+	[PCU_IRQ] = "PCU Interrupt Event",
 
 	[EVENT_RESERVED] = "RESERVED EVENTS!!!",
 };

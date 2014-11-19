@@ -107,6 +107,10 @@ enum vgt_event_type {
 	VCS_PAGE_DIRECTORY_FAULT,
 	VCS_AS_CONTEXT_SWITCH,
 
+	VCS2_MI_USER_INTERRUPT,
+	VCS2_MI_FLUSH_DW,
+	VCS2_AS_CONTEXT_SWITCH,
+
 	BCS_MI_USER_INTERRUPT,
 	BCS_MMIO_SYNC_FLUSH,
 	BCS_CMD_STREAMER_ERR,
@@ -114,7 +118,9 @@ enum vgt_event_type {
 	BCS_PAGE_DIRECTORY_FAULT,
 	BCS_AS_CONTEXT_SWITCH,
 
+	VECS_MI_USER_INTERRUPT,
 	VECS_MI_FLUSH_DW,
+	VECS_AS_CONTEXT_SWITCH,
 
 	// DISPLAY
 	PIPE_A_FIFO_UNDERRUN,	/* This is an active high level for the duration of the Pipe A FIFO underrun */
@@ -148,7 +154,6 @@ enum vgt_event_type {
 	GSE,
 	DP_A_HOTPLUG,
 	AUX_CHANNEL_A,	// This is an active high pulse on the AUX A done event.
-	PCH_IRQ,	// Only the rising edge of the PCH Display interrupt will cause the IIR to be set here
 	PERF_COUNTER,	// This is an active high pulse when the performance counter reaches the threshold value programmed in the Performance Counter Source register
 	POISON,		// This is an active high pulse on receiving the poison message
 	GTT_FAULT,	// This is an active high level while either of the GTT Fault Status register bits are set
@@ -186,6 +191,20 @@ enum vgt_event_type {
 	AUDIO_POWER_STATE_CHANGE_B,
 	AUDIO_POWER_STATE_CHANGE_C,
 	AUDIO_POWER_STATE_CHANGE_D,
+
+	RCS_IRQ,
+	BCS_IRQ,
+	VCS_IRQ,
+	VCS2_IRQ,
+	PM_IRQ,
+	VECS_IRQ,
+	DE_PIPE_A_IRQ,
+	DE_PIPE_B_IRQ,
+	DE_PIPE_C_IRQ,
+	DE_PORT_IRQ,
+	DE_MISC_IRQ,
+	PCH_IRQ,
+	PCU_IRQ,
 
 	EVENT_RESERVED,
 	EVENT_MAX,
@@ -2033,6 +2052,20 @@ enum vgt_irq_type {
 	IRQ_INFO_DPY,
 	IRQ_INFO_PCH,
 	IRQ_INFO_PM,
+
+	IRQ_INFO_MASTER,
+	IRQ_INFO_GT0,
+	IRQ_INFO_GT1,
+	IRQ_INFO_GT2,
+	IRQ_INFO_GT3,
+	IRQ_INFO_DE_PIPE_A,
+	IRQ_INFO_DE_PIPE_B,
+	IRQ_INFO_DE_PIPE_C,
+	IRQ_INFO_DE_PORT,
+	IRQ_INFO_DE_MISC,
+	IRQ_INFO_AUD,
+	IRQ_INFO_PCU,
+
 	IRQ_INFO_MAX,
 };
 
