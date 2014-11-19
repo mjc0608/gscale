@@ -347,7 +347,8 @@ bool vgt_reg_imr_handler(struct vgt_device *vgt,
 
 	/* figure out newly masked/unmasked bits */
 	changed = __vreg(vgt, reg) ^ imr;
-	changed &= ~_REGBIT_MASTER_INTERRUPT;
+	if (reg == _REG_DEIMR)
+		changed &= ~_REGBIT_MASTER_INTERRUPT;
 	masked = (__vreg(vgt, reg) & changed) ^ changed;
 	unmasked = masked ^ changed;
 
