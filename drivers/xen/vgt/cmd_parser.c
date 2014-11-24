@@ -1172,6 +1172,27 @@ static void addr_type_update_snb(struct parser_exec_state* s)
 	}
 }
 
+/*
+ * Check whether a batch buffer needs to be scanned. Currently
+ * the only criteria is based on privilege.
+ */
+static int batch_buffer_needs_scan(struct parser_exec_state *s)
+{
+	struct pgt_device *pdev = s->vgt->pdev;
+
+	if (IS_BDW(pdev)) {
+		/* BDW decides privilege based on address space */
+		if (cmd_val(s, 0) & (1 << 8))
+			return 0;
+	} else if (IS_HSW(pdev)) {
+		/* pre-BDW has dedicated privilege bit */
+		if (cmd_val(s, 0) & (1 << 13))
+			return 0;
+	}
+
+	return 1;
+}
+
 static int vgt_cmd_handler_mi_batch_buffer_start(struct parser_exec_state *s)
 {
 	int rc=0;
@@ -1206,10 +1227,18 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct parser_exec_state *s)
 
 	address_fixup(s, 1);
 
-	rc = ip_gma_set(s, cmd_val(s,1) & BATCH_BUFFER_ADDR_MASK);
+	if (batch_buffer_needs_scan(s)) {
+		rc = ip_gma_set(s, cmd_val(s,1) & BATCH_BUFFER_ADDR_MASK);
+		if (rc < 0)
+			vgt_warn("invalid batch buffer addr, so skip scanning it\n");
+	} else {
+		struct vgt_statistics *stat = &s->vgt->stat;
 
-	if (rc < 0){
-		vgt_warn("invalid batch buffer addr, so skip scanning it\n");
+		stat->skip_bb_cnt++;
+		/* emulate a batch buffer end to do return right */
+		rc = vgt_cmd_handler_mi_batch_buffer_end(s);
+		if (rc < 0)
+			vgt_err("skip batch buffer error\n");
 	}
 
 	return rc;

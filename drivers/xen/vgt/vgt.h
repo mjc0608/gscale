@@ -481,6 +481,7 @@ struct vgt_statistics {
 	u64	vring_scan_cycles;
 	u64	ppgtt_wp_cnt;
 	u64	ppgtt_wp_cycles;
+	u64	skip_bb_cnt;
 };
 
 /* per-VM structure */
