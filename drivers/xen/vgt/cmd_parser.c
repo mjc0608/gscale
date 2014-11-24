@@ -1117,31 +1117,10 @@ static int vgt_handle_mi_wait_for_event(struct parser_exec_state *s)
 	return rc;
 }
 
-
-#define USE_GLOBAL_GTT_MASK (1U << 22)
 static int vgt_cmd_handler_mi_update_gtt(struct parser_exec_state *s)
 {
-	uint32_t entry_num, *entry;
-	int rc, i;
-
-	/*TODO: remove this assert when PPGTT support is added */
-	ASSERT(cmd_val(s,0) & USE_GLOBAL_GTT_MASK);
-
-	address_fixup(s, 1);
-
-	entry_num = cmd_length(s) - 2; /* GTT items begin from the 3rd dword */
-	//entry = v_aperture(s->vgt->pdev, cmd_val(s,1));
-	entry = cmd_ptr(s, 2);
-	for (i=0; i<entry_num; i++){
-		vgt_dbg(VGT_DBG_CMD, "vgt: update GTT entry %d\n", i);
-		/*TODO: optimize by batch g2m translation*/
-		rc = gtt_p2m(s->vgt, entry[i], &entry[i] );
-		if (rc < 0){
-			/* TODO: how to handle the invalide guest value */
-		}
-	}
-
-	return 0;
+	vgt_err("Unexpectted mi_update_gtt in VM command buffer\n");
+	return -1;
 }
 
 static int vgt_cmd_handler_mi_flush_dw(struct parser_exec_state* s)
