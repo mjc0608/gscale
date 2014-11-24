@@ -212,6 +212,11 @@ state_nodes = {
 		"count" : 1,
 		"cycles": 1,
 	},
+	"Skipped batch buffers" : {
+		"node"	: "skip_bb_",
+		"count"	: 1,
+		"cycles": 0,
+	},
 	#"PM accesses" : {
 	#	"node" 	: "mmio_pm_",
 	#	"count"	: 1,
@@ -325,6 +330,7 @@ def print_cmd_stats(e, vs, bias):
 	print "Scanned CMDs: %ld" % vs['total_cmds']
 	print "cycles per CMD scan: %ld" % avg_cycles
 	print "CMDs per scan: %ld" % avg_cmds
+	print "Skipped batch buffers: %ld" % vs['skip_bb_cnt'] 
 
 def show_result(e, s, r, time):
 	print "===================================="
