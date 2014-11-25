@@ -586,7 +586,11 @@ static bool process_irq(struct vgt_irq_host_state *hstate,
 	u32 reg;
 	int count = 0;
 
-	reg = regbase_to_iir(info->reg_base);
+	if (info->group == IRQ_INFO_MASTER)
+		reg = info->reg_base;
+	else
+		reg = regbase_to_iir(info->reg_base);
+
 	val = VGT_MMIO_READ(pdev, reg);
 	if (!val)
 		return false;
@@ -594,7 +598,8 @@ static bool process_irq(struct vgt_irq_host_state *hstate,
 	vgt_handle_events(hstate, &val, info);
 
 	if (reg != _REG_SDEIIR) {
-		VGT_MMIO_WRITE(pdev, reg, val);
+		if (info->group != IRQ_INFO_MASTER)
+			VGT_MMIO_WRITE(pdev, reg, val);
 	} else {
 		while((count < IIR_WRITE_MAX) && (val != 0)) {
 			VGT_MMIO_WRITE(pdev, _REG_SDEIIR, val);
@@ -659,7 +664,6 @@ static void update_upstream_irq(struct vgt_device *vgt,
 	u32 set_bits = 0;
 	u32 clear_bits = 0;
 	int bit;
-	u32 imr, iir;
 	u32 val = __vreg(vgt, regbase_to_iir(info->reg_base))
 			& __vreg(vgt, regbase_to_ier(info->reg_base));
 
@@ -683,9 +687,15 @@ static void update_upstream_irq(struct vgt_device *vgt,
 			clear_bits |= (1 << bit);
 	}
 
-	iir = regbase_to_iir(up_irq_info->reg_base);
-	imr = regbase_to_imr(up_irq_info->reg_base);
-	__vreg(vgt, iir) |= (set_bits & ~__vreg(vgt, imr));
+	if (info->group == IRQ_INFO_MASTER) {
+		u32 isr = up_irq_info->reg_base;
+		__vreg(vgt, isr) &= ~clear_bits;
+		__vreg(vgt, isr) |= set_bits;
+	} else {
+		u32 iir = regbase_to_iir(up_irq_info->reg_base);
+		u32 imr = regbase_to_imr(up_irq_info->reg_base);
+		__vreg(vgt, iir) |= (set_bits & ~__vreg(vgt, imr));
+	}
 
 	if (up_irq_info->has_upstream_irq)
 		update_upstream_irq(vgt, up_irq_info);
