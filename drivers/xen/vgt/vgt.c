@@ -145,6 +145,9 @@ module_param_named(enable_reset, enable_reset, bool, 0600);
 bool vgt_lock_irq = false;
 module_param_named(vgt_lock_irq, vgt_lock_irq, bool, 0400);
 
+bool vgt_preliminary_hw_support = false;
+module_param_named(vgt_preliminary_hw_support, vgt_preliminary_hw_support, bool, 0400);
+
 static vgt_ops_t vgt_xops = {
 	.mem_read = vgt_emulate_read,
 	.mem_write = vgt_emulate_write,
@@ -474,6 +477,11 @@ static bool vgt_initialize_device_info(struct pgt_device *pdev)
 		vgt_err("Unsupported gen_dev_type(%s)!\n",
 			IS_IVB(pdev) ?
 			"IVB" : "SNB(or unknown GEN types)");
+		return false;
+	}
+
+	if (IS_BDW(pdev) && !vgt_preliminary_hw_support) {
+		vgt_err("VGT haven't fully supported preliminary platform: broadwell.\n");
 		return false;
 	}
 
