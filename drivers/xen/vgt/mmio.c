@@ -608,12 +608,16 @@ int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 					return -EINVAL;
 				gpa = req->data + sign * i * req->size;
 				gva = vgt_vmem_gpa_2_va(vgt, gpa);
-				// On the SNB laptop, writing tmp to gva can
-				//cause bug 119. So let's do the writing only on HSW for now.
-				if (gva != NULL && IS_HSW(vgt->pdev))
-					memcpy(gva, &tmp, req->size);
-				else
-					vgt_dbg(VGT_DBG_GENERIC,"vGT: can not write gpa = 0x%lx!!!\n", gpa);
+				if (gva) {
+					if (!IS_SNB(vgt->pdev))
+						memcpy(gva, &tmp, req->size);
+					else {
+						// On the SNB laptop, writing tmp to gva can
+						//cause bug 119. So let's do the writing only on HSW for now.
+						vgt_err("vGT: disable support of string copy instruction on SNB, gpa: 0x%lx\n", gpa);
+					}
+				} else
+					vgt_err("VM %d is trying to store mmio data block to invalid gpa: 0x%lx.\n", vgt->vm_id, gpa);
 			}
 		}
 	}
