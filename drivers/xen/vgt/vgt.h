@@ -2119,7 +2119,8 @@ struct vgt_emul_timer {
 #define REGBIT_INTERRUPT_PIPE_MASK    0x1f
 
 struct vgt_irq_map {
-	int up_irq_event;
+	int up_irq_group;
+	int up_irq_bit;
 	int down_irq_group;
 	u32 down_irq_bitmask;
 };

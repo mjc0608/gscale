@@ -166,20 +166,6 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[AUDIO_POWER_STATE_CHANGE_C] = "Audio Power State change Port C",
 	[AUDIO_POWER_STATE_CHANGE_D] = "Audio Power State change Port D",
 
-	[PCH_IRQ] = "PCH Display Interrupt Event",
-	[RCS_IRQ] = "RCS Interrupt Event",
-	[BCS_IRQ] = "BCS Interrupt Event",
-	[VCS_IRQ] = "VCS Interrupt Event",
-	[VCS2_IRQ] = "VCS2 Interrupt Event",
-	[PM_IRQ] = "PM Interrupt Event",
-	[VECS_IRQ] = "VECS Interrupt Event",
-	[DE_PIPE_A_IRQ] = "Display Pipe A Interrupt Event",
-	[DE_PIPE_B_IRQ] = "Display Pipe B Interrupt Event",
-	[DE_PIPE_C_IRQ] = "Display Pipe C Interrupt Event",
-	[DE_PORT_IRQ] = "Display Port Interrupt Event",
-	[DE_MISC_IRQ] = "Display Misc Interrupt Event",
-	[PCU_IRQ] = "PCU Interrupt Event",
-
 	[EVENT_RESERVED] = "RESERVED EVENTS!!!",
 };
 
@@ -611,44 +597,40 @@ static bool process_irq(struct vgt_irq_host_state *hstate,
 	return true;
 }
 
+struct vgt_irq_map snb_irq_map[] = {
+	{ IRQ_INFO_DPY, 21, IRQ_INFO_PCH, ~0 },
+	{ -1, -1, -1, ~0},
+};
+
 struct vgt_irq_map base_irq_map[] = {
-	{ PCH_IRQ, IRQ_INFO_PCH, ~0 },
-	{ -1, -1, ~0},
+	{ IRQ_INFO_DPY, 28, IRQ_INFO_PCH, ~0 },
+	{ -1, -1, -1, ~0},
 };
 
 struct vgt_irq_map gen8_irq_map[] = {
-	{ RCS_IRQ, IRQ_INFO_GT0, 0xffff },
-	{ BCS_IRQ, IRQ_INFO_GT0, 0xffff0000 },
-	{ VCS_IRQ, IRQ_INFO_GT1, 0xffff },
-	{ VCS2_IRQ, IRQ_INFO_GT1, 0xffff0000 },
-	{ PM_IRQ, IRQ_INFO_GT2, 0xffff },
-	{ VECS_IRQ, IRQ_INFO_GT3, 0xffff },
-	{ DE_PIPE_A_IRQ, IRQ_INFO_DE_PIPE_A, ~0 },
-	{ DE_PIPE_B_IRQ, IRQ_INFO_DE_PIPE_B, ~0 },
-	{ DE_PIPE_C_IRQ, IRQ_INFO_DE_PIPE_C, ~0 },
-	{ DE_PORT_IRQ, IRQ_INFO_DE_PORT, ~0 },
-	{ DE_MISC_IRQ, IRQ_INFO_DE_MISC, ~0 },
-	{ PCU_IRQ, IRQ_INFO_PCU, ~0 },
-	{ PCH_IRQ, IRQ_INFO_PCH, ~0 },
+	{ IRQ_INFO_MASTER, 0, IRQ_INFO_GT0, 0xffff },
+	{ IRQ_INFO_MASTER, 1, IRQ_INFO_GT0, 0xffff0000 },
+	{ IRQ_INFO_MASTER, 2, IRQ_INFO_GT1, 0xffff },
+	{ IRQ_INFO_MASTER, 3, IRQ_INFO_GT1, 0xffff0000 },
+	{ IRQ_INFO_MASTER, 4, IRQ_INFO_GT2, 0xffff },
+	{ IRQ_INFO_MASTER, 6, IRQ_INFO_GT3, 0xffff },
+	{ IRQ_INFO_MASTER, 16, IRQ_INFO_DE_PIPE_A, ~0 },
+	{ IRQ_INFO_MASTER, 17, IRQ_INFO_DE_PIPE_B, ~0 },
+	{ IRQ_INFO_MASTER, 18, IRQ_INFO_DE_PIPE_C, ~0 },
+	{ IRQ_INFO_MASTER, 20, IRQ_INFO_DE_PORT, ~0 },
+	{ IRQ_INFO_MASTER, 22, IRQ_INFO_DE_MISC, ~0 },
+	{ IRQ_INFO_MASTER, 23, IRQ_INFO_PCU, ~0 },
+	{ IRQ_INFO_MASTER, 30, IRQ_INFO_PCH, ~0 },
 	{ -1, -1, ~0 },
 };
 
-static inline bool has_downstream_irq(struct vgt_irq_host_state *hstate,
-		enum vgt_event_type event)
-{
-	struct vgt_irq_info *info = hstate->events[event].info;
-	int bit = hstate->events[event].bit;
-
-	return test_bit(bit, info->downstream_irq_bitmap);
-}
-
 static void process_downstream_irq(struct vgt_irq_host_state *hstate,
-		enum vgt_event_type event)
+		struct vgt_irq_info *info, int bit)
 {
 	struct vgt_irq_map *map;
 
-	for (map = hstate->irq_map; map->up_irq_event != -1; map++) {
-		if (map->up_irq_event != event)
+	for (map = hstate->irq_map; map->up_irq_bit != -1; map++) {
+		if (map->up_irq_group != info->group || map->up_irq_bit != bit)
 			continue;
 
 		process_irq(hstate, hstate->info[map->down_irq_group]);
@@ -670,16 +652,16 @@ static void update_upstream_irq(struct vgt_device *vgt,
 	if (!info->has_upstream_irq)
 		return;
 
-	for (map = hstate->irq_map; map->up_irq_event != -1; map++) {
+	for (map = hstate->irq_map; map->up_irq_bit != -1; map++) {
 		if (info->group != map->down_irq_group)
 			continue;
 
 		if (!up_irq_info)
-			up_irq_info = hstate->events[map->up_irq_event].info;
+			up_irq_info = hstate->info[map->up_irq_group];
 		else
-			ASSERT(up_irq_info == hstate->events[map->up_irq_event].info);
+			ASSERT(up_irq_info == hstate->info[map->up_irq_group]);
 
-		bit = hstate->events[map->up_irq_event].bit;
+		bit = map->up_irq_bit;
 
 		if (val & map->down_irq_bitmask)
 			set_bits |= (1 << bit);
@@ -705,20 +687,18 @@ static void vgt_irq_map_init(struct vgt_irq_host_state *hstate)
 {
 	struct vgt_irq_map *map;
 	struct vgt_irq_info *up_info, *down_info;
-	int event, up_bit;
+	int up_bit;
 
-	for (map = hstate->irq_map; map->up_irq_event != -1; map++) {
-		event = map->up_irq_event;
-		up_info = hstate->events[event].info;
-		up_bit = hstate->events[event].bit;
+	for (map = hstate->irq_map; map->up_irq_bit != -1; map++) {
+		up_info = hstate->info[map->up_irq_group];
+		up_bit = map->up_irq_bit;
 		down_info = hstate->info[map->down_irq_group];
 
 		set_bit(up_bit, up_info->downstream_irq_bitmap);
 		down_info->has_upstream_irq = true;
 
-		printk("vGT: build irq map: [upstream] -> [downstream]\n");
-		printk("[upstream]   group: %d bit: %d, event: %s.\n", up_info->group, up_bit, vgt_irq_name[event]);
-		printk("[downstream] group: %d bitmask: 0x%x.\n", down_info->group, map->down_irq_bitmask);
+		printk("vGT: irq map [upstream] group: %d, bit: %d -> [downstream] group: %d, bitmask: 0x%x\n",
+			up_info->group, up_bit, down_info->group, map->down_irq_bitmask);
 	}
 }
 
@@ -1406,7 +1386,6 @@ static void vgt_base_init_irq(
 		SET_BIT_INFO(hstate, 25, DPST_HISTOGRAM, IRQ_INFO_DPY);
 		SET_BIT_INFO(hstate, 26, AUX_CHANNEL_A, IRQ_INFO_DPY);
 		SET_BIT_INFO(hstate, 27, DP_A_HOTPLUG, IRQ_INFO_DPY);
-		SET_BIT_INFO(hstate, 28, PCH_IRQ, IRQ_INFO_DPY);
 		SET_BIT_INFO(hstate, 29, GSE, IRQ_INFO_DPY);
 	} else if (IS_SNB(pdev)) {
 		SET_BIT_INFO(hstate, 7, PIPE_A_VBLANK, IRQ_INFO_DPY);
@@ -1416,7 +1395,6 @@ static void vgt_base_init_irq(
 		SET_BIT_INFO(hstate, 18, GSE, IRQ_INFO_DPY);
 		SET_BIT_INFO(hstate, 19, DP_A_HOTPLUG, IRQ_INFO_DPY);
 		SET_BIT_INFO(hstate, 20, AUX_CHANNEL_A, IRQ_INFO_DPY);
-		SET_BIT_INFO(hstate, 21, PCH_IRQ, IRQ_INFO_DPY);
 		SET_BIT_INFO(hstate, 26, PRIMARY_A_FLIP_DONE, IRQ_INFO_DPY);
 		SET_BIT_INFO(hstate, 27, PRIMARY_B_FLIP_DONE, IRQ_INFO_DPY);
 		SET_BIT_INFO(hstate, 28, SPRITE_A_FLIP_DONE, IRQ_INFO_DPY);
@@ -1565,21 +1543,6 @@ static void vgt_gen8_init_irq(
 	SET_IRQ_GROUP(hstate, IRQ_INFO_DE_MISC, &vgt_gen8_de_misc_info);
 	SET_IRQ_GROUP(hstate, IRQ_INFO_PCU, &vgt_gen8_pcu_info);
 	SET_IRQ_GROUP(hstate, IRQ_INFO_PCH, &vgt_base_pch_info);
-
-	/* GEN8 level 1 interrupts. */
-	SET_BIT_INFO(hstate, 0, RCS_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 1, BCS_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 2, VCS_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 3, VCS2_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 4, PM_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 6, VECS_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 16, DE_PIPE_A_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 17, DE_PIPE_B_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 18, DE_PIPE_C_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 20, DE_PORT_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 22, DE_MISC_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 23, PCH_IRQ, IRQ_INFO_MASTER);
-	SET_BIT_INFO(hstate, 30, PCU_IRQ, IRQ_INFO_MASTER);
 
 	/* GEN8 level 2 interrupts. */
 
@@ -1842,7 +1805,13 @@ static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
 	ASSERT(spin_is_locked(&pdev->irq_lock));
 
 	for_each_set_bit(bit, iir, VGT_IRQ_BITWIDTH) {
+		if (test_bit(bit, info->downstream_irq_bitmap)) {
+			process_downstream_irq(hstate, info, bit);
+			continue;
+		}
+
 		event = info->bit_to_event[bit];
+		pdev->stat.events[event]++;
 
 		if (unlikely(event == EVENT_RESERVED)) {
 			if (!test_and_set_bit(bit, &info->warned))
@@ -1851,12 +1820,6 @@ static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
 			continue;
 		}
 
-		if (has_downstream_irq(hstate, event)) {
-			process_downstream_irq(hstate, event);
-			continue;
-		}
-
-		pdev->stat.events[event]++;
 		handler = vgt_get_event_phys_handler(hstate, event);
 		ASSERT(handler);
 
@@ -2022,7 +1985,10 @@ int vgt_irq_init(struct pgt_device *pdev)
 	if (hstate == NULL)
 		return -ENOMEM;
 
-	if (IS_SNB(pdev) || IS_IVB(pdev) || IS_HSW(pdev)) {
+	if (IS_SNB(pdev)) {
+		hstate->ops = &vgt_base_irq_ops;
+		hstate->irq_map = snb_irq_map;
+	} else if (IS_IVB(pdev) || IS_HSW(pdev)) {
 		hstate->ops = &vgt_base_irq_ops;
 		hstate->irq_map = base_irq_map;
 	} else if (IS_BDW(pdev)) {
