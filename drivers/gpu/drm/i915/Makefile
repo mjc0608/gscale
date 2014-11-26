@@ -3,6 +3,7 @@
 # Direct Rendering Infrastructure (DRI) in XFree86 4.1.0 and higher.
 
 ccflags-y := -Iinclude/drm
+ccflags-$(CONFIG_I915_VGT) += -Idrivers/xen/vgt
 
 # Please keep these build lists sorted!
 
