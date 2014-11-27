@@ -662,7 +662,7 @@ bool vgt_init_shadow_ppgtt(struct vgt_device *vgt)
 	/* each PDE entry has one shadow PTE page */
 	for (i = 0; i < VGT_PPGTT_PDE_ENTRIES; i++) {
 		p = &vgt->shadow_pte_table[i];
-		p->pte_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+		p->pte_page = alloc_page(GFP_ATOMIC | __GFP_ZERO);
 		if (!p->pte_page) {
 			vgt_err("Init shadow PTE page failed!\n");
 			return false;
