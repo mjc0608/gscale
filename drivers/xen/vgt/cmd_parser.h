@@ -71,6 +71,8 @@ struct decode_info{
 #define OP_MI_SET_CONTEXT                   0x18
 #define OP_MI_MATH                          0x1A
 #define OP_MI_URB_CLEAR                     0x19
+#define OP_MI_SEMAPHORE_SIGNAL		    0x1B  /* BDW+ */
+#define OP_MI_SEMAPHORE_WAIT		    0x1C  /* BDW+ */
 
 #define OP_MI_STORE_DATA_IMM                0x20
 #define OP_MI_STORE_DATA_INDEX              0x21
@@ -85,6 +87,8 @@ struct decode_info{
 #define OP_MI_RS_STORE_DATA_IMM             0x2B  /* HSW+ */
 #define OP_MI_LOAD_URB_MEM                  0x2C  /* HSW+ */
 #define OP_MI_STORE_URM_MEM                 0x2D  /* HSW+ */
+#define OP_MI_2E			    0x2E  /* BDW+ */
+#define OP_MI_2F			    0x2F  /* BDW+ */
 #define OP_MI_BATCH_BUFFER_START            0x31
 
 /* Bit definition for dword 0 */
@@ -223,6 +227,17 @@ struct decode_info{
 #define OP_3DSTATE_BINDING_TABLE_EDIT_DS        OP_3D_MEDIA(0x3, 0x0, 0x46) /* HSW+ */
 #define OP_3DSTATE_BINDING_TABLE_EDIT_PS        OP_3D_MEDIA(0x3, 0x0, 0x47) /* HSW+ */
 
+#define OP_3DSTATE_VF_INSTANCING 		OP_3D_MEDIA(0x3, 0x0, 0x49) /* BDW+ */
+#define OP_3DSTATE_VF_SGVS  			OP_3D_MEDIA(0x3, 0x0, 0x4A) /* BDW+ */
+#define OP_3DSTATE_VF_TOPOLOGY   		OP_3D_MEDIA(0x3, 0x0, 0x4B) /* BDW+ */
+#define OP_3DSTATE_WM_CHROMAKEY   		OP_3D_MEDIA(0x3, 0x0, 0x4C) /* BDW+ */
+#define OP_3DSTATE_PS_BLEND   			OP_3D_MEDIA(0x3, 0x0, 0x4D) /* BDW+ */
+#define OP_3DSTATE_WM_DEPTH_STENCIL   		OP_3D_MEDIA(0x3, 0x0, 0x4E) /* BDW+ */
+#define OP_3DSTATE_PS_EXTRA   			OP_3D_MEDIA(0x3, 0x0, 0x4F) /* BDW+ */
+#define OP_3DSTATE_RASTER   			OP_3D_MEDIA(0x3, 0x0, 0x50) /* BDW+ */
+#define OP_3DSTATE_SBE_SWIZ   			OP_3D_MEDIA(0x3, 0x0, 0x51) /* BDW+ */
+#define OP_3DSTATE_WM_HZ_OP   			OP_3D_MEDIA(0x3, 0x0, 0x52) /* BDW+ */
+
 #define OP_3DSTATE_DRAWING_RECTANGLE            OP_3D_MEDIA( 0x3 ,0x1, 0x00 )
 #define OP_3DSTATE_SAMPLER_PALETTE_LOAD0        OP_3D_MEDIA( 0x3 ,0x1, 0x02 )
 #define OP_3DSTATE_CHROMA_KEY                   OP_3D_MEDIA( 0x3 ,0x1, 0x04 )
@@ -234,6 +249,7 @@ struct decode_info{
 #define OP_3DSTATE_GS_SVB_INDEX                 OP_3D_MEDIA( 0x3 ,0x1, 0x0B )
 #define OP_3DSTATE_SAMPLER_PALETTE_LOAD1        OP_3D_MEDIA( 0x3 ,0x1, 0x0C )
 #define OP_3DSTATE_MULTISAMPLE                  OP_3D_MEDIA( 0x3 ,0x1, 0x0D )
+#define OP_3DSTATE_MULTISAMPLE_BDW		OP_3D_MEDIA( 0x3 ,0x0, 0x0D )
 #define OP_3DSTATE_RAST_MULTISAMPLE             OP_3D_MEDIA( 0x3 ,0x1, 0x0E )
 #define OP_SNB_3DSTATE_STENCIL_BUFFER           OP_3D_MEDIA( 0x3 ,0x1, 0x0E )
 #define OP_SNB_3DSTATE_HIER_DEPTH_BUFFER        OP_3D_MEDIA( 0x3 ,0x1, 0x0F )
