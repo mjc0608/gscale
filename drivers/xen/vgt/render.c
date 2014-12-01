@@ -218,14 +218,11 @@ static bool vgt_rings_need_idle_notification(struct pgt_device *pdev)
 {
 	int i;
 	u32 head, tail, offset;
-	struct cmd_general_info *tail_list;
-        struct vgt_device *vgt = current_render_owner(pdev);
 
 	for (i=0; i < pdev->max_engines; i++) {
 		if (pdev->ring_buffer[i].need_irq) {
 			head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, i)) & RB_HEAD_OFF_MASK;
-			tail_list = &vgt->rb[i].tail_list;
-			tail = tail_list->cmd[tail_list->head].tail;
+			tail = VGT_MMIO_READ(pdev, RB_TAIL(pdev, i)) & RB_TAIL_OFF_MASK;
 			if (head != tail) {
 				offset = pdev->ring_buffer[i].ip_offset;
 				if (!vgt_ring_check_offset_passed(pdev, i, head, tail, offset))
