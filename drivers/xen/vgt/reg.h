@@ -1197,6 +1197,7 @@ union _TRANS_CONFIG
 #define _REG_DDI_BUF_CTL_A		0x64000
 #define  _DDI_BUFCTL_DETECT_MASK	0x1
 #define  _REGBIT_DDI_BUF_ENABLE		(1 << 31)
+#define  _REGBIT_DDI_BUF_IS_IDLE	(1<<7)
 #define _REG_DDI_BUF_CTL_B		0x64100
 #define _REG_DDI_BUF_CTL_C		0x64200
 #define _REG_DDI_BUF_CTL_D		0x64300
@@ -1661,7 +1662,11 @@ static inline int port_type_to_port(int port_sel)
 
 /* HSW */
 #define _REG_LCPLL_CTL		0x130040
+#define  _REGBIT_LCPLL_PLL_DISABLE		(1<<31)
+#define  _REGBIT_LCPLL_PLL_LOCK			(1<<30)
 #define  _REGBIT_LCPLL_CLK_FREQ_MASK		(3<<26)
+#define  _REGBIT_LCPLL_CD_SOURCE_FCLK		(1<<21)
+#define  _REGBIT_LCPLL_CD_SOURCE_FCLK_DONE	(1<<19)
 #define  _LCPLL_CLK_FREQ_450		(0<<26)
 #define _REG_HSW_FUSE_STRAP	0x42014
 #define  _REGBIT_HSW_CDCLK_LIMIT	(1 << 24)

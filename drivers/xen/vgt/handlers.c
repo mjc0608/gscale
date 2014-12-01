@@ -477,6 +477,37 @@ static bool shotplug_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 	return true;
 }
+static bool lcpll_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	unsigned int reg;
+	vgt_reg_t vreg_data;
+	bool rc;
+
+	reg = offset & ~(bytes - 1);
+	vreg_data = *(vgt_reg_t *)p_data;
+
+	rc = default_mmio_write(vgt, offset, &vreg_data, bytes);
+
+	if (!reg_hw_access(vgt, reg)) {
+		vreg_data = __vreg(vgt, offset);
+
+		if (vreg_data & _REGBIT_LCPLL_PLL_DISABLE)
+			vreg_data &= ~_REGBIT_LCPLL_PLL_LOCK;
+		else
+			vreg_data |= _REGBIT_LCPLL_PLL_LOCK;
+
+		if (vreg_data & _REGBIT_LCPLL_CD_SOURCE_FCLK)
+			vreg_data |= _REGBIT_LCPLL_CD_SOURCE_FCLK_DONE;
+		else
+			vreg_data &= ~_REGBIT_LCPLL_CD_SOURCE_FCLK_DONE;
+
+		__vreg(vgt, offset) = vreg_data;
+	}
+
+	return rc;
+
+}
 
 /* Pipe Frame Count */
 static bool pipe_frmcount_mmio_read(struct vgt_device *vgt, unsigned int offset,
@@ -831,6 +862,18 @@ static bool ddi_buf_ctl_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		| (__vreg(vgt, offset) & _DDI_BUFCTL_DETECT_MASK);
 
 	rc = default_mmio_write(vgt, offset, &reg_val, bytes);
+
+	//update idle status when enable/disable DDI buf
+	if (!reg_hw_access(vgt, offset)) {
+		reg_val = __vreg(vgt, offset);
+
+		if (reg_val & _REGBIT_DDI_BUF_ENABLE)
+			reg_val &= ~_REGBIT_DDI_BUF_IS_IDLE;
+		else
+			reg_val |= _REGBIT_DDI_BUF_IS_IDLE;
+
+		__vreg(vgt, offset) = reg_val;
+	}
 
 	// clear the auto_training done bit
 	if ((offset == _REG_DDI_BUF_CTL_E) &&
@@ -2875,7 +2918,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0xE6E1C, 4, F_DPY, 0, D_ALL,
 	dpy_reg_mmio_read_3, NULL},
 {_REG_SHOTPLUG_CTL, 4, F_VIRT, 0, D_ALL, NULL, shotplug_ctl_mmio_write},
-{_REG_LCPLL_CTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
+{_REG_LCPLL_CTL, 4, F_DPY, 0, D_HSW, NULL, lcpll_ctl_mmio_write},
 {_REG_HSW_FUSE_STRAP, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_DP_A_HOTPLUG_CNTL, 4, F_DPY, 0, D_HSW, NULL, NULL},
 
