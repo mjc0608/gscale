@@ -2785,7 +2785,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x13812c, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 {_REG_GTT_FAULT_STATUS, 4, F_VIRT, 0, D_ALL, err_int_r, err_int_w},
 {0x120010, 4, F_VIRT, 0, D_HSW, NULL, NULL},
-{0x9008, 4, F_VIRT, 0, D_HSW, NULL, NULL},
+{0x9008, 4, F_DOM0, 0, D_HSW, NULL, NULL},
 {_REG_GFX_FLSH_CNT, 4, F_PT, 0, D_ALL, NULL, NULL},
 {0x320f0, 8, F_DOM0, 0, D_HSW, NULL, NULL},
 {0x320fc, 4, F_DOM0, 0, D_HSW, NULL, NULL},
