@@ -831,6 +831,32 @@ static const struct file_operations vgt_device_reset_fops = {
 	.release = single_release,
 };
 
+static int vgt_debug_show(struct seq_file *m, void *data)
+{
+	struct pgt_device *pdev = (struct pgt_device *)m->private;
+	unsigned long flags;
+
+	spin_lock_irqsave(&pdev->lock, flags);
+	show_debug(pdev);
+	spin_unlock_irqrestore(&pdev->lock, flags);
+
+	seq_printf(m, "\n");
+
+	return 0;
+}
+
+static int vgt_debug_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vgt_debug_show, inode->i_private);
+}
+
+static const struct file_operations vgt_debug_fops = {
+	.open = vgt_debug_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 /* initialize vGT debufs top directory */
 struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 {
@@ -848,6 +874,11 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 
 	temp_d = debugfs_create_file("device_reset", 0444, d_vgt_debug,
 		pdev, &vgt_device_reset_fops);
+	if (!temp_d)
+		return NULL;
+
+	temp_d = debugfs_create_file("show_debug", 0444, d_vgt_debug,
+		pdev, &vgt_debug_fops);
 	if (!temp_d)
 		return NULL;
 
