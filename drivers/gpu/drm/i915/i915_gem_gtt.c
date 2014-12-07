@@ -652,10 +652,33 @@ static void gen8_ppgtt_unmap_pages(struct i915_hw_ppgtt *ppgtt)
 	}
 }
 
+static int gen8_ppgtt_notify_vgt(struct i915_hw_ppgtt *ppgtt, int msg)
+{
+	struct drm_i915_private *dev_priv = ppgtt->base.dev->dev_private;
+	int used_pd = ppgtt->num_pd_entries / GEN8_PDES_PER_PAGE;
+
+	int i;
+
+	for (i = 0; i < used_pd; i++) {
+		dma_addr_t addr = ppgtt->pd_dma_addr[i];
+		unsigned int off = vgt_info_off(pdp0_lo) + i * 8;
+
+		I915_WRITE(off, addr & 0xffffffff);
+		I915_WRITE(off + 4, addr << 32);
+	}
+
+	I915_WRITE(vgt_info_off(g2v_notify), msg);
+
+	return 0;
+}
+
 static void gen8_ppgtt_cleanup(struct i915_address_space *vm)
 {
 	struct i915_hw_ppgtt *ppgtt =
 		container_of(vm, struct i915_hw_ppgtt, base);
+
+	if (USES_VGT(ppgtt->base.dev))
+		gen8_ppgtt_notify_vgt(ppgtt, VGT_G2V_PPGTT_L3_PAGE_TABLE_DESTROY);
 
 	gen8_ppgtt_unmap_pages(ppgtt);
 	gen8_ppgtt_free(ppgtt);
@@ -880,6 +903,10 @@ static int gen8_ppgtt_init(struct i915_hw_ppgtt *ppgtt, uint64_t size)
 	DRM_DEBUG_DRIVER("Allocated %d pages for page tables (%lld wasted)\n",
 			 ppgtt->num_pd_entries,
 			 (ppgtt->num_pd_entries - min_pt_pages) + size % (1<<30));
+
+	if (USES_VGT(ppgtt->base.dev))
+		gen8_ppgtt_notify_vgt(ppgtt, VGT_G2V_PPGTT_L3_PAGE_TABLE_CREATE);
+
 	return 0;
 
 bail:
