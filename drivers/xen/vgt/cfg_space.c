@@ -23,7 +23,6 @@
  * SOFTWARE.
  */
 
-#include <asm/xen/hypercall.h>
 
 #include "vgt.h"
 
