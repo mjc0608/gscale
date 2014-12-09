@@ -464,8 +464,8 @@ err_mmio:
 static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq);
 static void vgt_crash_domain(struct vgt_device *vgt)
 {
-	vgt_pause_domain(vgt);
-	vgt_shutdown_domain(vgt);
+	hypervisor_pause_domain(vgt);
+	hypervisor_shutdown_domain(vgt);
 }
 
 static int vgt_emulation_thread(void *priv)
@@ -810,6 +810,28 @@ static bool vgt_hvm_opregion_resinit(struct vgt_device *vgt, uint32_t gpa)
 	return true;
 }
 
+int vgt_hvm_opregion_map(struct vgt_device *vgt, int map)
+{
+	void *opregion;
+	int rc;
+	int i;
+
+	opregion = vgt->state.opregion_va;
+
+	for (i = 0; i < VGT_OPREGION_PAGES; i++) {
+		rc = hypervisor_map_mfn_to_gpfn(vgt,
+			vgt->state.opregion_gfn[i],
+			hypervisor_virt_to_mfn(opregion + i*PAGE_SIZE),
+			1,
+			map);
+		if (rc != 0)
+			vgt_err("vgt_hvm_map_opregion fail with %d!\n", rc);
+	}
+
+	return rc;
+}
+
+
 int vgt_hvm_opregion_init(struct vgt_device *vgt, uint32_t gpa)
 {
 
@@ -851,7 +873,7 @@ int vgt_hvm_info_init(struct vgt_device *vgt)
 
 	vgt->hvm_info = info;
 
-	info->iopage_vma = map_hvm_iopage(vgt);
+	info->iopage_vma = hypervisor_map_iopage(vgt);
 	if (info->iopage_vma == NULL) {
 		printk(KERN_ERR "Failed to map HVM I/O page for VM%d\n", vgt->vm_id);
 		rc = -EFAULT;

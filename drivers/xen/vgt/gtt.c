@@ -370,7 +370,7 @@ static bool gtt_entry_p2m(struct vgt_device *vgt, gtt_entry_t *p, gtt_entry_t *m
 
         gfn = ops->get_pfn(p);
 
-        mfn = g2m_pfn(vgt->vm_id, gfn);
+        mfn = hypervisor_g2m_pfn(vgt, gfn);
         if (mfn == INVALID_MFN) {
                 vgt_err("fail to translate gfn: 0x%lx\n", gfn);
                 return false;
@@ -509,50 +509,6 @@ static inline gtt_entry_t *ppgtt_spt_set_entry(ppgtt_spt_t *spt,
 	ppgtt_spt_set_entry(spt, spt->shadow_page.vaddr, \
 		spt->shadow_page.type, e, index)
 
-/*
- * Guest page mainpulation APIs.
- */
-bool vgt_set_guest_page_writeprotection(struct vgt_device *vgt,
-		guest_page_t *guest_page)
-{
-	int r;
-
-	if (guest_page->writeprotection)
-		return true;
-
-	r = hvm_wp_page_to_ioreq_server(vgt, guest_page->gfn, 1);
-	if (r) {
-		vgt_err("fail to set write protection.\n");
-		return false;
-	}
-
-	guest_page->writeprotection = true;
-
-	atomic_inc(&vgt->gtt.n_write_protected_guest_page);
-
-	return true;
-}
-
-bool vgt_clear_guest_page_writeprotection(struct vgt_device *vgt,
-		guest_page_t *guest_page)
-{
-	int r;
-
-	if (!guest_page->writeprotection)
-		return true;
-
-	r = hvm_wp_page_to_ioreq_server(vgt, guest_page->gfn, 0);
-	if (r) {
-		vgt_err("fail to clear write protection.\n");
-		return false;
-	}
-
-	guest_page->writeprotection = false;
-
-	atomic_dec(&vgt->gtt.n_write_protected_guest_page);
-
-	return true;
-}
 
 bool vgt_init_guest_page(struct vgt_device *vgt, guest_page_t *guest_page,
 		unsigned long gfn, guest_page_handler_t handler, void *data)
@@ -579,7 +535,7 @@ void vgt_clean_guest_page(struct vgt_device *vgt, guest_page_t *guest_page)
 		hash_del(&guest_page->node);
 
 	if (guest_page->writeprotection)
-		vgt_clear_guest_page_writeprotection(vgt, guest_page);
+		hypervisor_unset_wp_pages(vgt, guest_page);
 }
 
 guest_page_t *vgt_find_guest_page(struct vgt_device *vgt, unsigned long gfn)
@@ -856,7 +812,7 @@ static ppgtt_spt_t *ppgtt_populate_shadow_page_by_guest_entry(struct vgt_device 
 		if (!s)
 			goto fail;
 
-		if (!vgt_set_guest_page_writeprotection(vgt, &s->guest_page))
+		if (!hypervisor_set_wp_pages(vgt, &s->guest_page))
 			goto fail;
 
 		if (!ppgtt_populate_shadow_page(s))

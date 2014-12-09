@@ -717,7 +717,7 @@ static bool vgt_check_delay_event(void *timer)
 {
 	int bit;
 
-	if (!vgt_delay_nest || !xen_initial_domain()
+	if (!vgt_delay_nest || !hypervisor_check_host()
 			|| !vgt_enabled || !__get_cpu_var(in_vgt))
 		return true;
 
@@ -1999,7 +1999,7 @@ void *vgt_init_irq(struct pci_dev *pdev, struct drm_device *dev)
 	int irq;
 	struct vgt_irq_host_state *hstate;
 
-	if (!vgt_in_host())
+	if (!hypervisor_check_host() || !vgt_enabled)
 		return NULL;
 
 	if (list_empty(&pgt_devices)) {
@@ -2045,7 +2045,7 @@ void vgt_fini_irq(struct pci_dev *pdev)
 	struct pgt_device *node, *pgt = NULL;
 	struct vgt_irq_host_state *hstate;
 
-	if (!vgt_in_host())
+	if (!hypervisor_check_host() || !vgt_enabled)
 		return;
 
 	if (list_empty(&pgt_devices)) {

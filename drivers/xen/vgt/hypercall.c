@@ -17,6 +17,16 @@
  * Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+/*
+ * NOTE:
+ * This file contains hypervisor specific interactions to
+ * implement the concept of mediated pass-through framework.
+ * What this file provides is actually a general abstraction
+ * of in-kernel device model, which is not vgt specific.
+ *
+ * Now temporarily in vgt code. long-term this should be
+ * in hypervisor (xen/kvm) specific directory
+ */
 #include <asm/xen/hypercall.h>
 #include <asm/xen/page.h>
 #include <xen/xen-ops.h>
@@ -26,7 +36,7 @@
 #include "vgt.h"
 
 /* Translate from VM's guest pfn to machine pfn */
-unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
+static unsigned long xen_g2m_pfn(int vm_id, unsigned long g_pfn)
 {
 	struct xen_get_mfn_from_pfn pfn_arg;
 	int rc;
@@ -40,14 +50,14 @@ unsigned long g2m_pfn(int vm_id, unsigned long g_pfn)
 
 	rc = HYPERVISOR_memory_op(XENMEM_get_mfn_from_pfn, &pfn_arg);
 	if(rc < 0){
-		vgt_err("failed to get mfn for gpfn(0x%lx)\n, errno=%d\n", g_pfn,rc);
+		printk("failed to get mfn for gpfn(0x%lx)\n, errno=%d\n", g_pfn, rc);
 		return INVALID_MFN;
 	}
 
 	return pfn_list[0];
 }
 
-int vgt_get_hvm_max_gpfn(int vm_id)
+static int xen_get_max_gpfn(int vm_id)
 {
 	domid_t dom_id = vm_id;
 	int max_gpfn = HYPERVISOR_memory_op(XENMEM_maximum_gpfn, &dom_id);
@@ -55,35 +65,36 @@ int vgt_get_hvm_max_gpfn(int vm_id)
 	return max_gpfn;
 }
 
-int vgt_pause_domain(struct vgt_device *vgt)
+static int xen_pause_domain(int vm_id)
 {
 	int rc;
 	struct xen_domctl domctl;
 
-	domctl.domain = (domid_t)vgt->vm_id;
+	domctl.domain = vm_id;
 	domctl.cmd = XEN_DOMCTL_pausedomain;
 	domctl.interface_version = XEN_DOMCTL_INTERFACE_VERSION;
 
 	rc = HYPERVISOR_domctl(&domctl);
 	if (rc != 0)
-		vgt_err("HYPERVISOR_domctl pausedomain fail with %d!\n", rc);
+		printk("HYPERVISOR_domctl pausedomain fail with %d!\n", rc);
 
 	return rc;
 }
 
-void vgt_shutdown_domain(struct vgt_device *vgt)
+static int xen_shutdown_domain(int vm_id)
 {
 	int rc;
 	struct sched_remote_shutdown r;
 
 	r.reason = SHUTDOWN_crash;
-	r.domain_id = vgt->vm_id;
+	r.domain_id = vm_id;
 	rc = HYPERVISOR_sched_op(SCHEDOP_remote_shutdown, &r);
 	if (rc != 0)
-		vgt_err("failed to HYPERVISOR_sched_op\n");
+		printk("HYPERVISOR_sched_op failed: %d\n", rc);
+	return rc;
 }
 
-static int vgt_domain_iomem_perm(uint32_t domain_id, uint64_t first_mfn,
+static int xen_domain_iomem_perm(uint32_t domain_id, uint64_t first_mfn,
                                uint64_t nr_mfns, uint8_t allow_access)
 {
 	struct xen_domctl arg;
@@ -96,21 +107,20 @@ static int vgt_domain_iomem_perm(uint32_t domain_id, uint64_t first_mfn,
 	arg.u.iomem_perm.nr_mfns = nr_mfns;
 	arg.u.iomem_perm.allow_access = allow_access;
 	rc = HYPERVISOR_domctl(&arg);
+
 	return rc;
 }
 
-static int vgt_hvm_memory_mapping(int vm_id, uint64_t first_gfn, uint64_t first_mfn,
+static int xen_hvm_memory_mapping(int vm_id, uint64_t first_gfn, uint64_t first_mfn,
 				  uint32_t nr_mfns, uint32_t add_mapping)
 {
 	struct xen_domctl arg;
 	int rc;
 
-	if (add_mapping)
-	{
-		rc = vgt_domain_iomem_perm(vm_id, first_mfn, nr_mfns, 1);
+	if (add_mapping) {
+		rc = xen_domain_iomem_perm(vm_id, first_mfn, nr_mfns, 1);
 	        if (rc < 0) {
-			printk(KERN_ERR "HYPERVISOR_domctl XEN_DOMCTL_iomem_permission "
-				"failed, ret=%d\n",rc);
+			printk(KERN_ERR "xen_domain_iomem_perm failed: %d\n", rc);
 	        	return rc;
 		}
 	}
@@ -125,123 +135,39 @@ static int vgt_hvm_memory_mapping(int vm_id, uint64_t first_gfn, uint64_t first_
 
 	rc = HYPERVISOR_domctl(&arg);
 	if (rc < 0) {
-		printk(KERN_ERR "HYPERVISOR_domctl failed, rc=%d\n", rc);
+		printk(KERN_ERR "HYPERVISOR_domctl failed: %d\n", rc);
 		return rc;
 	}
 
-	if (!add_mapping)
-	{
-		rc = vgt_domain_iomem_perm(vm_id, first_mfn, nr_mfns, 0);
+	if (!add_mapping) {
+		rc = xen_domain_iomem_perm(vm_id, first_mfn, nr_mfns, 0);
 	        if (rc < 0) {
-			printk(KERN_ERR "HYPERVISOR_domctl XEN_DOMCTL_iomem_permission "
-				"failed, ret=%d\n",rc);
+			printk(KERN_ERR "xen_domain_iomem_perm failed: %d\n", rc);
 			return rc;
 		}
 	}
+
 	return rc;
 }
 
-int vgt_hvm_opregion_map(struct vgt_device *vgt, int map)
+static int xen_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
+	unsigned long mfn, int nr, int map)
 {
-	void *opregion;
 	int rc;
-	int i;
-
-	opregion = vgt->state.opregion_va;
-
-	for (i = 0; i < VGT_OPREGION_PAGES; i++) {
-		rc = vgt_hvm_memory_mapping(vgt->vm_id, vgt->state.opregion_gfn[i],
-					virt_to_mfn(opregion + i*PAGE_SIZE),
-					1, map ? DPCI_ADD_MAPPING : DPCI_REMOVE_MAPPING);
-		if (rc != 0)
-			vgt_err("vgt_hvm_map_opregion fail with %d!\n", rc);
-	}
-
+	rc = xen_hvm_memory_mapping(vm_id, gpfn, mfn, nr,
+			map ? DPCI_ADD_MAPPING : DPCI_REMOVE_MAPPING);
+	if (rc != 0)
+		printk("xen_hvm_memory_mapping failed: %d\n", rc);
 	return rc;
 }
 
-/*
- * Map the aperture space (BAR1) of vGT device for direct access.
- */
-int vgt_hvm_map_aperture (struct vgt_device *vgt, int map)
+static int xen_set_trap_area(struct vgt_device *vgt, uint64_t start, uint64_t end, bool map)
 {
-	char *cfg_space = &vgt->state.cfg_space[0];
-	uint64_t bar_s;
-	uint64_t  first_gfn;
-	uint64_t  first_mfn;
-	uint32_t  nr_mfns;
-	int r;
-
 	if (!vgt_pci_mmio_is_enabled(vgt))
 		return 0;
 
-	/* guarantee the sequence of map -> unmap -> map -> unmap */
-	if (map == vgt->state.bar_mapped[1])
-		return 0;
-
-	cfg_space += VGT_REG_CFG_SPACE_BAR1;	/* APERTUR */
-	if (VGT_GET_BITS(*cfg_space, 2, 1) == 2){
-		/* 64 bits MMIO bar */
-		bar_s = * (uint64_t *) cfg_space;
-	} else {
-		/* 32 bits MMIO bar */
-		bar_s = * (uint32_t*) cfg_space;
-	}
-
-	first_gfn = (bar_s + vgt_aperture_offset(vgt)) >> PAGE_SHIFT;
-	first_mfn = vgt_aperture_base(vgt) >> PAGE_SHIFT;
-	if (!vgt->ballooning)
-		nr_mfns = vgt->state.bar_size[1] >> PAGE_SHIFT;
-	else
-		nr_mfns = vgt_aperture_sz(vgt) >> PAGE_SHIFT;
-
-	printk("%s: domid=%d gfn_s=0x%llx mfn_s=0x%llx nr_mfns=0x%x\n", map==0? "remove_map":"add_map",
-			vgt->vm_id, first_gfn, first_mfn, nr_mfns);
-
-	r = vgt_hvm_memory_mapping(vgt->vm_id, first_gfn, first_mfn,
-				nr_mfns, map ? DPCI_ADD_MAPPING : DPCI_REMOVE_MAPPING);
-
-	if (r != 0)
-		printk(KERN_ERR "vgt_hvm_map_aperture fail with %d!\n", r);
-	else
-		vgt->state.bar_mapped[1] = map;
-
-	return r;
+	return hvm_map_io_range_to_ioreq_server(vgt, 1, start, end, map);
 }
-
-/*
- * Zap the GTTMMIO bar area for vGT trap and emulation.
- */
-int vgt_hvm_set_trap_area(struct vgt_device *vgt, int map)
-{
-	char *cfg_space = &vgt->state.cfg_space[0];
-	uint64_t bar_s, bar_e;
-
-	int r;
-
-	if (!vgt_pci_mmio_is_enabled(vgt))
-		return 0;
-
-	cfg_space += VGT_REG_CFG_SPACE_BAR0;
-	if (VGT_GET_BITS(*cfg_space, 2, 1) == 2) {
-		/* 64 bits MMIO bar */
-		bar_s = * (uint64_t *) cfg_space;
-	} else {
-		/* 32 bits MMIO bar */
-		bar_s = * (uint32_t*) cfg_space;
-	}
-
-	bar_s &= ~0xF; /* clear the LSB 4 bits */
-	bar_e = bar_s + vgt->state.bar_size[0] - 1;
-	r = hvm_map_io_range_to_ioreq_server(vgt, 1, bar_s, bar_e, map);
-	if (r < 0) {
-		printk(KERN_ERR "VGT: %s(): fail to trap area: %d.\n", __func__, r);
-		return r;
-	}
-
-	return r;
-}
-
 
 int xen_get_nr_vcpu(int vm_id)
 {
@@ -368,7 +294,7 @@ int hvm_map_pcidev_to_ioreq_server(struct vgt_device *vgt, uint64_t sbdf)
 	return rc;
 }
 
-int hvm_set_mem_type(struct vgt_device *vgt,
+static int hvm_set_mem_type(struct vgt_device *vgt,
 	uint16_t mem_type, uint64_t first_pfn, uint64_t nr)
 {
 	xen_hvm_set_mem_type_t args;
@@ -383,7 +309,7 @@ int hvm_set_mem_type(struct vgt_device *vgt,
 	return rc;
 }
 
-int hvm_wp_page_to_ioreq_server(struct vgt_device *vgt, unsigned long page, int set)
+static int hvm_wp_page_to_ioreq_server(struct vgt_device *vgt, unsigned long page, int set)
 {
 	int rc = 0;
 	uint64_t start, end;
@@ -409,7 +335,7 @@ int hvm_wp_page_to_ioreq_server(struct vgt_device *vgt, unsigned long page, int 
 	return rc;
 }
 
-struct vm_struct *map_hvm_iopage(struct vgt_device *vgt)
+struct vm_struct *xen_map_iopage(struct vgt_device *vgt)
 {
 	uint64_t ioreq_pfn;
 	int rc;
@@ -426,211 +352,76 @@ struct vm_struct *map_hvm_iopage(struct vgt_device *vgt)
 	return xen_remap_domain_mfn_range_in_kernel(ioreq_pfn, 1, vgt->vm_id);
 }
 
-int vgt_hvm_vmem_init(struct vgt_device *vgt)
+static bool xen_set_guest_page_writeprotection(struct vgt_device *vgt,
+		guest_page_t *guest_page)
 {
-	unsigned long i, j, gpfn, count;
-	unsigned long nr_low_1mb_bkt, nr_high_bkt, nr_high_4k_bkt;
+	int r;
 
-	/* Dom0 already has mapping for itself */
-	ASSERT(vgt->vm_id != 0)
+	if (guest_page->writeprotection)
+		return true;
 
-	ASSERT(vgt->vmem_vma == NULL && vgt->vmem_vma_low_1mb == NULL);
-
-	vgt->vmem_sz = vgt_get_hvm_max_gpfn(vgt->vm_id) + 1;
-	vgt->vmem_sz <<= PAGE_SHIFT;
-
-	/* warn on non-1MB-aligned memory layout of HVM */
-	if (vgt->vmem_sz & ~VMEM_BUCK_MASK)
-		vgt_warn("VM%d: vmem_sz=0x%llx!\n", vgt->vm_id, vgt->vmem_sz);
-
-	nr_low_1mb_bkt = VMEM_1MB >> PAGE_SHIFT;
-	nr_high_bkt = (vgt->vmem_sz >> VMEM_BUCK_SHIFT);
-	nr_high_4k_bkt = (vgt->vmem_sz >> PAGE_SHIFT);
-
-	vgt->vmem_vma_low_1mb =
-		kmalloc(sizeof(*vgt->vmem_vma) * nr_low_1mb_bkt, GFP_KERNEL);
-	vgt->vmem_vma =
-		kmalloc(sizeof(*vgt->vmem_vma) * nr_high_bkt, GFP_KERNEL);
-	vgt->vmem_vma_4k =
-		vzalloc(sizeof(*vgt->vmem_vma) * nr_high_4k_bkt);
-
-	if (vgt->vmem_vma_low_1mb == NULL || vgt->vmem_vma == NULL ||
-		vgt->vmem_vma_4k == NULL) {
-		vgt_err("Insufficient memory for vmem_vma, vmem_sz=0x%llx\n",
-				vgt->vmem_sz );
-		goto err;
+	r = hvm_wp_page_to_ioreq_server(vgt, guest_page->gfn, 1);
+	if (r) {
+		vgt_err("fail to set write protection.\n");
+		return false;
 	}
 
-	/* map the low 1MB memory */
-	for (i = 0; i < nr_low_1mb_bkt; i++) {
-		vgt->vmem_vma_low_1mb[i] =
-			xen_remap_domain_mfn_range_in_kernel(i, 1, vgt->vm_id);
+	guest_page->writeprotection = true;
 
-		if (vgt->vmem_vma[i] != NULL)
-			continue;
+	atomic_inc(&vgt->gtt.n_write_protected_guest_page);
 
-		/* Don't warn on [0xa0000, 0x100000): a known non-RAM hole */
-		if (i < (0xa0000 >> PAGE_SHIFT))
-			vgt_dbg(VGT_DBG_GENERIC, "vGT: VM%d: can't map GPFN %ld!\n",
-				vgt->vm_id, i);
-	}
-
-	printk("start vmem_map\n");
-	count = 0;
-	/* map the >1MB memory */
-	for (i = 1; i < nr_high_bkt; i++) {
-		gpfn = i << (VMEM_BUCK_SHIFT - PAGE_SHIFT);
-		vgt->vmem_vma[i] = xen_remap_domain_mfn_range_in_kernel(
-				gpfn,
-				VMEM_BUCK_SIZE >> PAGE_SHIFT,
-				vgt->vm_id);
-
-		if (vgt->vmem_vma[i] != NULL)
-			continue;
-
-
-		/* for <4G GPFNs: skip the hole after low_mem_max_gpfn */
-		if (gpfn < (1 << (32 - PAGE_SHIFT)) &&
-			vgt->low_mem_max_gpfn != 0 &&
-			gpfn > vgt->low_mem_max_gpfn)
-			continue;
-
-		for (j = gpfn;
-		     j < ((i + 1) << (VMEM_BUCK_SHIFT - PAGE_SHIFT));
-		     j++) {
-			vgt->vmem_vma_4k[j] =
-				xen_remap_domain_mfn_range_in_kernel(
-					j, 1, vgt->vm_id);
-
-			if (vgt->vmem_vma_4k[j]) {
-				count++;
-				vgt_dbg(VGT_DBG_GENERIC, "map 4k gpa (%lx)\n", j << PAGE_SHIFT);
-			}
-		}
-
-		/* To reduce the number of err messages(some of them, due to
-		 * the MMIO hole, are spurious and harmless) we only print a
-		 * message if it's at every 64MB boundary or >4GB memory.
-		 */
-		if ((i % 64 == 0) || (i >= (1ULL << (32 - VMEM_BUCK_SHIFT))))
-			vgt_dbg(VGT_DBG_GENERIC, "vGT: VM%d: can't map %ldKB\n",
-				vgt->vm_id, i);
-	}
-	printk("end vmem_map (%ld 4k mappings)\n", count);
-
-	return 0;
-err:
-	kfree(vgt->vmem_vma);
-	kfree(vgt->vmem_vma_low_1mb);
-	vfree(vgt->vmem_vma_4k);
-	vgt->vmem_vma = vgt->vmem_vma_low_1mb = vgt->vmem_vma_4k = NULL;
-	return -ENOMEM;
+	return true;
 }
 
-void vgt_vmem_destroy(struct vgt_device *vgt)
+static bool xen_clear_guest_page_writeprotection(struct vgt_device *vgt,
+		guest_page_t *guest_page)
 {
-	int i, j;
-	unsigned long nr_low_1mb_bkt, nr_high_bkt, nr_high_bkt_4k;
+	int r;
 
-	if(vgt->vm_id == 0)
-		return;
+	if (!guest_page->writeprotection)
+		return true;
 
-	/*
-	 * Maybe the VM hasn't accessed GEN MMIO(e.g., still in the legacy VGA
-	 * mode), so no mapping is created yet.
-	 */
-	if (vgt->vmem_vma == NULL && vgt->vmem_vma_low_1mb == NULL)
-		return;
-
-	ASSERT(vgt->vmem_vma != NULL && vgt->vmem_vma_low_1mb != NULL);
-
-	nr_low_1mb_bkt = VMEM_1MB >> PAGE_SHIFT;
-	nr_high_bkt = (vgt->vmem_sz >> VMEM_BUCK_SHIFT);
-	nr_high_bkt_4k = (vgt->vmem_sz >> PAGE_SHIFT);
-
-	for (i = 0; i < nr_low_1mb_bkt; i++) {
-		if (vgt->vmem_vma_low_1mb[i] == NULL)
-			continue;
-		xen_unmap_domain_mfn_range_in_kernel(
-			vgt->vmem_vma_low_1mb[i], 1, vgt->vm_id);
+	r = hvm_wp_page_to_ioreq_server(vgt, guest_page->gfn, 0);
+	if (r) {
+		vgt_err("fail to clear write protection.\n");
+		return false;
 	}
 
-	for (i = 1; i < nr_high_bkt; i++) {
-		if (vgt->vmem_vma[i] == NULL) {
-			for (j = (i << (VMEM_BUCK_SHIFT - PAGE_SHIFT));
-			     j < ((i + 1) << (VMEM_BUCK_SHIFT - PAGE_SHIFT));
-			     j++) {
-				if (vgt->vmem_vma_4k[j] == NULL)
-					continue;
-				xen_unmap_domain_mfn_range_in_kernel(
-					vgt->vmem_vma_4k[j], 1, vgt->vm_id);
-			}
-			continue;
-		}
-		xen_unmap_domain_mfn_range_in_kernel(
-			vgt->vmem_vma[i], VMEM_BUCK_SIZE >> PAGE_SHIFT,
-			vgt->vm_id);
-	}
+	guest_page->writeprotection = false;
 
-	kfree(vgt->vmem_vma);
-	kfree(vgt->vmem_vma_low_1mb);
-	vfree(vgt->vmem_vma_4k);
+	atomic_dec(&vgt->gtt.n_write_protected_guest_page);
+
+	return true;
 }
 
-void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
+static int xen_check_host(void)
 {
-	unsigned long buck_index, buck_4k_index;
-	unsigned long nr_low_1mb_bkt, nr_high_bkt, nr_high_4k_bkt;
-
-	if (vgt->vm_id == 0)
-		return (char*)mfn_to_virt(gpa>>PAGE_SHIFT) + (gpa & (PAGE_SIZE-1));
-
-	nr_low_1mb_bkt = VMEM_1MB >> PAGE_SHIFT;
-	nr_high_bkt = (vgt->vmem_sz >> VMEM_BUCK_SHIFT);
-	nr_high_4k_bkt = (vgt->vmem_sz >> PAGE_SHIFT);
-
-	/*
-	 * At the beginning of _hvm_mmio_emulation(), we already initialize
-	 * vgt->vmem_vma and vgt->vmem_vma_low_1mb.
-	 */
-	ASSERT(vgt->vmem_vma != NULL && vgt->vmem_vma_low_1mb != NULL);
-
-	/* handle the low 1MB memory */
-	if (gpa < VMEM_1MB) {
-		buck_index = gpa >> PAGE_SHIFT;
-		if (buck_index >= nr_low_1mb_bkt)
-			goto invalid_gpa;
-
-		if (!vgt->vmem_vma_low_1mb[buck_index])
-			return NULL;
-
-		return (char*)(vgt->vmem_vma_low_1mb[buck_index]->addr) +
-			(gpa & ~PAGE_MASK);
-
-	}
-
-	/* handle the >1MB memory */
-	buck_index = gpa >> VMEM_BUCK_SHIFT;
-	if (buck_index >= nr_high_bkt)
-		goto invalid_gpa;
-
-	if (!vgt->vmem_vma[buck_index]) {
-		buck_4k_index = gpa >> PAGE_SHIFT;
-		if (buck_index >= nr_high_4k_bkt)
-			goto invalid_gpa;
-
-		if (!vgt->vmem_vma_4k[buck_4k_index])
-			return NULL;
-
-		return (char*)(vgt->vmem_vma_4k[buck_4k_index]->addr) +
-			(gpa & ~PAGE_MASK);
-	}
-
-	return (char*)(vgt->vmem_vma[buck_index]->addr) +
-		(gpa & (VMEM_BUCK_SIZE -1));
-
-invalid_gpa:
-	vgt_err("vGT: fail to map gpa 0x%lx.\n", gpa);
-	return NULL;
+	return xen_initial_domain();
 }
 
+static int xen_virt_to_mfn(void *addr)
+{
+	return virt_to_mfn(addr);
+}
+
+static void *xen_mfn_to_virt(int mfn)
+{
+	return mfn_to_virt(mfn);
+}
+
+struct kernel_dm xen_kdm = {
+	.g2m_pfn = xen_g2m_pfn,
+	.get_max_gpfn = xen_get_max_gpfn,
+	.pause_domain = xen_pause_domain,
+	.shutdown_domain = xen_shutdown_domain,
+	.map_mfn_to_gpfn = xen_map_mfn_to_gpfn,
+	.set_trap_area = xen_set_trap_area,
+	.map_iopage = xen_map_iopage,
+	.remap_mfn_range_in_kernel = xen_remap_domain_mfn_range_in_kernel,
+	.unmap_mfn_range_in_kernel = xen_unmap_domain_mfn_range_in_kernel,
+	.set_wp_pages = xen_set_guest_page_writeprotection,
+	.unset_wp_pages = xen_clear_guest_page_writeprotection,
+	.check_host = xen_check_host,
+	.from_virt_to_mfn = xen_virt_to_mfn,
+	.from_mfn_to_virt = xen_mfn_to_virt,
+};

@@ -49,6 +49,7 @@ typedef uint32_t vgt_reg_t;
 #include "devtable.h"
 #include "edid.h"
 #include "cmd_parser.h"
+#include "hypercall.h"
 
 struct pgt_device;
 struct vgt_device;
@@ -543,14 +544,15 @@ extern void vgt_clean_vgtt(struct vgt_device *vgt);
 
 typedef bool guest_page_handler_t(void *gp, uint64_t pa, void *p_data, int bytes);
 
-typedef struct {
+struct guest_page {
 	struct hlist_node node;
 	int writeprotection;
 	unsigned long gfn;
 	void *vaddr;
 	guest_page_handler_t *handler;
 	void *data;
-} guest_page_t;
+};
+typedef struct guest_page guest_page_t;
 
 typedef struct {
 	shadow_page_t shadow_page;
@@ -593,9 +595,6 @@ extern bool vgt_reinitialize_mode(struct vgt_device *cur_vgt,
 extern int vgt_hvm_info_init(struct vgt_device *vgt);
 extern int vgt_hvm_opregion_init(struct vgt_device *vgt, uint32_t gpa);
 extern void vgt_hvm_info_deinit(struct vgt_device *vgt);
-extern int vgt_hvm_enable(struct vgt_device *vgt);
-extern int vgt_pause_domain(struct vgt_device *vgt);
-extern void vgt_shutdown_domain(struct vgt_device *vgt);
 extern bool vgt_prepare_vbios_general_definition(struct vgt_device *vgt);
 extern void vgt_check_pending_context_switch(struct vgt_device *vgt);
 
@@ -2530,8 +2529,6 @@ extern bool gtt_emulate_write(struct vgt_device *vgt, unsigned int off,
 
 extern void* vgt_gma_to_va(struct vgt_mm *mm, unsigned long gma);
 
-extern unsigned long g2m_pfn(int vm_id, unsigned long g_pfn);
-
 extern void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 
 #define INVALID_MFN	(~0UL)
@@ -2627,11 +2624,9 @@ int hvm_toggle_iorequest_server(struct vgt_device *vgt, bool enable);
 int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
 		int is_mmio, uint64_t start, uint64_t end, int map);
 int hvm_map_pcidev_to_ioreq_server(struct vgt_device *vgt, uint64_t sbdf);
-int hvm_wp_page_to_ioreq_server(struct vgt_device *vgt, unsigned long page,
-				int set);
-struct vm_struct *map_hvm_iopage(struct vgt_device *vgt);
 int xen_get_nr_vcpu(int vm_id);
 int vgt_hvm_set_trap_area(struct vgt_device *vgt, int map);
+
 int vgt_hvm_map_aperture (struct vgt_device *vgt, int map);
 int setup_gtt(struct pgt_device *pdev);
 void check_gtt(struct pgt_device *pdev);
@@ -2641,7 +2636,6 @@ void vgt_save_gtt_and_fence(struct pgt_device *pdev);
 void vgt_restore_gtt_and_fence(struct pgt_device *pdev);
 uint64_t vgt_get_gtt_size(struct pgt_device *pdev);
 uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off);
-int vgt_get_hvm_max_gpfn(int vm_id);
 int vgt_hvm_vmem_init(struct vgt_device *vgt);
 void vgt_vmem_destroy(struct vgt_device *vgt);
 void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
@@ -2664,6 +2658,83 @@ int create_dump_buffer(struct dump_buffer *buf, int buf_size);
 void destroy_dump_buffer(struct dump_buffer *buf);
 void dump_string(struct dump_buffer *buf, const char *fmt, ...);
 
+extern struct kernel_dm *vgt_pkdm;
+
+static inline unsigned long hypervisor_g2m_pfn(struct vgt_device *vgt,
+	unsigned long g_pfn)
+{
+	return vgt_pkdm->g2m_pfn(vgt->vm_id, g_pfn);
+}
+
+static inline int hypervisor_get_max_gpfn(struct vgt_device *vgt)
+{
+	return vgt_pkdm->get_max_gpfn(vgt->vm_id);
+}
+
+static inline int hypervisor_pause_domain(struct vgt_device *vgt)
+{
+	return vgt_pkdm->pause_domain(vgt->vm_id);
+}
+
+static inline int hypervisor_shutdown_domain(struct vgt_device *vgt)
+{
+	return vgt_pkdm->shutdown_domain(vgt->vm_id);
+}
+
+static inline int hypervisor_map_mfn_to_gpfn(struct vgt_device *vgt,
+	unsigned long gpfn, unsigned long mfn, int nr, int map)
+{
+	return vgt_pkdm->map_mfn_to_gpfn(vgt->vm_id, gpfn, mfn, nr, map);
+}
+
+static inline int hypervisor_set_trap_area(struct vgt_device *vgt,
+	uint64_t start, uint64_t end, bool map)
+{
+	return vgt_pkdm->set_trap_area(vgt, start, end, map);
+}
+
+static inline struct vm_struct *hypervisor_map_iopage(struct vgt_device *vgt)
+{
+	return vgt_pkdm->map_iopage(vgt);
+}
+
+static inline struct vm_struct *hypervisor_remap_mfn_range(unsigned long mfn,
+	int nr, struct vgt_device *vgt)
+{
+	return vgt_pkdm->remap_mfn_range_in_kernel(mfn, nr, vgt->vm_id);
+}
+
+static inline void hypervisor_unmap_mfn_range(struct vm_struct *area,
+	int nr, struct vgt_device *vgt)
+{
+	return vgt_pkdm->unmap_mfn_range_in_kernel(area, nr, vgt->vm_id);
+}
+
+static inline int hypervisor_set_wp_pages(struct vgt_device *vgt, guest_page_t *p)
+{
+	return vgt_pkdm->set_wp_pages(vgt, p);
+}
+
+static inline int hypervisor_unset_wp_pages(struct vgt_device *vgt, guest_page_t *p)
+{
+	return vgt_pkdm->unset_wp_pages(vgt, p);
+}
+
+static inline int hypervisor_check_host(void)
+{
+	return vgt_pkdm->check_host();
+}
+
+static inline int hypervisor_virt_to_mfn(void *addr)
+{
+	return vgt_pkdm->from_virt_to_mfn(addr);
+}
+
+static inline void *hypervisor_mfn_to_virt(int mfn)
+{
+	return vgt_pkdm->from_mfn_to_virt(mfn);
+}
+
 #define ASSERT_VM(x, vgt)						\
 	do {								\
 		if (!(x)) {						\
@@ -2672,20 +2743,10 @@ void dump_string(struct dump_buffer *buf, const char *fmt, ...);
 			if (atomic_cmpxchg(&(vgt)->crashing, 0, 1))	\
 				break;					\
 			vgt_warn("Killing VM%d\n", (vgt)->vm_id);	\
-			if (!vgt_pause_domain((vgt)))			\
-				vgt_shutdown_domain((vgt));		\
+			if (!hypervisor_pause_domain((vgt)))		\
+				hypervisor_shutdown_domain((vgt));	\
 		}							\
 	} while (0)
-
-
-
-static inline bool vgt_in_host(void)
-{
-	if (!vgt_enabled)
-		return false;
-
-	return xen_initial_domain();
-}
 
 
 #endif	/* _VGT_DRV_H_ */

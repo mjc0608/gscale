@@ -811,7 +811,7 @@ int vgt_suspend(struct pci_dev *pdev)
 {
 	struct pgt_device *node, *pgt = NULL;
 
-	if (!vgt_in_host())
+	if (!hypervisor_check_host() || !vgt_enabled)
 		return 0;
 
 	if (list_empty(&pgt_devices)) {
@@ -852,7 +852,7 @@ int vgt_resume(struct pci_dev *pdev)
 {
 	struct pgt_device *node, *pgt = NULL;
 
-	if (!vgt_in_host())
+	if (!hypervisor_check_host() || !vgt_enabled)
 		return 0;
 
 
@@ -983,7 +983,7 @@ bool vgt_handle_dom0_device_reset(void)
 	int id;
 	bool rc;
 
-	if (!xen_initial_domain() || !vgt_enabled)
+	if (!hypervisor_check_host() || !vgt_enabled)
 		return false;
 
 	vgt_info("DOM0 hangcheck timer request reset device.\n");
@@ -1090,7 +1090,7 @@ int vgt_reset_device(struct pgt_device *pdev)
 /* for GFX driver */
 bool i915_start_vgt(struct pci_dev *pdev)
 {
-	if (!vgt_in_host())
+	if (!hypervisor_check_host())
 		return false;
 
 	if (vgt_xops.initialized) {
@@ -1132,7 +1132,7 @@ static void vgt_param_check(void)
 
 static int __init vgt_init_module(void)
 {
-	if (!vgt_in_host())
+	if (!hypervisor_check_host())
 		return 0;
 
 	vgt_param_check();
@@ -1145,7 +1145,7 @@ module_init(vgt_init_module);
 
 static void __exit vgt_exit_module(void)
 {
-	if (!vgt_in_host())
+	if (!hypervisor_check_host())
 		return;
 
 	// fill other exit works here
