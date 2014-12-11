@@ -256,7 +256,7 @@ static ssize_t vgt_hot_plug_trigger(struct kobject *kobj,
 {
 	unsigned hotplug_cmd = 0;
 
-	if (sscanf(buf, "%i", &hotplug_cmd) != 1)
+	if (sscanf(buf, "%u", &hotplug_cmd) != 1)
 		return -EINVAL;
 	vgt_trigger_display_hot_plug(&default_device, (vgt_hotplug_cmd_t)hotplug_cmd);
 	return count;

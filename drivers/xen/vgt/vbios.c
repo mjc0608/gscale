@@ -188,7 +188,7 @@ child_dev_insert_fake_port(struct child_devices* dev, int max_num, int efp_port)
  */
 bool vgt_prepare_vbios_general_definition(struct vgt_device *vgt)
 {
-	bool ret;
+	bool ret = true;
 	struct vbt_header *header;
 	struct bios_data_header *data_header;
 	struct vbios_general_definitions *gendef;

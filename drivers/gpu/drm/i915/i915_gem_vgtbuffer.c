@@ -69,7 +69,7 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data,
 	uint32_t __iomem *gtt_base = dev_priv->gtt.gsm;	/* mappable_base; */
 	uint32_t gtt_fbstart;
 	uint32_t gtt_pte;
-	uint32_t gtt_offset;
+	uint32_t gtt_offset = 0;
 
 	/* Allocate the new object */
 	DRM_DEBUG_DRIVER("VGT: gem_vgtbuffer_ioctl\n");
@@ -214,6 +214,7 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data,
 	drm_gem_object_unreference(&obj->base);
 	if (ret) {
 		kfree(obj);
+		i915_gem_vma_destroy(vma);
 		return ret;
 	}
 

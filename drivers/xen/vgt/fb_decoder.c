@@ -423,7 +423,7 @@ int vgt_decode_fb_format(int vmid, struct vgt_fb_format *fb)
 		} else {
 			vgt_reg_t port = (ddi_func_ctl & _REGBIT_TRANS_DDI_PORT_MASK) >>
 						_TRANS_DDI_PORT_SHIFT;
-			if ((port >= DDI_PORT_NONE) || (port <= DDI_PORT_E))
+			if (port <= DDI_PORT_E)
 				pipe->ddi_port = port;
 			else
 				pipe->ddi_port = DDI_PORT_NONE;
@@ -526,10 +526,6 @@ static int vgt_fb_event(struct notifier_block *nb,
 	 * drop it.
 	 */
 	msg->plane_id = vgt_plane_to_i915_plane(msg->plane_id);
-	if (msg->plane_id < 0) {
-		ret = -EINVAL;
-		goto out;
-	}
 
 	m->seq = seq++;
 	m->len = data_sz;
@@ -537,7 +533,6 @@ static int vgt_fb_event(struct notifier_block *nb,
 
 	ret = cn_netlink_send(m, 0, CN_IDX_VGT, GFP_ATOMIC);
 
-out:
 	kfree(m);
 	return (ret);
 }
