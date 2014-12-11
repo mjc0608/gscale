@@ -180,11 +180,6 @@ DEFINE_GUEST_HANDLE_STRUCT(vcpu_register_vcpu_info);
 
 #define PV_IOREQ_TYPE_PIO          0 /* pio */
 #define PV_IOREQ_TYPE_COPY         1 /* mmio ops */
-#define PV_IOREQ_TYPE_CTRL         2 /* vGT control ops */
-
-/* for "addr" field , when "type" is PV_IOREQ_TYPE_CTRL */
-#define VGT_CTRL_FORCEWAKE_GET  0
-#define VGT_CTRL_FORCEWAKE_PUT  1
 
 struct vcpu_emul_ioreq {
     uint64_t      addr;           /* physical address */
