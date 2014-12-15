@@ -155,12 +155,15 @@ bool vgt_host_write(u32 reg, void *val, int len, bool is_gtt, bool trace)
 	return vgt_ops->mem_write(vgt_dom0, pa, val, len);
 }
 
+void vgt_host_irq_sync(void)
+{
+	irq_work_sync(&dev_priv->irq_work);
+}
+
 void vgt_host_irq(int irq)
 {
-#if 0
 	struct drm_device *dev = pci_get_drvdata(pgt_to_pci(pdev_default));
 	vgt_schedule_host_isr(dev);
-#endif
 }
 
 void vgt_force_wake_get(void)

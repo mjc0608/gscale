@@ -1788,7 +1788,7 @@ static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
  */
 irqreturn_t vgt_interrupt(int irq, void *data)
 {
-	struct pgt_device *pdev = NULL; //tmp for i915_drm_to_pgt(data);
+	struct pgt_device *pdev = i915_drm_to_pgt(data);
 	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
 	irqreturn_t ret;
 	int cpu;

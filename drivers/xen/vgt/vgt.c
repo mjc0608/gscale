@@ -841,6 +841,7 @@ int vgt_suspend(struct pci_dev *pdev)
 		return 0;
 	}
 
+	vgt_host_irq_sync();
 	vgt_info("Suspending vGT driver...\n");
 
 	/* TODO: check vGT instance state */

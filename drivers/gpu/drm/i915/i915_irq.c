@@ -45,6 +45,22 @@
  * and related files, but that will be described in separate chapters.
  */
 
+#ifdef DRM_I915_VGT_SUPPORT
+#include "vgt-if.h"
+void i915_isr_wrapper(struct irq_work *work)
+{
+	struct drm_i915_private *dev_priv = container_of(work,
+				struct drm_i915_private, irq_work);
+	dev_priv->irq_ops.irq_handler(dev_priv->dev->pdev->irq, dev_priv->dev);
+}
+
+void vgt_schedule_host_isr(struct drm_device *dev)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	irq_work_queue_on(&dev_priv->irq_work, 0);
+}
+#endif
+
 static const u32 hpd_ibx[] = {
 	[HPD_CRT] = SDE_CRT_HOTPLUG,
 	[HPD_SDVO_B] = SDE_SDVOB_HOTPLUG,
@@ -2184,10 +2200,8 @@ static irqreturn_t ironlake_irq_handler(int irq, void *arg)
 	u32 de_iir, gt_iir, de_ier, sde_ier = 0;
 	irqreturn_t ret = IRQ_NONE;
 
-#ifdef DRM_I915_VGT_SUPPORT
-	if (USES_VGT(dev) && !vgt_can_process_irq())
+	if (i915_host_mediate && !vgt_can_process_irq())
 		return IRQ_HANDLED;
-#endif
 
 	/* We get interrupts on unclaimed registers, so check for this before we
 	 * do any I915_{READ,WRITE}. */
@@ -2979,8 +2993,8 @@ static void i915_hangcheck_elapsed(unsigned long data)
 		return;
 
 #ifdef DRM_I915_VGT_SUPPORT
-	if (USES_VGT(dev)
-		&& !vgt_can_process_timer(&dev_priv->gpu_error.hangcheck_timer))
+	if (i915_host_mediate &&
+			!vgt_can_process_timer(&dev_priv->gpu_error.hangcheck_timer))
 		return;
 #endif
 
@@ -3077,7 +3091,7 @@ static void i915_hangcheck_elapsed(unsigned long data)
 
 	if (rings_hung) {
 #ifdef DRM_I915_VGT_SUPPORT
-		if (USES_VGT(dev) && vgt_handle_dom0_device_reset())
+		if (i915_host_mediate && vgt_handle_dom0_device_reset())
 			return;
 #endif
 		i915_handle_error(dev, true, "Ring hung");
@@ -3147,8 +3161,6 @@ static void gen5_gt_irq_reset(struct drm_device *dev)
 		GEN5_IRQ_RESET(GEN6_PM);
 }
 
-extern void vgt_install_irq(struct pci_dev *pdev);
-
 /* drm_dma.h hooks
 */
 static void ironlake_irq_reset(struct drm_device *dev)
@@ -3164,13 +3176,6 @@ static void ironlake_irq_reset(struct drm_device *dev)
 	gen5_gt_irq_reset(dev);
 
 	ibx_irq_reset(dev);
-
-#ifdef DRM_I915_VGT_SUPPORT
-	/* a hacky hook to vGT driver */
-	printk("vGT: setup vGT irq hook in %s\n", __FUNCTION__);
-	if (USES_VGT(dev))
-		vgt_install_irq(dev->pdev);
-#endif
 }
 
 static void vlv_display_irq_reset(struct drm_i915_private *dev_priv)
@@ -3231,13 +3236,6 @@ static void gen8_irq_reset(struct drm_device *dev)
 	GEN5_IRQ_RESET(GEN8_PCU_);
 
 	ibx_irq_reset(dev);
-
-#ifdef DRM_I915_VGT_SUPPORT
-	/* a hacky hook to vGT driver */
-	printk("vGT: setup vGT irq hook in %s\n", __FUNCTION__);
-	if (USES_VGT(dev))
-		vgt_install_irq(dev->pdev);
-#endif
 }
 
 void gen8_irq_power_well_post_enable(struct drm_i915_private *dev_priv)
@@ -4351,6 +4349,54 @@ static void intel_hpd_irq_reenable_work(struct work_struct *work)
 	intel_runtime_pm_put(dev_priv);
 }
 
+#ifdef CONFIG_I915_VGT
+void *i915_drm_to_pgt(struct drm_device *dev)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	return dev_priv->pgt;
+}
+
+static void vgt_irq_preinstall(struct drm_device *dev)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+
+	dev_priv->pgt = vgt_init_irq(dev->pdev, dev);
+	if (!dev_priv->pgt) {
+		DRM_DEBUG_DRIVER("vgt_init_irq failed, turn vgt off\n");
+		i915_host_mediate = false;
+
+		dev->driver->irq_handler = dev_priv->irq_ops.irq_handler;
+		dev->driver->irq_preinstall = dev_priv->irq_ops.irq_preinstall;
+		dev->driver->irq_postinstall = dev_priv->irq_ops.irq_postinstall;
+		dev->driver->irq_uninstall = dev_priv->irq_ops.irq_uninstall;
+
+		/* still call it for this time */
+		dev_priv->irq_ops.irq_preinstall(dev);
+
+		return;
+	}
+
+	init_irq_work(&dev_priv->irq_work, i915_isr_wrapper);
+
+	dev_priv->irq_ops.irq_preinstall(dev);
+}
+
+static int vgt_irq_postinstall(struct drm_device *dev)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	return dev_priv->irq_ops.irq_postinstall(dev);
+}
+
+static void vgt_irq_uninstall(struct drm_device *dev)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	irq_work_sync(&dev_priv->irq_work);
+
+	dev_priv->irq_ops.irq_uninstall(dev);
+	vgt_fini_irq(dev->pdev);
+}
+#endif
+
 /**
  * intel_irq_init - initializes irq support
  * @dev_priv: i915 device instance
@@ -4379,7 +4425,7 @@ void intel_irq_init(struct drm_i915_private *dev_priv)
 		    i915_hangcheck_elapsed,
 		    (unsigned long) dev);
 
-#ifdef DRM_I915_VGT_SUPPORT
+#ifdef CONFIG_I915_VGT
 	vgt_new_delay_event_timer(&dev_priv->gpu_error.hangcheck_timer);
 #endif
 
@@ -4466,6 +4512,22 @@ void intel_irq_init(struct drm_i915_private *dev_priv)
 		dev->driver->enable_vblank = i915_enable_vblank;
 		dev->driver->disable_vblank = i915_disable_vblank;
 	}
+
+#ifdef CONFIG_I915_VGT
+	if (i915_host_mediate) {
+		/* save the original irq ops */
+		dev_priv->irq_ops.irq_handler = dev->driver->irq_handler;
+		dev_priv->irq_ops.irq_preinstall = dev->driver->irq_preinstall;
+		dev_priv->irq_ops.irq_postinstall = dev->driver->irq_postinstall;
+		dev_priv->irq_ops.irq_uninstall = dev->driver->irq_uninstall;
+
+		/* let drm take vgt as hardware interrupt handler */
+		dev->driver->irq_handler = vgt_interrupt;
+		dev->driver->irq_preinstall = vgt_irq_preinstall;
+		dev->driver->irq_postinstall = vgt_irq_postinstall;
+		dev->driver->irq_uninstall = vgt_irq_uninstall;
+	}
+#endif
 }
 
 /**

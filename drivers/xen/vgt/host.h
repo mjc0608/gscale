@@ -29,6 +29,7 @@ bool vgt_native_mmio_write(u32 reg, void *val, int len, bool trace);
 bool vgt_native_gtt_read(u32 reg, void *val, int len);
 bool vgt_native_gtt_write(u32 reg, void *val, int len);
 void vgt_host_irq(int);
+void vgt_host_irq_sync(void);
 
 void vgt_force_wake_get(void);
 void vgt_force_wake_put(void);

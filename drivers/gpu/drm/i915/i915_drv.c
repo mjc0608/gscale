@@ -41,6 +41,8 @@
 #include <linux/pm_runtime.h>
 #include <drm/drm_crtc_helper.h>
 
+bool i915_host_mediate __read_mostly = false;
+
 static struct drm_driver driver;
 
 #define GEN_DEFAULT_PIPEOFFSETS \
@@ -920,8 +922,8 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 #ifdef DRM_I915_VGT_SUPPORT
 	/* enforce dependancy and initialize the vGT driver */
-	xen_start_vgt(pdev);
-	printk("i915: xen_start_vgt done\n");
+	i915_start_vgt(pdev);
+	printk("i915: i915_start_vgt done\n");
 #endif
 
 	return drm_get_pci_dev(pdev, ent, &driver);
@@ -954,7 +956,7 @@ static int i915_pm_suspend(struct device *dev)
 		int i;
 
 		/* need cleanup for the native case */
-		set_gen_pci_cfg_space_pt(1);
+		//set_gen_pci_cfg_space_pt(1);
 
 		for (i = 0; i < ARRAY_SIZE(gen_dev_pci_cfg_space); i++)
 			pci_read_config_dword(pdev, i*4,
@@ -1036,7 +1038,7 @@ static int i915_pm_resume(struct device *dev)
 		if (error)
 			return error;
 
-		set_gen_pci_cfg_space_pt(0);
+		//set_gen_pci_cfg_space_pt(0);
 	}
 #endif
 

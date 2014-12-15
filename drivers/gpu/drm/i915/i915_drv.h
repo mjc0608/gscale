@@ -38,6 +38,7 @@
 #include "intel_lrc.h"
 #include "i915_gem_gtt.h"
 #include "i915_gem_render_state.h"
+#include "i915_vgt.h"
 #include <linux/io-mapping.h>
 #include <linux/i2c.h>
 #include <linux/i2c-algo-bit.h>
@@ -50,14 +51,14 @@
 #include <linux/kref.h>
 #include <linux/pm_qos.h>
 
-#if defined(CONFIG_XEN_VGT_I915) || defined(CONFIG_XEN_VGT_I915_MODULE)
+#ifdef CONFIG_I915_VGT
+#include <linux/irq_work.h>
 #define DRM_I915_VGT_SUPPORT	1
 #endif
 
 #ifdef DRM_I915_VGT_SUPPORT
-#include <xen/vgt.h>
-#include <xen/vgt-if.h>
-#include <xen/fb_decoder.h>
+#include "vgt-if.h"
+#include "fb_decoder.h"
 #endif
 
 /* General customization:
@@ -1784,6 +1785,18 @@ struct drm_i915_private {
 
 	int mmio_size;
 
+#ifdef CONFIG_I915_VGT
+	/* vgt host-side mediation */
+	void *pgt;
+	struct irq_work irq_work;
+	struct {
+		irqreturn_t(*irq_handler) (int irq, void *arg);
+		void (*irq_preinstall) (struct drm_device *dev);
+		int (*irq_postinstall) (struct drm_device *dev);
+		void (*irq_uninstall) (struct drm_device *dev);
+	} irq_ops;
+#endif
+
 	/* Abstract the submission mechanism (legacy ringbuffer or execlists) away */
 	struct {
 		int (*do_execbuf)(struct drm_device *dev, struct drm_file *file,
@@ -2975,9 +2988,15 @@ void gen6_gt_force_wake_get(struct drm_i915_private *dev_priv, int fw_engine);
 void gen6_gt_force_wake_put(struct drm_i915_private *dev_priv, int fw_engine);
 void assert_force_wake_inactive(struct drm_i915_private *dev_priv);
 
+#ifdef CONFIG_I915_VGT
+
+extern bool vgt_can_process_irq(void);
+extern bool vgt_can_process_timer(void *timer);
+extern void vgt_new_delay_event_timer(void *timer);
+#endif
+
 #ifdef DRM_I915_VGT_SUPPORT
 #define VGT_IF_VERSION	0x10000		/* 1.0 */
-extern void vgt_install_irq(struct pci_dev *pdev);
 extern void i915_check_vgt(struct drm_i915_private *dev_priv);
 #endif
 
@@ -3119,5 +3138,7 @@ wait_remaining_ms_from_jiffies(unsigned long timestamp_jiffies, int to_wait_ms)
 			    schedule_timeout_uninterruptible(remaining_jiffies);
 	}
 }
+
+extern bool i915_host_mediate __read_mostly;
 
 #endif
