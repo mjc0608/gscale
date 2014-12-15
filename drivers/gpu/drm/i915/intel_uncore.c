@@ -40,6 +40,40 @@
 
 #define __raw_posting_read(dev_priv__, reg__) (void)__raw_i915_read32(dev_priv__, reg__)
 
+
+/* Intel GVT-g MMIO mediation */
+#define __i915_read(x, y) \
+u##x i915_read##x(struct drm_i915_private *dev_priv, u32 reg,			\
+		bool trace) {							\
+	u##x val = 0;								\
+	if (i915_host_mediate)							\
+		vgt_host_read((reg), &val, sizeof(u##x), false, trace);		\
+	else									\
+		val = dev_priv->uncore.funcs.mmio_read##y(dev_priv,		\
+				reg, trace);					\
+	return val;								\
+}
+__i915_read(8, b)
+__i915_read(16, w)
+__i915_read(32, l)
+__i915_read(64, q)
+#undef __i915_read
+#define __i915_write(x, y) \
+void i915_write##x(struct drm_i915_private *dev_priv, u32 reg,			\
+		u##x val, bool trace)						\
+{										\
+	if (i915_host_mediate)							\
+		vgt_host_write(reg, &val, sizeof(u##x), false, trace);		\
+	else									\
+		dev_priv->uncore.funcs.mmio_write##y(dev_priv,			\
+				(reg), (val), trace);				\
+}
+__i915_write(8, b)
+__i915_write(16, w)
+__i915_write(32, l)
+__i915_write(64, q)
+#undef __i915_write
+
 static void
 assert_device_not_suspended(struct drm_i915_private *dev_priv)
 {
@@ -1258,6 +1292,7 @@ void intel_uncore_init(struct drm_device *dev)
 	}
 
 	i915_check_and_clear_faults(dev);
+	i915_vgt_record_priv(dev_priv);
 }
 #undef ASSIGN_WRITE_MMIO_VFUNCS
 #undef ASSIGN_READ_MMIO_VFUNCS

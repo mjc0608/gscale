@@ -3036,27 +3036,40 @@ int vlv_freq_opcode(struct drm_i915_private *dev_priv, int val);
 					FORCEWAKE_BLITTER)
 
 
-#define I915_READ8(reg)		dev_priv->uncore.funcs.mmio_readb(dev_priv, (reg), true)
-#define I915_WRITE8(reg, val)	dev_priv->uncore.funcs.mmio_writeb(dev_priv, (reg), (val), true)
+#define __i915_read(x) \
+	u##x i915_read##x(struct drm_i915_private *dev_priv, u32 reg, bool trace);
+__i915_read(8)
+__i915_read(16)
+__i915_read(32)
+__i915_read(64)
+#undef __i915_read
+#define __i915_write(x) \
+	void i915_write##x(struct drm_i915_private *dev_priv, u32 reg, u##x val, bool trace);
+__i915_write(8)
+__i915_write(16)
+__i915_write(32)
+__i915_write(64)
+#undef __i915_write
 
-#define I915_READ16(reg)	dev_priv->uncore.funcs.mmio_readw(dev_priv, (reg), true)
-#define I915_WRITE16(reg, val)	dev_priv->uncore.funcs.mmio_writew(dev_priv, (reg), (val), true)
-#define I915_READ16_NOTRACE(reg)	dev_priv->uncore.funcs.mmio_readw(dev_priv, (reg), false)
-#define I915_WRITE16_NOTRACE(reg, val)	dev_priv->uncore.funcs.mmio_writew(dev_priv, (reg), (val), false)
-
-#define I915_READ(reg)		dev_priv->uncore.funcs.mmio_readl(dev_priv, (reg), true)
-#define I915_WRITE(reg, val)	dev_priv->uncore.funcs.mmio_writel(dev_priv, (reg), (val), true)
-#define I915_READ_NOTRACE(reg)		dev_priv->uncore.funcs.mmio_readl(dev_priv, (reg), false)
-#define I915_WRITE_NOTRACE(reg, val)	dev_priv->uncore.funcs.mmio_writel(dev_priv, (reg), (val), false)
-
+#define I915_READ8(reg)			i915_read8(dev_priv, (reg), true)
+#define I915_WRITE8(reg, val)		i915_write8(dev_priv, (reg), (val), true)
+#define I915_READ16(reg)		i915_read16(dev_priv, (reg), true)
+#define I915_WRITE16(reg, val)		i915_write16(dev_priv, (reg), (val), true)
+#define I915_READ16_NOTRACE(reg)	i915_read16(dev_priv, (reg), false)
+#define I915_WRITE16_NOTRACE(reg, val)	i915_write16(dev_priv, (reg), (val), false)
+#define I915_READ(reg)			i915_read32(dev_priv, (reg), true)
+#define I915_WRITE(reg, val)		i915_write32(dev_priv, (reg), (val), true)
+#define I915_READ_NOTRACE(reg)		i915_read32(dev_priv, (reg), false)
+#define I915_WRITE_NOTRACE(reg, val)	i915_write32(dev_priv, (reg), (val), false)
 /* Be very careful with read/write 64-bit values. On 32-bit machines, they
  * will be implemented using 2 32-bit writes in an arbitrary order with
  * an arbitrary delay between them. This can cause the hardware to
  * act upon the intermediate value, possibly leading to corruption and
  * machine death. You have been warned.
  */
-#define I915_WRITE64(reg, val)	dev_priv->uncore.funcs.mmio_writeq(dev_priv, (reg), (val), true)
-#define I915_READ64(reg)	dev_priv->uncore.funcs.mmio_readq(dev_priv, (reg), true)
+#define I915_WRITE64(reg, val)		i915_write64(dev_priv, (reg), (val), true)
+#define I915_READ64(reg)		i915_read64(dev_priv, (reg), true)
+
 
 #define I915_READ64_2x32(lower_reg, upper_reg) ({			\
 		u32 upper = I915_READ(upper_reg);			\
