@@ -28,7 +28,7 @@
 #include "i915_trace.h"
 #include "intel_drv.h"
 #include <linux/swap.h>
-#include <xen/fb_decoder.h>
+#include "fb_decoder.h"
 
 static int i915_gem_vgtbuffer_get_pages(struct drm_i915_gem_object *obj)
 {

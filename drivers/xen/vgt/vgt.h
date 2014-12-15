@@ -34,11 +34,13 @@
 #include <linux/cdev.h>
 #include <linux/hashtable.h>
 #include <linux/pci.h>
+#include <drm/drmP.h>
 
 #include <xen/interface/hvm/ioreq.h>
 #include <xen/interface/platform.h>
-#include <xen/vgt-if.h>
-#include <xen/vgt.h>
+
+#include "vgt-if.h"
+#include "host.h"
 
 typedef uint32_t vgt_reg_t;
 
@@ -218,15 +220,6 @@ enum transcoder {
 	TRANSCODER_EDP = 0xF,
 };
 
-#define vgt_info(fmt, s...)	\
-	do { printk(KERN_INFO "vGT info:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
-
-#define vgt_warn(fmt, s...)	\
-	do { printk(KERN_WARNING "vGT warning:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
-
-#define vgt_err(fmt, s...)	\
-	do { printk(KERN_ERR "vGT error:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
-
 #define vgt_dbg(component, fmt, s...)	\
 	do { if (vgt_debug & component) printk(KERN_DEBUG "vGT debug:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
 
@@ -277,7 +270,7 @@ struct vgt_rsvd_ring {
 #define _tail_reg_(ring_reg_off)	\
 		(ring_reg_off & ~(sizeof(vgt_ringbuffer_t)-1))
 
-#define _vgt_mmio_va(pdev, x)		((char*)pdev->gttmmio_base_va+x)	/* PA to VA */
+#define _vgt_mmio_va(pdev, x)		((uint64_t)((char*)pdev->gttmmio_base_va+x))	/* PA to VA */
 #define _vgt_mmio_pa(pdev, x)		(pdev->gttmmio_base+x)			/* PA to VA */
 
 #define VGT_RING_TIMEOUT	500	/* in ms */
@@ -454,7 +447,7 @@ extern void vgt_check_pending_context_switch(struct vgt_device *vgt);
 struct vgt_irq_virt_state;
 
 #define MAX_HVM_VCPUS_SUPPORTED 128
-struct vgt_hvm_info{
+struct vgt_hvm_info {
 	shared_iopage_t *iopage;
 	DECLARE_BITMAP(ioreq_pending, MAX_HVM_VCPUS_SUPPORTED);
 	wait_queue_head_t io_event_wq;
@@ -913,6 +906,7 @@ struct pgt_device {
 	uint64_t total_gm_sz;	/* size of available GM space, e.g 2M GTT is 2GB */
 
 	uint64_t gttmmio_base;	/* base of GTT and MMIO */
+	void *gttmmio_base_va;	/* virtual base of GTT and MMIO */
 	uint64_t gmadr_base;	/* base of GMADR */
 	void *gmadr_va;		/* virtual base of GMADR */
 	u32 mmio_size;
@@ -941,10 +935,6 @@ struct pgt_device {
 
 	/* 1 bit corresponds to 1 PAGE(4K) in aperture */
 	DECLARE_BITMAP(rsvd_aperture_bitmap, VGT_RSVD_APERTURE_BITMAP_BITS);
-
-	/* 1 bit corresponds to 1 vgt virtual force wake request */
-	DECLARE_BITMAP(v_force_wake_bitmap, VGT_MAX_VMS);
-	spinlock_t v_force_wake_lock;
 
 	struct page *dummy_page;
 	struct page *(*rsvd_aperture_pages)[VGT_APERTURE_PAGES];
@@ -1723,10 +1713,12 @@ static inline uint32_t h2g_gtt_index(struct vgt_device *vgt, uint32_t h_index)
 	return (uint32_t)(h2g_gm(vgt, h_addr) >> GTT_PAGE_SHIFT);
 }
 
+#ifndef CONFIG_KVMGT
 static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
 {
 	return &(vgt->hvm_info->iopage->vcpu_ioreq[vcpu]);
 }
+#endif
 
 static inline void __REG_WRITE(struct pgt_device *pdev,
 	unsigned long reg, unsigned long val, int bytes)
@@ -1745,21 +1737,18 @@ static inline void __REG_WRITE(struct pgt_device *pdev,
 	 */
 	if (pdev->in_ctx_switch)
 		reg_set_saved(pdev, reg);
-	ret = hcall_mmio_write(_vgt_mmio_pa(pdev, reg), bytes, val);
-	//ASSERT(ret == X86EMUL_OKAY);
+	ret = vgt_native_mmio_write(reg, &val, bytes, false);
 }
 
 static inline unsigned long __REG_READ(struct pgt_device *pdev,
 	unsigned long reg, int bytes)
 {
-	unsigned long data;
+	unsigned long data = 0;
 	int ret;
 
 	if (pdev->in_ctx_switch)
 		reg_set_saved(pdev, reg);
-	ret = hcall_mmio_read(_vgt_mmio_pa(pdev, reg), bytes, &data);
-	//ASSERT(ret == X86EMUL_OKAY);
-
+	ret = vgt_native_mmio_read(reg, &data, bytes, false);
 	return data;
 }
 
@@ -1991,8 +1980,10 @@ static inline u32 vgt_read_gtt(struct pgt_device *pdev, u32 index)
 {
 	struct vgt_device_info *info = &pdev->device_info;
 	unsigned int off = index << info->gtt_entry_size_shift;
+	u32 ret = 0;
 
-	return VGT_MMIO_READ(pdev, info->gtt_start_offset + off);
+	vgt_native_gtt_read(off, &ret, sizeof(ret));
+	return ret;
 }
 
 static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
@@ -2000,15 +1991,17 @@ static inline void vgt_write_gtt(struct pgt_device *pdev, u32 index, u32 val)
 	struct vgt_device_info *info = &pdev->device_info;
 	unsigned int off = index << info->gtt_entry_size_shift;
 
-	VGT_MMIO_WRITE(pdev, info->gtt_start_offset + off, val);
+	vgt_native_gtt_write(off, &val, sizeof(val));
 }
 
 static inline u64 vgt_read_gtt64(struct pgt_device *pdev, u32 index)
 {
 	struct vgt_device_info *info = &pdev->device_info;
 	unsigned int off = index << info->gtt_entry_size_shift;
+	u64 ret = 0;
 
-	return VGT_MMIO_READ64(pdev, info->gtt_start_offset + off, val);
+	vgt_native_gtt_read(off, &ret, sizeof(ret));
+	return ret;
 }
 
 static inline void vgt_write_gtt64(struct pgt_device *pdev, u32 index, u64 val)
@@ -2016,7 +2009,7 @@ static inline void vgt_write_gtt64(struct pgt_device *pdev, u32 index, u64 val)
 	struct vgt_device_info *info = &pdev->device_info;
 	unsigned int off = index << info->gtt_entry_size_shift;
 
-	VGT_MMIO_WRITE64(pdev, info->gtt_start_offset + off, val);
+	vgt_native_gtt_write(off, &val, sizeof(val));
 }
 
 static inline void vgt_pci_bar_write_32(struct vgt_device *vgt, uint32_t bar_offset, uint32_t val)
@@ -2258,7 +2251,7 @@ void vgt_emulate_dpy_events(struct pgt_device *pdev);
 bool vgt_manage_emul_dpy_events(struct pgt_device *pdev);
 void vgt_update_frmcount(struct vgt_device *vgt, enum vgt_pipe pipe);
 void vgt_calculate_frmcount_delta(struct vgt_device *vgt, enum vgt_pipe pipe);
-void vgt_install_irq(struct pci_dev *pdev);
+void *vgt_install_irq(struct pci_dev *pdev, struct drm_device *dev);
 int vgt_irq_init(struct pgt_device *pgt);
 void vgt_irq_exit(struct pgt_device *pgt);
 
@@ -2336,6 +2329,9 @@ bool rebuild_pipe_mapping(struct vgt_device *vgt, unsigned int reg, uint32_t new
 bool update_pipe_mapping(struct vgt_device *vgt, unsigned int physical_reg, uint32_t physical_wr_data);
 
 #include <drm/drmP.h>
+
+extern void *i915_drm_to_pgt(struct drm_device *dev);
+extern void vgt_schedule_host_isr(struct drm_device *dev);
 
 extern void i915_handle_error(struct drm_device *dev, bool wedged,
 		       const char *fmt, ...);
@@ -2441,7 +2437,6 @@ extern u64 ring_idle_wait;
 extern u64 ring_0_idle;
 extern u64 ring_0_busy;
 extern u64 vm_pending_irq[VGT_MAX_VMS];
-extern u64 forcewake_count;
 
 struct vgt_port_output_struct {
 	unsigned int ctrl_reg;
@@ -2512,6 +2507,9 @@ extern void vgt_print_edid(struct vgt_edid_data_t *edid);
 extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);
 int vgt_fb_notifier_call_chain(unsigned long val, void *data);
 void vgt_init_fb_notify(void);
+void vgt_dom0_ready(struct vgt_device *vgt);
+
+
 
 struct dump_buffer {
 	char *buffer;
@@ -2535,5 +2533,16 @@ void dump_string(struct dump_buffer *buf, const char *fmt, ...);
 				vgt_shutdown_domain((vgt));		\
 		}							\
 	} while (0)
+
+
+
+static inline bool vgt_in_host(void)
+{
+	if (!vgt_enabled)
+		return false;
+
+	return xen_initial_domain();
+}
+
 
 #endif	/* _VGT_DRV_H_ */

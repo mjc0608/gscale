@@ -29,12 +29,12 @@
 
 #include <linux/device.h>
 #include <linux/acpi.h>
-#include <xen/vgt.h>
 #include <drm/drmP.h>
 #include <drm/i915_drm.h>
 #include "i915_drv.h"
 #include "i915_trace.h"
 #include "intel_drv.h"
+#include "vgt-if.h"
 
 #include <linux/console.h>
 #include <linux/module.h>

@@ -27,7 +27,7 @@
 #include <linux/debugfs.h>
 #include <linux/connector.h>
 #include "vgt.h"
-#include <xen/fb_decoder.h>
+#include "fb_decoder.h"
 #include <uapi/drm/drm_fourcc.h>
 #include <uapi/drm/i915_drm.h>
 

@@ -285,8 +285,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	}
 
 	if (vgt->vm_id) {
-		vgt_ops->boot_time = 0;
-
 		if (hvm_render_owner)
 			current_render_owner(pdev) = vgt;
 

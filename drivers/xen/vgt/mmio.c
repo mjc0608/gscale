@@ -967,7 +967,6 @@ out1:
 	return;
 }
 
-
 static void vgt_set_reg_attr(struct pgt_device *pdev,
 	u32 reg, reg_attr_t *attr, bool track)
 {

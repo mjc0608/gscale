@@ -29,9 +29,11 @@
 #include <linux/bitops.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+
 #include <xen/events.h>
 #include <xen/interface/vcpu.h>
 #include <xen/interface/hvm/hvm_op.h>
+
 #include "vgt.h"
 
 /*
@@ -704,8 +706,6 @@ static void vgt_irq_map_init(struct vgt_irq_host_state *hstate)
 
 /* =======================vEvent injection===================== */
 
-extern int resend_irq_on_evtchn(unsigned int i915_irq);
-
 DEFINE_PER_CPU(unsigned long, delay_event_bitmap);
 static unsigned long next_avail_delay_event = 1;
 
@@ -772,11 +772,7 @@ static void vgt_flush_delay_events(void)
 		if (bit == 0) {
 			struct pgt_device *pdev = &default_device;
 			int i915_irq = pdev->irq_hstate->i915_irq;
-			unsigned long flags;
-
-			local_irq_save(flags);
-			resend_irq_on_evtchn(i915_irq);
-			local_irq_restore(flags);
+			vgt_host_irq(i915_irq);
 		} else {
 			struct timer_list *t = delay_event_timers[bit];
 			if (t)
@@ -809,11 +805,7 @@ static void pend_dom0_virtual_interrupt(struct vgt_device *vgt)
 		return;
 
 	if (unlikely(!vgt_track_nest)) {
-		unsigned long flags;
-		/* resend irq may unmask events which requires irq disabled */
-		local_irq_save(flags);
-		resend_irq_on_evtchn(i915_irq);
-		local_irq_restore(flags);
+		vgt_host_irq(i915_irq);
 		return;
 	}
 
@@ -832,29 +824,6 @@ static void pend_dom0_virtual_interrupt(struct vgt_device *vgt)
 	/* TODO: may do a kick here */
 }
 
-static void do_inject_dom0_virtual_interrupt(void *info, int ipi);
-
-static void inject_dom0_ipi_virtual_interrupt(void *info)
-{
-	do_inject_dom0_virtual_interrupt(info, 1);
-
-	return;
-}
-
-void inject_dom0_virtual_interrupt(void *info)
-{
-	if (vgt_delay_nest)
-		vgt_flush_delay_events();
-
-	do_inject_dom0_virtual_interrupt(info, 0);
-
-	return;
-}
-
-static DEFINE_PER_CPU(struct call_single_data, vgt_call_data) = {
-	.func = inject_dom0_ipi_virtual_interrupt,
-};
-
 /*
  * actual virq injection happens here. called in vgt_exit()
  * or IPI handler
@@ -864,7 +833,7 @@ static void do_inject_dom0_virtual_interrupt(void *info, int ipi)
 	unsigned long flags;
 	struct pgt_device *pdev = &default_device;
 	int i915_irq;
-	int this_cpu, target_cpu;
+	int this_cpu;
 
 	if (ipi)
 		clear_bit(0, &pdev->dom0_ipi_irq_injecting);
@@ -887,40 +856,24 @@ static void do_inject_dom0_virtual_interrupt(void *info, int ipi)
 	}
 
 	i915_irq = pdev->irq_hstate->i915_irq;
-	target_cpu = xen_get_cpu_from_irq(i915_irq);
 
-	/*
-	 * If target cpu is the current, notify cpu by resending
-	 * evtchn. Later interrupt enable will make it fired
-	 *
-	 * Otherwise, we need check whether the target cpu is
-	 * in vgt core logic, which may have lock acquired. In
-	 * that case, no further action except adjusting target
-	 * cpu, because pending irq will be handled when target
-	 * vcpu does vgt_exit().
-	 *
-	 * the only case we need to kick the target cpu, is when
-	 * it's not in vgt code path. An IPI is sent to make the
-	 * target cpu note the pending irq;
-	 */
-	if (this_cpu == target_cpu) {
-		pdev->dom0_irq_pending = false;
-		wmb();
-		pdev->dom0_irq_cpu = -1;
+	//TODO: remove the logic used for injecting irq to dom0!
+	pdev->dom0_irq_pending = false;
+	wmb();
+	pdev->dom0_irq_cpu = -1;
 
-		resend_irq_on_evtchn(i915_irq);
-		spin_unlock_irqrestore(&pdev->lock, flags);
-	} else {
-		pdev->dom0_irq_cpu = target_cpu;
-		spin_unlock_irqrestore(&pdev->lock, flags);
+	spin_unlock_irqrestore(&pdev->lock, flags);
+	vgt_host_irq(i915_irq);
+}
 
-		/* do this out of the lock */
-		if (!per_cpu(in_vgt, target_cpu)
-				&& !test_and_set_bit(0, &pdev->dom0_ipi_irq_injecting)) {
-			smp_call_function_single_async(target_cpu,
-					&per_cpu(vgt_call_data, this_cpu));
-		}
-	}
+void inject_dom0_virtual_interrupt(void *info)
+{
+	if (vgt_delay_nest)
+		vgt_flush_delay_events();
+
+	do_inject_dom0_virtual_interrupt(info, 0);
+
+	return;
 }
 
 #define MSI_CAP_OFFSET 0x90	/* FIXME. need to get from cfg emulation */
@@ -946,7 +899,7 @@ static void inject_hvm_virtual_interrupt(struct vgt_device *vgt)
 	info.addr = *(uint32_t *)(cfg_space + MSI_CAP_ADDRESS);
 	info.data = *(uint16_t *)(cfg_space + MSI_CAP_DATA);
 	vgt_dbg(VGT_DBG_IRQ, "vGT: VM(%d): hvm injections. address (%llx) data(%x)!\n",
-		vgt->vm_id, info.addr, info.data);
+			vgt->vm_id, info.addr, info.data);
 	r = HYPERVISOR_hvm_op(HVMOP_inject_msi, &info);
 	if (r < 0)
 		vgt_err("vGT(%d): failed to inject vmsi\n", vgt->vgt_id);
@@ -1833,9 +1786,9 @@ static void vgt_handle_events(struct vgt_irq_host_state *hstate, void *iir,
  *   - handle various interrupt reasons
  *   - may trigger virtual interrupt instances to dom0 or other VMs
  */
-static irqreturn_t vgt_interrupt(int irq, void *data)
+irqreturn_t vgt_interrupt(int irq, void *data)
 {
-	struct pgt_device *pdev = (struct pgt_device *)data;
+	struct pgt_device *pdev = NULL; //tmp for i915_drm_to_pgt(data);
 	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
 	irqreturn_t ret;
 	int cpu;
@@ -2038,18 +1991,18 @@ void vgt_irq_exit(struct pgt_device *pdev)
 	kfree(pdev->irq_hstate);
 }
 
-void vgt_install_irq(struct pci_dev *pdev)
+void *vgt_init_irq(struct pci_dev *pdev, struct drm_device *dev)
 {
 	struct pgt_device *node, *pgt = NULL;
-	int irq, ret;
+	int irq;
 	struct vgt_irq_host_state *hstate;
 
-	if (!xen_initial_domain() || !vgt_enabled)
-		return;
+	if (!vgt_in_host())
+		return NULL;
 
 	if (list_empty(&pgt_devices)) {
 		printk("vGT: no valid pgt_device registered when installing irq\n");
-		return;
+		return NULL;
 	}
 
 	list_for_each_entry(node, &pgt_devices, list) {
@@ -2061,7 +2014,7 @@ void vgt_install_irq(struct pci_dev *pdev)
 
 	if (!pgt) {
 		printk("vGT: no matching pgt_device when registering irq\n");
-		return;
+		return NULL;
 	}
 
 	printk("vGT: found matching pgt_device when registering irq for dev (0x%x)\n", pdev->devfn);
@@ -2069,39 +2022,28 @@ void vgt_install_irq(struct pci_dev *pdev)
 	hstate = pgt->irq_hstate;
 	if (hstate->installed) {
 		printk("vGT: IRQ has been installed already.\n");
-		return;
+		return NULL;
 	}
-
-	irq = bind_virq_to_irq(VIRQ_VGT_GFX, 0);
-	if (irq < 0) {
-		printk("vGT: fail to bind virq\n");
-		return;
-	}
-
-	ret = request_irq(pdev->irq, vgt_interrupt, IRQF_SHARED, "vgt", pgt);
-	if (ret < 0) {
-		printk("vGT: error on request_irq (%d)\n", ret);
-		//unbind_from_irq(irq);
-		return;
-	}
-
+	irq = -1;
+	vgt_dbg(VGT_DBG_IRQ, "not requesting irq here!\n");
 	hstate->pirq = pdev->irq;
 	hstate->i915_irq = irq;
-	pdev->irq = irq;
 
 	hstate->installed = true;
 
 	printk("vGT: allocate virq (%d) for i915, while keep original irq (%d) for vgt\n",
 		hstate->i915_irq, hstate->pirq);
 	printk("vGT: track_nest: %s\n", vgt_track_nest ? "enabled" : "disabled");
+
+	return pgt;
 }
 
-void vgt_uninstall_irq(struct pci_dev *pdev)
+void vgt_fini_irq(struct pci_dev *pdev)
 {
 	struct pgt_device *node, *pgt = NULL;
 	struct vgt_irq_host_state *hstate;
 
-	if (!xen_initial_domain() || !vgt_enabled)
+	if (!vgt_in_host())
 		return;
 
 	if (list_empty(&pgt_devices)) {
@@ -2131,12 +2073,6 @@ void vgt_uninstall_irq(struct pci_dev *pdev)
 	VGT_MMIO_WRITE(pgt, _REG_DEIER,
 		VGT_MMIO_READ(pgt, _REG_DEIER) & ~_REGBIT_MASTER_INTERRUPT);
 
-
-	free_irq(hstate->pirq, pgt);
-	//unbind_from_irq(hstate->pirq);
-
-	pdev->irq = hstate->pirq; /* needed by __pci_restore_msi_state() */
-
 	hstate->installed = false;
 }
 
@@ -2157,6 +2093,3 @@ void vgt_inject_flip_done(struct vgt_device *vgt, enum vgt_pipe pipe)
 		}
 	}
 }
-
-EXPORT_SYMBOL(vgt_install_irq);
-EXPORT_SYMBOL(vgt_uninstall_irq);

@@ -26,7 +26,7 @@
 #include <linux/slab.h>
 #include "vgt.h"
 #include "trace.h"
-#include <xen/fb_decoder.h>
+#include "fb_decoder.h"
 
 /* vgt uses below bits in NOOP_ID:
  *	    bit 21 - 16 is command type.

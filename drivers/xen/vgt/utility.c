@@ -636,6 +636,7 @@ int setup_gtt(struct pgt_device *pdev)
 	}
 	pdev->rsvd_aperture_pages = pages;
 
+
 	index = GTT_INDEX(pdev, aperture_2_gm(pdev, pdev->rsvd_aperture_base));
 	for (i = 0; i < VGT_APERTURE_PAGES; i++) {
 		/* need a DMA flag? */

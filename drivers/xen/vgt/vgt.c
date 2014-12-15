@@ -26,19 +26,17 @@
 #include <linux/module.h>
 #include <linux/kthread.h>
 #include <linux/freezer.h>
+
 #include <asm/xen/hypercall.h>
 #include <xen/interface/vcpu.h>
 
 #include "vgt.h"
 
+
 MODULE_AUTHOR("Intel Corporation");
 MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
-
-bool ignore_hvm_forcewake_req = true;
-module_param_named(ignore_hvm_forcewake_req, ignore_hvm_forcewake_req, bool, 0400);
-MODULE_PARM_DESC(ignore_hvm_forcewake_req, "ignore HVM's forwake request (default: true)");
 
 bool hvm_render_owner = false;
 module_param_named(hvm_render_owner, hvm_render_owner, bool, 0600);
@@ -153,8 +151,9 @@ static vgt_ops_t vgt_xops = {
 	.mem_write = vgt_emulate_write,
 	.cfg_read = vgt_emulate_cfg_read,
 	.cfg_write = vgt_emulate_cfg_write,
-	.boot_time = 1,
+	.initialized = false,
 };
+vgt_ops_t *vgt_ops = NULL;
 
 LIST_HEAD(pgt_devices);
 struct pgt_device default_device = {
@@ -163,40 +162,33 @@ struct pgt_device default_device = {
 };
 
 struct vgt_device *vgt_dom0;
+struct pgt_device *pdev_default = &default_device;
+struct drm_i915_private *dev_priv = NULL;
 DEFINE_PER_CPU(u8, in_vgt);
+
+uint64_t vgt_gttmmio_va(struct pgt_device *pdev, off_t reg)
+{
+	return (uint64_t)((char *)pdev->gttmmio_base_va + reg);
+}
+
+uint64_t vgt_gttmmio_pa(struct pgt_device *pdev, off_t reg)
+{
+	return (uint64_t)(pdev->gttmmio_base + reg);
+}
+
+struct pci_dev *pgt_to_pci(struct pgt_device *pdev)
+{
+	return pdev->pdev;
+}
 
 static bool vgt_start_io_forwarding(struct pgt_device *pdev)
 {
-	struct xen_domctl domctl;
-	struct xen_domctl_vgt_io_trap *info = &domctl.u.vgt_io_trap;
-
-	uint64_t bar0; /* the MMIO BAR for regs(2MB) and GTT */
-
 	struct xen_platform_op xpop;
-
-	bar0 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
-	bar0 &= ~0xf;	/* bit0~3 of the bar is the attribution info */
-
-	domctl.domain = 0;
-
-	info->n_pio = 1;
-	info->pio[0].s = 0x3B0;
-	info->pio[0].e = 0x3DF;
-
-	info->n_mmio = 1;
-	info->mmio[0].s = bar0;
-	info->mmio[0].e = (bar0 + pdev->bar_size[0] - 1) & PAGE_MASK;
-
-	BUG_ON(vgt_io_trap(&domctl) != 0);
-
-	if (xen_register_vgt_driver(&vgt_xops) != 0)
-		return false;
 
 	/*
 	 * Pass the GEN device's BDF and the type(SNB/IVB/HSW?) to
 	 * the xen hypervisor: xen needs the info to decide which device's
-	 * PCI CFG R/W access should be forwarded to the vgt driver, and
-	 * to decice the proper forcewake logic.
+	 * PCI CFG R/W access should be forwarded to the vgt driver.
 	 */
 	xpop.cmd = XENPF_set_vgt_info;
 	xpop.u.vgt_info.gen_dev_bdf = PCI_BDF2(pdev->pbus->number, pdev->devfn);
@@ -401,6 +393,14 @@ bool initial_phys_states(struct pgt_device *pdev)
 	pdev->gmadr_base = bar1 & ~0xf;
 	printk("gttmmio: 0x%llx, gmadr: 0x%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
 
+	pdev->gttmmio_base_va = ioremap(pdev->gttmmio_base,
+			pdev->mmio_size + pdev->gtt_size);
+	if (pdev->gttmmio_base_va == NULL) {
+		WARN_ONCE(1, "insufficient memory for ioremap!\n");
+		return false;
+	}
+	printk("gttmmio_base_va: 0x%llx\n", (uint64_t)pdev->gttmmio_base_va);
+
 	/* start the io forwarding! */
 	if (!vgt_start_io_forwarding(pdev))
 		return false;;
@@ -411,14 +411,14 @@ bool initial_phys_states(struct pgt_device *pdev)
 	 * 4MB MMIO of the GEN device is trapped into the vgt driver.
 	 */
 
-#if 1		// TODO: runtime sanity check warning...
+	// TODO: runtime sanity check warning...
 	pdev->gmadr_va = ioremap (pdev->gmadr_base, pdev->bar_size[1]);
 	if ( pdev->gmadr_va == NULL ) {
+		iounmap(pdev->gttmmio_base_va);
 		printk("Insufficient memory for ioremap2\n");
 		return false;
 	}
 	printk("gmadr_va: 0x%llx\n", (uint64_t)pdev->gmadr_va);
-#endif
 
 	vgt_initial_mmio_setup(pdev);
 	vgt_initial_opregion_setup(pdev);
@@ -632,9 +632,6 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 		return false;
 	}
 
-	bitmap_zero(pdev->v_force_wake_bitmap, VGT_MAX_VMS);
-	spin_lock_init(&pdev->v_force_wake_lock);
-
 	vgt_init_reserved_aperture(pdev);
 
 	for (i = 0; i < pdev->max_engines; i++)
@@ -656,7 +653,7 @@ int vgt_initialize(struct pci_dev *dev)
 	vgt_params_t vp;
 
 	if (!vgt_enabled)
-		return 0;
+		return -1;
 
 	spin_lock_init(&pdev->lock);
 
@@ -694,7 +691,8 @@ int vgt_initialize(struct pci_dev *dev)
 	if (setup_gtt(pdev))
 		goto err;
 
-	xen_vgt_dom0_ready(vgt_dom0);
+	vgt_ops = &vgt_xops;
+	vgt_ops->initialized = true;
 
 	if (!hvm_render_owner)
 		current_render_owner(pdev) = vgt_dom0;
@@ -823,7 +821,7 @@ int vgt_suspend(struct pci_dev *pdev)
 {
 	struct pgt_device *node, *pgt = NULL;
 
-	if (!xen_initial_domain() || !vgt_enabled)
+	if (!vgt_in_host())
 		return 0;
 
 	if (list_empty(&pgt_devices)) {
@@ -856,19 +854,16 @@ int vgt_suspend(struct pci_dev *pdev)
 
 	vgt_reset_dom0_ppgtt_state();
 
-	if (pgt->irq_hstate->installed)
-		pdev->irq = pgt->irq_hstate->pirq;
-
 	return 0;
 }
-EXPORT_SYMBOL(vgt_suspend);
 
 int vgt_resume(struct pci_dev *pdev)
 {
 	struct pgt_device *node, *pgt = NULL;
 
-	if (!xen_initial_domain() || !vgt_enabled)
+	if (!vgt_in_host())
 		return 0;
+
 
 	if (list_empty(&pgt_devices)) {
 		printk("vGT: no valid pgt_device registered at resume\n");
@@ -928,14 +923,10 @@ int vgt_resume(struct pci_dev *pdev)
 	recalculate_and_update_ier(pgt, _REG_PMIER);
 	recalculate_and_update_ier(pgt, _REG_SDEIER);
 
-	if (pgt->irq_hstate->installed)
-		pdev->irq = pgt->irq_hstate->i915_irq;
-
 	spin_unlock(&pgt->lock);
 
 	return 0;
 }
-EXPORT_SYMBOL(vgt_resume);
 
 static void do_device_reset(struct pgt_device *pdev)
 {
@@ -1106,20 +1097,18 @@ int vgt_reset_device(struct pgt_device *pdev)
 }
 
 /* for GFX driver */
-int xen_start_vgt(struct pci_dev *pdev)
+bool i915_start_vgt(struct pci_dev *pdev)
 {
-	if (!xen_initial_domain())
-		return 0;
+	if (!vgt_in_host())
+		return false;
 
 	if (vgt_xops.initialized) {
-		vgt_info("vgt_ops has been intialized\n");
-		return 0;
+		vgt_info("VGT has been intialized?\n");
+		return false;
 	}
 
-	return vgt_initialize(pdev);
+	return vgt_initialize(pdev) == 0;
 }
-
-EXPORT_SYMBOL(xen_start_vgt);
 
 static void vgt_param_check(void)
 {
@@ -1152,7 +1141,7 @@ static void vgt_param_check(void)
 
 static int __init vgt_init_module(void)
 {
-	if (!xen_initial_domain())
+	if (!vgt_in_host())
 		return 0;
 
 	vgt_param_check();
@@ -1165,9 +1154,8 @@ module_init(vgt_init_module);
 
 static void __exit vgt_exit_module(void)
 {
-	if (!xen_initial_domain())
+	if (!vgt_in_host())
 		return;
-	// Need cancel the i/o forwarding
 
 	// fill other exit works here
 	vgt_destroy();

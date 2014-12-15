@@ -26,11 +26,9 @@
 #include <linux/delay.h>
 #include <linux/acpi.h>
 
-#include <xen/interface/vcpu.h>
-#include <xen/interface/hvm/hvm_op.h>
-#include <xen/fb_decoder.h>
-
+#include "fb_decoder.h"
 #include "vgt.h"
+
 
 static bool vgt_error_handler(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
@@ -120,57 +118,22 @@ static void set_vRC_to_C0(struct vgt_device *vgt)
 	set_vRC(vgt, 0);
 }
 
-u64 forcewake_count;
 static void v_force_wake_get(struct vgt_device *vgt)
 {
-	unsigned long flags;
-	int rc;
-
 	/* ignore hvm guest's forcewake req */
-	if (vgt->vm_id != 0 && ignore_hvm_forcewake_req)
+	if (vgt->vm_id != 0)
 		return;
 
-	spin_lock_irqsave(&vgt->pdev->v_force_wake_lock, flags);
-
-	if (bitmap_empty(vgt->pdev->v_force_wake_bitmap, VGT_MAX_VMS)){
-		rc = hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_GET);
-		if (rc < 0){
-			printk("incompatible hypervisor, consider to update your hypervisor\n");
-			BUG();
-		}
-
-		++forcewake_count;
-	}
-
-	bitmap_set(vgt->pdev->v_force_wake_bitmap, vgt->vgt_id, 1);
-
-	spin_unlock_irqrestore(&vgt->pdev->v_force_wake_lock, flags);
+	WARN(1, "Host driver should take care forcewake itself!\n");
 }
 
 static void v_force_wake_put(struct vgt_device *vgt)
 {
-	unsigned long flags;
-	int rc;
-
 	/* ignore hvm guest's forcewake req */
-	if (vgt->vm_id != 0 && ignore_hvm_forcewake_req)
+	if (vgt->vm_id != 0)
 		return;
 
-	spin_lock_irqsave(&vgt->pdev->v_force_wake_lock, flags);
-
-	if (test_and_clear_bit(vgt->vgt_id, vgt->pdev->v_force_wake_bitmap)){
-		if (bitmap_empty(vgt->pdev->v_force_wake_bitmap, VGT_MAX_VMS)){
-			rc = hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_PUT);
-			if (rc < 0){
-				printk("incompatible hypervisor, consider to update your hypervisor\n");
-				BUG();
-			}
-
-			--forcewake_count;
-		}
-	}
-
-	spin_unlock_irqrestore(&vgt->pdev->v_force_wake_lock, flags);
+	WARN(1, "Host driver should take care forcewake itself!\n");
 }
 
 static bool force_wake_write(struct vgt_device *vgt, unsigned int offset,
@@ -1747,10 +1710,6 @@ static void vgt_dpy_stat_notify(struct vgt_device *vgt,
 	struct pgt_device *pdev = vgt->pdev;
 
 	ASSERT(event >= VGT_ENABLE_VGA && event <= VGT_DISPLAY_UNREADY);
-
-	/* no notification at dom0 boot time */
-	if (vgt_ops->boot_time)
-		return;
 
 	vgt_set_uevent(vgt, event);
 	vgt_raise_request(pdev, VGT_REQUEST_UEVENT);

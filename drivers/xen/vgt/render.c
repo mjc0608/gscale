@@ -1587,18 +1587,13 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	int cpu;
 	struct vgt_device *next, *prev;
 	cycles_t t0, t1, t2;
-	bool forcewake_got = false;
 
 	vgt_lock_dev(pdev, cpu);
 	if (!ctx_switch_requested(pdev))
 		goto out;
 
 	ASSERT(spin_is_locked(&pdev->lock));
-	ASSERT(forcewake_count == 0 || forcewake_count == 1);
-	if (forcewake_count == 0) {
-		BUG_ON(hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_GET) != 0);
-		forcewake_got = true;
-	}
+	vgt_force_wake_get();
 
 	next = pdev->next_sched_vgt;
 	prev = current_render_owner(pdev);
@@ -1709,8 +1704,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	vgt_kick_ringbuffers(next);
 
 	/* NOTE: do NOT access MMIO after this PUT hypercall! */
-	if (forcewake_got)
-		BUG_ON(hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_PUT) != 0);
+	vgt_force_wake_put();
 
 	/* request to check IRQ when ctx switch happens */
 	if (prev->force_removal ||
@@ -1764,9 +1758,7 @@ err:
 	 * CPU/GPU states: we want to hold the lock to prevent other
 	 * vcpus' vGT related codes at this time.
 	 */
-
-	if (forcewake_got)
-		BUG_ON(hcall_vgt_ctrl(VGT_CTRL_FORCEWAKE_PUT) != 0);
+	vgt_force_wake_put();
 
 	vgt_unlock_dev(pdev, cpu);
 

@@ -473,7 +473,7 @@ int drm_irq_uninstall(struct drm_device *dev)
 	unsigned long irqflags;
 	bool irq_enabled;
 	int i;
-	void vgt_uninstall_irq(struct pci_dev *pdev);
+	//void vgt_uninstall_irq(struct pci_dev *pdev);
 
 	if (!drm_core_check_feature(dev, DRIVER_HAVE_IRQ))
 		return -EINVAL;
@@ -511,7 +511,7 @@ int drm_irq_uninstall(struct drm_device *dev)
 	free_irq(dev->irq, dev);
 
 	/* TODO: add a dev->driver->post_irq_uninstall? */
-	vgt_uninstall_irq(dev->pdev);
+	//vgt_uninstall_irq(dev->pdev);
 
 	return 0;
 }

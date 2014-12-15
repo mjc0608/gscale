@@ -18,7 +18,6 @@
  */
 
 #include <linux/slab.h>
-#include <asm/xen/x86_emulate.h> /* only for X86EMUL_OKAY */
 #include "vgt.h"
 
 struct kobject *vgt_ctrl_kobj;
@@ -934,8 +933,7 @@ igd_mmio_read(struct file *filp, struct kobject *kobj,
 		len = (count > sizeof(unsigned long)) ? sizeof(unsigned long) :
 				count;
 
-		if (hcall_mmio_read(_vgt_mmio_pa(pdev, off), len, &data) !=
-				X86EMUL_OKAY) {
+		if (vgt_native_mmio_read(off, &data, len, false) != 0) {
 			vgt_unlock_dev(pdev, cpu);
 			return -EIO;
 		}
@@ -970,8 +968,7 @@ igd_mmio_write(struct file* filp, struct kobject *kobj,
 				count;
 
 		memcpy(&data, buf, len);
-		if (hcall_mmio_write(_vgt_mmio_pa(pdev, off), len, data) !=
-				X86EMUL_OKAY) {
+		if (vgt_native_mmio_read(off, &data, len, false) != 0) {
 			vgt_unlock_dev(pdev, cpu);
 			return -EIO;
 		}

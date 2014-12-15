@@ -19,7 +19,6 @@
 
 #include <asm/xen/hypercall.h>
 #include <asm/xen/page.h>
-
 #include <xen/xen-ops.h>
 #include <xen/interface/memory.h>
 #include <xen/interface/hvm/params.h>
@@ -56,7 +55,7 @@ int vgt_get_hvm_max_gpfn(int vm_id)
 	return max_gpfn;
 }
 
-int vgt_hvm_enable (struct vgt_device *vgt)
+int vgt_hvm_enable(struct vgt_device *vgt)
 {
 	struct xen_hvm_vgt_enable vgt_enable;
 	int rc;
