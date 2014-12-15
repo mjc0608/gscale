@@ -908,7 +908,7 @@ static void gen6_dump_ppgtt(struct i915_hw_ppgtt *ppgtt, struct seq_file *m)
 		u32 expected;
 		gen6_gtt_pte_t *pt_vaddr;
 		dma_addr_t pt_addr = ppgtt->pt_dma_addr[pde];
-		pd_entry = readl(pd_addr + pde);
+		pd_entry = GTT_READ32(pd_addr + pde);
 		expected = (GEN6_PDE_ADDR_ENCODE(pt_addr) | GEN6_PDE_VALID);
 
 		if (pd_entry != expected)
@@ -961,9 +961,9 @@ static void gen6_write_pdes(struct i915_hw_ppgtt *ppgtt)
 		pd_entry = GEN6_PDE_ADDR_ENCODE(pt_addr);
 		pd_entry |= GEN6_PDE_VALID;
 
-		writel(pd_entry, pd_addr + i);
+		GTT_WRITE32(pd_entry, pd_addr + i);
 	}
-	readl(pd_addr);
+	GTT_READ32(pd_addr);
 }
 
 static uint32_t get_pd_offset(struct i915_hw_ppgtt *ppgtt)
@@ -1170,7 +1170,7 @@ static void gen6_ppgtt_insert_vmfb_entries(struct i915_address_space *vm,
 		if (pt_vaddr == NULL)
 			pt_vaddr = kmap_atomic(ppgtt->pt_pages[act_pt]);
 
-		pt_vaddr[act_pte] = readl(vmfb_start);
+		pt_vaddr[act_pte] = GTT_READ32(vmfb_start);
 		vmfb_start++;
 
 		if (++act_pte == I915_PPGTT_PT_ENTRIES) {
@@ -1701,13 +1701,14 @@ int i915_gem_gtt_prepare_object(struct drm_i915_gem_object *obj)
 	return 0;
 }
 
-static inline void gen8_set_pte(void __iomem *addr, gen8_gtt_pte_t pte)
+static inline void gen8_set_pte(void __iomem *addr, gen8_gtt_pte_t pte,
+					struct drm_i915_private *dev_priv)
 {
 #ifdef writeq
-	writeq(pte, addr);
+	GTT_WRITE64(pte, addr);
 #else
-	iowrite32((u32)pte, addr);
-	iowrite32(pte >> 32, addr + 4);
+	GTT_WRITE32((u32)pte, addr);
+	GTT_WRITE32(pte >> 32, addr + 4);
 #endif
 }
 
@@ -1728,7 +1729,7 @@ static void gen8_ggtt_insert_entries(struct i915_address_space *vm,
 		addr = sg_dma_address(sg_iter.sg) +
 			(sg_iter.sg_pgoffset << PAGE_SHIFT);
 		gen8_set_pte(&gtt_entries[i],
-			     gen8_pte_encode(addr, level, true));
+			     gen8_pte_encode(addr, level, true), dev_priv);
 		i++;
 	}
 
@@ -1740,7 +1741,7 @@ static void gen8_ggtt_insert_entries(struct i915_address_space *vm,
 	 * hardware should work, we must keep this posting read for paranoia.
 	 */
 	if (i != 0)
-		WARN_ON(readq(&gtt_entries[i-1])
+		WARN_ON(GTT_READ64(&gtt_entries[i-1])
 			!= gen8_pte_encode(addr, level, true));
 
 	/* This next bit makes the above posting read even more important. We
@@ -1772,7 +1773,7 @@ static void gen6_ggtt_insert_entries(struct i915_address_space *vm,
 
 	for_each_sg_page(st->sgl, &sg_iter, st->nents, 0) {
 		addr = sg_page_iter_dma_address(&sg_iter);
-		iowrite32(vm->pte_encode(addr, level, true, flags), &gtt_entries[i]);
+		GTT_WRITE32(vm->pte_encode(addr, level, true, flags), &gtt_entries[i]);
 		i++;
 	}
 
@@ -1783,7 +1784,7 @@ static void gen6_ggtt_insert_entries(struct i915_address_space *vm,
 	 * hardware should work, we must keep this posting read for paranoia.
 	 */
 	if (i != 0) {
-		unsigned long gtt = readl(&gtt_entries[i-1]);
+		unsigned long gtt = GTT_READ32(&gtt_entries[i-1]);
 		WARN_ON(gtt != vm->pte_encode(addr, level, true, flags));
 	}
 
@@ -1817,8 +1818,8 @@ static void gen8_ggtt_clear_range(struct i915_address_space *vm,
 				      I915_CACHE_LLC,
 				      use_scratch);
 	for (i = 0; i < num_entries; i++)
-		gen8_set_pte(&gtt_base[i], scratch_pte);
-	readl(gtt_base);
+		gen8_set_pte(&gtt_base[i], scratch_pte, dev_priv);
+	GTT_READ32(gtt_base);
 }
 
 static void gen6_ggtt_clear_range(struct i915_address_space *vm,
@@ -1842,8 +1843,8 @@ static void gen6_ggtt_clear_range(struct i915_address_space *vm,
 	scratch_pte = vm->pte_encode(vm->scratch.addr, I915_CACHE_LLC, use_scratch, 0);
 
 	for (i = 0; i < num_entries; i++)
-		iowrite32(scratch_pte, &gtt_base[i]);
-	readl(gtt_base);
+		GTT_WRITE32(scratch_pte, &gtt_base[i]);
+	GTT_READ32(gtt_base);
 }
 
 static void i915_ggtt_bind_vma(struct i915_vma *vma,

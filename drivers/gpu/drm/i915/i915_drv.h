@@ -3072,6 +3072,57 @@ int vlv_freq_opcode(struct drm_i915_private *dev_priv, int val);
 #define POSTING_READ(reg)	(void)I915_READ_NOTRACE(reg)
 #define POSTING_READ16(reg)	(void)I915_READ16_NOTRACE(reg)
 
+
+#define GTT_READ32(addr)						\
+({									\
+	off_t reg = (unsigned long)(addr) -				\
+			(unsigned long)(dev_priv->gtt.gsm);		\
+	u32 __ret = 0;							\
+	if (i915_host_mediate)						\
+		vgt_host_read(reg, &__ret, sizeof(u32),			\
+						true, false);		\
+	else								\
+		__ret = readl(addr);					\
+	__ret;								\
+})
+
+#define GTT_READ64(addr)						\
+({									\
+	off_t reg = (unsigned long)(addr) -				\
+			(unsigned long)(dev_priv->gtt.gsm);		\
+	u64 __ret = 0;							\
+	if (i915_host_mediate)						\
+		vgt_host_read(reg, &__ret, sizeof(u64),			\
+						true, false);		\
+	else								\
+		__ret = readq(addr);					\
+	__ret;								\
+})
+
+#define GTT_WRITE32(val, addr)						\
+({									\
+	off_t reg = (unsigned long)(addr) -				\
+			(unsigned long)(dev_priv->gtt.gsm);		\
+	u32 __val = (val);						\
+	if (i915_host_mediate)						\
+		vgt_host_write(reg, &__val, sizeof(u32),		\
+						true, false);		\
+	else								\
+		writel((val), (addr));					\
+})
+
+#define GTT_WRITE64(val, addr)						\
+({									\
+	off_t reg = (unsigned long)(addr) -				\
+			(unsigned long)(dev_priv->gtt.gsm);		\
+	u64 __val = (val);						\
+	if (i915_host_mediate)						\
+		vgt_host_write(reg, &__val, sizeof(u64),		\
+						true, false);		\
+	else								\
+		writeq((val), (addr));					\
+})
+
 /* "Broadcast RGB" property */
 #define INTEL_BROADCAST_RGB_AUTO 0
 #define INTEL_BROADCAST_RGB_FULL 1
