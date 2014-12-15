@@ -617,7 +617,7 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 {
 	struct drm_i915_private *dev_priv;
 	struct intel_device_info *info, *device_info;
-	int ret = 0, mmio_bar, mmio_size;
+	int ret = 0, mmio_bar;
 	uint32_t aperture_size;
 
 	info = (struct intel_device_info *) flags;
@@ -683,11 +683,11 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 	 * generations up to Ironlake.
 	 */
 	if (info->gen < 5)
-		mmio_size = 512*1024;
+		dev_priv->mmio_size = 512*1024;
 	else
-		mmio_size = 2*1024*1024;
+		dev_priv->mmio_size = 2*1024*1024;
 
-	dev_priv->regs = pci_iomap(dev->pdev, mmio_bar, mmio_size);
+	dev_priv->regs = pci_iomap(dev->pdev, mmio_bar, dev_priv->mmio_size);
 	if (!dev_priv->regs) {
 		DRM_ERROR("failed to map registers\n");
 		ret = -EIO;
