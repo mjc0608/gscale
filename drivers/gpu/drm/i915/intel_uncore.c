@@ -1523,6 +1523,9 @@ void intel_uncore_check_errors(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
+	if (!i915.mmio_debug)
+		return;
+
 	if (HAS_FPGA_DBG_UNCLAIMED(dev) &&
 	    (__raw_i915_read32(dev_priv, FPGA_DBG) & FPGA_DBG_RM_NOCLAIM)) {
 		DRM_ERROR("Unclaimed register before interrupt\n");
