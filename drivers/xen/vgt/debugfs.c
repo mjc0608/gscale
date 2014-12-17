@@ -101,6 +101,7 @@ enum vgt_debugfs_entry_t
 	VGT_DEBUGFS_SHADOW_MMIO,
 	VGT_DEBUGFS_FB_FORMAT,
 	VGT_DEBUGFS_DPY_INFO,
+	VGT_DEBUGFS_VIRTUAL_GTT,
 	VGT_DEBUGFS_ENTRY_MAX
 };
 
@@ -904,6 +905,8 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 
 	temp_d = debugfs_create_file("irqinfo", 0444, d_vgt_debug,
 		pdev, &irqinfo_fops);
+	if (!temp_d)
+		return NULL;
 
 	temp_d = debugfs_create_file("dpyinfo", 0444, d_vgt_debug,
 		pdev, &phys_dpyinfo_fops);
@@ -993,6 +996,23 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		printk(KERN_ERR "vGT(%d): failed to create debugfs node: shadow_mmio_space\n", vgt_id);
 	else
 		printk("vGT(%d): create debugfs node: shadow_mmio_space\n", vgt_id);
+
+	/* virtual gtt space dump */
+	p = &vgt_debugfs_data[vgt_id][VGT_DEBUGFS_VIRTUAL_GTT];
+	p->array = (u32 *)(vgt->gtt.ggtt_mm->virtual_page_table);
+	p->elements = 2* SIZE_1MB;
+	d_debugfs_entry[vgt_id][VGT_DEBUGFS_VIRTUAL_GTT] =
+		vgt_debugfs_create_blob("virtual_gtt_space",
+			0444,
+			d_per_vgt[vgt_id],
+			p);
+
+	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_VIRTUAL_GTT])
+		printk(KERN_ERR "vGT(%d): failed to create debugfs node: "
+				"virtual_mmio_space\n", vgt_id);
+	else
+		printk("vGT(%d): create debugfs node: virtual_mmio_space\n", vgt_id);
+	/* end of virtual gtt space dump */
 
 	d_debugfs_entry[vgt_id][VGT_DEBUGFS_FB_FORMAT] = debugfs_create_file("frame_buffer_format",
 			0444, d_per_vgt[vgt_id], vgt, &fbinfo_fops);
