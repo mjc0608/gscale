@@ -123,10 +123,11 @@ unsigned long rsvd_aperture_alloc(struct pgt_device *pdev, unsigned long size)
 	start = bitmap_find_next_zero_area( pdev->rsvd_aperture_bitmap,
 			VGT_RSVD_APERTURE_BITMAP_BITS, 0, nr_pages, 0 );
 
-	/* reserved aperture is enough to serve all VMs,
-	   out of memory should not happen
-	 */
-	ASSERT (start < VGT_RSVD_APERTURE_BITMAP_BITS);
+	if (start >= VGT_RSVD_APERTURE_BITMAP_BITS) {
+		vgt_err("Out of memory for reserved aperture allocation "
+				"of size 0x%lx!\n", size);
+		BUG();
+	}
 
 	bitmap_set(pdev->rsvd_aperture_bitmap, start, nr_pages);
 
@@ -143,6 +144,9 @@ void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start, unsigned l
 	{
 		bitmap_clear(pdev->rsvd_aperture_bitmap,
 				(start - pdev->rsvd_aperture_base)>>PAGE_SHIFT, nr_pages);
+	} else {
+		vgt_err("Out of range parameter for rsvd_aperture_free(pdev, "
+			"start[0x%lx], size[0x%lx])!\n", start, size);
 	}
 }
 
