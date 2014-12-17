@@ -1010,7 +1010,7 @@ struct pgt_device {
 #define is_current_config_owner(vgt)	(vgt && vgt == current_config_owner(vgt->pdev))
 #define ctx_switch_requested(d)		\
 	(d->next_sched_vgt &&		\
-	 (d->next_sched_vgt != current_render_owner(pdev)))
+	 (d->next_sched_vgt != current_render_owner(d)))
 #define vgt_ctx_check(d)		(d->ctx_check)
 #define vgt_ctx_switch(d)		(d->ctx_switch)
 #define vgt_has_edp_enabled(vgt, pipe)							\
