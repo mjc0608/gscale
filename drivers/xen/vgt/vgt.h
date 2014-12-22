@@ -1022,13 +1022,19 @@ struct pgt_device {
 	 (d->next_sched_vgt != current_render_owner(pdev)))
 #define vgt_ctx_check(d)		(d->ctx_check)
 #define vgt_ctx_switch(d)		(d->ctx_switch)
-#define vgt_has_pipe_enabled(vgt, pipe)						\
+#define vgt_has_edp_enabled(vgt, pipe)							\
+		(vgt && ((pipe) >= PIPE_A) && ((pipe) < I915_MAX_PIPES) &&		\
+		(__vreg((vgt), _REG_PIPE_EDP_CONF) & _REGBIT_PIPE_ENABLE) &&		\
+		(pipe == get_edp_input(__vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP))))
+#define vgt_has_pipe_enabled(vgt, pipe)				\
 		(vgt && ((pipe) >= PIPE_A) && ((pipe) < I915_MAX_PIPES) &&	\
-		(__vreg((vgt), VGT_PIPECONF(pipe)) & _REGBIT_PIPE_ENABLE))
+		((__vreg((vgt), VGT_PIPECONF(pipe)) & _REGBIT_PIPE_ENABLE) ||	\
+			vgt_has_edp_enabled(vgt, pipe)))
 #define pdev_has_pipe_enabled(pdev, pipe)					\
 		(pdev && ((pipe) >= PIPE_A) && ((pipe) < I915_MAX_PIPES) &&	\
-		(__vreg(current_display_owner(pdev),				\
-			VGT_PIPECONF(pipe)) & _REGBIT_PIPE_ENABLE))
+		((__vreg(current_display_owner(pdev),				\
+			VGT_PIPECONF(pipe)) & _REGBIT_PIPE_ENABLE) ||		\
+			vgt_has_edp_enabled(current_display_owner(pdev), pipe)))
 #define dpy_is_valid_port(port)							\
 		(((port) >= PORT_A) && ((port) < I915_MAX_PORTS))
 

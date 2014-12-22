@@ -802,22 +802,18 @@ static bool pipe_conf_mmio_write(struct vgt_device *vgt, unsigned int offset,
 
 	if (offset == _REG_PIPE_EDP_CONF) {
 		vgt_reg_t ctl_edp;
-		orig_pipe_enabled = (__vreg((vgt), _REG_PIPE_EDP_CONF) &
-						_REGBIT_PIPE_ENABLE);
-		rc = default_mmio_write(vgt, offset, &wr_data, bytes);
-		curr_pipe_enabled = (__vreg((vgt), _REG_PIPE_EDP_CONF) &
-						_REGBIT_PIPE_ENABLE);
-		if (!curr_pipe_enabled) {
-			pipe = I915_MAX_PIPES;
-		} else {
-			ctl_edp = __vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP);
-			pipe = get_edp_input(ctl_edp);
-		}
+		ctl_edp = __vreg(vgt, _REG_TRANS_DDI_FUNC_CTL_EDP);
+		pipe = get_edp_input(ctl_edp);
 	} else {
 		pipe = VGT_PIPECONFPIPE(offset);
-		orig_pipe_enabled = vgt_has_pipe_enabled(vgt, pipe);
-		rc = default_mmio_write(vgt, offset, &wr_data, bytes);
-		curr_pipe_enabled = vgt_has_pipe_enabled(vgt, pipe);
+	}
+	orig_pipe_enabled = vgt_has_pipe_enabled(vgt, pipe);
+	rc = default_mmio_write(vgt, offset, &wr_data, bytes);
+	curr_pipe_enabled = vgt_has_pipe_enabled(vgt, pipe);
+
+	if (offset == _REG_PIPE_EDP_CONF) {
+		if (!curr_pipe_enabled)
+			pipe = I915_MAX_PIPES;
 	}
 
 	if (orig_pipe_enabled && !curr_pipe_enabled) {
