@@ -867,3 +867,11 @@ void vgt_submit_commands(struct vgt_device *vgt, int ring_id)
 	vgt->total_cmds += cmd_nr;
 	vgt->submitted_cmds += cmd_nr;
 }
+
+void vgt_request_force_removal(struct vgt_device *vgt)
+{
+	vgt->force_removal = 1;
+	vgt->pdev->next_sched_vgt = vgt_dom0;
+	vgt_raise_request(vgt->pdev, VGT_REQUEST_SCHED);
+	wmb();
+}

@@ -545,6 +545,9 @@ static int vgt_emulation_thread(void *priv)
 			if (unlikely(ret))
 				vgt_crash_domain(vgt);
 
+			if (vgt->force_removal)
+				wait_event(vgt->pdev->destroy_wq, !vgt->force_removal);
+
 			ioreq->state = STATE_IORESP_READY;
 
 			irq = info->evtchn_irq[vcpu];

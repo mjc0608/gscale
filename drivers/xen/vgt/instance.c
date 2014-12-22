@@ -377,10 +377,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	} else {
 		printk("vgt(%d) is current owner, request reschedule\n",
 			vgt->vgt_id);
-		vgt->force_removal = 1;
-		pdev->next_sched_vgt = vgt_dom0;
-		vgt_raise_request(pdev, VGT_REQUEST_SCHED);
-		wmb();
+		vgt_request_force_removal(vgt);
 	}
 
 	printk("check display ownership...\n");

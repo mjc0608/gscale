@@ -301,8 +301,13 @@ static bool handle_device_reset(struct vgt_device *vgt, unsigned int offset,
 
 	vgt->last_reset_time = get_seconds();
 
-	if (device_is_reseting(vgt->pdev) && vgt->vm_id == 0)
-		return default_mmio_write(vgt, offset, p_data, bytes);
+	if (vgt->vm_id == 0) {
+		if (device_is_reseting(vgt->pdev))
+			return default_mmio_write(vgt, offset, p_data, bytes);
+	} else {
+		if (current_render_owner(vgt->pdev) == vgt)
+			vgt_request_force_removal(vgt);
+	}
 
 	return true;
 }
