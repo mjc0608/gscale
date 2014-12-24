@@ -515,19 +515,12 @@ static inline gtt_entry_t *ppgtt_spt_set_entry(ppgtt_spt_t *spt,
 bool vgt_set_guest_page_writeprotection(struct vgt_device *vgt,
 		guest_page_t *guest_page)
 {
-	xen_hvm_vgt_wp_pages_t req;
 	int r;
 
 	if (guest_page->writeprotection)
 		return true;
 
-	memset(&req, 0, sizeof(xen_hvm_vgt_wp_pages_t));
-	req.domid = vgt->vm_id;
-	req.set = 1;
-	req.nr_pages = 1;
-	req.wp_pages[0] = guest_page->gfn;
-
-	r = HYPERVISOR_hvm_op(HVMOP_vgt_wp_pages, &req);
+	r = hvm_wp_page_to_ioreq_server(vgt, guest_page->gfn, 1);
 	if (r) {
 		vgt_err("fail to set write protection.\n");
 		return false;
@@ -543,19 +536,12 @@ bool vgt_set_guest_page_writeprotection(struct vgt_device *vgt,
 bool vgt_clear_guest_page_writeprotection(struct vgt_device *vgt,
 		guest_page_t *guest_page)
 {
-	xen_hvm_vgt_wp_pages_t req;
 	int r;
 
 	if (!guest_page->writeprotection)
 		return true;
 
-	memset(&req, 0, sizeof(xen_hvm_vgt_wp_pages_t));
-	req.domid = vgt->vm_id;
-	req.set = 0;
-	req.nr_pages = 1;
-	req.wp_pages[0] = guest_page->gfn;
-
-	r = HYPERVISOR_hvm_op(HVMOP_vgt_wp_pages, &req);
+	r = hvm_wp_page_to_ioreq_server(vgt, guest_page->gfn, 0);
 	if (r) {
 		vgt_err("fail to clear write protection.\n");
 		return false;

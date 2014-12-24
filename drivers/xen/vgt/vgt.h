@@ -2627,6 +2627,8 @@ int hvm_toggle_iorequest_server(struct vgt_device *vgt, bool enable);
 int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
 		int is_mmio, uint64_t start, uint64_t end, int map);
 int hvm_map_pcidev_to_ioreq_server(struct vgt_device *vgt, uint64_t sbdf);
+int hvm_wp_page_to_ioreq_server(struct vgt_device *vgt, unsigned long page,
+				int set);
 struct vm_struct *map_hvm_iopage(struct vgt_device *vgt);
 int xen_get_nr_vcpu(int vm_id);
 int vgt_hvm_set_trap_area(struct vgt_device *vgt, int map);

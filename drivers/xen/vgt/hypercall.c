@@ -325,11 +325,6 @@ int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
 	else
 		rc = HYPERVISOR_hvm_op(HVMOP_unmap_io_range_from_ioreq_server, &arg);
 
-	if (rc < 0) {
-		printk(KERN_ERR "Cannot map io range to ioreq_server: %d!\n", rc);
-		return rc;
-	}
-
 	return rc;
 }
 
@@ -348,6 +343,47 @@ int hvm_map_pcidev_to_ioreq_server(struct vgt_device *vgt, uint64_t sbdf)
 		return rc;
 	}
 
+	return rc;
+}
+
+int hvm_set_mem_type(struct vgt_device *vgt,
+	uint16_t mem_type, uint64_t first_pfn, uint64_t nr)
+{
+	xen_hvm_set_mem_type_t args;
+	int rc;
+
+	args.domid = vgt->vm_id;
+	args.hvmmem_type = mem_type;
+	args.first_pfn = first_pfn;
+	args.nr = 1;
+	rc = HYPERVISOR_hvm_op(HVMOP_set_mem_type, &args);
+
+	return rc;
+}
+
+int hvm_wp_page_to_ioreq_server(struct vgt_device *vgt, unsigned long page, int set)
+{
+	int rc = 0;
+	uint64_t start, end;
+	uint16_t mem_type;
+
+	start = page << PAGE_SHIFT;
+	end = ((page + 1) << PAGE_SHIFT) - 1;
+
+	rc = hvm_map_io_range_to_ioreq_server(vgt, 1, start, end, set);
+	if (rc < 0) {
+		printk(KERN_ERR "Failed to %s page 0x%lx to ioreq_server: %d!\n",
+			set ? "map":"unmap", page , rc);
+		return rc;
+	}
+
+	mem_type = set ? HVMMEM_mmio_write_dm : HVMMEM_ram_rw;
+	rc = hvm_set_mem_type(vgt, mem_type, page, 1);
+	if (rc < 0) {
+		printk(KERN_ERR "Failed to set mem type of page 0x%lx to %s!\n", page,
+			set ? "HVMMEM_mmio_write_dm":"HVMMEM_ram_rw");
+		return rc;
+	}
 	return rc;
 }
 

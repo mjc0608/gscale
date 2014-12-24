@@ -62,7 +62,24 @@ enum hvmmem_type_t {
     HVMMEM_ram_rw,             /* Normal read/write guest RAM */
     HVMMEM_ram_ro,             /* Read-only; writes are discarded */
     HVMMEM_mmio_dm,            /* Reads and write go to the device model */
+    HVMMEM_mmio_write_dm       /* Read-only; writes go to the device model */
 };
+
+#define HVMOP_set_mem_type    8
+/* Notify that a region of memory is to be treated in a specific way. */
+struct xen_hvm_set_mem_type {
+	/* Domain to be updated. */
+	domid_t domid;
+	/* Memory type */
+	uint16_t hvmmem_type;
+	/* Number of pages. */
+	uint32_t nr;
+	/* First pfn. */
+	uint64_t first_pfn;
+};
+typedef struct xen_hvm_set_mem_type xen_hvm_set_mem_type_t;
+DEFINE_GUEST_HANDLE_STRUCT(xen_hvm_set_mem_type_t);
+
 
 #define HVMOP_get_mem_type    15
 /* Return hvmmem_type_t for the specified pfn. */
