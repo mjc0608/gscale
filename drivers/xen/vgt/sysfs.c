@@ -227,37 +227,53 @@ static ssize_t vgt_dpy_switch_show(struct kobject *kobj, struct kobj_attribute *
 }
 
 
-static ssize_t vgt_hot_plug_reader(struct kobject *kobj,
+static ssize_t vgt_virtual_event_reader(struct kobject *kobj,
 				struct kobj_attribute *attr, char *buf)
 {
-	/* read the hot-plug node, do nothing */
-	return 0;
+	ssize_t nbytes = sprintf(buf, "== README ==\n"
+			"This interface is only used for debugging purpose.\n"
+			"Cat an integer to trigger a virtual event.\n"
+			"\t bit 0 - bit 15: for virtual event number;\n"
+			"\t bit 16 - bit 23: for vm id;\n"
+			"Supported event list:\n"
+			"[0x%x]: %s\n"
+			"[0x%x]: %s\n"
+			"[0x%x]: %s\n",
+			RCS_AS_CONTEXT_SWITCH, vgt_irq_name[RCS_AS_CONTEXT_SWITCH],
+			VCS_AS_CONTEXT_SWITCH, vgt_irq_name[VCS_AS_CONTEXT_SWITCH],
+			BCS_AS_CONTEXT_SWITCH, vgt_irq_name[BCS_AS_CONTEXT_SWITCH]);
+	return nbytes;
 }
 
-/* bit field definition of the hot_plug trigger value:
- *
- * bit 31 - bit 16	: Reserved;
- * bit 15 - bit 8	: vmid;
- * bit 7 - bit 4	: Reserved;
- * bit 3 - bit 1	: port/monitor selection:
- *		0	-	CRT
- *		1	-	PORT_A
- *		2	-	PORT_B
- *		3	-	PORT_C
- *		4	-	PORT_D
- * bit 0 - bit 0	: Direction.
- *		0: pull out;
- *		1: plug in;
- */
-static ssize_t vgt_hot_plug_trigger(struct kobject *kobj,
-				struct kobj_attribute *attr,
-				const char *buf, size_t count)
+static ssize_t vgt_virtual_event_trigger(struct kobject *kobj,
+		struct kobj_attribute *attr,
+		const char *buf, size_t count)
 {
-	unsigned hotplug_cmd = 0;
+	int cpu;
+	enum vgt_event_type event;
+	struct vgt_device *vgt;
+	vgt_virtual_event_t v_event;
+	struct pgt_device *pdev = &default_device;
 
-	if (sscanf(buf, "%u", &hotplug_cmd) != 1)
+	if (sscanf(buf, "%i", &v_event.dw) != 1)
 		return -EINVAL;
-	vgt_trigger_display_hot_plug(&default_device, (vgt_hotplug_cmd_t)hotplug_cmd);
+
+	event = v_event.virtual_event;
+	if ((event != RCS_AS_CONTEXT_SWITCH) &&
+			(event != VCS_AS_CONTEXT_SWITCH) &&
+			(event != BCS_AS_CONTEXT_SWITCH)) {
+		return -EINVAL;
+	}
+
+	vgt = vmid_2_vgt_device(v_event.vmid);
+
+	if (!vgt)
+		return -EINVAL;
+
+	vgt_lock_dev(pdev, cpu);
+	vgt_trigger_virtual_event(vgt, event);
+	vgt_unlock_dev(pdev, cpu);
+
 	return count;
 }
 
@@ -268,8 +284,8 @@ static struct kobj_attribute display_owner_ctrl_attrs =
 static struct kobj_attribute foreground_vm_ctrl_attrs =
 	__ATTR(foreground_vm, 0660, vgt_foreground_vm_show, vgt_foreground_vm_store);
 
-static struct kobj_attribute hot_plug_event_attrs =
-	__ATTR(virtual_event, 0660, vgt_hot_plug_reader, vgt_hot_plug_trigger);
+static struct kobj_attribute virtual_event_attrs =
+	__ATTR(virtual_event, 0660, vgt_virtual_event_reader, vgt_virtual_event_trigger);
 
 static struct kobj_attribute ctx_switch_attrs =
 	__ATTR(ctx_switch, 0660, vgt_ctx_switch_show, vgt_ctx_switch_store);
@@ -287,7 +303,7 @@ static struct attribute *vgt_ctrl_attrs[] = {
 	&create_vgt_instance_attrs.attr,
 	&display_owner_ctrl_attrs.attr,
 	&foreground_vm_ctrl_attrs.attr,
-	&hot_plug_event_attrs.attr,
+	&virtual_event_attrs.attr,
 	&ctx_switch_attrs.attr,
 	&validate_ctx_switch_attrs.attr,
 	&dpy_switch_attrs.attr,

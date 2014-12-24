@@ -984,6 +984,15 @@ typedef union {
 	};
 } vgt_hotplug_cmd_t;
 
+typedef union {
+	uint32_t dw;
+	struct {
+		uint32_t virtual_event: 16;
+		uint32_t vmid : 8;
+		uint32_t rsvd_24_31 : 8;
+	};
+} vgt_virtual_event_t;
+
 struct hotplug_work {
 	struct work_struct work;
 	DECLARE_BITMAP(hotplug_uevent, UEVENT_MAX);
