@@ -740,7 +740,7 @@ static int vgt_device_reset_show(struct seq_file *m, void *data)
 
 	seq_printf(m, "status: ");
 
-	if (test_bit(DEVICE_RESET_INPROGRESS, &pdev->device_reset_flags))
+	if (test_bit(RESET_INPROGRESS, &pdev->device_reset_flags))
 		seq_printf(m, "resetting");
 	else {
 		if (get_seconds() - vgt_dom0->last_reset_time < 6)

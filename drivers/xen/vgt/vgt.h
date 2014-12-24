@@ -860,12 +860,12 @@ struct pgt_statistics {
 struct vgt_mmio_dev;
 
 enum {
-	DEVICE_RESET_INPROGRESS = 0,
+	RESET_INPROGRESS = 0,
 	WAIT_RESET,
 };
 
 #define device_is_reseting(pdev) \
-	test_bit(DEVICE_RESET_INPROGRESS, &pdev->device_reset_flags)
+	test_bit(RESET_INPROGRESS, &pdev->device_reset_flags)
 
 #define MKGEN(major, minor, rev) \
 	((major << 16) | (minor << 8) | (rev))

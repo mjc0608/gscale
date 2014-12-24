@@ -1037,7 +1037,7 @@ int vgt_reset_device(struct pgt_device *pdev)
 		return -EAGAIN;
 	}
 
-	if (test_and_set_bit(DEVICE_RESET_INPROGRESS,
+	if (test_and_set_bit(RESET_INPROGRESS,
 				&pdev->device_reset_flags)) {
 		vgt_err("Another device reset has been already running.\n");
 		return -EBUSY;
@@ -1088,7 +1088,7 @@ int vgt_reset_device(struct pgt_device *pdev)
 
 	vgt_initialize_ctx_scheduler(pdev);
 
-	clear_bit(DEVICE_RESET_INPROGRESS, &pdev->device_reset_flags);
+	clear_bit(RESET_INPROGRESS, &pdev->device_reset_flags);
 
 	spin_lock_irqsave(&pdev->lock, flags);
 	vgt_get_irq_lock(pdev, flags);
