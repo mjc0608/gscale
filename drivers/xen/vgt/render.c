@@ -1914,6 +1914,8 @@ bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
 				if (!vgt_init_null_context(pdev, ring_id))
 					return false;
 			}
+
+			clear_bit(RESET_INPROGRESS, &vgt->reset_flags);
 		}
 		if (vring->ctl & _RING_CTL_ENABLE) {
 			rs->last_scan_head =

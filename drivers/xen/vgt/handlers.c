@@ -281,6 +281,7 @@ static bool handle_device_reset(struct vgt_device *vgt, unsigned int offset,
 
 	/* after this point, driver should re-initialize the device */
 	vgt->warn_untrack = 1;
+	set_bit(RESET_INPROGRESS, &vgt->reset_flags);
 
 	clear_bit(WAIT_RESET, &vgt->reset_flags);
 
