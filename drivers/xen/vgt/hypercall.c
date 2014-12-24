@@ -436,9 +436,14 @@ void vgt_vmem_destroy(struct vgt_device *vgt)
 void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
 {
 	unsigned long buck_index, buck_4k_index;
+	unsigned long nr_low_1mb_bkt, nr_high_bkt, nr_high_4k_bkt;
 
 	if (vgt->vm_id == 0)
 		return (char*)mfn_to_virt(gpa>>PAGE_SHIFT) + (gpa & (PAGE_SIZE-1));
+
+	nr_low_1mb_bkt = VMEM_1MB >> PAGE_SHIFT;
+	nr_high_bkt = (vgt->vmem_sz >> VMEM_BUCK_SHIFT);
+	nr_high_4k_bkt = (vgt->vmem_sz >> PAGE_SHIFT);
 
 	/*
 	 * At the beginning of _hvm_mmio_emulation(), we already initialize
@@ -449,6 +454,9 @@ void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
 	/* handle the low 1MB memory */
 	if (gpa < VMEM_1MB) {
 		buck_index = gpa >> PAGE_SHIFT;
+		if (buck_index >= nr_low_1mb_bkt)
+			goto invalid_gpa;
+
 		if (!vgt->vmem_vma_low_1mb[buck_index])
 			return NULL;
 
@@ -459,14 +467,16 @@ void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
 
 	/* handle the >1MB memory */
 	buck_index = gpa >> VMEM_BUCK_SHIFT;
+	if (buck_index >= nr_high_bkt)
+		goto invalid_gpa;
 
 	if (!vgt->vmem_vma[buck_index]) {
 		buck_4k_index = gpa >> PAGE_SHIFT;
-		if (!vgt->vmem_vma_4k[buck_4k_index]) {
-			if (buck_4k_index > vgt->low_mem_max_gpfn)
-				vgt_err("vGT failed to map gpa=0x%lx?\n", gpa);
+		if (buck_index >= nr_high_4k_bkt)
+			goto invalid_gpa;
+
+		if (!vgt->vmem_vma_4k[buck_4k_index])
 			return NULL;
-		}
 
 		return (char*)(vgt->vmem_vma_4k[buck_4k_index]->addr) +
 			(gpa & ~PAGE_MASK);
@@ -474,5 +484,9 @@ void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
 
 	return (char*)(vgt->vmem_vma[buck_index]->addr) +
 		(gpa & (VMEM_BUCK_SIZE -1));
+
+invalid_gpa:
+	vgt_err("vGT: fail to map gpa 0x%lx.\n", gpa);
+	return NULL;
 }
 
