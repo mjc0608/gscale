@@ -58,16 +58,6 @@ struct xen_hvm_inject_msi {
 typedef struct xen_hvm_inject_msi xen_hvm_inject_msi_t;
 DEFINE_GUEST_HANDLE_STRUCT(xen_hvm_inject_msi_t);
 
-#define HVMOP_vgt_map_mmio           25
-struct xen_hvm_vgt_map_mmio {
-	uint16_t  domid;
-    uint16_t  map;		/* 1: Map, 0: Unmap */
-    uint32_t  nr_mfns;
-    uint64_t  first_gfn;
-    uint64_t  first_mfn;
-};
-typedef struct xen_hvm_vgt_map_mmio xen_hvm_vgt_map_mmio_t;
-
 enum hvmmem_type_t {
     HVMMEM_ram_rw,             /* Normal read/write guest RAM */
     HVMMEM_ram_ro,             /* Read-only; writes are discarded */

@@ -792,9 +792,10 @@ struct xen_domctl_getdomaininfo {
 };
 DEFINE_GUEST_HANDLE_STRUCT(xen_domctl_getdomaininfo);
 
-#define XEN_DOMCTL_INTERFACE_VERSION 0x00000009
+#define XEN_DOMCTL_INTERFACE_VERSION 0x0000000a
 #define XEN_DOMCTL_pausedomain                    3
 #define XEN_DOMCTL_getdomaininfo                  5
+#define XEN_DOMCTL_memory_mapping                 39
 
 #define XEN_DOMCTL_vgt_io_trap			  700
 
@@ -813,6 +814,20 @@ struct xen_domctl_vgt_io_trap {
         struct vgt_io_trap_info mmio[MAX_VGT_IO_TRAP_INFO];
 };
 
+/* Bind machine I/O address range -> HVM address range. */
+/* XEN_DOMCTL_memory_mapping */
+#define DPCI_ADD_MAPPING        1
+#define DPCI_REMOVE_MAPPING     0
+struct xen_domctl_memory_mapping {
+	aligned_u64 first_gfn; /* first page (hvm guest phys page) in range */
+	aligned_u64 first_mfn; /* first page (machine page) in range. */
+	aligned_u64 nr_mfns;   /* number of pages in range (>0) */
+	uint32_t add_mapping;  /* Add or remove mapping */
+	uint32_t padding;      /* padding for 64-bit aligned struct */
+};
+typedef struct xen_domctl_memory_mapping xen_domctl_memory_mapping_t;
+DEFINE_GUEST_HANDLE_STRUCT(xen_domctl_memory_mapping_t);
+
 struct xen_domctl {
 	uint32_t cmd;
 	uint32_t interface_version; /* XEN_DOMCTL_INTERFACE_VERSION */
@@ -820,6 +835,7 @@ struct xen_domctl {
 	union {
 		struct xen_domctl_getdomaininfo     getdomaininfo;
 		struct xen_domctl_vgt_io_trap       vgt_io_trap;
+		struct xen_domctl_memory_mapping    memory_mapping;
 		uint8_t                             pad[256];
 	}u;
 };

@@ -83,24 +83,38 @@ void vgt_shutdown_domain(struct vgt_device *vgt)
 		vgt_err("failed to HYPERVISOR_sched_op\n");
 }
 
+static int vgt_hvm_memory_mapping(int vm_id, uint64_t first_gfn, uint64_t first_mfn,
+				  uint32_t nr_mfns, uint32_t add_mapping)
+{
+	struct xen_domctl arg;
+	int rc;
+
+	arg.domain = vm_id;
+	arg.cmd = XEN_DOMCTL_memory_mapping;
+	arg.interface_version = XEN_DOMCTL_INTERFACE_VERSION;
+	arg.u.memory_mapping.first_gfn = first_gfn;
+	arg.u.memory_mapping.first_mfn = first_mfn;
+	arg.u.memory_mapping.nr_mfns = nr_mfns;
+	arg.u.memory_mapping.add_mapping = add_mapping;
+
+	rc = HYPERVISOR_domctl(&arg);
+	if (rc < 0)
+		printk(KERN_ERR "HYPERVISOR_domctl failed, rc=%d\n", rc);
+	return rc;
+}
+
 int vgt_hvm_opregion_map(struct vgt_device *vgt, int map)
 {
 	void *opregion;
-	struct xen_hvm_vgt_map_mmio memmap;
 	int rc;
 	int i;
 
 	opregion = vgt->state.opregion_va;
 
-	memset(&memmap, 0, sizeof(memmap));
 	for (i = 0; i < VGT_OPREGION_PAGES; i++) {
-
-		memmap.first_gfn = vgt->state.opregion_gfn[i];
-		memmap.first_mfn = virt_to_mfn(opregion + i*PAGE_SIZE);
-		memmap.nr_mfns = 1;
-		memmap.map = map;
-		memmap.domid = vgt->vm_id;
-		rc = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
+		rc = vgt_hvm_memory_mapping(vgt->vm_id, vgt->state.opregion_gfn[i],
+					virt_to_mfn(opregion + i*PAGE_SIZE),
+					1, map ? DPCI_ADD_MAPPING : DPCI_REMOVE_MAPPING);
 		if (rc != 0)
 			vgt_err("vgt_hvm_map_opregion fail with %d!\n", rc);
 	}
@@ -115,7 +129,9 @@ int vgt_hvm_map_aperture (struct vgt_device *vgt, int map)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint64_t bar_s;
-	struct xen_hvm_vgt_map_mmio memmap;
+	uint64_t  first_gfn;
+	uint64_t  first_mfn;
+	uint32_t  nr_mfns;
 	int r;
 
 	if (!vgt_pci_mmio_is_enabled(vgt))
@@ -134,20 +150,18 @@ int vgt_hvm_map_aperture (struct vgt_device *vgt, int map)
 		bar_s = * (uint32_t*) cfg_space;
 	}
 
-	memmap.first_gfn = (bar_s + vgt_aperture_offset(vgt)) >> PAGE_SHIFT;
-	memmap.first_mfn = vgt_aperture_base(vgt) >> PAGE_SHIFT;
+	first_gfn = (bar_s + vgt_aperture_offset(vgt)) >> PAGE_SHIFT;
+	first_mfn = vgt_aperture_base(vgt) >> PAGE_SHIFT;
 	if (!vgt->ballooning)
-		memmap.nr_mfns = vgt->state.bar_size[1] >> PAGE_SHIFT;
+		nr_mfns = vgt->state.bar_size[1] >> PAGE_SHIFT;
 	else
-		memmap.nr_mfns = vgt_aperture_sz(vgt) >> PAGE_SHIFT;
-
-	memmap.map = map;
-	memmap.domid = vgt->vm_id;
+		nr_mfns = vgt_aperture_sz(vgt) >> PAGE_SHIFT;
 
 	printk("%s: domid=%d gfn_s=0x%llx mfn_s=0x%llx nr_mfns=0x%x\n", map==0? "remove_map":"add_map",
-			vgt->vm_id, memmap.first_gfn, memmap.first_mfn, memmap.nr_mfns);
+			vgt->vm_id, first_gfn, first_mfn, nr_mfns);
 
-	r = HYPERVISOR_hvm_op(HVMOP_vgt_map_mmio, &memmap);
+	r = vgt_hvm_memory_mapping(vgt->vm_id, first_gfn, first_mfn,
+				nr_mfns, map ? DPCI_ADD_MAPPING : DPCI_REMOVE_MAPPING);
 
 	if (r != 0)
 		printk(KERN_ERR "vgt_hvm_map_aperture fail with %d!\n", r);
