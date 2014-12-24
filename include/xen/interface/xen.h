@@ -796,6 +796,8 @@ DEFINE_GUEST_HANDLE_STRUCT(xen_domctl_getdomaininfo);
 #define XEN_DOMCTL_pausedomain                    3
 #define XEN_DOMCTL_getdomaininfo                  5
 #define XEN_DOMCTL_memory_mapping                 39
+#define XEN_DOMCTL_iomem_permission               20
+
 
 #define XEN_DOMCTL_vgt_io_trap			  700
 
@@ -828,6 +830,15 @@ struct xen_domctl_memory_mapping {
 typedef struct xen_domctl_memory_mapping xen_domctl_memory_mapping_t;
 DEFINE_GUEST_HANDLE_STRUCT(xen_domctl_memory_mapping_t);
 
+/* XEN_DOMCTL_iomem_permission */
+struct xen_domctl_iomem_permission {
+    aligned_u64 first_mfn;/* first page (physical page number) in range */
+    aligned_u64 nr_mfns;  /* number of pages in range (>0) */
+    uint8_t  allow_access;     /* allow (!0) or deny (0) access to range? */
+};
+typedef struct xen_domctl_iomem_permission xen_domctl_iomem_permission_t;
+DEFINE_GUEST_HANDLE_STRUCT(xen_domctl_iomem_permission_t);
+
 struct xen_domctl {
 	uint32_t cmd;
 	uint32_t interface_version; /* XEN_DOMCTL_INTERFACE_VERSION */
@@ -836,6 +847,7 @@ struct xen_domctl {
 		struct xen_domctl_getdomaininfo     getdomaininfo;
 		struct xen_domctl_vgt_io_trap       vgt_io_trap;
 		struct xen_domctl_memory_mapping    memory_mapping;
+		struct xen_domctl_iomem_permission 	iomem_perm;
 		uint8_t                             pad[256];
 	}u;
 };

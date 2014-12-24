@@ -83,11 +83,37 @@ void vgt_shutdown_domain(struct vgt_device *vgt)
 		vgt_err("failed to HYPERVISOR_sched_op\n");
 }
 
+static int vgt_domain_iomem_perm(uint32_t domain_id, uint64_t first_mfn,
+                               uint64_t nr_mfns, uint8_t allow_access)
+{
+	struct xen_domctl arg;
+	int rc;
+
+	arg.domain = domain_id;
+	arg.cmd = XEN_DOMCTL_iomem_permission;
+	arg.interface_version = XEN_DOMCTL_INTERFACE_VERSION;
+	arg.u.iomem_perm.first_mfn = first_mfn;
+	arg.u.iomem_perm.nr_mfns = nr_mfns;
+	arg.u.iomem_perm.allow_access = allow_access;
+	rc = HYPERVISOR_domctl(&arg);
+	return rc;
+}
+
 static int vgt_hvm_memory_mapping(int vm_id, uint64_t first_gfn, uint64_t first_mfn,
 				  uint32_t nr_mfns, uint32_t add_mapping)
 {
 	struct xen_domctl arg;
 	int rc;
+
+	if (add_mapping)
+	{
+		rc = vgt_domain_iomem_perm(vm_id, first_mfn, nr_mfns, 1);
+	        if (rc < 0) {
+			printk(KERN_ERR "HYPERVISOR_domctl XEN_DOMCTL_iomem_permission "
+				"failed, ret=%d\n",rc);
+	        	return rc;
+		}
+	}
 
 	arg.domain = vm_id;
 	arg.cmd = XEN_DOMCTL_memory_mapping;
@@ -98,8 +124,20 @@ static int vgt_hvm_memory_mapping(int vm_id, uint64_t first_gfn, uint64_t first_
 	arg.u.memory_mapping.add_mapping = add_mapping;
 
 	rc = HYPERVISOR_domctl(&arg);
-	if (rc < 0)
+	if (rc < 0) {
 		printk(KERN_ERR "HYPERVISOR_domctl failed, rc=%d\n", rc);
+		return rc;
+	}
+
+	if (!add_mapping)
+	{
+		rc = vgt_domain_iomem_perm(vm_id, first_mfn, nr_mfns, 0);
+	        if (rc < 0) {
+			printk(KERN_ERR "HYPERVISOR_domctl XEN_DOMCTL_iomem_permission "
+				"failed, ret=%d\n",rc);
+			return rc;
+		}
+	}
 	return rc;
 }
 
