@@ -506,6 +506,17 @@ static void vgt_reset_ringbuffer(struct vgt_device *vgt, unsigned long ring_bitm
 		memset(&rb->sring, 0, sizeof(vgt_ringbuffer_t));
 
 		vgt_disable_ring(vgt, bit);
+
+		if (bit == RING_BUFFER_RCS) {
+			struct pgt_device *pdev = vgt->pdev;
+			struct vgt_rsvd_ring *ring = &pdev->ring_buffer[bit];
+
+			memcpy((char *)v_aperture(pdev, rb->context_save_area),
+					(char *)v_aperture(pdev, ring->null_context),
+					SZ_CONTEXT_AREA_PER_RING);
+
+			vgt->has_context = rb->active_vm_context = 0;
+		}
 	}
 
 	return;
@@ -518,8 +529,6 @@ void vgt_reset_virtual_states(struct vgt_device *vgt, unsigned long ring_bitmap)
 	vgt_reset_ringbuffer(vgt, ring_bitmap);
 
 	vgt_reset_ppgtt(vgt, ring_bitmap);
-
-	vgt->has_context = 0;
 
 	return;
 }

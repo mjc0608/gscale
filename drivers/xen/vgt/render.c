@@ -1091,6 +1091,9 @@ static bool vgt_save_hw_context(int id, struct vgt_device *vgt)
 	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[id];
 	vgt_reg_t	ccid, new_ccid;
 
+	if (test_bit(RESET_INPROGRESS, &vgt->reset_flags))
+		return true;
+
 	/* pipeline flush */
 	vgt_ring_emit(ring, PIPE_CONTROL(5));
 	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
