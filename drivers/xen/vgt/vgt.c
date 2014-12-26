@@ -69,8 +69,8 @@ module_param_named(track_nest, vgt_track_nest, bool, 0600);
 bool vgt_delay_nest = true;
 module_param_named(delay_nest, vgt_delay_nest, bool, 0600);
 
-bool vgt_debug = false;
-module_param_named(debug, vgt_debug, bool, 0600);
+int vgt_debug = 0;
+module_param_named(debug, vgt_debug, int, 0600);
 
 bool vgt_enabled = true;
 module_param_named(vgt, vgt_enabled, bool, 0400);

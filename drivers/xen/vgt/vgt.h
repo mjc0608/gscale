@@ -68,7 +68,7 @@ extern bool hvm_boot_foreground;
 extern bool vgt_primary;
 extern bool vgt_track_nest;
 extern bool vgt_delay_nest;
-extern bool vgt_debug;
+extern int vgt_debug;
 extern bool vgt_enabled;
 extern bool fastpath_dpy_switch;
 extern bool shadow_tail_based_qos;
