@@ -766,7 +766,7 @@ hsw_unclaimed_reg_debug(struct drm_i915_private *dev_priv, u32 reg, bool read,
 static void
 hsw_unclaimed_reg_detect(struct drm_i915_private *dev_priv)
 {
-	if (i915.mmio_debug)
+	if (i915.mmio_debug || i915_host_mediate)
 		return;
 
 	if (__raw_i915_read32(dev_priv, FPGA_DBG) & FPGA_DBG_RM_NOCLAIM) {
