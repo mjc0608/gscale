@@ -2488,10 +2488,11 @@ static void intel_connector_info(struct seq_file *m,
 {
 	struct intel_connector *intel_connector = to_intel_connector(connector);
 	struct intel_encoder *intel_encoder = intel_connector->encoder;
+	struct intel_digital_port *dig_port = enc_to_dig_port(&intel_encoder->base);
 	struct drm_display_mode *mode;
 
-	seq_printf(m, "connector %d: type %s, status: %s\n",
-		   connector->base.id, connector->name,
+	seq_printf(m, "connector %d: type %s, port PORT_%c, status: %s\n",
+		   connector->base.id, connector->name, port_name(dig_port->port),
 		   drm_get_connector_status_name(connector->status));
 	if (connector->status == connector_status_connected) {
 		seq_printf(m, "\tname: %s\n", connector->display_info.name);

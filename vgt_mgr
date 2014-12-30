@@ -1,64 +1,21 @@
 #!/bin/bash
 
-connector_lookup() {
-	lookup_return=unknown
-	if [ x"$1" == x"${connector_count[1]}" ]; then
-		lookup_return=PORT_B
-	elif [ x"$1" == x"${connector_count[2]}" ]; then
-		lookup_return=PORT_C
-	elif [ x"$1" == x"${connector_count[3]}" ]; then
-		lookup_return=PORT_D
-	fi
-}
-
 get_port_name() {
-	port_name=unknown
-	check_connector_table=0
-	if [ x"$1" == x"card0-eDP-1" ]; then
-		port_name=PORT_A
-	elif [ x"$1" == x"card0-VGA-1" ]; then
-		port_name=PORT_E
-	elif [ x"$1" == x"card0-DP-1" ]; then
-		check_connector_table=1
-	elif [ x"$1" == x"card0-DP-2" ]; then
-		check_connector_table=1
-	elif [ x"$1" == x"card0-DP-3" ]; then
-		check_connector_table=1
-	elif [ x"$1" == x"card0-HDMI-A-1" ]; then
-		check_connector_table=1
-	elif [ x"$1" == x"card0-HDMI-A-2" ]; then
-		check_connector_table=1
-	elif [ x"$1" == x"card0-HDMI-A-3" ]; then
-		check_connector_table=1
-	fi
-
-	if [ x"$check_connector_table" == x"1" ]; then
-		last_index=$((${#1}-1))
-		connector_lookup ${1:$last_index:1}
-		port_name=$lookup_return
+	type=`echo $1|cut -c7-`
+	port_name=`cat $i915_debugfs_dir/i915_display_info|sed -n '/Connector info/,$p'|grep $type|awk '{print $6}'|sed 's/,//g'`
+	if [ x"$port_name" != x"PORT_A" ] && [ x"$port_name" != x"PORT_B" ] &&\
+		[ x"$port_name" != x"PORT_C" ] && [ x"$port_name" != x"PORT_D" ] && [ x"$port_name" != x"PORT_E" ]; then
+		port_name=unknown
 	fi
 }
 
 get_drm_name () {
-	drm_name=unknown
-	if [ x"$1" == x"PORT_A" ] && [ x"$2" == x"eDP" ] && [ x"${connector_count[0]}" != x"0" ]; then
-		drm_name=card0-eDP-1
-	elif [ x"$1" == x"PORT_B" ] && [ x"$2" == x"DP" ] && [ x"${connector_count[1]}" != x"0" ]; then
-		drm_name=card0-DP-${connector_count[1]}
-	elif [ x"$1" == x"PORT_B" ] && [ x"$2" == x"HDMI" ] && [ x"${connector_count[1]}" != x"0" ]; then
-		drm_name=card0-HDMI-A-${connector_count[1]}
-	elif [ x"$1" == x"PORT_C" ] && [ x"$2" == x"DP" ] && [ x"${connector_count[2]}" != x"0" ]; then
-		drm_name=card0-DP-${connector_count[2]}
-	elif [ x"$1" == x"PORT_C" ] && [ x"$2" == x"HDMI" ] && [ x"${connector_count[2]}" != x"0" ]; then
-		drm_name=card0-HDMI-A-${connector_count[2]}
-	elif [ x"$1" == x"PORT_D" ] && [ x"$2" == x"DP" ] && [ x"${connector_count[3]}" != x"0" ]; then
-		drm_name=card0-DP-${connector_count[3]}
-	elif [ x"$1" == x"PORT_D" ] && [ x"$2" == x"HDMI" ] && [ x"${connector_count[3]}" != x"0" ]; then
-		drm_name=card0-HDMI-A-${connector_count[3]}
-	elif [ x"$1" == x"PORT_E" ] && [ x"$2" == x"VGA" ] && [ x"${connector_count[4]}" != x"0" ]; then
-		drm_name=card0-VGA-1
+	drm_name=card0-`cat $i915_debugfs_dir/i915_display_info|sed -n '/Connector info/,$p'|grep $1|grep $2|awk '{print $4}'|sed 's/,//g'`
+	if [ x"$drm_name" == x"card0-" ]; then
+		drm_name=unknown
 	fi
 }
+
 
 wait_for_edid () {
 	EDID=""
@@ -77,31 +34,14 @@ wait_for_edid () {
 	fi
 }
 
-count=0
-
-connector_count[0]=1
-connector_count[1]=0
-connector_count[2]=0
-connector_count[3]=0
-connector_count[4]=1
-
 vgt_dir=/sys/kernel/vgt
+i915_debugfs_dir=/sys/kernel/debug/dri/64
 
-if [ x"`cat $vgt_dir/control/PORT_B/presence`" == x"present" ]; then
-	count=`expr $count + 1`
-	connector_count[1]=$count
+if [ -e ${i915_debugfs_dir}/i915_display_info ]; then
+	:
+else
+	echo "vGT warning:(vgt_mgr $1 $2 $3) vGT: debugfs node i915_display_info does not exist!" > /dev/kmsg
 fi
-
-if [ x"`cat $vgt_dir/control/PORT_C/presence`" == x"present" ]; then
-	count=`expr $count + 1`
-	connector_count[2]=$count
-fi
-
-if [ x"`cat $vgt_dir/control/PORT_D/presence`" == x"present" ]; then
-	count=`expr $count + 1`
-	connector_count[3]=$count
-fi
-
 #######################################################################
 ############################ --help ###################################
 #######################################################################
