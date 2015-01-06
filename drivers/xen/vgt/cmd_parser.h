@@ -233,6 +233,7 @@ struct decode_info{
 #define OP_3DSTATE_GS_SVB_INDEX                 OP_3D_MEDIA( 0x3 ,0x1, 0x0B )
 #define OP_3DSTATE_SAMPLER_PALETTE_LOAD1        OP_3D_MEDIA( 0x3 ,0x1, 0x0C )
 #define OP_3DSTATE_MULTISAMPLE                  OP_3D_MEDIA( 0x3 ,0x1, 0x0D )
+#define OP_3DSTATE_RAST_MULTISAMPLE             OP_3D_MEDIA( 0x3 ,0x1, 0x0E )
 #define OP_SNB_3DSTATE_STENCIL_BUFFER           OP_3D_MEDIA( 0x3 ,0x1, 0x0E )
 #define OP_SNB_3DSTATE_HIER_DEPTH_BUFFER        OP_3D_MEDIA( 0x3 ,0x1, 0x0F )
 #define OP_SNB_3DSTATE_CLEAR_PARAMS             OP_3D_MEDIA( 0x3 ,0x1, 0x10 )
