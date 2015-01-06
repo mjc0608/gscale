@@ -153,11 +153,11 @@ struct decode_info{
 
 #define OP_3DSTATE_BINDING_TABLE_POINTERS       OP_3D_MEDIA(0x3, 0x0, 0x01)
 #define OP_3DSTATE_SAMPLER_STATE_POINTERS       OP_3D_MEDIA(0x3, 0x0, 0x02)
-#define OP_GEN7_3DSTATE_CLEAR_PARAMS            OP_3D_MEDIA(0x3, 0x0, 0x04) /* IVB+ */
-#define OP_GEN7_3DSTATE_DEPTH_BUFFER            OP_3D_MEDIA(0x3, 0x0, 0x05) /* IVB+ */
-#define OP_3DSTATE_URB                          OP_3D_MEDIA(0x3, 0x0, 0x05)
-#define OP_GEN7_3DSTATE_STENCIL_BUFFER          OP_3D_MEDIA(0x3, 0x0, 0x06) /* IVB+ */
-#define OP_GEN7_3DSTATE_HIER_DEPTH_BUFFER       OP_3D_MEDIA(0x3, 0x0, 0x07) /* IVB+ */
+#define OP_3DSTATE_CLEAR_PARAMS                 OP_3D_MEDIA(0x3, 0x0, 0x04) /* IVB+ */
+#define OP_3DSTATE_DEPTH_BUFFER                 OP_3D_MEDIA(0x3, 0x0, 0x05) /* IVB+ */
+#define OP_3DSTATE_URB                          OP_3D_MEDIA(0x3, 0x0, 0x05) /* SNB  */
+#define OP_3DSTATE_STENCIL_BUFFER               OP_3D_MEDIA(0x3, 0x0, 0x06) /* IVB+ */
+#define OP_3DSTATE_HIER_DEPTH_BUFFER            OP_3D_MEDIA(0x3, 0x0, 0x07) /* IVB+ */
 #define OP_3DSTATE_VERTEX_BUFFERS               OP_3D_MEDIA(0x3, 0x0, 0x08)
 #define OP_3DSTATE_VERTEX_ELEMENTS              OP_3D_MEDIA(0x3, 0x0, 0x09)
 #define OP_3DSTATE_INDEX_BUFFER                 OP_3D_MEDIA(0x3, 0x0, 0x0A)
@@ -225,7 +225,7 @@ struct decode_info{
 #define OP_3DSTATE_DRAWING_RECTANGLE            OP_3D_MEDIA( 0x3 ,0x1, 0x00 )
 #define OP_3DSTATE_SAMPLER_PALETTE_LOAD0        OP_3D_MEDIA( 0x3 ,0x1, 0x02 )
 #define OP_3DSTATE_CHROMA_KEY                   OP_3D_MEDIA( 0x3 ,0x1, 0x04 )
-#define OP_3DSTATE_DEPTH_BUFFER                 OP_3D_MEDIA( 0x3 ,0x1, 0x05 )
+#define OP_SNB_3DSTATE_DEPTH_BUFFER             OP_3D_MEDIA( 0x3 ,0x1, 0x05 )
 #define OP_3DSTATE_POLY_STIPPLE_OFFSET          OP_3D_MEDIA( 0x3 ,0x1, 0x06 )
 #define OP_3DSTATE_POLY_STIPPLE_PATTERN         OP_3D_MEDIA( 0x3 ,0x1, 0x07 )
 #define OP_3DSTATE_LINE_STIPPLE                 OP_3D_MEDIA( 0x3 ,0x1, 0x08 )
@@ -233,9 +233,9 @@ struct decode_info{
 #define OP_3DSTATE_GS_SVB_INDEX                 OP_3D_MEDIA( 0x3 ,0x1, 0x0B )
 #define OP_3DSTATE_SAMPLER_PALETTE_LOAD1        OP_3D_MEDIA( 0x3 ,0x1, 0x0C )
 #define OP_3DSTATE_MULTISAMPLE                  OP_3D_MEDIA( 0x3 ,0x1, 0x0D )
-#define OP_3DSTATE_STENCIL_BUFFER               OP_3D_MEDIA( 0x3 ,0x1, 0x0E )
-#define OP_3DSTATE_HIER_DEPTH_BUFFER            OP_3D_MEDIA( 0x3 ,0x1, 0x0F )
-#define OP_3DSTATE_CLEAR_PARAMS                 OP_3D_MEDIA( 0x3 ,0x1, 0x10 )
+#define OP_SNB_3DSTATE_STENCIL_BUFFER           OP_3D_MEDIA( 0x3 ,0x1, 0x0E )
+#define OP_SNB_3DSTATE_HIER_DEPTH_BUFFER        OP_3D_MEDIA( 0x3 ,0x1, 0x0F )
+#define OP_SNB_3DSTATE_CLEAR_PARAMS             OP_3D_MEDIA( 0x3 ,0x1, 0x10 )
 #define OP_3DSTATE_MONOFILTER_SIZE              OP_3D_MEDIA( 0x3 ,0x1, 0x11 )
 #define OP_3DSTATE_PUSH_CONSTANT_ALLOC_VS       OP_3D_MEDIA(0x3, 0x1, 0x12) /* IVB+ */
 #define OP_3DSTATE_PUSH_CONSTANT_ALLOC_HS       OP_3D_MEDIA(0x3, 0x1, 0x13) /* IVB+ */
