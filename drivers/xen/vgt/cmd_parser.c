@@ -55,7 +55,7 @@ static struct cmd_info* vgt_find_cmd_entry(unsigned int opcode, int ring_id)
 	struct vgt_cmd_entry *e;
 
 	hash_for_each_possible(vgt_cmd_table, e, hlist, opcode) {
-		if ( (opcode == e->info->opcode) && (e->info->rings & (1<<ring_id)) )
+		if ((opcode == e->info->opcode) && (e->info->rings & (1<<ring_id)))
 			return e->info;
 	}
 	return NULL;
@@ -65,9 +65,9 @@ static struct cmd_info* vgt_find_cmd_entry_any_ring(unsigned int opcode, int rin
 {
 	struct cmd_info* info = NULL;
 	unsigned int ring;
-	for_each_set_bit(ring, (unsigned long*)&rings, MAX_ENGINES){
+	for_each_set_bit(ring, (unsigned long*)&rings, MAX_ENGINES) {
 		info = vgt_find_cmd_entry(opcode, ring);
-		if(info)
+		if (info)
 			break;
 	}
 	return info;
@@ -85,13 +85,14 @@ void vgt_clear_cmd_table(void)
 	hash_init(vgt_cmd_table);
 }
 #ifdef VGT_ENABLE_ADDRESS_FIX
-static int address_fixup(struct parser_exec_state *s, int index){
+static int address_fixup(struct parser_exec_state *s, int index)
+{
 	/*TODO: add address fix up implementation */
 	return 0;
 }
 #else
 
-#define address_fixup(s,index)	do{}while(0)
+#define address_fixup(s, index)	do{}while(0)
 
 #endif
 
@@ -339,7 +340,7 @@ int get_submission_id(vgt_state_ring_t *rs, int budget,
 }
 
 /* ring ALL, type = 0 */
-static struct sub_op_bits sub_op_mi[]={
+static struct sub_op_bits sub_op_mi[] = {
 	{31, 29},
 	{28, 23},
 };
@@ -353,7 +354,7 @@ static struct decode_info decode_info_mi = {
 
 
 /* ring RCS, command type 2 */
-static struct sub_op_bits sub_op_2d[]={
+static struct sub_op_bits sub_op_2d[] = {
 	{31, 29},
 	{28, 22},
 };
@@ -366,7 +367,7 @@ static struct decode_info decode_info_2d = {
 };
 
 /* ring RCS, command type 3 */
-static struct sub_op_bits sub_op_3d_media[]={
+static struct sub_op_bits sub_op_3d_media[] = {
 	{31, 29},
 	{28, 27},
 	{26, 24},
@@ -381,7 +382,7 @@ static struct decode_info decode_info_3d_media = {
 };
 
 /* ring VCS, command type 3 */
-static struct sub_op_bits sub_op_mfx_vc[]={
+static struct sub_op_bits sub_op_mfx_vc[] = {
 	{31, 29},
 	{28, 27},
 	{26, 24},
@@ -412,8 +413,7 @@ static struct decode_info decode_info_vebox = {
 	sub_op_vebox,
 };
 
-static struct decode_info* ring_decode_info[MAX_ENGINES][8]=
-{
+static struct decode_info* ring_decode_info[MAX_ENGINES][8] = {
 	[RING_BUFFER_RCS] = {
 		&decode_info_mi,
 		NULL,
@@ -491,7 +491,7 @@ static void vgt_print_opcode(uint32_t cmd, int ring_id)
 		return;
 
 	vgt_err("opcode=0x%x %s sub_ops:", cmd >> (32 - d_info->op_len), d_info->name);
-	for (i=0; i< d_info->nr_sub_op; i++){
+	for (i = 0; i< d_info->nr_sub_op; i++) {
 		vgt_err("0x%x ", sub_op_val(cmd, d_info->sub_op[i].hi,  d_info->sub_op[i].low));
 	}
 	vgt_err("\n");
@@ -502,7 +502,7 @@ static inline struct cmd_info* vgt_get_cmd_info(uint32_t cmd, int ring_id)
 	uint32_t opcode;
 
 	opcode = vgt_get_opcode(cmd, ring_id);
-	if (opcode == INVALID_OP){
+	if (opcode == INVALID_OP) {
 		return NULL;
 	}
 
@@ -532,12 +532,12 @@ static void parser_exec_state_dump(struct parser_exec_state *s)
 			s->buf_type == RING_BUFFER_INSTRUCTION ? "RING_BUFFER": "BATCH_BUFFER",
 			s->buf_addr_type == GTT_BUFFER ? "GTT" : "PPGTT", s->ip_gma);
 
-	if (s->ip_va == NULL){
+	if (s->ip_va == NULL) {
 		vgt_err(" ip_va(NULL)\n");
-	}else{
+	} else {
 		vgt_err("  ip_va=%p: %08x %08x %08x %08x \n",
-				s->ip_va, cmd_val(s,0), cmd_val(s,1),cmd_val(s,2), cmd_val(s,3));
-		vgt_print_opcode(cmd_val(s,0), s->ring_id);
+				s->ip_va, cmd_val(s, 0), cmd_val(s, 1), cmd_val(s, 2), cmd_val(s, 3));
+		vgt_print_opcode(cmd_val(s, 0), s->ring_id);
 	}
 }
 #define RING_BUF_WRAP(s, ip_gma)	(((s)->buf_type == RING_BUFFER_INSTRUCTION) && \
@@ -551,7 +551,7 @@ static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)
 
 	/* set ip_gma */
 
-	if (RING_BUF_WRAP(s, ip_gma)){
+	if (RING_BUF_WRAP(s, ip_gma)) {
 		ip_gma = ip_gma - s->ring_size;
 	}
 
@@ -559,8 +559,8 @@ static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)
 	s->ip_va = vgt_gma_to_va(s->vgt, ip_gma,
 			s->buf_addr_type == PPGTT_BUFFER);
 
-	if (s->ip_va == NULL){
-		vgt_err("ERROR: gma %lx is invalid, fail to set\n",s->ip_gma);
+	if (s->ip_va == NULL) {
+		vgt_err("ERROR: gma %lx is invalid, fail to set\n", s->ip_gma);
 		dump_stack();
 		parser_exec_state_dump(s);
 		return -EFAULT;
@@ -571,15 +571,15 @@ static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)
 
 	/* set ip of next page */
 
-	if (RING_BUF_WRAP(s, ip_gma + PAGE_SIZE)){
+	if (RING_BUF_WRAP(s, ip_gma + PAGE_SIZE))
 		gma_next_page = s->ring_start;
-	}else{
+	else
 		gma_next_page = ((ip_gma >> PAGE_SHIFT) + 1) << PAGE_SHIFT;
-	}
+
 	s->ip_va_next_page = vgt_gma_to_va(s->vgt, gma_next_page,
 			s->buf_addr_type == PPGTT_BUFFER);
 
-	if (s->ip_va_next_page == NULL){
+	if (s->ip_va_next_page == NULL) {
 		vgt_err("ERROR: next page gma %lx is invalid, fail to set\n",gma_next_page);
 		dump_stack();
 		parser_exec_state_dump(s);
@@ -592,12 +592,12 @@ static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)
 static inline int ip_gma_advance(struct parser_exec_state *s, unsigned int len)
 {
 	int rc = 0;
-	if (s->ip_buf_len > len){
+	if (s->ip_buf_len > len) {
 		/* not cross page, advance ip inside page */
 		s->ip_gma += len*sizeof(uint32_t);
 		s->ip_va += len;
 		s->ip_buf_len -= len;
-	} else{
+	} else {
 		/* cross page, reset ip_va */
 		rc = ip_gma_set(s, s->ip_gma + len*sizeof(uint32_t));
 	}
@@ -617,17 +617,16 @@ static inline int cmd_length(struct parser_exec_state *s)
 	 */
 	if (info->opcode == OP_MI_NOOP) {
 		unsigned int cmd, length = info->len;
-		cmd = (cmd_val(s,0) & VGT_NOOP_ID_CMD_MASK) >>
+		cmd = (cmd_val(s, 0) & VGT_NOOP_ID_CMD_MASK) >>
 			VGT_NOOP_ID_CMD_SHIFT;
 		if (cmd)
-			length = cmd_val(s,0) & CMD_LENGTH_MASK;
+			length = cmd_val(s, 0) & CMD_LENGTH_MASK;
 
 		return length;
 	} else if ((info->flag & F_LEN_MASK) == F_LEN_CONST) {
 		return info->len;
-	}
-	else /* F_LEN_VAR */{
-		return (cmd_val(s,0) & ( (1U << s->info->len) - 1)) + 2;
+	} else /* F_LEN_VAR */{
+		return (cmd_val(s, 0) & ((1U << s->info->len) - 1)) + 2;
 	}
 }
 
@@ -643,7 +642,7 @@ static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
 	return 0;
 }
 
-#define BIT_RANGE_MASK(a,b)	\
+#define BIT_RANGE_MASK(a, b)	\
 	((1UL << ((a) + 1)) - (1UL << (b)))
 static int vgt_cmd_handler_lri(struct parser_exec_state *s)
 {
@@ -698,10 +697,11 @@ static int vgt_cmd_handler_pipe_control(struct parser_exec_state *s)
 	if (cmd_val(s, 1) & PIPE_CONTROL_POST_SYNC) {
 		offset = cmd_val(s, 2) & BIT_RANGE_MASK(22, 2);
 		reg_set_cmd_access(pdev, offset);
-	} else if (cmd_val(s, 1) & (2 << 14))
+	} else if (cmd_val(s, 1) & (2 << 14)) {
 		reg_set_cmd_access(pdev, 0x2350);
-	else if (cmd_val(s, 1) & (3 << 14))
+	} else if (cmd_val(s, 1) & (3 << 14)) {
 		reg_set_cmd_access(pdev, _REG_RCS_TIMESTAMP);
+	}
 
 	s->cmd_issue_irq = (cmd_val(s, 1) & PIPE_CONTROL_NOTIFY) ? true : false;
 
@@ -724,11 +724,11 @@ static int vgt_cmd_handler_mi_batch_buffer_end(struct parser_exec_state *s)
 {
 	int rc;
 
-	if (s->buf_type == BATCH_BUFFER_2ND_LEVEL){
+	if (s->buf_type == BATCH_BUFFER_2ND_LEVEL) {
 		s->buf_type = BATCH_BUFFER_INSTRUCTION;
 		rc = ip_gma_set(s, s->ret_ip_gma_bb);
 		s->buf_addr_type = s->saved_buf_addr_type;
-	}else{
+	} else {
 		s->buf_type = RING_BUFFER_INSTRUCTION;
 		s->buf_addr_type = GTT_BUFFER;
 		rc = ip_gma_set(s, s->ret_ip_gma_ring);
@@ -824,34 +824,20 @@ static bool display_flip_decode_plane_info(uint32_t  plane_code, enum vgt_pipe *
 static bool display_flip_encode_plane_info(enum vgt_pipe pipe, enum vgt_plane_type plane, uint32_t * plane_code)
 {
 
-	if(pipe == PIPE_A && plane == PRIMARY_PLANE)
-	{
+	if (pipe == PIPE_A && plane == PRIMARY_PLANE)
 		*plane_code = DISPLAY_FLIP_PLANE_A;
-	}
 	else if (pipe == PIPE_B && plane == PRIMARY_PLANE)
-	{
 		*plane_code = DISPLAY_FLIP_PLANE_B;
-	}
 	else if (pipe == PIPE_A && plane == SPRITE_PLANE)
-	{
 		*plane_code = DISPLAY_FLIP_SPRITE_A;
-	}
 	else if (pipe == PIPE_B && plane == SPRITE_PLANE)
-	{
 		*plane_code = DISPLAY_FLIP_SPRITE_B;
-	}
 	else if (pipe == PIPE_C && plane == PRIMARY_PLANE)
-	{
 		*plane_code = DISPLAY_FLIP_PLANE_C;
-	}
 	else if (pipe == PIPE_C && plane == SPRITE_PLANE)
-	{
 		*plane_code = DISPLAY_FLIP_SPRITE_C;
-	}
 	else
-	{
 		return false;
-	}
 
 	return true;
 
@@ -954,7 +940,7 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 	}
 
 
-	if(!display_flip_decode_plane_info(plane_code, &pipe, &plane)){
+	if (!display_flip_decode_plane_info(plane_code, &pipe, &plane)) {
 		goto wrong_command;
 	}
 
@@ -974,9 +960,8 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 	}
 
 	if (!resubmitted) {
-		if (!vgt_flip_parameter_check(s, plane_code, stride_val, surf_val)) {
+		if (!vgt_flip_parameter_check(s, plane_code, stride_val, surf_val))
 			goto wrong_command;
-		}
 
 		GET_INFO_FOR_FLIP(pipe, plane,
 			ctrl_reg, surf_reg, stride_reg, stride_mask);
@@ -1002,12 +987,13 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 
 	if ((s->vgt == current_foreground_vm(s->vgt->pdev)) && !resubmitted) {
 		if(!display_flip_encode_plane_info(real_pipe, plane, &real_plane_code))
-		{
 			goto wrong_command;
-		}
 
 		value = *(cmd_ptr(s, 0));
-		add_patch_entry(s, cmd_ptr(s,0), (value & ~PLANE_SELECT_MASK) |  (real_plane_code << PLANE_SELECT_SHIFT));
+		add_patch_entry(s,
+			cmd_ptr(s, 0),
+			((value & ~PLANE_SELECT_MASK) |
+			 (real_plane_code << PLANE_SELECT_SHIFT)));
 		return 0;
 	}
 
@@ -1019,7 +1005,7 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 			(OP_MI_DISPLAY_FLIP << VGT_NOOP_ID_CMD_SHIFT));
 	}
 
-	rc |= add_patch_entry(s, cmd_ptr(s,0), MI_NOOP |
+	rc |= add_patch_entry(s, cmd_ptr(s, 0), MI_NOOP |
 			(OP_MI_DISPLAY_FLIP << VGT_NOOP_ID_CMD_SHIFT) |
 			(plane_code << PLANE_INFO_SHIFT) |
 			(length & CMD_LENGTH_MASK));
@@ -1057,9 +1043,8 @@ static int vgt_handle_mi_wait_for_event(struct parser_exec_state *s)
 	uint32_t new_cmd = cmd;
 	enum vgt_plane_type plane_type = MAX_PLANE;
 
-	if (!is_wait_for_flip_pending(cmd)) {
+	if (!is_wait_for_flip_pending(cmd))
 		return rc;
-	}
 
 	if (s->vgt != current_foreground_vm(s->vgt->pdev)) {
 		rc |= add_patch_entry(s, cmd_ptr(s, 0), MI_NOOP);
@@ -1075,7 +1060,7 @@ static int vgt_handle_mi_wait_for_event(struct parser_exec_state *s)
 		virtual_pipe = PIPE_B;
 		plane_type = PRIMARY_PLANE;
 		new_cmd &= ~MI_WAIT_FOR_PLANE_B_FLIP_PENDING;
-	} else if (cmd & MI_WAIT_FOR_PLANE_C_FLIP_PENDING){
+	} else if (cmd & MI_WAIT_FOR_PLANE_C_FLIP_PENDING) {
 		virtual_pipe = PIPE_C;
 		plane_type = PRIMARY_PLANE;
 		new_cmd &= ~MI_WAIT_FOR_PLANE_C_FLIP_PENDING;
@@ -1087,7 +1072,7 @@ static int vgt_handle_mi_wait_for_event(struct parser_exec_state *s)
 		virtual_pipe = PIPE_B;
 		plane_type = SPRITE_PLANE;
 		new_cmd &= ~MI_WAIT_FOR_SPRITE_B_FLIP_PENDING;
-	} else  if(cmd & MI_WAIT_FOR_SPRITE_C_FLIP_PENDING){
+	} else  if(cmd & MI_WAIT_FOR_SPRITE_C_FLIP_PENDING) {
 		virtual_pipe = PIPE_C;
 		plane_type = SPRITE_PLANE;
 		new_cmd &= ~MI_WAIT_FOR_SPRITE_C_FLIP_PENDING;
@@ -1128,7 +1113,7 @@ static int vgt_cmd_handler_mi_flush_dw(struct parser_exec_state* s)
 	int i, len;
 
 	/* Check post-sync bit */
-	if ( (cmd_val(s,0) >> 14) & 0x3)
+	if ((cmd_val(s, 0) >> 14) & 0x3)
 		address_fixup(s, 1);
 	/* Check notify bit */
 	s->cmd_issue_irq = ( cmd_val(s,0) & (1 << 8)) ? true : false;
@@ -1142,11 +1127,9 @@ static int vgt_cmd_handler_mi_flush_dw(struct parser_exec_state* s)
 
 static void addr_type_update_snb(struct parser_exec_state* s)
 {
-	if ( (s->buf_type == RING_BUFFER_INSTRUCTION) &&
+	if ((s->buf_type == RING_BUFFER_INSTRUCTION) &&
 			(s->vgt->rb[s->ring_id].has_ppgtt_mode_enabled) &&
-			(BATCH_BUFFER_ADR_SPACE_BIT(cmd_val(s,0)) == 1)
-	   )
-	{
+			(BATCH_BUFFER_ADR_SPACE_BIT(cmd_val(s, 0)) == 1)) {
 		s->buf_addr_type = PPGTT_BUFFER;
 	}
 }
@@ -1177,13 +1160,13 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct parser_exec_state *s)
 	int rc=0;
 	bool second_level;
 
-	if (s->buf_type == BATCH_BUFFER_2ND_LEVEL){
+	if (s->buf_type == BATCH_BUFFER_2ND_LEVEL) {
 		vgt_err("MI_BATCH_BUFFER_START not allowd in 2nd level batch buffer\n");
 		return -EINVAL;
 	}
 
-	second_level = BATCH_BUFFER_2ND_LEVEL_BIT(cmd_val(s,0)) == 1;
-	if (second_level && (s->buf_type != BATCH_BUFFER_INSTRUCTION)){
+	second_level = BATCH_BUFFER_2ND_LEVEL_BIT(cmd_val(s, 0)) == 1;
+	if (second_level && (s->buf_type != BATCH_BUFFER_INSTRUCTION)) {
 		vgt_err("Jumping to 2nd level batch buffer from ring buffer is not allowd\n");
 		return -EINVAL;
 	}
@@ -1193,21 +1176,21 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct parser_exec_state *s)
 	/* FIXME: add IVB/HSW code */
 	addr_type_update_snb(s);
 
-	if (s->buf_type == RING_BUFFER_INSTRUCTION){
+	if (s->buf_type == RING_BUFFER_INSTRUCTION) {
 		s->ret_ip_gma_ring = s->ip_gma + 2*sizeof(uint32_t);
 		s->buf_type = BATCH_BUFFER_INSTRUCTION;
-	} else if (second_level){
+	} else if (second_level) {
 		s->buf_type = BATCH_BUFFER_2ND_LEVEL;
 		s->ret_ip_gma_bb = s->ip_gma + 2*sizeof(uint32_t);
-	 }
+	}
 
 	klog_printk("MI_BATCH_BUFFER_START: Addr=%x ClearCommandBufferEnable=%d\n",
-			cmd_val(s,1),  (cmd_val(s,0)>>11) & 1);
+			cmd_val(s, 1), (cmd_val(s, 0) >> 11) & 1);
 
 	address_fixup(s, 1);
 
 	if (batch_buffer_needs_scan(s)) {
-		rc = ip_gma_set(s, cmd_val(s,1) & BATCH_BUFFER_ADDR_MASK);
+		rc = ip_gma_set(s, cmd_val(s, 1) & BATCH_BUFFER_ADDR_MASK);
 		if (rc < 0)
 			vgt_warn("invalid batch buffer addr, so skip scanning it\n");
 	} else {
@@ -1229,9 +1212,9 @@ static int vgt_cmd_handler_3dstate_vertex_buffers(struct parser_exec_state *s)
 
 	length = cmd_length(s);
 
-	for (i=1; i < length; i = i+4){
-		address_fixup(s,i + 1);
-		address_fixup(s,i + 2);
+	for (i = 1; i < length; i = i + 4) {
+		address_fixup(s, i + 1);
+		address_fixup(s, i + 2);
 	}
 
 	return 0;
@@ -1239,10 +1222,10 @@ static int vgt_cmd_handler_3dstate_vertex_buffers(struct parser_exec_state *s)
 
 static int vgt_cmd_handler_3dstate_index_buffer(struct parser_exec_state *s)
 {
-	address_fixup(s,1);
+	address_fixup(s, 1);
 
-	if (cmd_val(s,2) != 0)
-		address_fixup(s,2);
+	if (cmd_val(s, 2) != 0)
+		address_fixup(s, 2);
 
 	return 0;
 }
@@ -1255,70 +1238,70 @@ static unsigned int constant_buffer_address_offset_disable(struct parser_exec_st
 	  1 - use as graphics address
 	 */
 
-	return __vreg(s->vgt,_REG_RCS_INSTPM) & INSTPM_CONS_BUF_ADDR_OFFSET_DIS;
+	return __vreg(s->vgt, _REG_RCS_INSTPM) & INSTPM_CONS_BUF_ADDR_OFFSET_DIS;
 }
 
 static int vgt_cmd_handler_3dstate_constant_gs(struct parser_exec_state *s)
 {
-	if (constant_buffer_address_offset_disable(s) == 1){
-		address_fixup(s,1);
-	}
-	address_fixup(s,2);
-	address_fixup(s,3);
-	address_fixup(s,4);
+	if (constant_buffer_address_offset_disable(s) == 1)
+		address_fixup(s, 1);
+
+	address_fixup(s, 2);
+	address_fixup(s, 3);
+	address_fixup(s, 4);
 
 	return 0;
 }
 
 static int vgt_cmd_handler_3dstate_constant_ps(struct parser_exec_state *s)
 {
-	if (constant_buffer_address_offset_disable(s) == 1){
-		address_fixup(s,1);
-	}
-	address_fixup(s,2);
-	address_fixup(s,3);
-	address_fixup(s,4);
+	if (constant_buffer_address_offset_disable(s) == 1)
+		address_fixup(s, 1);
+
+	address_fixup(s, 2);
+	address_fixup(s, 3);
+	address_fixup(s, 4);
 
 	return 0;
 }
 
 static int vgt_cmd_handler_3dstate_constant_vs(struct parser_exec_state *s)
 {
-	if (constant_buffer_address_offset_disable(s) == 1){
-		address_fixup(s,1);
-	}
-	address_fixup(s,2);
-	address_fixup(s,3);
-	address_fixup(s,4);
+	if (constant_buffer_address_offset_disable(s) == 1)
+		address_fixup(s, 1);
+
+	address_fixup(s, 2);
+	address_fixup(s, 3);
+	address_fixup(s, 4);
 
 	return 0;
 }
 
 static int vgt_cmd_handler_state_base_address(struct parser_exec_state *s)
 {
-	address_fixup(s,1);
-	address_fixup(s,2);
-	address_fixup(s,3);
-	address_fixup(s,4);
-	address_fixup(s,5);
+	address_fixup(s, 1);
+	address_fixup(s, 2);
+	address_fixup(s, 3);
+	address_fixup(s, 4);
+	address_fixup(s, 5);
 	/* Zero Bound is ignore */
-	if (cmd_val(s,6) >> 12)
-		address_fixup(s,6);
-	if (cmd_val(s,7) >> 12)
-		address_fixup(s,7);
-	if (cmd_val(s,8) >> 12)
-		address_fixup(s,8);
-	if (cmd_val(s,9) >> 12)
-		address_fixup(s,9);
+	if (cmd_val(s, 6) >> 12)
+		address_fixup(s, 6);
+	if (cmd_val(s, 7) >> 12)
+		address_fixup(s, 7);
+	if (cmd_val(s, 8) >> 12)
+		address_fixup(s, 8);
+	if (cmd_val(s, 9) >> 12)
+		address_fixup(s, 9);
 	return 0;
 }
 
 static inline int base_and_upper_addr_fix(struct parser_exec_state *s)
 {
-	address_fixup(s,1);
+	address_fixup(s, 1);
 	/* Zero Bound is ignore */
-	if (cmd_val(s,2) >> 12)
-		address_fixup(s,2);
+	if (cmd_val(s, 2) >> 12)
+		address_fixup(s, 2);
 	return 0;
 }
 
@@ -1358,7 +1341,7 @@ static int vgt_cmd_handler_op_3dstate_constant_ds(struct parser_exec_state *s)
 static int vgt_cmd_handler_mfx_pipe_buf_addr_state(struct parser_exec_state *s)
 {
 	int i;
-	for (i=1; i<=23; i++){
+	for (i = 1; i <= 23; i++) {
 		address_fixup(s, i);
 	}
 	return 0;
@@ -1367,7 +1350,7 @@ static int vgt_cmd_handler_mfx_pipe_buf_addr_state(struct parser_exec_state *s)
 static int vgt_cmd_handler_mfx_ind_obj_base_addr_state(struct parser_exec_state *s)
 {
 	int i;
-	for (i=1; i<=10; i++){
+	for (i = 1; i <= 10; i++) {
 		address_fixup(s, i);
 	}
 	return 0;
@@ -1376,14 +1359,14 @@ static int vgt_cmd_handler_mfx_ind_obj_base_addr_state(struct parser_exec_state 
 static int vgt_cmd_handler_mfx_2_6_0_0(struct parser_exec_state *s)
 {
 	base_and_upper_addr_fix(s);
-	address_fixup(s,2);
+	address_fixup(s, 2);
 	return 0;
 }
 
 static int vgt_cmd_handler_mi_noop(struct parser_exec_state* s)
 {
 	unsigned int cmd;
-	cmd = (cmd_val(s,0) & VGT_NOOP_ID_CMD_MASK) >> VGT_NOOP_ID_CMD_SHIFT;
+	cmd = (cmd_val(s, 0) & VGT_NOOP_ID_CMD_MASK) >> VGT_NOOP_ID_CMD_SHIFT;
 
 	if (cmd) {
 		if (cmd == OP_MI_DISPLAY_FLIP) {
@@ -1499,7 +1482,7 @@ static struct cmd_info cmd_info[] = {
 		0, 2, NULL},
 
 	{"XY_SETUP_BLT", OP_XY_SETUP_BLT, F_LEN_VAR, R_BCS, D_ALL,
-		ADDR_FIX_2(4,7), 8, NULL},
+		ADDR_FIX_2(4, 7), 8, NULL},
 
 	{"XY_SETUP_CLIP_BLT", OP_XY_SETUP_CLIP_BLT, F_LEN_VAR, R_BCS, D_ALL,
 		0, 8, NULL},
@@ -1527,27 +1510,27 @@ static struct cmd_info cmd_info[] = {
 		ADDR_FIX_1(4), 8, NULL},
 
 	{"XY_PAT_BLT", OP_XY_PAT_BLT, F_LEN_VAR, R_BCS, D_ALL,
-		ADDR_FIX_2(4,5), 8, NULL},
+		ADDR_FIX_2(4, 5), 8, NULL},
 
 	{"XY_MONO_PAT_BLT", OP_XY_MONO_PAT_BLT, F_LEN_VAR, R_BCS, D_ALL,
-		ADDR_FIX_2(4,5), 8, NULL},
+		ADDR_FIX_2(4, 5), 8, NULL},
 
 	{"XY_SRC_COPY_BLT", OP_XY_SRC_COPY_BLT, F_LEN_VAR, R_BCS, D_ALL,
-		ADDR_FIX_2(4,7), 8, NULL},
+		ADDR_FIX_2(4, 7), 8, NULL},
 
 	{"XY_MONO_SRC_COPY_BLT", OP_XY_MONO_SRC_COPY_BLT, F_LEN_VAR, R_BCS,
-		D_ALL, ADDR_FIX_2(4,5), 8, NULL},
+		D_ALL, ADDR_FIX_2(4, 5), 8, NULL},
 
 	{"XY_FULL_BLT", OP_XY_FULL_BLT, F_LEN_VAR, R_BCS, D_ALL, 0, 8, NULL},
 
 	{"XY_FULL_MONO_SRC_BLT", OP_XY_FULL_MONO_SRC_BLT, F_LEN_VAR, R_BCS, D_ALL,
-		ADDR_FIX_3(4,5,8), 8, NULL},
+		ADDR_FIX_3(4, 5, 8), 8, NULL},
 
 	{"XY_FULL_MONO_PATTERN_BLT", OP_XY_FULL_MONO_PATTERN_BLT, F_LEN_VAR,
-		R_BCS, D_ALL, ADDR_FIX_2(4,7), 8, NULL},
+		R_BCS, D_ALL, ADDR_FIX_2(4, 7), 8, NULL},
 
 	{"XY_FULL_MONO_PATTERN_MONO_SRC_BLT", OP_XY_FULL_MONO_PATTERN_MONO_SRC_BLT,
-		F_LEN_VAR, R_BCS, D_ALL, ADDR_FIX_2(4,5), 8, NULL},
+		F_LEN_VAR, R_BCS, D_ALL, ADDR_FIX_2(4, 5), 8, NULL},
 
 	{"XY_MONO_PAT_FIXED_BLT", OP_XY_MONO_PAT_FIXED_BLT, F_LEN_VAR, R_BCS, D_ALL,
 		ADDR_FIX_1(4), 8, NULL},
@@ -1559,16 +1542,16 @@ static struct cmd_info cmd_info[] = {
 		D_ALL, ADDR_FIX_1(4), 8, NULL},
 
 	{"XY_SRC_COPY_CHROMA_BLT", OP_XY_SRC_COPY_CHROMA_BLT, F_LEN_VAR, R_BCS,
-		D_ALL, ADDR_FIX_2(4,7), 8, NULL},
+		D_ALL, ADDR_FIX_2(4, 7), 8, NULL},
 
 	{"XY_FULL_IMMEDIATE_PATTERN_BLT", OP_XY_FULL_IMMEDIATE_PATTERN_BLT,
-		F_LEN_VAR, R_BCS, D_ALL, ADDR_FIX_2(4,7), 8, NULL},
+		F_LEN_VAR, R_BCS, D_ALL, ADDR_FIX_2(4, 7), 8, NULL},
 
 	{"XY_FULL_MONO_SRC_IMMEDIATE_PATTERN_BLT", OP_XY_FULL_MONO_SRC_IMMEDIATE_PATTERN_BLT,
-		F_LEN_VAR, R_BCS, D_ALL, ADDR_FIX_2(4,5), 8, NULL},
+		F_LEN_VAR, R_BCS, D_ALL, ADDR_FIX_2(4, 5), 8, NULL},
 
 	{"XY_PAT_CHROMA_BLT", OP_XY_PAT_CHROMA_BLT, F_LEN_VAR, R_BCS, D_ALL,
-		ADDR_FIX_2(4,5), 8, NULL},
+		ADDR_FIX_2(4, 5), 8, NULL},
 
 	{"XY_PAT_CHROMA_BLT_IMMEDIATE", OP_XY_PAT_CHROMA_BLT_IMMEDIATE, F_LEN_VAR,
 		R_BCS, D_ALL, ADDR_FIX_1(4), 8, NULL},
@@ -1739,11 +1722,11 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_CONSTANT_DS", OP_3DSTATE_CONSTANT_DS, F_LEN_VAR, R_RCS,
 		D_GEN7PLUS, 0, 8, vgt_cmd_handler_op_3dstate_constant_ds},
 
-	{"3DSTATE_HS", OP_3DSTATE_HS, F_LEN_VAR, R_RCS,	D_GEN7PLUS, 0, 8, NULL},
+	{"3DSTATE_HS", OP_3DSTATE_HS, F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
 
-	{"3DSTATE_TE", OP_3DSTATE_TE, F_LEN_VAR, R_RCS,	D_GEN7PLUS, 0, 8, NULL},
+	{"3DSTATE_TE", OP_3DSTATE_TE, F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
 
-	{"3DSTATE_DS", OP_3DSTATE_DS, F_LEN_VAR, R_RCS,	D_GEN7PLUS, 0, 8, NULL},
+	{"3DSTATE_DS", OP_3DSTATE_DS, F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
 
 	{"3DSTATE_STREAMOUT", OP_3DSTATE_STREAMOUT, F_LEN_VAR, R_RCS,
 		D_GEN7PLUS, 0, 8, NULL},
@@ -1828,7 +1811,7 @@ static struct cmd_info cmd_info[] = {
 		0, 9, NULL},
 
 	{"3DSTATE_SO_BUFFER", OP_3DSTATE_SO_BUFFER, F_LEN_VAR, R_RCS, D_ALL,
-		ADDR_FIX_2(2,3), 8, NULL},
+		ADDR_FIX_2(2, 3), 8, NULL},
 
 	{"3DSTATE_BINDING_TABLE_POOL_ALLOC", OP_3DSTATE_BINDING_TABLE_POOL_ALLOC,
 		F_LEN_VAR, R_RCS, D_GEN75PLUS, 0, 8, vgt_cmd_handler_3dstate_binding_table_pool_alloc},
@@ -1905,7 +1888,7 @@ static struct cmd_info cmd_info[] = {
 		R_VCS, D_ALL, 0, 12, vgt_cmd_handler_mfx_ind_obj_base_addr_state},
 
 	{"MFX_BSP_BUF_BASE_ADDR_STATE", OP_MFX_BSP_BUF_BASE_ADDR_STATE, F_LEN_VAR,
-		R_VCS, D_ALL, ADDR_FIX_3(1,2,3), 12, NULL},
+		R_VCS, D_ALL, ADDR_FIX_3(1, 2, 3), 12, NULL},
 
 	{"OP_2_0_0_5", OP_2_0_0_5, F_LEN_VAR,
 		R_VCS, D_ALL, ADDR_FIX_1(6), 12, NULL},
@@ -2035,8 +2018,8 @@ static int cmd_hash_init(struct pgt_device *pdev)
 
 	gen_type = vgt_gen_dev_type(pdev);
 
-	for (i=0; i< ARRAY_SIZE(cmd_info); i++){
-		if (!(cmd_info[i].devices & gen_type)){
+	for (i = 0; i < ARRAY_SIZE(cmd_info); i++) {
+		if (!(cmd_info[i].devices & gen_type)) {
 			vgt_dbg(VGT_DBG_CMD, "CMD[%-30s] op[%04x] flag[%x] devs[%02x] rings[%02x] not registered\n",
 					cmd_info[i].name, cmd_info[i].opcode, cmd_info[i].flag,
 					cmd_info[i].devices, cmd_info[i].rings);
@@ -2051,7 +2034,7 @@ static int cmd_hash_init(struct pgt_device *pdev)
 		e->info = &cmd_info[i];
 
 		info = vgt_find_cmd_entry_any_ring(e->info->opcode, e->info->rings);
-		if (info){
+		if (info) {
 			vgt_err("%s %s duplicated\n", e->info->name, info->name);
 			return -EINVAL;
 		}
@@ -2078,11 +2061,11 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 	int rc = 0, i, cmd_len;
 
 	info = vgt_get_cmd_info(*s->ip_va, s->ring_id);
-	if(info == NULL){
+	if (info == NULL) {
 		vgt_err("ERROR: unknown cmd 0x%x, opcode=0x%x\n", *s->ip_va,
 				vgt_get_opcode(*s->ip_va, s->ring_id));
 		parser_exec_state_dump(s);
-		klog_printk("ERROR: unknown cmd %x, ring%d[%lx,%lx] gma[%lx] va[%p]\n",
+		klog_printk("ERROR: unknown cmd %x, ring%d[%lx, %lx] gma[%lx] va[%p]\n",
 				*s->ip_va, s->ring_id, s->ring_start,
 				s->ring_start + s->ring_size, s->ip_gma, s->ip_va);
 
@@ -2129,8 +2112,10 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 		vgt_dbg(VGT_DBG_CMD, "cmd length exceed tracing limitation!\n");
 		cmd_len = VGT_MAX_CMD_LENGTH;
 	}
+
 	for (i = 0; i < cmd_len; i++)
 		cmd_trace_buf[i] = cmd_val(s, i);
+
 	trace_vgt_command(s->vgt->vm_id, s->ring_id, s->ip_gma, cmd_trace_buf,
 			cmd_len, s->buf_type == RING_BUFFER_INSTRUCTION);
 
@@ -2160,9 +2145,9 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 		}
 	}
 
-	if (!(info->flag & F_IP_ADVANCE_CUSTOM)){
+	if (!(info->flag & F_IP_ADVANCE_CUSTOM)) {
 		rc = vgt_cmd_advance_default(s);
-		if (rc < 0){
+		if (rc < 0) {
 			vgt_err("%s IP advance error", info->name);
 			return rc;
 		}
@@ -2174,7 +2159,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 static inline bool gma_out_of_range(unsigned long gma, unsigned long gma_head, unsigned gma_tail)
 {
 	if ( gma_tail >= gma_head)
-		return	(gma < gma_head) || (gma > gma_tail);
+		return (gma < gma_head) || (gma > gma_tail);
 	else
 		return (gma > gma_tail) && (gma < gma_head);
 
@@ -2225,7 +2210,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		s.cmd_issue_irq = false;
 		if (s.buf_type == RING_BUFFER_INSTRUCTION){
 			ASSERT((s.ip_gma >= base) && (s.ip_gma < gma_bottom));
-			if (gma_out_of_range(s.ip_gma, gma_head, gma_tail)){
+			if (gma_out_of_range(s.ip_gma, gma_head, gma_tail)) {
 				vgt_err("ERROR: ip_gma %lx out of range\n", s.ip_gma);
 				break;
 			}
@@ -2234,7 +2219,7 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		cmd_nr++;
 
 		rc = vgt_cmd_parser_exec(&s);
-		if (rc < 0){
+		if (rc < 0) {
 			vgt_err("cmd parser error\n");
 			break;
 		}
@@ -2280,7 +2265,7 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 
 	t0 = get_cycles();
 
-	if ( !(vring->ctl & _RING_CTL_ENABLE) ) {
+	if (!(vring->ctl & _RING_CTL_ENABLE)) {
 		/* Ring is enabled */
 		vgt_dbg(VGT_DBG_CMD, "VGT-Parser.c vring head %x tail %x ctl %x\n",
 			vring->head, vring->tail, vring->ctl);
@@ -2289,7 +2274,7 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 
 	stat->vring_scan_cnt++;
 	rs->request_id++;
-	ret = __vgt_scan_vring (vgt, ring_id, rs->last_scan_head,
+	ret = __vgt_scan_vring(vgt, ring_id, rs->last_scan_head,
 		vring->tail & RB_TAIL_OFF_MASK,
 		vring->start, _RING_CTL_BUF_SIZE(vring->ctl));
 
