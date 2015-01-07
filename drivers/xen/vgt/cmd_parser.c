@@ -84,17 +84,12 @@ void vgt_clear_cmd_table(void)
 
 	hash_init(vgt_cmd_table);
 }
-#ifdef VGT_ENABLE_ADDRESS_FIX
-static int address_fixup(struct parser_exec_state *s, int index)
+
+static int address_audit(struct parser_exec_state *s, int index)
 {
-	/*TODO: add address fix up implementation */
+	/*TODO: add address audit implementation */
 	return 0;
 }
-#else
-
-#define address_fixup(s, index)	do{}while(0)
-
-#endif
 
 void vgt_init_cmd_info(vgt_state_ring_t *rs)
 {
@@ -1114,13 +1109,13 @@ static int vgt_cmd_handler_mi_flush_dw(struct parser_exec_state* s)
 
 	/* Check post-sync bit */
 	if ((cmd_val(s, 0) >> 14) & 0x3)
-		address_fixup(s, 1);
+		address_audit(s, 1);
 	/* Check notify bit */
 	s->cmd_issue_irq = ( cmd_val(s,0) & (1 << 8)) ? true : false;
 
 	len = cmd_length(s);
 	for (i=2; i<len; i++)
-		address_fixup(s, i);
+		address_audit(s, i);
 
 	return 0;
 }
@@ -1187,7 +1182,7 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct parser_exec_state *s)
 	klog_printk("MI_BATCH_BUFFER_START: Addr=%x ClearCommandBufferEnable=%d\n",
 			cmd_val(s, 1), (cmd_val(s, 0) >> 11) & 1);
 
-	address_fixup(s, 1);
+	address_audit(s, 1);
 
 	if (batch_buffer_needs_scan(s)) {
 		rc = ip_gma_set(s, cmd_val(s, 1) & BATCH_BUFFER_ADDR_MASK);
@@ -1213,8 +1208,8 @@ static int vgt_cmd_handler_3dstate_vertex_buffers(struct parser_exec_state *s)
 	length = cmd_length(s);
 
 	for (i = 1; i < length; i = i + 4) {
-		address_fixup(s, i + 1);
-		address_fixup(s, i + 2);
+		address_audit(s, i + 1);
+		address_audit(s, i + 2);
 	}
 
 	return 0;
@@ -1222,10 +1217,10 @@ static int vgt_cmd_handler_3dstate_vertex_buffers(struct parser_exec_state *s)
 
 static int vgt_cmd_handler_3dstate_index_buffer(struct parser_exec_state *s)
 {
-	address_fixup(s, 1);
+	address_audit(s, 1);
 
 	if (cmd_val(s, 2) != 0)
-		address_fixup(s, 2);
+		address_audit(s, 2);
 
 	return 0;
 }
@@ -1244,11 +1239,11 @@ static unsigned int constant_buffer_address_offset_disable(struct parser_exec_st
 static int vgt_cmd_handler_3dstate_constant_gs(struct parser_exec_state *s)
 {
 	if (constant_buffer_address_offset_disable(s) == 1)
-		address_fixup(s, 3);
+		address_audit(s, 3);
 
-	address_fixup(s, 4);
-	address_fixup(s, 5);
-	address_fixup(s, 6);
+	address_audit(s, 4);
+	address_audit(s, 5);
+	address_audit(s, 6);
 
 	return 0;
 }
@@ -1256,11 +1251,11 @@ static int vgt_cmd_handler_3dstate_constant_gs(struct parser_exec_state *s)
 static int vgt_cmd_handler_3dstate_constant_ps(struct parser_exec_state *s)
 {
 	if (constant_buffer_address_offset_disable(s) == 1)
-		address_fixup(s, 3);
+		address_audit(s, 3);
 
-	address_fixup(s, 4);
-	address_fixup(s, 5);
-	address_fixup(s, 6);
+	address_audit(s, 4);
+	address_audit(s, 5);
+	address_audit(s, 6);
 
 	return 0;
 }
@@ -1268,40 +1263,40 @@ static int vgt_cmd_handler_3dstate_constant_ps(struct parser_exec_state *s)
 static int vgt_cmd_handler_3dstate_constant_vs(struct parser_exec_state *s)
 {
 	if (constant_buffer_address_offset_disable(s) == 1)
-		address_fixup(s, 3);
+		address_audit(s, 3);
 
-	address_fixup(s, 4);
-	address_fixup(s, 5);
-	address_fixup(s, 6);
+	address_audit(s, 4);
+	address_audit(s, 5);
+	address_audit(s, 6);
 
 	return 0;
 }
 
 static int vgt_cmd_handler_state_base_address(struct parser_exec_state *s)
 {
-	address_fixup(s, 1);
-	address_fixup(s, 2);
-	address_fixup(s, 3);
-	address_fixup(s, 4);
-	address_fixup(s, 5);
+	address_audit(s, 1);
+	address_audit(s, 2);
+	address_audit(s, 3);
+	address_audit(s, 4);
+	address_audit(s, 5);
 	/* Zero Bound is ignore */
 	if (cmd_val(s, 6) >> 12)
-		address_fixup(s, 6);
+		address_audit(s, 6);
 	if (cmd_val(s, 7) >> 12)
-		address_fixup(s, 7);
+		address_audit(s, 7);
 	if (cmd_val(s, 8) >> 12)
-		address_fixup(s, 8);
+		address_audit(s, 8);
 	if (cmd_val(s, 9) >> 12)
-		address_fixup(s, 9);
+		address_audit(s, 9);
 	return 0;
 }
 
 static inline int base_and_upper_addr_fix(struct parser_exec_state *s)
 {
-	address_fixup(s, 1);
+	address_audit(s, 1);
 	/* Zero Bound is ignore */
 	if (cmd_val(s, 2) >> 12)
-		address_fixup(s, 2);
+		address_audit(s, 2);
 	return 0;
 }
 
@@ -1323,22 +1318,22 @@ static int vgt_cmd_handler_3dstate_dx9_constant_buffer_pool_alloc(struct parser_
 static int vgt_cmd_handler_op_3dstate_constant_hs(struct parser_exec_state *s)
 {
 	if (constant_buffer_address_offset_disable(s) == 1)
-		address_fixup(s, 3);
+		address_audit(s, 3);
 
-	address_fixup(s, 4);
-	address_fixup(s, 5);
-	address_fixup(s, 6);
+	address_audit(s, 4);
+	address_audit(s, 5);
+	address_audit(s, 6);
 	return 0;
 }
 
 static int vgt_cmd_handler_op_3dstate_constant_ds(struct parser_exec_state *s)
 {
 	if (constant_buffer_address_offset_disable(s) == 1)
-		address_fixup(s, 3);
+		address_audit(s, 3);
 
-	address_fixup(s, 4);
-	address_fixup(s, 5);
-	address_fixup(s, 6);
+	address_audit(s, 4);
+	address_audit(s, 5);
+	address_audit(s, 6);
 	return 0;
 }
 
@@ -1346,7 +1341,7 @@ static int vgt_cmd_handler_mfx_pipe_buf_addr_state_hsw(struct parser_exec_state 
 {
 	int i;
 	for (i = 1; i <= 24; i++) {
-		address_fixup(s, i);
+		address_audit(s, i);
 	}
 	return 0;
 }
@@ -1355,7 +1350,7 @@ static int vgt_cmd_handler_mfx_ind_obj_base_addr_state_hsw(struct parser_exec_st
 {
 	int i;
 	for (i = 1; i <= 10; i++) {
-		address_fixup(s, i);
+		address_audit(s, i);
 	}
 	return 0;
 }
@@ -1363,7 +1358,7 @@ static int vgt_cmd_handler_mfx_ind_obj_base_addr_state_hsw(struct parser_exec_st
 static int vgt_cmd_handler_mfx_2_6_0_0(struct parser_exec_state *s)
 {
 	base_and_upper_addr_fix(s);
-	address_fixup(s, 2);
+	address_audit(s, 2);
 	return 0;
 }
 
@@ -2107,13 +2102,11 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 
 	s->info = info;
 
-#ifdef VGT_ENABLE_ADDRESS_FIX
 	{
 		unsigned int bit;
 		for_each_set_bit(bit, (unsigned long*)&info->addr_bitmap, 8*sizeof(info->addr_bitmap))
-			address_fixup(s, bit);
+			address_audit(s, bit);
 	}
-#endif
 
 	/* Let's keep this logic here. Someone has special needs for dumping
 	 * commands can customize this code snippet.
