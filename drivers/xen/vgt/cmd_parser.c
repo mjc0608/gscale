@@ -620,10 +620,18 @@ static inline int cmd_length(struct parser_exec_state *s)
 	}
 }
 
+static bool addr_audit_32(struct parser_exec_state *s, int index)
+{
+	/* TODO:
+	 * Add the address audit implementation here. Right now do nothing
+	 */
+	return true;
+}
+
 static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
 {
 	struct vgt_device *vgt = s->vgt;
-
+	addr_audit_32(s, 1);
 	if (!vgt->has_context) {
 		printk("VM %d activate context\n", vgt->vm_id);
 		vgt->has_context = 1;
@@ -1012,6 +1020,7 @@ wrong_command:
 
 static int vgt_cmd_handler_mi_display_flip(struct parser_exec_state *s)
 {
+	addr_audit_32(s, 2);
 	return vgt_handle_mi_display_flip(s, false);
 }
 static bool is_wait_for_flip_pending(uint32_t cmd)
@@ -1426,12 +1435,12 @@ static struct cmd_info cmd_info[] = {
 	{"MI_RS_CONTEXT", OP_MI_RS_CONTEXT, F_LEN_CONST, R_RCS, D_HSW_PLUS, 0, 1, NULL},
 
 	{"MI_DISPLAY_FLIP", OP_MI_DISPLAY_FLIP, F_LEN_VAR|F_POST_HANDLE, R_RCS | R_BCS,
-		D_ALL, ADDR_FIX_1(2), 8, vgt_cmd_handler_mi_display_flip},
+		D_ALL, 0, 8, vgt_cmd_handler_mi_display_flip},
 
 	{"MI_SEMAPHORE_MBOX", OP_MI_SEMAPHORE_MBOX, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL },
 
 	{"MI_SET_CONTEXT", OP_MI_SET_CONTEXT, F_LEN_VAR, R_ALL, D_ALL,
-		ADDR_FIX_1(1), 8, vgt_cmd_handler_mi_set_context},
+		0, 8, vgt_cmd_handler_mi_set_context},
 
 	{"MI_MATH", OP_MI_MATH, F_LEN_VAR, R_ALL, D_ALL, 0, 8, NULL},
 
