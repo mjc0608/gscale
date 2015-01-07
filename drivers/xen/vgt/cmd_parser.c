@@ -38,7 +38,8 @@
 #define VGT_NOOP_ID_CMD_SHIFT	16
 #define VGT_NOOP_ID_CMD_MASK	(0x3f << VGT_NOOP_ID_CMD_SHIFT)
 #define CMD_LENGTH_MASK		0xff
-
+#define gmadr_dw_number(s)	\
+	(s->vgt->pdev->device_info.gmadr_bytes_in_cmd >> 2)
 /*
  * new cmd parser
  */
@@ -83,12 +84,6 @@ void vgt_clear_cmd_table(void)
 		kfree(e);
 
 	hash_init(vgt_cmd_table);
-}
-
-static int address_audit(struct parser_exec_state *s, int index)
-{
-	/*TODO: add address audit implementation */
-	return 0;
 }
 
 void vgt_init_cmd_info(vgt_state_ring_t *rs)
@@ -1097,6 +1092,55 @@ static int vgt_handle_mi_wait_for_event(struct parser_exec_state *s)
 	return rc;
 }
 
+static unsigned long get_gma_bb_from_cmd(struct parser_exec_state *s, int index)
+{
+	unsigned long addr;
+	int32_t gma_high, gma_low;
+	int gmadr_bytes = s->vgt->pdev->device_info.gmadr_bytes_in_cmd;
+
+	ASSERT(gmadr_bytes == 4 || gmadr_bytes == 8);
+
+	gma_low = cmd_val(s, index) & BATCH_BUFFER_ADDR_MASK;
+
+	if (gmadr_bytes == 4) {
+		addr = gma_low;
+	} else {
+		gma_high = cmd_val(s, index + 1) & BATCH_BUFFER_ADDR_HIGH_MASK;
+		addr = (((unsigned long)gma_high) << 32) | gma_low;
+	}
+
+	return addr;
+}
+
+static bool address_audit(struct parser_exec_state *s, int index)
+{
+	int gmadr_bytes = s->vgt->pdev->device_info.gmadr_bytes_in_cmd;
+
+	/* TODO:
+	 * Add the address audit implementation here. Right now do nothing
+	 */
+	ASSERT(gmadr_bytes == 4 || gmadr_bytes == 8);
+
+	return true;
+}
+
+static bool vgt_cmd_addr_audit_with_bitmap(struct parser_exec_state *s,
+			unsigned long addr_bitmap)
+{
+	unsigned int bit;
+	unsigned int delta = 0;
+	int cmd_len = cmd_length(s);
+
+	for_each_set_bit(bit, &addr_bitmap, sizeof(addr_bitmap)*8) {
+		if (bit + delta >= cmd_len)
+			return false;
+		address_audit(s, bit + delta);
+		delta = delta + gmadr_dw_number(s) - 1;
+	}
+
+	return true;
+}
+
 static int vgt_cmd_handler_mi_update_gtt(struct parser_exec_state *s)
 {
 	vgt_err("Unexpectted mi_update_gtt in VM command buffer\n");
@@ -1106,16 +1150,21 @@ static int vgt_cmd_handler_mi_update_gtt(struct parser_exec_state *s)
 static int vgt_cmd_handler_mi_flush_dw(struct parser_exec_state* s)
 {
 	int i, len;
+	int offset = 1;
 
 	/* Check post-sync bit */
 	if ((cmd_val(s, 0) >> 14) & 0x3)
-		address_audit(s, 1);
+		address_audit(s, offset);
+	offset += gmadr_dw_number(s);
+
 	/* Check notify bit */
 	s->cmd_issue_irq = ( cmd_val(s,0) & (1 << 8)) ? true : false;
 
 	len = cmd_length(s);
-	for (i=2; i<len; i++)
-		address_audit(s, i);
+	for (i=2; i<len; i++) {
+		address_audit(s, offset);
+		offset += gmadr_dw_number(s);
+	}
 
 	return 0;
 }
@@ -1185,7 +1234,7 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct parser_exec_state *s)
 	address_audit(s, 1);
 
 	if (batch_buffer_needs_scan(s)) {
-		rc = ip_gma_set(s, cmd_val(s, 1) & BATCH_BUFFER_ADDR_MASK);
+		rc = ip_gma_set(s, get_gma_bb_from_cmd(s, 1));
 		if (rc < 0)
 			vgt_warn("invalid batch buffer addr, so skip scanning it\n");
 	} else {
@@ -1203,13 +1252,13 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct parser_exec_state *s)
 
 static int vgt_cmd_handler_3dstate_vertex_buffers(struct parser_exec_state *s)
 {
-	int length, i;
+	int length, offset;
 
 	length = cmd_length(s);
 
-	for (i = 1; i < length; i = i + 4) {
-		address_audit(s, i + 1);
-		address_audit(s, i + 2);
+	for (offset = 1; offset < length; offset += 4) {
+		address_audit(s, offset + 1);
+		address_audit(s, offset + 2);
 	}
 
 	return 0;
@@ -1294,8 +1343,10 @@ static int vgt_cmd_handler_3dstate_dx9_constant_buffer_pool_alloc(struct parser_
 static int vgt_cmd_handler_mfx_pipe_buf_addr_state_hsw(struct parser_exec_state *s)
 {
 	int i;
+	int offset = 1;
 	for (i = 1; i <= 24; i++) {
-		address_audit(s, i);
+		address_audit(s, offset);
+		offset += gmadr_dw_number(s);
 	}
 	return 0;
 }
@@ -1303,8 +1354,10 @@ static int vgt_cmd_handler_mfx_pipe_buf_addr_state_hsw(struct parser_exec_state 
 static int vgt_cmd_handler_mfx_ind_obj_base_addr_state_hsw(struct parser_exec_state *s)
 {
 	int i;
+	int offset = 1;
 	for (i = 1; i <= 10; i++) {
-		address_audit(s, i);
+		address_audit(s, offset);
+		offset += gmadr_dw_number(s);
 	}
 	return 0;
 }
@@ -2056,11 +2109,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 
 	s->info = info;
 
-	{
-		unsigned int bit;
-		for_each_set_bit(bit, (unsigned long*)&info->addr_bitmap, 8*sizeof(info->addr_bitmap))
-			address_audit(s, bit);
-	}
+	vgt_cmd_addr_audit_with_bitmap(s, info->addr_bitmap);
 
 	/* Let's keep this logic here. Someone has special needs for dumping
 	 * commands can customize this code snippet.

@@ -93,6 +93,7 @@ struct decode_info{
 #define OP_MI_CONDITIONAL_BATCH_BUFFER_END  0x36
 
 #define BATCH_BUFFER_ADDR_MASK ((1UL << 32) - (1U <<2))
+#define BATCH_BUFFER_ADDR_HIGH_MASK ((1UL << 16) - (1U))
 #define BATCH_BUFFER_ADR_SPACE_BIT(x)	(((x)>>8) & 1U)
 #define BATCH_BUFFER_2ND_LEVEL_BIT(x)   ((x)>>22 & 1U)
 
@@ -384,7 +385,14 @@ struct cmd_info{
 	/* devices that support this cmd: SNB/IVB/HSW/... */
 	uint16_t devices;
 
-	/* which DWords are address that need fix up */
+	/* which DWords are address that need fix up.
+	 * bit 0 means a 32-bit non address operand in command
+	 * bit 1 means address operand, which could be 32-bit
+	 * or 64-bit depending on different architectures.(
+	 * defined by "gmadr_bytes_in_cmd" in pgt_device.
+	 * No matter the address length, each address only takes
+	 * one bit in the bitmap.
+	 */
 	uint16_t addr_bitmap;
 
 	/*	flag == F_LEN_CONST : command length
