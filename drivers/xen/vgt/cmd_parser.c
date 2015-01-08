@@ -1273,6 +1273,19 @@ static int vgt_cmd_handler_3dstate_vertex_buffers(struct parser_exec_state *s)
 	return 0;
 }
 
+static int vgt_cmd_handler_3dstate_vertex_buffers_bdw(struct parser_exec_state *s)
+{
+	int length, offset;
+
+	length = cmd_length(s);
+
+	for (offset = 1; offset < length; offset += 4) {
+		address_audit(s, offset + 1);
+	}
+
+	return 0;
+}
+
 static int vgt_cmd_handler_3dstate_index_buffer(struct parser_exec_state *s)
 {
 	address_audit(s, 1);
@@ -1302,6 +1315,19 @@ static int vgt_cmd_handler_3dstate_constant_hsw(struct parser_exec_state *s)
 	address_audit(s, 4);
 	address_audit(s, 5);
 	address_audit(s, 6);
+
+	return 0;
+}
+
+static int vgt_cmd_handler_3dstate_constant_bdw(struct parser_exec_state *s)
+{
+	int offset = 3;
+	int cmd_len = cmd_length(s);
+
+	while (offset < cmd_len) {
+		address_audit(s, offset);
+		offset += gmadr_dw_number(s);
+	}
 
 	return 0;
 }
@@ -1360,6 +1386,16 @@ static int vgt_cmd_handler_mfx_pipe_buf_addr_state_hsw(struct parser_exec_state 
 	return 0;
 }
 
+static int vgt_cmd_handler_mfx_pipe_buf_addr_state_bdw(struct parser_exec_state *s)
+{
+	/*  address pattern of the command is like below:
+	 *  from bit0: "01010101 01010111 11111111 11111010 1010"
+	 */
+	vgt_cmd_addr_audit_with_bitmap(s, 0x055fffeaaaUL);
+
+	return 0;
+}
+
 static int vgt_cmd_handler_mfx_ind_obj_base_addr_state_hsw(struct parser_exec_state *s)
 {
 	int i;
@@ -1368,6 +1404,16 @@ static int vgt_cmd_handler_mfx_ind_obj_base_addr_state_hsw(struct parser_exec_st
 		address_audit(s, offset);
 		offset += gmadr_dw_number(s);
 	}
+	return 0;
+}
+
+static int vgt_cmd_handler_mfx_ind_obj_base_addr_state_bdw(struct parser_exec_state *s)
+{
+	/*  address pattern of the command is like below:
+	 *  from bit0: "10110110 11011010"
+	 */
+	vgt_cmd_addr_audit_with_bitmap(s, 0x5b6d);
+
 	return 0;
 }
 
@@ -1449,6 +1495,9 @@ static struct cmd_info cmd_info[] = {
 	{"MI_STORE_DATA_IMM", OP_MI_STORE_DATA_IMM, F_LEN_VAR, R_ALL, D_HSW,
 		ADDR_FIX_1(2), 10, NULL},
 
+	{"MI_STORE_DATA_IMM", OP_MI_STORE_DATA_IMM, F_LEN_VAR, R_ALL, D_BDW,
+		ADDR_FIX_1(1), 10, NULL},
+
 	{"MI_STORE_DATA_INDEX", OP_MI_STORE_DATA_INDEX, F_LEN_VAR, R_ALL, D_ALL,
 		0, 8, NULL},
 
@@ -1459,6 +1508,9 @@ static struct cmd_info cmd_info[] = {
 
 	{"MI_UPDATE_GTT", OP_MI_UPDATE_GTT, F_LEN_VAR, (R_VCS | R_BCS | R_VECS), D_PRE_BDW,
 		0, 6, vgt_cmd_handler_mi_update_gtt},
+
+	{"MI_UPDATE_GTT", OP_MI_UPDATE_GTT, F_LEN_VAR, R_ALL, D_BDW,
+		0, 10, vgt_cmd_handler_mi_update_gtt},
 
 	{"MI_STORE_REGISTER_MEM", OP_MI_STORE_REGISTER_MEM, F_LEN_VAR, R_ALL, D_ALL,
 		ADDR_FIX_1(2), 8, vgt_cmd_handler_srm},
@@ -1696,11 +1748,17 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_VERTEX_BUFFERS", OP_3DSTATE_VERTEX_BUFFERS, F_LEN_VAR, R_RCS,
 		D_PRE_BDW, 0, 8, vgt_cmd_handler_3dstate_vertex_buffers},
 
+	{"3DSTATE_VERTEX_BUFFERS", OP_3DSTATE_VERTEX_BUFFERS, F_LEN_VAR, R_RCS,
+		D_BDW, 0, 8, vgt_cmd_handler_3dstate_vertex_buffers_bdw},
+
 	{"3DSTATE_VERTEX_ELEMENTS", OP_3DSTATE_VERTEX_ELEMENTS, F_LEN_VAR, R_RCS,
 		D_ALL, 0, 8, NULL},
 
 	{"3DSTATE_INDEX_BUFFER", OP_3DSTATE_INDEX_BUFFER, F_LEN_VAR, R_RCS,
 		D_PRE_BDW, 0, 8, vgt_cmd_handler_3dstate_index_buffer},
+
+	{"3DSTATE_INDEX_BUFFER", OP_3DSTATE_INDEX_BUFFER, F_LEN_VAR, R_RCS,
+		D_BDW, ADDR_FIX_1(2), 8, NULL},
 
 	{"3DSTATE_VF_STATISTICS", OP_3DSTATE_VF_STATISTICS, F_LEN_CONST,
 		R_RCS, D_ALL, 0, 1, NULL},
@@ -1725,8 +1783,14 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_CONSTANT_GS", OP_3DSTATE_CONSTANT_GS, F_LEN_VAR, R_RCS,
 		D_PRE_BDW, 0, 8, vgt_cmd_handler_3dstate_constant_hsw},
 
+	{"3DSTATE_CONSTANT_GS", OP_3DSTATE_CONSTANT_GS, F_LEN_VAR, R_RCS,
+		D_BDW, 0, 8, vgt_cmd_handler_3dstate_constant_bdw},
+
 	{"3DSTATE_CONSTANT_PS", OP_3DSTATE_CONSTANT_PS, F_LEN_VAR, R_RCS,
 		D_PRE_BDW, 0, 8, vgt_cmd_handler_3dstate_constant_hsw},
+
+	{"3DSTATE_CONSTANT_PS", OP_3DSTATE_CONSTANT_PS, F_LEN_VAR, R_RCS,
+		D_BDW, 0, 8, vgt_cmd_handler_3dstate_constant_bdw},
 
 	{"3DSTATE_SAMPLE_MASK", OP_3DSTATE_SAMPLE_MASK, F_LEN_VAR, R_RCS,
 		D_ALL, 0, 8, NULL},
@@ -1734,8 +1798,14 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_CONSTANT_HS", OP_3DSTATE_CONSTANT_HS, F_LEN_VAR, R_RCS,
 		D_IVB|D_HSW, 0, 8, vgt_cmd_handler_3dstate_constant_hsw},
 
+	{"3DSTATE_CONSTANT_HS", OP_3DSTATE_CONSTANT_HS, F_LEN_VAR, R_RCS,
+		D_BDW, 0, 8, vgt_cmd_handler_3dstate_constant_bdw},
+
 	{"3DSTATE_CONSTANT_DS", OP_3DSTATE_CONSTANT_DS, F_LEN_VAR, R_RCS,
 		D_IVB|D_HSW, 0, 8, vgt_cmd_handler_3dstate_constant_hsw},
+
+	{"3DSTATE_CONSTANT_DS", OP_3DSTATE_CONSTANT_DS, F_LEN_VAR, R_RCS,
+		D_BDW, 0, 8, vgt_cmd_handler_3dstate_constant_bdw},
 
 	{"3DSTATE_HS", OP_3DSTATE_HS, F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
 
@@ -1831,14 +1901,26 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_SO_BUFFER", OP_3DSTATE_SO_BUFFER, F_LEN_VAR, R_RCS, D_IVB|D_HSW,
 		ADDR_FIX_2(2, 3), 8, NULL},
 
+	{"3DSTATE_SO_BUFFER", OP_3DSTATE_SO_BUFFER, F_LEN_VAR, R_RCS, D_BDW,
+		ADDR_FIX_2(2, 4), 8, NULL},
+
 	{"3DSTATE_BINDING_TABLE_POOL_ALLOC", OP_3DSTATE_BINDING_TABLE_POOL_ALLOC,
 		F_LEN_VAR, R_RCS, D_HSW, 0, 8, vgt_cmd_handler_3dstate_binding_table_pool_alloc},
+
+	{"3DSTATE_BINDING_TABLE_POOL_ALLOC", OP_3DSTATE_BINDING_TABLE_POOL_ALLOC,
+		F_LEN_VAR, R_RCS, D_BDW, ADDR_FIX_1(1), 8, NULL},
 
 	{"3DSTATE_GATHER_POOL_ALLOC", OP_3DSTATE_GATHER_POOL_ALLOC,
 		F_LEN_VAR, R_RCS, D_HSW, 0, 8, vgt_cmd_handler_3dstate_gather_pool_alloc},
 
+	{"3DSTATE_GATHER_POOL_ALLOC", OP_3DSTATE_GATHER_POOL_ALLOC,
+		F_LEN_VAR, R_RCS, D_BDW, ADDR_FIX_1(1), 8, NULL},
+
 	{"3DSTATE_DX9_CONSTANT_BUFFER_POOL_ALLOC", OP_3DSTATE_DX9_CONSTANT_BUFFER_POOL_ALLOC,
 		F_LEN_VAR, R_RCS, D_HSW, 0, 8, vgt_cmd_handler_3dstate_dx9_constant_buffer_pool_alloc},
+
+	{"3DSTATE_DX9_CONSTANT_BUFFER_POOL_ALLOC", OP_3DSTATE_DX9_CONSTANT_BUFFER_POOL_ALLOC,
+		F_LEN_VAR, R_RCS, D_BDW, ADDR_FIX_1(1), 8, NULL},
 
 	{"PIPE_CONTROL", OP_PIPE_CONTROL, F_LEN_VAR, R_RCS, D_ALL,
 		ADDR_FIX_1(2), 8, vgt_cmd_handler_pipe_control},
@@ -1855,6 +1937,9 @@ static struct cmd_info cmd_info[] = {
 	{"STATE_BASE_ADDRESS", OP_STATE_BASE_ADDRESS, F_LEN_VAR, R_RCS, D_PRE_BDW,
 		0, 8, vgt_cmd_handler_state_base_address},
 
+	{"STATE_BASE_ADDRESS", OP_STATE_BASE_ADDRESS, F_LEN_VAR, R_RCS, D_BDW,
+		ADDR_FIX_5(1, 3, 4, 5, 6), 8, NULL},
+
 	{"OP_3D_MEDIA_0_1_4", OP_3D_MEDIA_0_1_4, F_LEN_VAR, R_RCS, D_HSW_PLUS,
 		ADDR_FIX_1(1), 8, NULL},
 
@@ -1864,6 +1949,9 @@ static struct cmd_info cmd_info[] = {
 
 	{"3DSTATE_CONSTANT_VS", OP_3DSTATE_CONSTANT_VS, F_LEN_VAR, R_RCS, D_PRE_BDW,
 		0, 8, vgt_cmd_handler_3dstate_constant_hsw},
+
+	{"3DSTATE_CONSTANT_VS", OP_3DSTATE_CONSTANT_VS, F_LEN_VAR, R_RCS, D_BDW,
+		0, 8, vgt_cmd_handler_3dstate_constant_bdw},
 
 	{"MEDIA_INTERFACE_DESCRIPTOR_LOAD", OP_MEDIA_INTERFACE_DESCRIPTOR_LOAD,
 		F_LEN_VAR, R_RCS, D_ALL, 0, 16, NULL},
@@ -1902,14 +1990,25 @@ static struct cmd_info cmd_info[] = {
 	{"MFX_PIPE_BUF_ADDR_STATE", OP_MFX_PIPE_BUF_ADDR_STATE, F_LEN_VAR,
 		R_VCS, D_PRE_BDW, 0, 12, vgt_cmd_handler_mfx_pipe_buf_addr_state_hsw},
 
+	{"MFX_PIPE_BUF_ADDR_STATE", OP_MFX_PIPE_BUF_ADDR_STATE, F_LEN_VAR,
+		R_VCS, D_BDW, 0, 12, vgt_cmd_handler_mfx_pipe_buf_addr_state_bdw},
+
 	{"MFX_IND_OBJ_BASE_ADDR_STATE", OP_MFX_IND_OBJ_BASE_ADDR_STATE, F_LEN_VAR,
 		R_VCS, D_PRE_BDW, 0, 12, vgt_cmd_handler_mfx_ind_obj_base_addr_state_hsw},
+
+	{"MFX_IND_OBJ_BASE_ADDR_STATE", OP_MFX_IND_OBJ_BASE_ADDR_STATE, F_LEN_VAR,
+		R_VCS, D_BDW, 0, 12, vgt_cmd_handler_mfx_ind_obj_base_addr_state_bdw},
 
 	{"MFX_BSP_BUF_BASE_ADDR_STATE", OP_MFX_BSP_BUF_BASE_ADDR_STATE, F_LEN_VAR,
 		R_VCS, D_PRE_BDW, ADDR_FIX_3(1, 2, 3), 12, NULL},
 
+	{"MFX_BSP_BUF_BASE_ADDR_STATE", OP_MFX_BSP_BUF_BASE_ADDR_STATE, F_LEN_VAR,
+		R_VCS, D_BDW, ADDR_FIX_3(1, 3, 5), 12, NULL},
+
 	{"OP_2_0_0_5", OP_2_0_0_5, F_LEN_VAR,
-		R_VCS,D_PRE_BDW, ADDR_FIX_1(6), 12, NULL},
+		R_VCS, D_PRE_BDW, ADDR_FIX_1(6), 12, NULL},
+
+	{"OP_2_0_0_5", OP_2_0_0_5, F_LEN_VAR, R_VCS, D_BDW, 0, 12, NULL},
 
 	{"MFX_STATE_POINTER", OP_MFX_STATE_POINTER, F_LEN_VAR,
 		R_VCS, D_ALL, 0, 12, NULL},
