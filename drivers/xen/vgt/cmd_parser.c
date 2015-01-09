@@ -2055,17 +2055,43 @@ static int cmd_hash_init(struct pgt_device *pdev)
 	return 0;
 }
 
-/* This buffer is used by ftrace to store all commands copied from guest gma
- * space. Sometimes commands can cross pages, this should not be handled in
- * ftrace logic. So this is just used as a 'bounce buffer' */
-static u32 cmd_trace_buf[VGT_MAX_CMD_LENGTH];
+static void trace_cs_command(struct parser_exec_state *s)
+{
+	/* This buffer is used by ftrace to store all commands copied from guest gma
+	* space. Sometimes commands can cross pages, this should not be handled in
+	 * ftrace logic. So this is just used as a 'bounce buffer' */
+	u32 cmd_trace_buf[VGT_MAX_CMD_LENGTH];
+	int i;
+	u32 cmd_len = cmd_length(s);
+	/* The chosen value of VGT_MAX_CMD_LENGTH are just based on
+	 * following two considerations:
+	 * 1) From observation, most common ring commands is not that long.
+	 *    But there are execeptions. So it indeed makes sence to observe
+	 *    longer commands.
+	 * 2) From the performance and debugging point of view, dumping all
+	 *    contents of very commands is not necessary.
+	 * We mgith shrink VGT_MAX_CMD_LENGTH or remove this trace event in
+	 * future for performance considerations.
+	 */
+	if (unlikely(cmd_len > VGT_MAX_CMD_LENGTH)) {
+		vgt_dbg(VGT_DBG_CMD, "cmd length exceed tracing limitation!\n");
+		cmd_len = VGT_MAX_CMD_LENGTH;
+	}
+
+	for (i = 0; i < cmd_len; i++)
+		cmd_trace_buf[i] = cmd_val(s, i);
+
+	trace_vgt_command(s->vgt->vm_id, s->ring_id, s->ip_gma, cmd_trace_buf,
+			cmd_len, s->buf_type == RING_BUFFER_INSTRUCTION);
+
+}
 
 /* call the cmd handler, and advance ip */
 static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 {
 	struct cmd_info *info;
 
-	int rc = 0, i, cmd_len;
+	int rc = 0;
 
 	info = vgt_get_cmd_info(*s->ip_va, s->ring_id);
 	if (info == NULL) {
@@ -2097,34 +2123,12 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 			s->buf_type == RING_BUFFER_INSTRUCTION ?
 			"RB" : "BB",
 			s->ip_gma);
-	cmd_len = cmd_length(s);
-	for (i = 0; i < cmd_len; i++) {
+	for (i = 0; i < cmd_length(s); i++) {
 		klog_printk("%08x ", cmd_val(s, i));
 	}
 	klog_printk("\n");
 #endif
-
-	cmd_len = cmd_length(s);
-	/* The chosen value of VGT_MAX_CMD_LENGTH are just based on
-	 * following two considerations:
-	 * 1) From observation, most common ring commands is not that long.
-	 *    But there are execeptions. So it indeed makes sence to observe
-	 *    longer commands.
-	 * 2) From the performance and debugging point of view, dumping all
-	 *    contents of very commands is not necessary.
-	 * We mgith shrink VGT_MAX_CMD_LENGTH or remove this trace event in
-	 * future for performance considerations.
-	 */
-	if (unlikely(cmd_len > VGT_MAX_CMD_LENGTH)) {
-		vgt_dbg(VGT_DBG_CMD, "cmd length exceed tracing limitation!\n");
-		cmd_len = VGT_MAX_CMD_LENGTH;
-	}
-
-	for (i = 0; i < cmd_len; i++)
-		cmd_trace_buf[i] = cmd_val(s, i);
-
-	trace_vgt_command(s->vgt->vm_id, s->ring_id, s->ip_gma, cmd_trace_buf,
-			cmd_len, s->buf_type == RING_BUFFER_INSTRUCTION);
+	trace_cs_command(s);
 
 	if (info->handler) {
 		int post_handle = 0;
@@ -2137,7 +2141,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 			 * OP_MI_NOOP: only handles nooped MI_DISPLAY_FILP
 			 * to prevent the heavy usage of patch list.
 			 */
-			if (info->opcode == OP_MI_NOOP && cmd_len == 1)
+			if (info->opcode == OP_MI_NOOP && cmd_length(s) == 1)
 				post_handle = 0;
 		}
 
