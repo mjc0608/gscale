@@ -1177,11 +1177,11 @@ static int vgt_cmd_handler_mi_batch_buffer_start(struct parser_exec_state *s)
 	addr_type_update_snb(s);
 
 	if (s->buf_type == RING_BUFFER_INSTRUCTION) {
-		s->ret_ip_gma_ring = s->ip_gma + 2*sizeof(uint32_t);
+		s->ret_ip_gma_ring = s->ip_gma + cmd_length(s) * sizeof(uint32_t);
 		s->buf_type = BATCH_BUFFER_INSTRUCTION;
 	} else if (second_level) {
 		s->buf_type = BATCH_BUFFER_2ND_LEVEL;
-		s->ret_ip_gma_bb = s->ip_gma + 2*sizeof(uint32_t);
+		s->ret_ip_gma_bb = s->ip_gma + cmd_length(s) * sizeof(uint32_t);
 	}
 
 	klog_printk("MI_BATCH_BUFFER_START: Addr=%x ClearCommandBufferEnable=%d\n",
