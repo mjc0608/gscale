@@ -1236,31 +1236,7 @@ static unsigned int constant_buffer_address_offset_disable(struct parser_exec_st
 	return __vreg(s->vgt, _REG_RCS_INSTPM) & INSTPM_CONS_BUF_ADDR_OFFSET_DIS;
 }
 
-static int vgt_cmd_handler_3dstate_constant_gs(struct parser_exec_state *s)
-{
-	if (constant_buffer_address_offset_disable(s) == 1)
-		address_audit(s, 3);
-
-	address_audit(s, 4);
-	address_audit(s, 5);
-	address_audit(s, 6);
-
-	return 0;
-}
-
-static int vgt_cmd_handler_3dstate_constant_ps(struct parser_exec_state *s)
-{
-	if (constant_buffer_address_offset_disable(s) == 1)
-		address_audit(s, 3);
-
-	address_audit(s, 4);
-	address_audit(s, 5);
-	address_audit(s, 6);
-
-	return 0;
-}
-
-static int vgt_cmd_handler_3dstate_constant_vs(struct parser_exec_state *s)
+static int vgt_cmd_handler_3dstate_constant_hsw(struct parser_exec_state *s)
 {
 	if (constant_buffer_address_offset_disable(s) == 1)
 		address_audit(s, 3);
@@ -1313,28 +1289,6 @@ static int vgt_cmd_handler_3dstate_gather_pool_alloc(struct parser_exec_state *s
 static int vgt_cmd_handler_3dstate_dx9_constant_buffer_pool_alloc(struct parser_exec_state *s)
 {
 	return base_and_upper_addr_fix(s);
-}
-
-static int vgt_cmd_handler_op_3dstate_constant_hs(struct parser_exec_state *s)
-{
-	if (constant_buffer_address_offset_disable(s) == 1)
-		address_audit(s, 3);
-
-	address_audit(s, 4);
-	address_audit(s, 5);
-	address_audit(s, 6);
-	return 0;
-}
-
-static int vgt_cmd_handler_op_3dstate_constant_ds(struct parser_exec_state *s)
-{
-	if (constant_buffer_address_offset_disable(s) == 1)
-		address_audit(s, 3);
-
-	address_audit(s, 4);
-	address_audit(s, 5);
-	address_audit(s, 6);
-	return 0;
 }
 
 static int vgt_cmd_handler_mfx_pipe_buf_addr_state_hsw(struct parser_exec_state *s)
@@ -1707,19 +1661,19 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_WM", OP_3DSTATE_WM, F_LEN_VAR, R_RCS, D_ALL, 0, 8, NULL},
 
 	{"3DSTATE_CONSTANT_GS", OP_3DSTATE_CONSTANT_GS, F_LEN_VAR, R_RCS,
-		D_PRE_BDW, 0, 8, vgt_cmd_handler_3dstate_constant_gs},
+		D_PRE_BDW, 0, 8, vgt_cmd_handler_3dstate_constant_hsw},
 
 	{"3DSTATE_CONSTANT_PS", OP_3DSTATE_CONSTANT_PS, F_LEN_VAR, R_RCS,
-		D_PRE_BDW, 0, 8, vgt_cmd_handler_3dstate_constant_ps},
+		D_PRE_BDW, 0, 8, vgt_cmd_handler_3dstate_constant_hsw},
 
 	{"3DSTATE_SAMPLE_MASK", OP_3DSTATE_SAMPLE_MASK, F_LEN_VAR, R_RCS,
 		D_ALL, 0, 8, NULL},
 
 	{"3DSTATE_CONSTANT_HS", OP_3DSTATE_CONSTANT_HS, F_LEN_VAR, R_RCS,
-		D_IVB|D_HSW, 0, 8, vgt_cmd_handler_op_3dstate_constant_hs},
+		D_IVB|D_HSW, 0, 8, vgt_cmd_handler_3dstate_constant_hsw},
 
 	{"3DSTATE_CONSTANT_DS", OP_3DSTATE_CONSTANT_DS, F_LEN_VAR, R_RCS,
-		D_IVB|D_HSW, 0, 8, vgt_cmd_handler_op_3dstate_constant_ds},
+		D_IVB|D_HSW, 0, 8, vgt_cmd_handler_3dstate_constant_hsw},
 
 	{"3DSTATE_HS", OP_3DSTATE_HS, F_LEN_VAR, R_RCS, D_GEN7PLUS, 0, 8, NULL},
 
@@ -1847,7 +1801,7 @@ static struct cmd_info cmd_info[] = {
 	{"3DSTATE_SF", OP_3DSTATE_SF, F_LEN_VAR, R_RCS, D_ALL, 0, 8, NULL},
 
 	{"3DSTATE_CONSTANT_VS", OP_3DSTATE_CONSTANT_VS, F_LEN_VAR, R_RCS, D_PRE_BDW,
-		0, 8, vgt_cmd_handler_3dstate_constant_vs},
+		0, 8, vgt_cmd_handler_3dstate_constant_hsw},
 
 	{"MEDIA_INTERFACE_DESCRIPTOR_LOAD", OP_MEDIA_INTERFACE_DESCRIPTOR_LOAD,
 		F_LEN_VAR, R_RCS, D_ALL, 0, 16, NULL},
