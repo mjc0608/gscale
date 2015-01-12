@@ -31,6 +31,7 @@
 #include <xen/interface/hvm/hvm_op.h>
 
 #include "vgt.h"
+#include "trace.h"
 
 unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
 {

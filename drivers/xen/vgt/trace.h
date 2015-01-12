@@ -113,6 +113,143 @@ TRACE_EVENT(vgt_command,
 		TP_printk("%s", __entry->cmd_str)
 );
 
+TRACE_EVENT(spt_alloc,
+		TP_PROTO(int vm_id, void *spt, int type, unsigned long mfn, unsigned long gpt_gfn),
+
+		TP_ARGS(vm_id, spt, type, mfn, gpt_gfn),
+
+		TP_STRUCT__entry(
+			__field(int, vm_id)
+			__field(void *, spt)
+			__field(int, type)
+			__field(unsigned long, mfn)
+			__field(unsigned long, gpt_gfn)
+			),
+
+		TP_fast_assign(
+			__entry->vm_id = vm_id;
+			__entry->spt = spt;
+			__entry->type = type;
+			__entry->mfn = mfn;
+			__entry->gpt_gfn = gpt_gfn;
+		),
+
+		TP_printk("VM%d [alloc] spt %p type %d mfn 0x%lx gpt_gfn 0x%lx\n",
+				__entry->vm_id,
+				__entry->spt,
+				__entry->type,
+				__entry->mfn,
+				__entry->gpt_gfn)
+);
+
+TRACE_EVENT(spt_free,
+		TP_PROTO(int vm_id, void *spt, int type),
+
+		TP_ARGS(vm_id, spt, type),
+
+		TP_STRUCT__entry(
+			__field(int, vm_id)
+			__field(void *, spt)
+			__field(int, type)
+			),
+
+		TP_fast_assign(
+			__entry->vm_id = vm_id;
+			__entry->spt = spt;
+			__entry->type = type;
+		),
+
+		TP_printk("VM%u [free] spt %p type %d\n",
+				__entry->vm_id,
+				__entry->spt,
+				__entry->type)
+);
+
+#define MAX_BUF_LEN 256
+
+TRACE_EVENT(gma_index,
+		TP_PROTO(const char *prefix, unsigned long gma, unsigned long index),
+
+		TP_ARGS(prefix, gma, index),
+
+		TP_STRUCT__entry(
+			__array(char, buf, MAX_BUF_LEN)
+		),
+
+		TP_fast_assign(
+			snprintf(__entry->buf, MAX_BUF_LEN, "%s gma 0x%lx index 0x%lx\n", prefix, gma, index);
+		),
+
+		TP_printk("%s", __entry->buf)
+);
+
+TRACE_EVENT(gma_translate,
+		TP_PROTO(int vm_id, char *type, int ring_id, int pt_level, unsigned long gma, unsigned long gpa),
+
+		TP_ARGS(vm_id, type, ring_id, pt_level, gma, gpa),
+
+		TP_STRUCT__entry(
+			__array(char, buf, MAX_BUF_LEN)
+		),
+
+		TP_fast_assign(
+			snprintf(__entry->buf, MAX_BUF_LEN, "VM%d %s ring %d pt_level %d gma 0x%lx -> gpa 0x%lx\n",
+					vm_id, type, ring_id, pt_level, gma, gpa);
+		),
+
+		TP_printk("%s", __entry->buf)
+);
+
+TRACE_EVENT(spt_refcount,
+		TP_PROTO(int vm_id, char *action, void *spt, int before, int after),
+
+		TP_ARGS(vm_id, action, spt, before, after),
+
+		TP_STRUCT__entry(
+			__array(char, buf, MAX_BUF_LEN)
+		),
+
+		TP_fast_assign(
+			snprintf(__entry->buf, MAX_BUF_LEN, "VM%d [%s] spt %p before %d -> after %d\n",
+					vm_id, action, spt, before, after);
+		),
+
+		TP_printk("%s", __entry->buf)
+);
+
+TRACE_EVENT(spt_change,
+		TP_PROTO(int vm_id, char *action, void *spt, unsigned long gfn, int type),
+
+		TP_ARGS(vm_id, action, spt, gfn, type),
+
+		TP_STRUCT__entry(
+			__array(char, buf, MAX_BUF_LEN)
+		),
+
+		TP_fast_assign(
+			snprintf(__entry->buf, MAX_BUF_LEN, "VM%d [%s] spt %p gfn 0x%lx type %d\n",
+					vm_id, action, spt, gfn, type);
+		),
+
+		TP_printk("%s", __entry->buf)
+);
+
+TRACE_EVENT(guest_pt_change,
+		TP_PROTO(int vm_id, const char *tag, void *spt, int type, u64 v, unsigned long index),
+
+		TP_ARGS(vm_id, tag, spt, type, v, index),
+
+		TP_STRUCT__entry(
+			__array(char, buf, MAX_BUF_LEN)
+		),
+
+		TP_fast_assign(
+			snprintf(__entry->buf, MAX_BUF_LEN, "VM%d [%s] spt %p type %d entry 0x%llx index 0x%lx\n",
+					vm_id, tag, spt, type, v, index);
+		),
+
+		TP_printk("%s", __entry->buf)
+);
 #endif /* _VGT_TRACE_H_ */
 
 /* This part must be out of protection */
