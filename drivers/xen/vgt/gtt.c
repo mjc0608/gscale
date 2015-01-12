@@ -34,6 +34,102 @@
 #include "trace.h"
 
 /*
+ * Mappings between GTT_TYPE* enumerations.
+ * Following informations can be found according to the given type:
+ * - type of next level page table
+ * - type of entry inside this level page table
+ * - type of entry with PSE set
+ *
+ * If the given type doesn't have such a kind of information,
+ * e.g. give a l4 root entry type, then request to get its PSE type,
+ * give a PTE page table type, then request to get its next level page
+ * table type, as we know l4 root entry doesn't have a PSE bit,
+ * and a PTE page table doesn't have a next level page table type,
+ * GTT_TYPE_INVALID will be returned. This is useful when traversing a
+ * page table.
+ */
+
+struct gtt_type_table_entry {
+	gtt_type_t entry_type;
+	gtt_type_t next_pt_type;
+	gtt_type_t pse_entry_type;
+};
+
+#define GTT_TYPE_TABLE_ENTRY(type, e_type, npt_type, pse_type) \
+	[type] = { \
+		.entry_type = e_type, \
+		.next_pt_type = npt_type, \
+		.pse_entry_type = pse_type, \
+	}
+
+static struct gtt_type_table_entry gtt_type_table[] = {
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_ROOT_L4_ENTRY,
+			GTT_TYPE_PPGTT_ROOT_L4_ENTRY,
+			GTT_TYPE_PPGTT_PML4_PT,
+			GTT_TYPE_INVALID),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_PML4_PT,
+			GTT_TYPE_PPGTT_PML4_ENTRY,
+			GTT_TYPE_PPGTT_PDP_PT,
+			GTT_TYPE_INVALID),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_PML4_ENTRY,
+			GTT_TYPE_PPGTT_PML4_ENTRY,
+			GTT_TYPE_PPGTT_PDP_PT,
+			GTT_TYPE_INVALID),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_PDP_PT,
+			GTT_TYPE_PPGTT_PDP_ENTRY,
+			GTT_TYPE_PPGTT_PDE_PT,
+			GTT_TYPE_PPGTT_PTE_1G_ENTRY),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_ROOT_L3_ENTRY,
+			GTT_TYPE_PPGTT_ROOT_L3_ENTRY,
+			GTT_TYPE_PPGTT_PDE_PT,
+			GTT_TYPE_PPGTT_PTE_1G_ENTRY),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_PDP_ENTRY,
+			GTT_TYPE_PPGTT_PDP_ENTRY,
+			GTT_TYPE_PPGTT_PDE_PT,
+			GTT_TYPE_PPGTT_PTE_1G_ENTRY),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_PDE_PT,
+			GTT_TYPE_PPGTT_PDE_ENTRY,
+			GTT_TYPE_PPGTT_PTE_PT,
+			GTT_TYPE_PPGTT_PTE_2M_ENTRY),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_PDE_ENTRY,
+			GTT_TYPE_PPGTT_PDE_ENTRY,
+			GTT_TYPE_PPGTT_PTE_PT,
+			GTT_TYPE_PPGTT_PTE_2M_ENTRY),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_PTE_PT,
+			GTT_TYPE_PPGTT_PTE_4K_ENTRY,
+			GTT_TYPE_INVALID,
+			GTT_TYPE_INVALID),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_PTE_4K_ENTRY,
+			GTT_TYPE_PPGTT_PTE_4K_ENTRY,
+			GTT_TYPE_INVALID,
+			GTT_TYPE_INVALID),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_PTE_2M_ENTRY,
+			GTT_TYPE_PPGTT_PDE_ENTRY,
+			GTT_TYPE_INVALID,
+			GTT_TYPE_PPGTT_PTE_2M_ENTRY),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_PPGTT_PTE_1G_ENTRY,
+			GTT_TYPE_PPGTT_PDP_ENTRY,
+			GTT_TYPE_INVALID,
+			GTT_TYPE_PPGTT_PTE_1G_ENTRY),
+	GTT_TYPE_TABLE_ENTRY(GTT_TYPE_GGTT_PTE,
+			GTT_TYPE_GGTT_PTE,
+			GTT_TYPE_INVALID,
+			GTT_TYPE_INVALID),
+};
+
+static inline gtt_type_t get_next_pt_type(gtt_type_t type) {
+	return gtt_type_table[type].next_pt_type;
+}
+
+static inline gtt_type_t get_entry_type(gtt_type_t type) {
+	return gtt_type_table[type].entry_type;
+}
+
+static inline gtt_type_t get_pse_type(gtt_type_t type) {
+	return gtt_type_table[type].pse_entry_type;
+}
+
+/*
  * Guest page mainpulation APIs.
  */
 bool vgt_set_guest_page_writeprotection(struct vgt_device *vgt,

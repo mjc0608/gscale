@@ -416,6 +416,50 @@ enum vgt_ring_id {
 	MAX_ENGINES
 };
 
+typedef enum {
+	GTT_TYPE_INVALID = -1,
+
+	GTT_TYPE_GGTT_PTE,
+
+	GTT_TYPE_PPGTT_PTE_4K_ENTRY,
+	GTT_TYPE_PPGTT_PTE_2M_ENTRY,
+	GTT_TYPE_PPGTT_PTE_1G_ENTRY,
+
+	GTT_TYPE_PPGTT_PTE_ENTRY,
+
+	GTT_TYPE_PPGTT_PDE_ENTRY,
+	GTT_TYPE_PPGTT_PDP_ENTRY,
+	GTT_TYPE_PPGTT_PML4_ENTRY,
+
+	GTT_TYPE_PPGTT_ROOT_ENTRY,
+
+	GTT_TYPE_PPGTT_ROOT_L3_ENTRY,
+	GTT_TYPE_PPGTT_ROOT_L4_ENTRY,
+
+	GTT_TYPE_PPGTT_ENTRY,
+
+	GTT_TYPE_PPGTT_PTE_PT,
+	GTT_TYPE_PPGTT_PDE_PT,
+	GTT_TYPE_PPGTT_PDP_PT,
+	GTT_TYPE_PPGTT_PML4_PT,
+
+	GTT_TYPE_MAX,
+}gtt_type_t;
+
+#define gtt_type_is_entry(type) \
+	(type > GTT_TYPE_INVALID && type < GTT_TYPE_PPGTT_ENTRY \
+	 && type != GTT_TYPE_PPGTT_PTE_ENTRY \
+	 && type != GTT_TYPE_PPGTT_ROOT_ENTRY)
+
+#define gtt_type_is_pt(type) \
+	(type >= GTT_TYPE_PPGTT_PTE_PT && type < GTT_TYPE_MAX)
+
+#define gtt_type_is_pte_pt(type) \
+	(type == GTT_TYPE_PPGTT_PTE_PT)
+
+#define gtt_type_is_root_pointer(type) \
+	(gtt_type_is_entry(type) && type > GTT_TYPE_PPGTT_ROOT_ENTRY)
+
 struct vgt_vgtt_info {
 	DECLARE_HASHTABLE(guest_page_hash_table, VGT_HASH_BITS);
 	atomic_t n_write_protected_guest_page;
