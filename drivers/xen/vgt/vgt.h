@@ -416,6 +416,13 @@ enum vgt_ring_id {
 	MAX_ENGINES
 };
 
+struct vgt_vgtt_info {
+
+};
+
+extern bool vgt_init_vgtt(struct vgt_device *vgt);
+extern void vgt_clean_vgtt(struct vgt_device *vgt);
+
 extern enum vgt_pipe surf_used_pipe;
 
 struct pgt_device;
@@ -665,6 +672,7 @@ struct vgt_device {
 	DECLARE_HASHTABLE(wp_table, VGT_HASH_BITS);
 	vgt_ppgtt_pde_t	shadow_pde_table[VGT_PPGTT_PDE_ENTRIES];	/* current max PDE entries should be 512 for 2G mapping */
 	vgt_ppgtt_pte_t shadow_pte_table[VGT_PPGTT_PDE_ENTRIES]; /* Current PTE number is same as PDE entries */
+	struct vgt_vgtt_info gtt;
 
 	/* embedded context scheduler information */
 	struct vgt_sched_info sched_info;

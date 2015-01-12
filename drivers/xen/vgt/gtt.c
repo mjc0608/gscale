@@ -699,6 +699,16 @@ void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt)
 	}
 }
 
+bool vgt_init_vgtt(struct vgt_device *vgt)
+{
+	return true;
+}
+
+void vgt_clean_vgtt(struct vgt_device *vgt)
+{
+	return;
+}
+
 void vgt_reset_dom0_ppgtt_state(void)
 {
 	int i;
