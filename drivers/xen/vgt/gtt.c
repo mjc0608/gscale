@@ -33,6 +33,104 @@
 #include "vgt.h"
 #include "trace.h"
 
+/*
+ * Guest page mainpulation APIs.
+ */
+bool vgt_set_guest_page_writeprotection(struct vgt_device *vgt,
+		guest_page_t *guest_page)
+{
+	xen_hvm_vgt_wp_pages_t req;
+	int r;
+
+	if (guest_page->writeprotection)
+		return true;
+
+	memset(&req, 0, sizeof(xen_hvm_vgt_wp_pages_t));
+	req.domid = vgt->vm_id;
+	req.set = 1;
+	req.nr_pages = 1;
+	req.wp_pages[0] = guest_page->gfn;
+
+	r = HYPERVISOR_hvm_op(HVMOP_vgt_wp_pages, &req);
+	if (r) {
+		vgt_err("fail to set write protection.\n");
+		return false;
+	}
+
+	guest_page->writeprotection = true;
+
+	atomic_inc(&vgt->gtt.n_write_protected_guest_page);
+
+	return true;
+}
+
+bool vgt_clear_guest_page_writeprotection(struct vgt_device *vgt,
+		guest_page_t *guest_page)
+{
+	xen_hvm_vgt_wp_pages_t req;
+	int r;
+
+	if (!guest_page->writeprotection)
+		return true;
+
+	memset(&req, 0, sizeof(xen_hvm_vgt_wp_pages_t));
+	req.domid = vgt->vm_id;
+	req.set = 0;
+	req.nr_pages = 1;
+	req.wp_pages[0] = guest_page->gfn;
+
+	r = HYPERVISOR_hvm_op(HVMOP_vgt_wp_pages, &req);
+	if (r) {
+		vgt_err("fail to clear write protection.\n");
+		return false;
+	}
+
+	guest_page->writeprotection = false;
+
+	atomic_dec(&vgt->gtt.n_write_protected_guest_page);
+
+	return true;
+}
+
+bool vgt_init_guest_page(struct vgt_device *vgt, guest_page_t *guest_page,
+		unsigned long gfn, guest_page_handler_t handler, void *data)
+{
+	INIT_HLIST_NODE(&guest_page->node);
+
+	guest_page->vaddr = vgt_vmem_gpa_2_va(vgt, gfn << GTT_PAGE_SHIFT);
+	if (!guest_page->vaddr)
+		return false;
+
+	guest_page->writeprotection = false;
+	guest_page->gfn = gfn;
+	guest_page->handler = handler;
+	guest_page->data = data;
+
+	hash_add(vgt->gtt.guest_page_hash_table, &guest_page->node, guest_page->gfn);
+
+	return true;
+}
+
+void vgt_clean_guest_page(struct vgt_device *vgt, guest_page_t *guest_page)
+{
+	if(!hlist_unhashed(&guest_page->node))
+		hash_del(&guest_page->node);
+
+	if (guest_page->writeprotection)
+		vgt_clear_guest_page_writeprotection(vgt, guest_page);
+}
+
+guest_page_t *vgt_find_guest_page(struct vgt_device *vgt, unsigned long gfn)
+{
+	guest_page_t *guest_page;
+
+	hash_for_each_possible(vgt->gtt.guest_page_hash_table, guest_page, node, gfn)
+		if (guest_page->gfn == gfn)
+			return guest_page;
+
+	return NULL;
+}
+
 unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
 {
 	u64 addr = 0;
@@ -701,6 +799,10 @@ void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt)
 
 bool vgt_init_vgtt(struct vgt_device *vgt)
 {
+	struct vgt_vgtt_info *gtt = &vgt->gtt;
+
+	hash_init(gtt->guest_page_hash_table);
+
 	return true;
 }
 

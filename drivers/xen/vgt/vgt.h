@@ -417,11 +417,32 @@ enum vgt_ring_id {
 };
 
 struct vgt_vgtt_info {
-
+	DECLARE_HASHTABLE(guest_page_hash_table, VGT_HASH_BITS);
+	atomic_t n_write_protected_guest_page;
 };
 
 extern bool vgt_init_vgtt(struct vgt_device *vgt);
 extern void vgt_clean_vgtt(struct vgt_device *vgt);
+
+typedef bool guest_page_handler_t(void *gp, uint64_t pa, void *p_data, int bytes);
+
+typedef struct {
+	struct hlist_node node;
+	int writeprotection;
+	unsigned long gfn;
+	void *vaddr;
+	guest_page_handler_t *handler;
+	void *data;
+} guest_page_t;
+
+extern bool vgt_init_guest_page(struct vgt_device *vgt, guest_page_t *guest_page,
+		unsigned long gfn, guest_page_handler_t handler, void *data);
+extern void vgt_clean_guest_page(struct vgt_device *vgt, guest_page_t *guest_page);
+extern bool vgt_set_guest_page_writeprotection(struct vgt_device *vgt,
+		guest_page_t *guest_page);
+extern bool vgt_clear_guest_page_writeprotection(struct vgt_device *vgt,
+		guest_page_t *guest_page);
+extern guest_page_t *vgt_find_guest_page(struct vgt_device *vgt, unsigned long gfn);
 
 extern enum vgt_pipe surf_used_pipe;
 
