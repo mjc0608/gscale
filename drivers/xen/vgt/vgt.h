@@ -358,6 +358,8 @@ typedef struct {
 #define RB_DWORDS_TO_SAVE	32
 typedef	uint32_t	rb_dword;
 
+struct vgt_mm;
+
 typedef struct {
 	vgt_ringbuffer_t	vring;		/* guest view ring */
 	vgt_ringbuffer_t	sring;		/* shadow ring */
@@ -370,6 +372,7 @@ typedef struct {
 	vgt_ring_ppgtt_t	sring_ppgtt_info; /* shadow info */
 	u8 has_ppgtt_base_set : 1;	/* Is PP dir base set? */
 	u8 has_ppgtt_mode_enabled : 1;	/* Is ring's mode reg PPGTT enable set? */
+	struct vgt_mm *active_ppgtt_mm;
 
 	struct cmd_general_info	patch_list;
 	struct cmd_general_info	handler_list;
@@ -501,7 +504,36 @@ typedef struct {
 	unsigned long mfn;
 }shadow_page_t;
 
+typedef enum {
+	VGT_MM_GGTT = 0,
+	VGT_MM_PPGTT,
+} vgt_mm_type_t;
+
+struct vgt_mm {
+	vgt_mm_type_t type;
+	bool initialized;
+	bool shadowed;
+
+	gtt_type_t page_table_entry_type;
+	u32 page_table_entry_size;
+	u32 page_table_entry_cnt;
+	void *virtual_page_table;
+	void *shadow_page_table;
+
+	int page_table_level;
+	bool has_shadow_page_table;
+	u32 pde_base_index;
+
+	struct list_head list;
+	atomic_t refcount;
+	struct vgt_device *vgt;
+};
+
 struct vgt_vgtt_info {
+	struct vgt_mm *ggtt_mm;
+	unsigned long active_ppgtt_mm_bitmap;
+	struct list_head mm_list_head;
+
 	DECLARE_HASHTABLE(shadow_page_hash_table, VGT_HASH_BITS);
 	DECLARE_HASHTABLE(guest_page_hash_table, VGT_HASH_BITS);
 	atomic_t n_write_protected_guest_page;
