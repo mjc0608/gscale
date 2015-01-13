@@ -460,7 +460,16 @@ typedef enum {
 #define gtt_type_is_root_pointer(type) \
 	(gtt_type_is_entry(type) && type > GTT_TYPE_PPGTT_ROOT_ENTRY)
 
+typedef struct {
+	void *vaddr;
+	struct page *page;
+	gtt_type_t type;
+	struct hlist_node node;
+	unsigned long mfn;
+}shadow_page_t;
+
 struct vgt_vgtt_info {
+	DECLARE_HASHTABLE(shadow_page_hash_table, VGT_HASH_BITS);
 	DECLARE_HASHTABLE(guest_page_hash_table, VGT_HASH_BITS);
 	atomic_t n_write_protected_guest_page;
 };

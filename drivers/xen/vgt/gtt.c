@@ -227,6 +227,51 @@ guest_page_t *vgt_find_guest_page(struct vgt_device *vgt, unsigned long gfn)
 	return NULL;
 }
 
+/*
+ * Shadow page manipulation routines.
+ */
+static inline bool vgt_init_shadow_page(struct vgt_device *vgt,
+		shadow_page_t *sp, gtt_type_t type)
+{
+	sp->page = alloc_page(GFP_ATOMIC);
+	if (!sp->page) {
+		vgt_err("fail to allocate page for shadow_page_t.\n");
+		return false;
+	}
+
+	sp->vaddr = page_address(sp->page);
+	sp->type = type;
+	memset(sp->vaddr, 0, PAGE_SIZE);
+
+	INIT_HLIST_NODE(&sp->node);
+	sp->mfn = pfn_to_mfn(page_to_pfn(sp->page));
+	hash_add(vgt->gtt.shadow_page_hash_table, &sp->node, sp->mfn);
+
+	return true;
+}
+
+static inline void vgt_clean_shadow_page(shadow_page_t *sp)
+{
+	if(!hlist_unhashed(&sp->node))
+		hash_del(&sp->node);
+
+	if (sp->page)
+		__free_page(sp->page);
+}
+
+static inline shadow_page_t *vgt_find_shadow_page(struct vgt_device *vgt,
+		unsigned long mfn)
+{
+	shadow_page_t *shadow_page;
+
+	hash_for_each_possible(vgt->gtt.shadow_page_hash_table, shadow_page, node, mfn) {
+		if (shadow_page->mfn == mfn)
+			return shadow_page;
+	}
+
+	return NULL;
+}
+
 unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
 {
 	u64 addr = 0;
@@ -898,6 +943,7 @@ bool vgt_init_vgtt(struct vgt_device *vgt)
 	struct vgt_vgtt_info *gtt = &vgt->gtt;
 
 	hash_init(gtt->guest_page_hash_table);
+	hash_init(gtt->shadow_page_hash_table);
 
 	return true;
 }
