@@ -436,6 +436,57 @@ static inline gtt_entry_t *mm_set_entry(struct vgt_mm *mm,
 	mm_set_entry(mm, mm->shadow_page_table, e, index)
 
 /*
+ * PPGTT shadow page table helpers.
+ */
+static inline gtt_entry_t *ppgtt_spt_get_entry(ppgtt_spt_t *spt,
+		void *page_table, gtt_type_t type,
+		gtt_entry_t *e, unsigned long index)
+{
+	struct pgt_device *pdev = spt->vgt->pdev;
+	struct vgt_gtt_pte_ops *ops = pdev->gtt.pte_ops;
+
+	e->pdev = pdev;
+	e->type = get_entry_type(type);
+
+	ASSERT(gtt_type_is_entry(e->type));
+
+	ops->get_entry(page_table, e, index);
+	ops->test_pse(e);
+
+	return e;
+}
+
+static inline gtt_entry_t *ppgtt_spt_set_entry(ppgtt_spt_t *spt,
+		void *page_table, gtt_type_t type,
+		gtt_entry_t *e, unsigned long index)
+{
+	struct pgt_device *pdev = spt->vgt->pdev;
+	struct vgt_gtt_pte_ops *ops = pdev->gtt.pte_ops;
+
+	e->pdev = pdev;
+
+	ASSERT(gtt_type_is_entry(e->type));
+
+	return ops->set_entry(page_table, e, index);
+}
+
+#define ppgtt_get_guest_entry(spt, e, index) \
+	ppgtt_spt_get_entry(spt, spt->guest_page.vaddr, \
+		spt->guest_page_type, e, index)
+
+#define ppgtt_set_guest_entry(spt, e, index) \
+	ppgtt_spt_set_entry(spt, spt->guest_page.vaddr, \
+		spt->guest_page_type, e, index)
+
+#define ppgtt_get_shadow_entry(spt, e, index) \
+	ppgtt_spt_get_entry(spt, spt->shadow_page.vaddr, \
+		spt->shadow_page.type, e, index)
+
+#define ppgtt_set_shadow_entry(spt, e, index) \
+	ppgtt_spt_set_entry(spt, spt->shadow_page.vaddr, \
+		spt->shadow_page.type, e, index)
+
+/*
  * Guest page mainpulation APIs.
  */
 bool vgt_set_guest_page_writeprotection(struct vgt_device *vgt,
