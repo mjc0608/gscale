@@ -358,6 +358,29 @@ struct vgt_gtt_gma_ops gen8_gtt_gma_ops = {
 	.gma_to_pml4_index = gen8_gma_to_pml4_index,
 };
 
+static bool gtt_entry_p2m(struct vgt_device *vgt, gtt_entry_t *p, gtt_entry_t *m)
+{
+        struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
+        unsigned long gfn, mfn;
+
+        *m = *p;
+
+        if (!ops->test_present(p))
+                return true;
+
+        gfn = ops->get_pfn(p);
+
+        mfn = g2m_pfn(vgt->vm_id, gfn);
+        if (mfn == INVALID_MFN) {
+                vgt_err("fail to translate gfn: 0x%lx\n", gfn);
+                return false;
+        }
+
+        ops->set_pfn(m, mfn);
+
+        return true;
+}
+
 /*
  * MM helpers.
  */
@@ -627,6 +650,445 @@ static inline shadow_page_t *vgt_find_shadow_page(struct vgt_device *vgt,
 	}
 
 	return NULL;
+}
+
+#define guest_page_to_ppgtt_spt(ptr) \
+	container_of(ptr, ppgtt_spt_t, guest_page)
+
+#define shadow_page_to_ppgtt_spt(ptr) \
+	container_of(ptr, ppgtt_spt_t, shadow_page)
+
+static void ppgtt_free_shadow_page(ppgtt_spt_t *spt)
+{
+	trace_spt_free(spt->vgt->vm_id, spt, spt->shadow_page.type);
+
+	vgt_clean_shadow_page(&spt->shadow_page);
+	vgt_clean_guest_page(spt->vgt, &spt->guest_page);
+
+	kfree(spt);
+}
+
+static void ppgtt_free_all_shadow_page(struct vgt_device *vgt)
+{
+	struct hlist_node *n;
+	shadow_page_t *sp;
+	int i;
+
+	hash_for_each_safe(vgt->gtt.shadow_page_hash_table, i, n, sp, node)
+		ppgtt_free_shadow_page(shadow_page_to_ppgtt_spt(sp));
+
+	return;
+}
+
+static bool ppgtt_handle_guest_write_page_table(guest_page_t *gpt, gtt_entry_t *we,
+		unsigned long index);
+
+static bool ppgtt_write_protection_handler(void *gp, uint64_t pa, void *p_data, int bytes)
+{
+	guest_page_t *gpt = (guest_page_t *)gp;
+	ppgtt_spt_t *spt = guest_page_to_ppgtt_spt(gpt);
+	struct vgt_device *vgt = spt->vgt;
+	struct vgt_device_info *info = &vgt->pdev->device_info;
+	struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
+	gtt_type_t type = get_entry_type(spt->guest_page_type);
+	unsigned long index;
+	gtt_entry_t e;
+
+	if (bytes != 4 && bytes != 8)
+		return false;
+
+	if (!gpt->writeprotection)
+		return false;
+
+	e.val64 = 0;
+
+	if (info->gtt_entry_size == 4) {
+		gtt_init_entry(&e, type, vgt->pdev, *(u32 *)p_data);
+	} else if (info->gtt_entry_size == 8) {
+		ASSERT_VM(bytes == 8, vgt);
+		gtt_init_entry(&e, type, vgt->pdev, *(u64 *)p_data);
+	}
+
+	ops->test_pse(&e);
+
+	index = (pa & (PAGE_SIZE - 1)) >> info->gtt_entry_size_shift;
+
+	return ppgtt_handle_guest_write_page_table(gpt, &e, index);
+}
+
+static ppgtt_spt_t *ppgtt_alloc_shadow_page(struct vgt_device *vgt,
+		gtt_type_t type, unsigned long gpt_gfn)
+{
+	ppgtt_spt_t *spt = NULL;
+
+	spt = kzalloc(sizeof(*spt), GFP_ATOMIC);
+	if (!spt) {
+		vgt_err("fail to allocate spt_t.\n");
+		return NULL;
+	}
+
+	spt->vgt = vgt;
+	spt->guest_page_type = type;
+	atomic_set(&spt->refcount, 1);
+
+	/*
+	 * TODO: Guest page may be different with shadow page type,
+	 *	 if we support PSE page in future.
+	 */
+	if (!vgt_init_shadow_page(vgt, &spt->shadow_page, type)) {
+		vgt_err("fail to initialize shadow_page_t for spt.\n");
+		goto err;
+	}
+
+	if (!vgt_init_guest_page(vgt, &spt->guest_page,
+				gpt_gfn, ppgtt_write_protection_handler, NULL)) {
+		vgt_err("fail to initialize shadow_page_t for spt.\n");
+		goto err;
+	}
+
+	trace_spt_alloc(vgt->vm_id, spt, type, spt->shadow_page.mfn, gpt_gfn);
+
+	return spt;
+err:
+	ppgtt_free_shadow_page(spt);
+	return NULL;
+}
+
+static ppgtt_spt_t *ppgtt_find_shadow_page(struct vgt_device *vgt, unsigned long mfn)
+{
+	shadow_page_t *sp = vgt_find_shadow_page(vgt, mfn);
+
+	if (sp)
+		return shadow_page_to_ppgtt_spt(sp);
+
+	vgt_err("VM %d fail to find ppgtt shadow page: 0x%lx.\n",
+			vgt->vm_id, mfn);
+
+	return NULL;
+}
+
+#define pt_entry_size_shift(spt) \
+	((spt)->vgt->pdev->device_info.gtt_entry_size_shift)
+
+#define pt_entries(spt) \
+	(PAGE_SIZE >> pt_entry_size_shift(spt))
+
+#define for_each_present_guest_entry(spt, e, i) \
+	for (i = 0; i < pt_entries(spt); i++) \
+	if (spt->vgt->pdev->gtt.pte_ops->test_present(ppgtt_get_guest_entry(spt, e, i)))
+
+#define for_each_present_shadow_entry(spt, e, i) \
+	for (i = 0; i < pt_entries(spt); i++) \
+	if (spt->vgt->pdev->gtt.pte_ops->test_present(ppgtt_get_shadow_entry(spt, e, i)))
+
+static void ppgtt_get_shadow_page(ppgtt_spt_t *spt)
+{
+	int v = atomic_read(&spt->refcount);
+
+	trace_spt_refcount(spt->vgt->vm_id, "inc", spt, v, (v + 1));
+
+	atomic_inc(&spt->refcount);
+}
+
+static bool ppgtt_invalidate_shadow_page(ppgtt_spt_t *spt);
+
+static bool ppgtt_invalidate_shadow_page_by_shadow_entry(struct vgt_device *vgt,
+		gtt_entry_t *e)
+{
+	struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
+	ppgtt_spt_t *s;
+
+	if (!gtt_type_is_pt(get_next_pt_type(e->type)))
+		return false;
+
+	s = ppgtt_find_shadow_page(vgt, ops->get_pfn(e));
+	if (!s) {
+		vgt_err("VM %d fail to find shadow page: mfn: 0x%lx.\n",
+				vgt->vm_id, ops->get_pfn(e));
+		return false;
+	}
+
+	return ppgtt_invalidate_shadow_page(s);
+}
+
+static bool ppgtt_invalidate_shadow_page(ppgtt_spt_t *spt)
+{
+	gtt_entry_t e;
+	unsigned long index;
+	int v = atomic_read(&spt->refcount);
+
+	trace_spt_change(spt->vgt->vm_id, "die", spt,
+			spt->guest_page.gfn, spt->shadow_page.type);
+
+	trace_spt_refcount(spt->vgt->vm_id, "dec", spt, v, (v - 1));
+
+	if (atomic_dec_return(&spt->refcount) > 0)
+		return true;
+
+	if (gtt_type_is_pte_pt(spt->shadow_page.type))
+		goto release;
+
+	for_each_present_shadow_entry(spt, &e, index) {
+		if (!gtt_type_is_pt(get_next_pt_type(e.type))) {
+			vgt_err("VGT doesn't support pse bit now.\n");
+			return false;
+		}
+		if (!ppgtt_invalidate_shadow_page_by_shadow_entry(spt->vgt, &e))
+			goto fail;
+	}
+
+release:
+	trace_spt_change(spt->vgt->vm_id, "release", spt,
+			spt->guest_page.gfn, spt->shadow_page.type);
+	ppgtt_free_shadow_page(spt);
+	return true;
+fail:
+	vgt_err("fail: shadow page %p shadow entry 0x%llx type %d.\n",
+			spt, e.val64, e.type);
+	return false;
+}
+
+static bool ppgtt_populate_shadow_page(ppgtt_spt_t *spt);
+
+static ppgtt_spt_t *ppgtt_populate_shadow_page_by_guest_entry(struct vgt_device *vgt,
+		gtt_entry_t *we)
+{
+	struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
+	ppgtt_spt_t *s = NULL;
+	guest_page_t *g;
+
+	if (!gtt_type_is_pt(get_next_pt_type(we->type)))
+		goto fail;
+
+	g = vgt_find_guest_page(vgt, ops->get_pfn(we));
+	if (g) {
+		s = guest_page_to_ppgtt_spt(g);
+		ppgtt_get_shadow_page(s);
+	} else {
+		gtt_type_t type = get_next_pt_type(we->type);
+		s = ppgtt_alloc_shadow_page(vgt, type, ops->get_pfn(we));
+		if (!s)
+			goto fail;
+
+		if (!vgt_set_guest_page_writeprotection(vgt, &s->guest_page))
+			goto fail;
+
+		if (!ppgtt_populate_shadow_page(s))
+			goto fail;
+
+		trace_spt_change(vgt->vm_id, "new", s, s->guest_page.gfn, s->shadow_page.type);
+	}
+	return s;
+fail:
+	vgt_err("fail: shadow page %p guest entry 0x%llx type %d.\n",
+			s, we->val64, we->type);
+	return NULL;
+}
+
+static inline void ppgtt_generate_shadow_entry(gtt_entry_t *se,
+		ppgtt_spt_t *s, gtt_entry_t *ge)
+{
+	struct vgt_gtt_pte_ops *ops = s->vgt->pdev->gtt.pte_ops;
+
+	se->type = ge->type;
+	se->val64 = ge->val64;
+	se->pdev = ge->pdev;
+
+	ops->set_pfn(se, s->shadow_page.mfn);
+}
+
+static bool ppgtt_populate_shadow_page(ppgtt_spt_t *spt)
+{
+	struct vgt_device *vgt = spt->vgt;
+	ppgtt_spt_t *s;
+	gtt_entry_t se, ge;
+	unsigned long i;
+
+	trace_spt_change(spt->vgt->vm_id, "born", spt,
+			spt->guest_page.gfn, spt->shadow_page.type);
+
+	if (gtt_type_is_pte_pt(spt->shadow_page.type)) {
+		for_each_present_guest_entry(spt, &ge, i) {
+			if (!gtt_entry_p2m(vgt, &ge, &se))
+				goto fail;
+			ppgtt_set_shadow_entry(spt, &se, i);
+		}
+		return true;
+	}
+
+	for_each_present_guest_entry(spt, &ge, i) {
+		if (!gtt_type_is_pt(get_next_pt_type(ge.type))) {
+			vgt_err("VGT doesn't support pse bit now.\n");
+			goto fail;
+		}
+
+		s = ppgtt_populate_shadow_page_by_guest_entry(vgt, &ge);
+		if (!s)
+			goto fail;
+		ppgtt_get_shadow_entry(spt, &se, i);
+		ppgtt_generate_shadow_entry(&se, s, &ge);
+		ppgtt_set_shadow_entry(spt, &se, i);
+	}
+	return true;
+fail:
+	vgt_err("fail: shadow page %p guest entry 0x%llx type %d.\n",
+			spt, ge.val64, ge.type);
+	return false;
+}
+
+static bool ppgtt_handle_guest_entry_removal(guest_page_t *gpt,
+		gtt_entry_t *we, unsigned long index)
+{
+	ppgtt_spt_t *spt = guest_page_to_ppgtt_spt(gpt);
+	shadow_page_t *sp = &spt->shadow_page;
+	struct vgt_device *vgt = spt->vgt;
+	struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
+	gtt_entry_t e;
+
+	trace_guest_pt_change(spt->vgt->vm_id, "remove", spt, sp->type, we->val64, index);
+
+	if (gtt_type_is_pt(get_next_pt_type(we->type))) {
+		guest_page_t *g = vgt_find_guest_page(vgt, ops->get_pfn(we));
+		if (!g) {
+			vgt_err("fail to find guest page.\n");
+			goto fail;
+		}
+		if (!ppgtt_invalidate_shadow_page(guest_page_to_ppgtt_spt(g)))
+			goto fail;
+	}
+	ppgtt_get_shadow_entry(spt, &e, index);
+	e.val64 = 0;
+	ppgtt_set_shadow_entry(spt, &e, index);
+	return true;
+fail:
+	vgt_err("fail: shadow page %p guest entry 0x%llx type %d.\n",
+			spt, we->val64, we->type);
+	return false;
+}
+
+static bool ppgtt_handle_guest_entry_add(guest_page_t *gpt,
+		gtt_entry_t *we, unsigned long index)
+{
+	ppgtt_spt_t *spt = guest_page_to_ppgtt_spt(gpt);
+	shadow_page_t *sp = &spt->shadow_page;
+	struct vgt_device *vgt = spt->vgt;
+	gtt_entry_t m;
+	ppgtt_spt_t *s;
+
+	trace_guest_pt_change(spt->vgt->vm_id, "add", spt, sp->type, we->val64, index);
+
+	if (gtt_type_is_pt(get_next_pt_type(we->type))) {
+		s = ppgtt_populate_shadow_page_by_guest_entry(vgt, we);
+		if (!s)
+			goto fail;
+		ppgtt_get_shadow_entry(spt, &m, index);
+		ppgtt_generate_shadow_entry(&m, s, we);
+		ppgtt_set_shadow_entry(spt, &m, index);
+	} else {
+		if (!gtt_entry_p2m(vgt, we, &m))
+			goto fail;
+		ppgtt_set_shadow_entry(spt, &m, index);
+	}
+
+	return true;
+
+fail:
+	vgt_err("fail: spt %p guest entry 0x%llx type %d.\n", spt, we->val64, we->type);
+	return false;
+}
+
+/*
+ * The heart of PPGTT shadow page table.
+ */
+static bool ppgtt_handle_guest_write_page_table(guest_page_t *gpt, gtt_entry_t *we,
+		unsigned long index)
+{
+	ppgtt_spt_t *spt = guest_page_to_ppgtt_spt(gpt);
+	struct vgt_device *vgt = spt->vgt;
+	struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
+	gtt_entry_t ge;
+
+	int old_present, new_present;
+
+	ppgtt_get_guest_entry(spt, &ge, index);
+
+	old_present = ops->test_present(&ge);
+	new_present = ops->test_present(we);
+
+	ppgtt_set_guest_entry(spt, we, index);
+
+	if (old_present && new_present) {
+		if (!ppgtt_handle_guest_entry_removal(gpt, &ge, index)
+		|| !ppgtt_handle_guest_entry_add(gpt, we, index))
+			goto fail;
+	} else if (!old_present && new_present) {
+		if (!ppgtt_handle_guest_entry_add(gpt, we, index))
+			goto fail;
+	} else if (old_present && !new_present) {
+		if (!ppgtt_handle_guest_entry_removal(gpt, &ge, index))
+			goto fail;
+	}
+	return true;
+fail:
+	vgt_err("fail: shadow page %p guest entry 0x%llx type %d.\n",
+			spt, we->val64, we->type);
+	return false;
+}
+
+bool ppgtt_handle_guest_write_root_pointer(struct vgt_mm *mm,
+		gtt_entry_t *we, unsigned long index)
+{
+	struct vgt_device *vgt = mm->vgt;
+	struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
+	ppgtt_spt_t *spt = NULL;
+	gtt_entry_t e;
+
+	if (mm->type != VGT_MM_PPGTT || !mm->shadowed)
+		return false;
+
+	trace_guest_pt_change(vgt->vm_id, __func__, NULL,
+			we->type, we->val64, index);
+
+	ppgtt_get_guest_root_entry(mm, &e, index);
+
+	if (ops->test_present(&e)) {
+		ppgtt_get_shadow_root_entry(mm, &e, index);
+
+		trace_guest_pt_change(vgt->vm_id, "destroy old root pointer",
+				spt, e.type, e.val64, index);
+
+		if (gtt_type_is_pt(get_next_pt_type(e.type))) {
+			if (!ppgtt_invalidate_shadow_page_by_shadow_entry(vgt, &e))
+				goto fail;
+		} else {
+			vgt_err("VGT doesn't support pse bit now.\n");
+			goto fail;
+		}
+		e.val64 = 0;
+		ppgtt_set_shadow_root_entry(mm, &e, index);
+	}
+
+	if (ops->test_present(we)) {
+		if (gtt_type_is_pt(get_next_pt_type(we->type))) {
+			spt = ppgtt_populate_shadow_page_by_guest_entry(vgt, we);
+			if (!spt) {
+				vgt_err("fail to populate root pointer.\n");
+				goto fail;
+			}
+			ppgtt_generate_shadow_entry(&e, spt, we);
+			ppgtt_set_shadow_root_entry(mm, &e, index);
+		} else {
+			vgt_err("VGT doesn't support pse bit now.\n");
+			goto fail;
+		}
+		trace_guest_pt_change(vgt->vm_id, "populate root pointer",
+				spt, e.type, e.val64, index);
+	}
+	return true;
+fail:
+	vgt_err("fail: shadow page %p guest entry 0x%llx type %d.\n",
+			spt, we->val64, we->type);
+	return false;
 }
 
 unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
@@ -1307,6 +1769,8 @@ bool vgt_init_vgtt(struct vgt_device *vgt)
 
 void vgt_clean_vgtt(struct vgt_device *vgt)
 {
+	ppgtt_free_all_shadow_page(vgt);
+
 	return;
 }
 

@@ -472,6 +472,12 @@ typedef struct {
 	struct pgt_device *pdev;
 }gtt_entry_t;
 
+#define gtt_init_entry(e, t, p, v) do { \
+	(e)->type = t; \
+	(e)->pdev = p; \
+	memcpy(&(e)->val64, &v, sizeof(v)); \
+}while(0)
+
 struct vgt_gtt_pte_ops {
 	gtt_entry_t *(*get_entry)(void *pt, gtt_entry_t *e, unsigned long index);
 	gtt_entry_t *(*set_entry)(void *pt, gtt_entry_t *e, unsigned long index);
