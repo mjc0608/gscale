@@ -553,6 +553,14 @@ typedef struct {
 	void *data;
 } guest_page_t;
 
+typedef struct {
+	shadow_page_t shadow_page;
+	guest_page_t guest_page;
+	gtt_type_t guest_page_type;
+	atomic_t refcount;
+	struct vgt_device *vgt;
+} ppgtt_spt_t;
+
 extern bool vgt_init_guest_page(struct vgt_device *vgt, guest_page_t *guest_page,
 		unsigned long gfn, guest_page_handler_t handler, void *data);
 extern void vgt_clean_guest_page(struct vgt_device *vgt, guest_page_t *guest_page);
