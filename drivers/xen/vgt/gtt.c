@@ -359,6 +359,83 @@ struct vgt_gtt_gma_ops gen8_gtt_gma_ops = {
 };
 
 /*
+ * MM helpers.
+ */
+static inline gtt_entry_t *mm_get_entry(struct vgt_mm *mm,
+		void *page_table, gtt_entry_t *e,
+		unsigned long index)
+{
+	struct pgt_device *pdev = mm->vgt->pdev;
+	struct vgt_gtt_pte_ops *ops = pdev->gtt.pte_ops;
+
+	e->pdev = pdev;
+	e->type = mm->page_table_entry_type;
+
+	/*
+	 * If this read goes to HW, we translate
+	 * the relative index to absolute index
+	 * for pre-bdw platform.
+	 */
+	if (IS_PREBDW(pdev)) {
+		if (mm->type == VGT_MM_PPGTT && !page_table)
+			index += mm->pde_base_index;
+	}
+
+	ops->get_entry(page_table, e, index);
+	ops->test_pse(e);
+
+	return e;
+}
+
+static inline gtt_entry_t *mm_set_entry(struct vgt_mm *mm,
+		void *page_table, gtt_entry_t *e,
+		unsigned long index)
+{
+	struct pgt_device *pdev = mm->vgt->pdev;
+	struct vgt_gtt_pte_ops *ops = pdev->gtt.pte_ops;
+
+	e->pdev = pdev;
+
+	/*
+	 * If this write goes to HW, we translate
+	 * the relative index to absolute index
+	 * for pre-bdw platform.
+	 */
+	if (IS_PREBDW(pdev)) {
+		if (mm->type == VGT_MM_PPGTT && !page_table)
+			index += mm->pde_base_index;
+	}
+
+	return ops->set_entry(page_table, e, index);
+}
+
+#define ggtt_get_guest_entry(mm, e, index) \
+	(mm->vgt->vm_id == 0) ? \
+	mm_get_entry(mm, NULL, e, index) : \
+	mm_get_entry(mm, mm->virtual_page_table, e, index)
+
+#define ggtt_set_guest_entry(mm, e, index) \
+	mm_set_entry(mm, mm->virtual_page_table, e, index)
+
+#define ggtt_get_shadow_entry(mm, e, index) \
+	mm_get_entry(mm, mm->shadow_page_table, e, index)
+
+#define ggtt_set_shadow_entry(mm, e, index) \
+	mm_set_entry(mm, mm->shadow_page_table, e, index)
+
+#define ppgtt_get_guest_root_entry(mm, e, index) \
+	mm_get_entry(mm, mm->virtual_page_table, e, index)
+
+#define ppgtt_set_guest_root_entry(mm, e, index) \
+	mm_set_entry(mm, mm->virtual_page_table, e, index)
+
+#define ppgtt_get_shadow_root_entry(mm, e, index) \
+	mm_get_entry(mm, mm->shadow_page_table, e, index)
+
+#define ppgtt_set_shadow_root_entry(mm, e, index) \
+	mm_set_entry(mm, mm->shadow_page_table, e, index)
+
+/*
  * Guest page mainpulation APIs.
  */
 bool vgt_set_guest_page_writeprotection(struct vgt_device *vgt,
