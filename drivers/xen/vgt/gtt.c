@@ -130,6 +130,235 @@ static inline gtt_type_t get_pse_type(gtt_type_t type) {
 }
 
 /*
+ * Per-platform GTT entry routines.
+ */
+static gtt_entry_t *gtt_get_entry32(void *pt, gtt_entry_t *e,
+		unsigned long index)
+{
+	struct vgt_device_info *info = &e->pdev->device_info;
+
+	ASSERT(info->gtt_entry_size == 4);
+
+	if (!pt) {
+		e->val32[0] = vgt_read_gtt(e->pdev, index);
+		e->val32[1] = 0;
+	} else {
+		e->val32[0] = *((u32 *)pt + index);
+		e->val32[1] = 0;
+	}
+	return e;
+}
+
+static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
+		unsigned long index)
+{
+	struct vgt_device_info *info = &e->pdev->device_info;
+
+	ASSERT(info->gtt_entry_size == 4);
+
+	if (!pt)
+		vgt_write_gtt(e->pdev, index, e->val32[0]);
+	else
+		*((u32 *)pt + index) = e->val32[0];
+	/* Non-LLC machine vlv needs clflush here. */
+	return e;
+}
+
+static inline gtt_entry_t *gtt_get_entry64(void *pt, gtt_entry_t *e,
+		unsigned long index)
+{
+	struct vgt_device_info *info = &e->pdev->device_info;
+
+	ASSERT(info->gtt_entry_size == 8);
+
+	if (!pt)
+		e->val64 = vgt_read_gtt64(e->pdev, index);
+	else
+		e->val64 = *((u64 *)pt + index);
+
+	return e;
+}
+
+static inline gtt_entry_t *gtt_set_entry64(void *pt, gtt_entry_t *e,
+		unsigned long index)
+{
+	struct vgt_device_info *info = &e->pdev->device_info;
+
+	ASSERT(info->gtt_entry_size == 8);
+
+	if (!pt)
+		vgt_write_gtt64(e->pdev, index, e->val64);
+	else
+		*((u64 *)pt + index) = e->val64;
+	/* Non-LLC machine chv needs clflush here. */
+	return e;
+}
+
+static unsigned long gen7_gtt_get_pfn(gtt_entry_t *e)
+{
+	u32 pte = e->val32[0];
+	u64 addr = 0;
+
+	if (IS_SNB(e->pdev) || IS_IVB(e->pdev))
+		addr = (((u64)pte & 0xff0) << 28) | (u64)(pte & 0xfffff000);
+	else if (IS_HSW(e->pdev))
+		addr = (((u64)pte & 0x7f0) << 28) | (u64)(pte & 0xfffff000);
+
+	return (addr >> GTT_PAGE_SHIFT);
+}
+
+static void gen7_gtt_set_pfn(gtt_entry_t *e, unsigned long pfn)
+{
+	u64 addr = pfn << GTT_PAGE_SHIFT;
+	u32 addr_mask = 0, ctl_mask = 0;
+	u32 old_pte = e->val32[0];
+
+	if (IS_SNB(e->pdev) || IS_IVB(e->pdev)) {
+		addr_mask = 0xff0;
+		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7;
+	} else if (IS_HSW(e->pdev)) {
+		addr_mask = 0x7f0;
+		ctl_mask = _REGBIT_PTE_CTL_MASK_GEN7_5;
+	}
+
+	e->val32[0] = (addr & ~0xfff) | ((addr >> 28) & addr_mask);
+	e->val32[0] |= (old_pte & ctl_mask);
+	e->val32[0] |= _REGBIT_PTE_VALID;
+
+	return;
+}
+
+static bool gen7_gtt_test_present(gtt_entry_t *e)
+{
+	return (e->val32[0] & _REGBIT_PTE_VALID);
+}
+
+static bool gen7_gtt_test_pse(gtt_entry_t *e)
+{
+	return false;
+}
+
+static unsigned long gen8_gtt_get_pfn(gtt_entry_t *e)
+{
+	if (e->type == GTT_TYPE_PPGTT_PTE_1G_ENTRY)
+		return (e->val64 & (0x1ff << 30)) >> 12;
+	else if (e->type == GTT_TYPE_PPGTT_PTE_2M_ENTRY)
+		return (e->val64 & (0x3ffff << 21)) >> 12;
+	else
+		return (e->val64 >> 12) & 0x7ffffff;
+}
+
+static void gen8_gtt_set_pfn(gtt_entry_t *e, unsigned long pfn)
+{
+	if (e->type == GTT_TYPE_PPGTT_PTE_1G_ENTRY) {
+		e->val64 &= ~(0x1ff << 30);
+		pfn &= ((0x1ff << 30) >> 12);
+	} else if (e->type == GTT_TYPE_PPGTT_PTE_2M_ENTRY) {
+		e->val64 &= ~(0x3ffff << 21);
+		pfn &= ((0x3ffff << 21) >> 12);
+	} else {
+		e->val64 &= ~(0x7ffffff << 12);
+		pfn &= 0x7ffffff;
+	}
+
+	e->val64 |= (pfn << 12);
+}
+
+static bool gen8_gtt_test_pse(gtt_entry_t *e)
+{
+	/* Entry doesn't have PSE bit. */
+	if (get_pse_type(e->type) == GTT_TYPE_INVALID)
+		return false;
+
+	e->type = get_entry_type(e->type);
+	if (!(e->val64 & (1 << 7)))
+		return false;
+
+	e->type = get_pse_type(e->type);
+	return true;
+}
+
+static bool gen8_gtt_test_present(gtt_entry_t *e)
+{
+	/*
+	 * i915 writes PDP root pointer registers without present bit,
+	 * it also works, so we need to treat root pointer entry
+	 * specifically.
+	 */
+	if (e->type == GTT_TYPE_PPGTT_ROOT_L3_ENTRY
+			|| e->type == GTT_TYPE_PPGTT_ROOT_L4_ENTRY)
+		return (e->val64 != 0);
+	else
+		return (e->val32[0] & _REGBIT_PTE_VALID);
+}
+
+static void gtt_entry_clear_present(gtt_entry_t *e)
+{
+	e->val32[0] &= ~_REGBIT_PTE_VALID;
+}
+
+/*
+ * Per-platform GMA routines.
+ */
+static unsigned long gma_to_ggtt_pte_index(unsigned long gma)
+{
+	unsigned long x = (gma >> GTT_PAGE_SHIFT);
+	trace_gma_index(__func__, gma, x);
+	return x;
+}
+
+#define DEFINE_PPGTT_GMA_TO_INDEX(prefix, ename, exp) \
+	static unsigned long prefix##_gma_to_##ename##_index(unsigned long gma) { \
+		unsigned long x = (exp); \
+		trace_gma_index(__func__, gma, x); \
+		return x; \
+	}
+
+DEFINE_PPGTT_GMA_TO_INDEX(gen7, pte, (gma >> 12 & 0x3ff));
+DEFINE_PPGTT_GMA_TO_INDEX(gen7, pde, (gma >> 22 & 0x1ff));
+
+DEFINE_PPGTT_GMA_TO_INDEX(gen8, pte, (gma >> 12 & 0x1ff));
+DEFINE_PPGTT_GMA_TO_INDEX(gen8, pde, (gma >> 21 & 0x1ff));
+DEFINE_PPGTT_GMA_TO_INDEX(gen8, l3_pdp, (gma >> 30 & 0x3));
+DEFINE_PPGTT_GMA_TO_INDEX(gen8, l4_pdp, (gma >> 30 & 0x1ff));
+DEFINE_PPGTT_GMA_TO_INDEX(gen8, pml4, (gma >> 39 & 0x1ff));
+
+struct vgt_gtt_pte_ops gen7_gtt_pte_ops = {
+	.get_entry = gtt_get_entry32,
+	.set_entry = gtt_set_entry32,
+	.clear_present = gtt_entry_clear_present,
+	.test_present = gen7_gtt_test_present,
+	.test_pse = gen7_gtt_test_pse,
+	.get_pfn = gen7_gtt_get_pfn,
+	.set_pfn = gen7_gtt_set_pfn,
+};
+
+struct vgt_gtt_gma_ops gen7_gtt_gma_ops = {
+	.gma_to_ggtt_pte_index = gma_to_ggtt_pte_index,
+	.gma_to_pte_index = gen7_gma_to_pte_index,
+	.gma_to_pde_index = gen7_gma_to_pde_index,
+};
+
+struct vgt_gtt_pte_ops gen8_gtt_pte_ops = {
+	.get_entry = gtt_get_entry64,
+	.set_entry = gtt_set_entry64,
+	.clear_present = gtt_entry_clear_present,
+	.test_present = gen8_gtt_test_present,
+	.test_pse = gen8_gtt_test_pse,
+	.get_pfn = gen8_gtt_get_pfn,
+	.set_pfn = gen8_gtt_set_pfn,
+};
+
+struct vgt_gtt_gma_ops gen8_gtt_gma_ops = {
+	.gma_to_ggtt_pte_index = gma_to_ggtt_pte_index,
+	.gma_to_pte_index = gen8_gma_to_pte_index,
+	.gma_to_pde_index = gen8_gma_to_pde_index,
+	.gma_to_l3_pdp_index = gen8_gma_to_l3_pdp_index,
+	.gma_to_l4_pdp_index = gen8_gma_to_l4_pdp_index,
+	.gma_to_pml4_index = gen8_gma_to_pml4_index,
+};
+
+/*
  * Guest page mainpulation APIs.
  */
 bool vgt_set_guest_page_writeprotection(struct vgt_device *vgt,

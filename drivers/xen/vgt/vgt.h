@@ -461,6 +461,39 @@ typedef enum {
 	(gtt_type_is_entry(type) && type > GTT_TYPE_PPGTT_ROOT_ENTRY)
 
 typedef struct {
+	union {
+		u32 val32[2];
+		u64 val64;
+	};
+	gtt_type_t type;
+	struct pgt_device *pdev;
+}gtt_entry_t;
+
+struct vgt_gtt_pte_ops {
+	gtt_entry_t *(*get_entry)(void *pt, gtt_entry_t *e, unsigned long index);
+	gtt_entry_t *(*set_entry)(void *pt, gtt_entry_t *e, unsigned long index);
+	bool (*test_present)(gtt_entry_t *e);
+	void (*clear_present)(gtt_entry_t *e);
+	bool (*test_pse)(gtt_entry_t *e);
+	void (*set_pfn)(gtt_entry_t *e, unsigned long pfn);
+	unsigned long (*get_pfn)(gtt_entry_t *e);
+};
+
+struct vgt_gtt_gma_ops {
+	unsigned long (*gma_to_ggtt_pte_index)(unsigned long gma);
+	unsigned long (*gma_to_pte_index)(unsigned long gma);
+	unsigned long (*gma_to_pde_index)(unsigned long gma);
+	unsigned long (*gma_to_l3_pdp_index)(unsigned long gma);
+	unsigned long (*gma_to_l4_pdp_index)(unsigned long gma);
+	unsigned long (*gma_to_pml4_index)(unsigned long gma);
+};
+
+extern struct vgt_gtt_pte_ops gen7_gtt_pte_ops;
+extern struct vgt_gtt_pte_ops gen8_gtt_pte_ops;
+extern struct vgt_gtt_gma_ops gen7_gtt_gma_ops;
+extern struct vgt_gtt_gma_ops gen8_gtt_gma_ops;
+
+typedef struct {
 	void *vaddr;
 	struct page *page;
 	gtt_type_t type;
@@ -960,6 +993,11 @@ struct vgt_device_info {
 	u32 gmadr_bytes_in_cmd;
 };
 
+struct vgt_gtt_info {
+	struct vgt_gtt_pte_ops *pte_ops;
+	struct vgt_gtt_gma_ops *gma_ops;
+};
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list; /* list node for 'pgt_devices' */
@@ -1007,6 +1045,8 @@ struct pgt_device {
 	u32 ring_xxx[MAX_ENGINES];
 	u8 ring_xxx_bit[MAX_ENGINES];
 	u8 ring_xxx_valid;
+
+	struct vgt_gtt_info gtt;
 
 	struct gt_port ports[I915_MAX_PORTS];
 

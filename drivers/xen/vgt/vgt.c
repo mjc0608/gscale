@@ -554,6 +554,9 @@ static bool vgt_initialize_platform(struct pgt_device *pdev)
 	/* this check is broken on SNB */
 	pdev->ring_xxx_valid = 0;
 
+	pdev->gtt.pte_ops = &gen7_gtt_pte_ops;
+	pdev->gtt.gma_ops = &gen7_gtt_gma_ops;
+
 	if (IS_HSW(pdev)) {
 		pdev->max_engines = 4;
 		pdev->ring_mmio_base[RING_BUFFER_VECS] = _REG_VECS_TAIL;
@@ -575,6 +578,9 @@ static bool vgt_initialize_platform(struct pgt_device *pdev)
 		pdev->ring_mmio_base[RING_BUFFER_VECS] = _REG_VECS_TAIL;
 		pdev->ring_mi_mode[RING_BUFFER_VECS] = _REG_VECS_MI_MODE;
 		pdev->ring_xxx_valid = 0;
+
+		pdev->gtt.pte_ops = &gen8_gtt_pte_ops;
+		pdev->gtt.gma_ops = &gen8_gtt_gma_ops;
 	} else {
 		vgt_err("Unsupported platform.\n");
 		return false;
