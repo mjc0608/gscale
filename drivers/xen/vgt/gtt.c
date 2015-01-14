@@ -1299,6 +1299,127 @@ fail:
 	return NULL;
 }
 
+/*
+ * GTT MMIO emulation.
+ */
+bool gtt_mmio_read(struct vgt_device *vgt,
+	unsigned int off, void *p_data, unsigned int bytes)
+{
+	struct vgt_mm *ggtt_mm = vgt->gtt.ggtt_mm;
+	struct vgt_device_info *info = &vgt->pdev->device_info;
+	unsigned long index = off >> info->gtt_entry_size_shift;
+	gtt_entry_t e;
+
+	if (bytes != 4 && bytes != 8)
+		return false;
+
+	ggtt_get_guest_entry(ggtt_mm, &e, index);
+
+	if (bytes == 4 && info->gtt_entry_size == 4)
+		*(u32 *)p_data = e.val32[0];
+	else if (info->gtt_entry_size == 8)
+		memcpy(p_data, &e.val64 + (off & 0x7), bytes);
+
+	return true;
+}
+
+static bool process_ppgtt_root_pointer(struct vgt_device *vgt,
+		gtt_entry_t *ge, unsigned int gtt_index)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_mm *mm = NULL;
+	gtt_entry_t e;
+	int index;
+	struct list_head *pos;
+
+	if (!IS_PREBDW(pdev))
+		return false;
+
+	list_for_each(pos, &vgt->gtt.mm_list_head) {
+		struct vgt_mm *ppgtt_mm = container_of(pos, struct vgt_mm, list);
+		if (ppgtt_mm->type != VGT_MM_PPGTT || !ppgtt_mm->initialized)
+			continue;
+
+		if (gtt_index >= ppgtt_mm->pde_base_index
+			&& gtt_index < ppgtt_mm->pde_base_index +
+			ppgtt_mm->page_table_entry_cnt) {
+			mm = ppgtt_mm;
+			break;
+		}
+	}
+
+	if (!mm || !mm->has_shadow_page_table)
+		return true;
+
+	gtt_init_entry(&e, GTT_TYPE_PPGTT_PDE_ENTRY, pdev, ge->val64);
+
+	index = gtt_index - mm->pde_base_index;
+
+	ppgtt_set_guest_root_entry(mm, &e, index);
+
+	if (!ppgtt_handle_guest_write_root_pointer(mm, &e, index))
+		return false;
+
+	ge->type = GTT_TYPE_PPGTT_PDE_ENTRY;
+
+	return true;
+}
+
+bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_device_info *info = &pdev->device_info;
+	struct vgt_mm *ggtt_mm = vgt->gtt.ggtt_mm;
+	unsigned long g_gtt_index = off >> info->gtt_entry_size_shift;
+	unsigned long gma;
+	gtt_entry_t e, m;
+	int rc;
+
+	if (bytes != 4 && bytes != 8)
+		return false;
+
+	gma = g_gtt_index << GTT_PAGE_SHIFT;
+	/* the VM may configure the whole GM space when ballooning is used */
+	if (!g_gm_is_valid(vgt, gma)) {
+		static int count = 0;
+
+		/* print info every 32MB */
+		if (!(count % 8192))
+			vgt_dbg(VGT_DBG_MEM, "vGT(%d): capture ballooned write for %d times (%x)\n",
+				vgt->vgt_id, count, off);
+
+		count++;
+		/* in this case still return true since the impact is on vgtt only */
+		goto out;
+	}
+
+	if (bytes == 4 && info->gtt_entry_size == 4)
+		e.val32[0] = *(u32 *)p_data;
+	else if (info->gtt_entry_size == 8)
+		memcpy(&e.val64 + (off & 7), p_data, bytes);
+
+	gtt_init_entry(&e, GTT_TYPE_GGTT_PTE, vgt->pdev, e.val64);
+
+	if (!process_ppgtt_root_pointer(vgt, &e, g_gtt_index))
+		return false;
+
+	if (e.type != GTT_TYPE_GGTT_PTE)
+		return true;
+
+	ggtt_set_guest_entry(ggtt_mm, &e, g_gtt_index);
+
+	rc = gtt_entry_p2m(vgt, &e, &m);
+	if (!rc) {
+		vgt_err("VM %d: failed to translate guest gtt entry\n", vgt->vm_id);
+		return false;
+	}
+
+	ggtt_set_shadow_entry(ggtt_mm, &m, g_gtt_index);
+out:
+	return true;
+}
+
 unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
 {
 	u64 addr = 0;
