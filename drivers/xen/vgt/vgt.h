@@ -2543,10 +2543,10 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe);
 void vgt_set_power_well(struct vgt_device *vgt, bool enable);
 void vgt_flush_port_info(struct vgt_device *vgt, struct gt_port *port);
 
-extern bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
+extern bool gtt_emulate_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
-extern bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
+extern bool gtt_emulate_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
 #define INVALID_ADDR (~0UL)

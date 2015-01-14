@@ -327,7 +327,7 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 	raise_ctx_sched(vgt);
 
 	if (reg_is_gtt(pdev, offset)) {
-		rc = gtt_mmio_read(vgt, offset, p_data, bytes);
+		rc = gtt_emulate_read(vgt, offset, p_data, bytes);
 		vgt_unlock_dev_flags(pdev, cpu, flags);
 		return rc;
 	}
@@ -430,7 +430,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	raise_ctx_sched(vgt);
 
 	if (reg_is_gtt(pdev, offset)) {
-		rc = gtt_mmio_write(vgt, offset, p_data, bytes);
+		rc = gtt_emulate_write(vgt, offset, p_data, bytes);
 		vgt_unlock_dev_flags(pdev, cpu, flags);
 		return rc;
 	}

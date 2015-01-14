@@ -1690,7 +1690,7 @@ static bool gtt_mmio_read32(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
-bool gtt_mmio_read(struct vgt_device *vgt, unsigned int off,
+bool gtt_emulate_read(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ret;
@@ -1769,7 +1769,7 @@ out:
 	return true;
 }
 
-bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
+bool gtt_emulate_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ret;
