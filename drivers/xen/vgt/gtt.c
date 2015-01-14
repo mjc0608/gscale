@@ -1300,6 +1300,110 @@ fail:
 }
 
 /*
+ * GMA translation APIs.
+ */
+static inline bool ppgtt_get_next_level_entry(struct vgt_mm *mm,
+		gtt_entry_t *e, unsigned long index, bool guest)
+{
+	struct vgt_device *vgt = mm->vgt;
+	struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
+	ppgtt_spt_t *s;
+	void *pt;
+
+	if (mm->has_shadow_page_table) {
+		if (!(s = ppgtt_find_shadow_page(vgt, ops->get_pfn(e))))
+			return false;
+		if (!guest)
+			ppgtt_get_shadow_entry(s, e, index);
+		else
+			ppgtt_get_guest_entry(s, e, index);
+	} else {
+		pt = mfn_to_virt(ops->get_pfn(e));
+		ops->get_entry(pt, e, index);
+		e->type = get_entry_type(get_next_pt_type(e->type));
+	}
+	return true;
+}
+
+static inline unsigned long vgt_gma_to_gpa(struct vgt_mm *mm, unsigned long gma)
+{
+	struct vgt_device *vgt = mm->vgt;
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_gtt_pte_ops *pte_ops = pdev->gtt.pte_ops;
+	struct vgt_gtt_gma_ops *gma_ops = pdev->gtt.gma_ops;
+
+	unsigned long gpa = INVALID_ADDR;
+	unsigned long gma_index[4];
+	gtt_entry_t e;
+	int i, index;
+
+	if (mm->type != VGT_MM_GGTT && mm->type != VGT_MM_PPGTT)
+		return INVALID_ADDR;
+
+	if (mm->type == VGT_MM_GGTT) {
+		if (!g_gm_is_valid(vgt, gma))
+			goto err;
+
+		ggtt_get_guest_entry(mm, &e, gma_ops->gma_to_ggtt_pte_index(gma));
+		gpa = (pte_ops->get_pfn(&e) << GTT_PAGE_SHIFT) + (gma & ~GTT_PAGE_MASK);
+
+		trace_gma_translate(vgt->vm_id, "ggtt", 0, 0, gma, gpa);
+
+		return gpa;
+	}
+
+	switch (mm->page_table_level) {
+		case 4:
+			ppgtt_get_shadow_root_entry(mm, &e, 0);
+			gma_index[0] = gma_ops->gma_to_pml4_index(gma);
+			gma_index[1] = gma_ops->gma_to_l4_pdp_index(gma);
+			gma_index[2] = gma_ops->gma_to_pde_index(gma);
+			gma_index[3] = gma_ops->gma_to_pte_index(gma);
+			index = 4;
+			break;
+		case 3:
+			ppgtt_get_shadow_root_entry(mm, &e, gma_ops->gma_to_l3_pdp_index(gma));
+			gma_index[0] = gma_ops->gma_to_pde_index(gma);
+			gma_index[1] = gma_ops->gma_to_pte_index(gma);
+			index = 2;
+			break;
+		case 2:
+			ppgtt_get_shadow_root_entry(mm, &e, gma_ops->gma_to_pde_index(gma));
+			gma_index[0] = gma_ops->gma_to_pte_index(gma);
+			index = 1;
+			break;
+	}
+	/* walk into the last level shadow page table and get gpa from guest entry */
+	for (i = 0; i < index; i++)
+		if (!ppgtt_get_next_level_entry(mm, &e, gma_index[i],
+			(i == index - 1)))
+			goto err;
+
+	gpa = (pte_ops->get_pfn(&e) << GTT_PAGE_SHIFT) + (gma & ~GTT_PAGE_MASK);
+
+	trace_gma_translate(vgt->vm_id, "ppgtt", 0, mm->page_table_level, gma, gpa);
+
+	return gpa;
+err:
+	vgt_err("invalid mm type: %d, gma %lx\n", mm->type, gma);
+	return INVALID_ADDR;
+}
+
+void *__vgt_gma_to_va(struct vgt_mm *mm, unsigned long gma)
+{
+	struct vgt_device *vgt = mm->vgt;
+	unsigned long gpa;
+
+	gpa = vgt_gma_to_gpa(mm, gma);
+	if (gpa == INVALID_ADDR) {
+		vgt_warn("invalid gpa! gma 0x%lx, mm type %d\n", gma, mm->type);
+		return NULL;
+	}
+
+	return vgt_vmem_gpa_2_va(vgt, gpa);
+}
+
+/*
  * GTT MMIO emulation.
  */
 bool gtt_mmio_read(struct vgt_device *vgt,
