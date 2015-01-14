@@ -2089,11 +2089,21 @@ void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt)
 bool vgt_init_vgtt(struct vgt_device *vgt)
 {
 	struct vgt_vgtt_info *gtt = &vgt->gtt;
+	struct vgt_mm *ggtt_mm;
 
 	hash_init(gtt->guest_page_hash_table);
 	hash_init(gtt->shadow_page_hash_table);
 
 	INIT_LIST_HEAD(&gtt->mm_list_head);
+
+	ggtt_mm = vgt_create_mm(vgt, VGT_MM_GGTT,
+			GTT_TYPE_GGTT_PTE, NULL, 1, 0);
+	if (!ggtt_mm) {
+		vgt_err("fail to create mm for ggtt.\n");
+		return false;
+	}
+
+	gtt->ggtt_mm = ggtt_mm;
 
 	return true;
 }
