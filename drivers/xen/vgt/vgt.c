@@ -865,7 +865,7 @@ int vgt_suspend(struct pci_dev *pdev)
 	/* save GTT and FENCE information */
 	vgt_save_gtt_and_fence(pgt);
 
-	vgt_reset_dom0_ppgtt_state();
+	vgt_reset_ppgtt(vgt_dom0, 0xff);
 
 	return 0;
 }

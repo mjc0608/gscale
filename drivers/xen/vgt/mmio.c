@@ -75,44 +75,6 @@ void vgt_clear_mmio_table(void)
 	hash_init(vgt_mmio_table);
 }
 
-void vgt_add_wp_page_entry(struct vgt_device *vgt, struct vgt_wp_page_entry *e)
-{
-	hash_add((vgt->wp_table), &e->hlist, e->pfn);
-}
-
-struct vgt_wp_page_entry * vgt_find_wp_page_entry(struct vgt_device *vgt, unsigned int pfn)
-{
-	struct vgt_wp_page_entry *e;
-
-	hash_for_each_possible((vgt->wp_table), e, hlist, pfn) {
-		if (pfn == e->pfn)
-			return e;
-	}
-	return NULL;
-}
-
-void vgt_del_wp_page_entry(struct vgt_device *vgt, unsigned int pfn)
-{
-	struct vgt_wp_page_entry *e;
-
-	if ((e = vgt_find_wp_page_entry(vgt, pfn))) {
-		hash_del(&e->hlist);
-		kfree(e);
-	}
-}
-
-void vgt_clear_wp_table(struct vgt_device *vgt)
-{
-	int i;
-	struct hlist_node *tmp;
-	struct vgt_wp_page_entry *e;
-
-	hash_for_each_safe((vgt->wp_table), i, tmp, e, hlist)
-		kfree(e);
-
-	hash_init((vgt->wp_table));
-}
-
 /* Default MMIO handler registration
  * These MMIO are registered as at least 4-byte aligned
  */

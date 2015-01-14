@@ -324,26 +324,11 @@ typedef struct {
 	uint64_t	opregion_gfn[VGT_OPREGION_PAGES];
 } vgt_state_t;
 
-#define VGT_PPGTT_PDE_ENTRIES	512 /* current 512 entires for 2G mapping */
-
 typedef struct {
 	vgt_reg_t base;
 	vgt_reg_t cache_ctl;
 	vgt_reg_t mode;
 } vgt_ring_ppgtt_t;
-
-typedef struct {
-	dma_addr_t shadow_addr;
-	struct page	*pte_page;
-	void *guest_pte_va;
-} vgt_ppgtt_pte_t;
-
-typedef struct {
-	dma_addr_t	virtual_phyaddr;
-	dma_addr_t	shadow_pte_maddr;
-	bool		big_page;	/* 32K page */
-	u32		entry;
-} vgt_ppgtt_pde_t;
 
 #define __vreg(vgt, off) (*(vgt_reg_t *)((char *)vgt->state.vReg + off))
 #define __vreg8(vgt, off) (*(char *)((char *)vgt->state.vReg + off))
@@ -400,12 +385,6 @@ struct vgt_mmio_entry {
 	unsigned int align_bytes;
 	vgt_mmio_read	read;
 	vgt_mmio_write	write;
-};
-
-struct vgt_wp_page_entry {
-	struct hlist_node hlist;
-	unsigned int pfn;
-	int idx;	/* shadow PTE index */
 };
 
 #define	VGT_HASH_BITS	6
@@ -536,6 +515,12 @@ struct vgt_mm {
 	atomic_t refcount;
 	struct vgt_device *vgt;
 };
+
+extern struct vgt_mm *vgt_create_mm(struct vgt_device *vgt,
+		vgt_mm_type_t mm_type, gtt_type_t page_table_entry_type,
+		void *virtual_page_table, int page_table_level,
+		u32 pde_base_index);
+extern void vgt_destroy_mm(struct vgt_mm *mm);
 
 extern bool gen7_mm_alloc_page_table(struct vgt_mm *mm);
 extern void gen7_mm_free_page_table(struct vgt_mm *mm);
@@ -814,9 +799,6 @@ struct vgt_device {
 	/* the max gpfn of the <4G memory */
 	unsigned long low_mem_max_gpfn;
 
-	uint64_t vgtt_sz; /* virtual GTT size in byte */
-	uint32_t *vgtt; /* virtual GTT table for guest to read */
-
 	vgt_reg_t	saved_wakeup;		/* disable PM before switching */
 
 	struct vgt_hvm_info *hvm_info;
@@ -824,16 +806,8 @@ struct vgt_device {
 	struct kobject kobj;
 	struct vgt_statistics	stat;		/* statistics info */
 
-	/* PPGTT info: currently not per-ring but assume three rings share same
-	* table.
-	 */
-	u32 ppgtt_base;
-	bool ppgtt_initialized;
 	DECLARE_BITMAP(enabled_rings, MAX_ENGINES);
 	DECLARE_BITMAP(started_rings, MAX_ENGINES);
-	DECLARE_HASHTABLE(wp_table, VGT_HASH_BITS);
-	vgt_ppgtt_pde_t	shadow_pde_table[VGT_PPGTT_PDE_ENTRIES];	/* current max PDE entries should be 512 for 2G mapping */
-	vgt_ppgtt_pte_t shadow_pte_table[VGT_PPGTT_PDE_ENTRIES]; /* Current PTE number is same as PDE entries */
 	struct vgt_vgtt_info gtt;
 
 	/* embedded context scheduler information */
@@ -1136,9 +1110,6 @@ struct pgt_device {
 
 	reg_info_t *reg_info;	/* virtualization policy for a given reg */
 	struct vgt_irq_host_state *irq_hstate;
-
-	uint64_t vgtt_sz; /* in bytes */
-	uint32_t *vgtt; /* virtual GTT table for guest to read*/
 
 	DECLARE_BITMAP(dpy_emul_request, VGT_MAX_VMS);
 
@@ -2424,6 +2395,7 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 }
 
 void vgt_reset_virtual_states(struct vgt_device *vgt, unsigned long ring_bitmap);
+void vgt_reset_ppgtt(struct vgt_device *vgt, unsigned long ring_bitmap);
 
 enum vgt_pipe get_edp_input(uint32_t wr_data);
 void vgt_forward_events(struct pgt_device *pdev);
@@ -2554,33 +2526,17 @@ extern bool gtt_emulate_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
 #define INVALID_ADDR (~0UL)
-extern unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma);
 
 extern void* vgt_gma_to_va(struct vgt_mm *mm, unsigned long gma);
-
-extern int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val);
 
 extern unsigned long g2m_pfn(int vm_id, unsigned long g_pfn);
 
 extern void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 
-extern unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte);
-
 #define INVALID_MFN	(~0UL)
 
-extern void vgt_add_wp_page_entry(struct vgt_device *vgt, struct vgt_wp_page_entry *e);
-extern void vgt_del_wp_page_entry(struct vgt_device *vgt, unsigned int pfn);
-extern int vgt_unset_wp_pages(struct vgt_device *vgt, int nr, unsigned long *pages);
-
-extern bool vgt_init_shadow_ppgtt(struct vgt_device *vgt);
-extern bool vgt_setup_ppgtt(struct vgt_device *vgt);
-extern void vgt_destroy_shadow_ppgtt(struct vgt_device *vgt);
-extern bool vgt_ppgtt_handle_pte_wp(struct vgt_device *vgt, struct vgt_wp_page_entry *e,
-				unsigned int offset, void *p_data, unsigned int bytes);
 extern void vgt_ppgtt_switch(struct vgt_device *vgt);
-extern void vgt_try_setup_ppgtt(struct vgt_device *vgt);
 extern int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode);
-extern void vgt_reset_dom0_ppgtt_state(void);
 
 extern struct dentry *vgt_init_debugfs(struct pgt_device *pdev);
 extern int vgt_create_debugfs(struct vgt_device *vgt);

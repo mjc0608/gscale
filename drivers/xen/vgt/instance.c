@@ -436,34 +436,37 @@ void vgt_release_instance(struct vgt_device *vgt)
 	printk("vGT: vgt_release_instance done\n");
 }
 
-static void vgt_reset_ppgtt(struct vgt_device *vgt, unsigned long ring_bitmap)
+void vgt_reset_ppgtt(struct vgt_device *vgt, unsigned long ring_bitmap)
 {
+	struct vgt_mm *mm;
 	int bit;
 
-	if (vgt->pdev->enable_ppgtt && vgt->ppgtt_initialized) {
-		if (ring_bitmap == 0xff) {
-			vgt_info("VM %d: Reset full virtual PPGTT state.\n", vgt->vm_id);
-			/*
-			 * DOM0 doesn't use shadow PPGTT table.
-			 */
-			if (vgt->vm_id)
-				vgt_destroy_shadow_ppgtt(vgt);
+	if (!vgt->pdev->enable_ppgtt || !vgt->gtt.active_ppgtt_mm_bitmap)
+		return;
 
-			vgt->ppgtt_initialized = false;
+	if (ring_bitmap == 0xff)
+		vgt_info("VM %d: Reset full virtual PPGTT state.\n", vgt->vm_id);
 
-			if (vgt->vm_id)
-				vgt_init_shadow_ppgtt(vgt);
-		}
+	for_each_set_bit(bit, &ring_bitmap, sizeof(ring_bitmap)) {
+		if (bit >= vgt->pdev->max_engines)
+			break;
 
-		for_each_set_bit(bit, &ring_bitmap, sizeof(ring_bitmap)) {
-			if (bit >= vgt->pdev->max_engines)
-				break;
+		if (!test_bit(bit, &vgt->gtt.active_ppgtt_mm_bitmap))
+			continue;
 
-			vgt_info("VM %d: Reset ring %d PPGTT state.\n", vgt->vm_id, bit);
+		mm = vgt->rb[bit].active_ppgtt_mm;
 
-			vgt->rb[bit].has_ppgtt_mode_enabled = 0;
-			vgt->rb[bit].has_ppgtt_base_set = 0;
-		}
+		vgt_info("VM %d: Reset ring %d PPGTT state.\n", vgt->vm_id, bit);
+
+		vgt->rb[bit].has_ppgtt_mode_enabled = 0;
+		vgt->rb[bit].has_ppgtt_base_set = 0;
+		vgt->rb[bit].ppgtt_page_table_level = 0;
+		vgt->rb[bit].ppgtt_root_pointer_type = GTT_TYPE_INVALID;
+
+		vgt_destroy_mm(mm);
+
+		vgt->rb[bit].active_ppgtt_mm = NULL;
+		clear_bit(bit, &vgt->gtt.active_ppgtt_mm_bitmap);
 	}
 
 	return;
