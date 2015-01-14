@@ -1091,6 +1091,214 @@ fail:
 	return false;
 }
 
+/*
+ * mm page table allocation policy for pre-bdw:
+ *  - for ggtt, a virtual page table will be allocated.
+ *  - for ppgtt, the virtual page table(root entry) will use a part of
+ *	virtual page table from ggtt.
+ */
+bool gen7_mm_alloc_page_table(struct vgt_mm *mm)
+{
+	struct vgt_device *vgt = mm->vgt;
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_vgtt_info *gtt = &vgt->gtt;
+	struct vgt_device_info *info = &pdev->device_info;
+	void *mem;
+
+	if (mm->type == VGT_MM_PPGTT) {
+		struct vgt_mm *ggtt_mm = gtt->ggtt_mm;
+		if (!ggtt_mm) {
+			vgt_err("ggtt mm hasn't been created.\n");
+			return false;
+		}
+		mm->page_table_entry_cnt = 512;
+		mm->page_table_entry_size = mm->page_table_entry_cnt *
+			info->gtt_entry_size;
+		mm->virtual_page_table = ggtt_mm->virtual_page_table +
+			(mm->pde_base_index << info->gtt_entry_size_shift);
+		/* shadow page table resides in the hw mmio entries. */
+	} else if (mm->type == VGT_MM_GGTT) {
+		mm->page_table_entry_cnt = (gm_sz(pdev) >> GTT_PAGE_SHIFT);
+		mm->page_table_entry_size = mm->page_table_entry_cnt *
+			info->gtt_entry_size;
+		mem = vzalloc(mm->page_table_entry_size);
+		if (!mem) {
+			vgt_err("fail to allocate memory.\n");
+			return false;
+		}
+		mm->virtual_page_table = mem;
+	}
+	return true;
+}
+
+void gen7_mm_free_page_table(struct vgt_mm *mm)
+{
+	if (mm->type == VGT_MM_GGTT) {
+		if (mm->virtual_page_table)
+			vfree(mm->virtual_page_table);
+	}
+	mm->virtual_page_table = mm->shadow_page_table = NULL;
+}
+
+/*
+ * mm page table allocation policy for bdw+
+ *  - for ggtt, only virtual page table will be allocated.
+ *  - for ppgtt, dedicated virtual/shadow page table will be allocated.
+ */
+bool gen8_mm_alloc_page_table(struct vgt_mm *mm)
+{
+	struct vgt_device *vgt = mm->vgt;
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_device_info *info = &pdev->device_info;
+	void *mem;
+
+	if (mm->type == VGT_MM_PPGTT) {
+		mm->page_table_entry_cnt = 4;
+		mm->page_table_entry_size = mm->page_table_entry_cnt *
+			info->gtt_entry_size;
+		mem = kzalloc(mm->has_shadow_page_table ?
+			mm->page_table_entry_size * 2 : mm->page_table_entry_size,
+			GFP_ATOMIC);
+		if (!mem) {
+			vgt_err("fail to allocate memory.\n");
+			return false;
+		}
+		mm->virtual_page_table = mem;
+		if (!mm->has_shadow_page_table)
+			return true;
+		mm->shadow_page_table = mem + mm->page_table_entry_size;
+	} else if (mm->type == VGT_MM_GGTT) {
+		mm->page_table_entry_cnt = (gm_sz(pdev) >> GTT_PAGE_SHIFT);
+		mm->page_table_entry_size = mm->page_table_entry_cnt *
+			info->gtt_entry_size;
+		mem = vzalloc(mm->page_table_entry_size);
+		if (!mem) {
+			vgt_err("fail to allocate memory.\n");
+			return false;
+		}
+		mm->virtual_page_table = mem;
+	}
+	return true;
+}
+
+void gen8_mm_free_page_table(struct vgt_mm *mm)
+{
+	if (mm->type == VGT_MM_PPGTT) {
+		if (mm->virtual_page_table)
+			kfree(mm->virtual_page_table);
+	} else if (mm->type == VGT_MM_GGTT) {
+		if (mm->virtual_page_table)
+			vfree(mm->virtual_page_table);
+	}
+	mm->virtual_page_table = mm->shadow_page_table = NULL;
+}
+
+void vgt_destroy_mm(struct vgt_mm *mm)
+{
+	struct vgt_device *vgt = mm->vgt;
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_gtt_info *gtt = &pdev->gtt;
+	struct vgt_gtt_pte_ops *ops = gtt->pte_ops;
+	gtt_entry_t se;
+	int i;
+
+	if (!mm->initialized)
+		goto out;
+
+	if (atomic_dec_return(&mm->refcount) > 0)
+		return;
+
+	list_del(&mm->list);
+
+	if (mm->has_shadow_page_table && mm->shadowed) {
+		for (i = 0; i < mm->page_table_entry_cnt; i++) {
+			ppgtt_get_shadow_root_entry(mm, &se, i);
+			if (!ops->test_present(&se))
+				continue;
+			ppgtt_invalidate_shadow_page_by_shadow_entry(vgt, &se);
+			se.val64 = 0;
+			ppgtt_set_shadow_root_entry(mm, &se, i);
+
+			trace_guest_pt_change(vgt->vm_id, "destroy root pointer",
+					NULL, se.type, se.val64, i);
+		}
+	}
+	gtt->mm_free_page_table(mm);
+out:
+	kfree(mm);
+}
+
+struct vgt_mm *vgt_create_mm(struct vgt_device *vgt,
+		vgt_mm_type_t mm_type, gtt_type_t page_table_entry_type,
+		void *virtual_page_table, int page_table_level,
+		u32 pde_base_index)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_gtt_info *gtt = &pdev->gtt;
+	struct vgt_gtt_pte_ops *ops = gtt->pte_ops;
+	struct vgt_mm *mm;
+	ppgtt_spt_t *spt;
+	gtt_entry_t ge, se;
+	int i;
+
+	mm = kzalloc(sizeof(*mm), GFP_ATOMIC);
+	if (!mm) {
+		vgt_err("fail to allocate memory for mm.\n");
+		goto fail;
+	}
+
+	mm->type = mm_type;
+	mm->page_table_entry_type = page_table_entry_type;
+	mm->page_table_level = page_table_level;
+	mm->pde_base_index = pde_base_index;
+
+	mm->vgt = vgt;
+	mm->has_shadow_page_table = (vgt->vm_id != 0 && mm_type == VGT_MM_PPGTT);
+
+	atomic_set(&mm->refcount, 1);
+	INIT_LIST_HEAD(&mm->list);
+	list_add_tail(&mm->list, &vgt->gtt.mm_list_head);
+
+	if (!gtt->mm_alloc_page_table(mm)) {
+		vgt_err("fail to allocate page table for mm.\n");
+		goto fail;
+	}
+
+	mm->initialized = true;
+
+	if (mm->has_shadow_page_table) {
+		if (virtual_page_table)
+			memcpy(mm->virtual_page_table, virtual_page_table,
+					mm->page_table_entry_size);
+		for (i = 0; i < mm->page_table_entry_cnt; i++) {
+			ppgtt_get_guest_root_entry(mm, &ge, i);
+			if (!ops->test_present(&ge))
+				continue;
+
+			trace_guest_pt_change(vgt->vm_id, __func__, NULL,
+					ge.type, ge.val64, i);
+
+			spt = ppgtt_populate_shadow_page_by_guest_entry(vgt, &ge);
+			if (!spt) {
+				vgt_err("fail to populate guest root pointer.\n");
+				goto fail;
+			}
+			ppgtt_generate_shadow_entry(&se, spt, &ge);
+			ppgtt_set_shadow_root_entry(mm, &se, i);
+
+			trace_guest_pt_change(vgt->vm_id, "populate root pointer",
+					NULL, se.type, se.val64, i);
+		}
+		mm->shadowed = true;
+	}
+	return mm;
+fail:
+	vgt_err("fail to create mm.\n");
+	if (mm)
+		vgt_destroy_mm(mm);
+	return NULL;
+}
+
 unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
 {
 	u64 addr = 0;
@@ -1764,12 +1972,23 @@ bool vgt_init_vgtt(struct vgt_device *vgt)
 	hash_init(gtt->guest_page_hash_table);
 	hash_init(gtt->shadow_page_hash_table);
 
+	INIT_LIST_HEAD(&gtt->mm_list_head);
+
 	return true;
 }
 
 void vgt_clean_vgtt(struct vgt_device *vgt)
 {
+	struct list_head *pos, *n;
+	struct vgt_mm *mm;
+
 	ppgtt_free_all_shadow_page(vgt);
+
+	list_for_each_safe(pos, n, &vgt->gtt.mm_list_head) {
+		mm = container_of(pos, struct vgt_mm, list);
+		vgt->pdev->gtt.mm_free_page_table(mm);
+		kfree(mm);
+	}
 
 	return;
 }

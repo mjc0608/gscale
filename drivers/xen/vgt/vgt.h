@@ -535,6 +535,11 @@ struct vgt_mm {
 	struct vgt_device *vgt;
 };
 
+extern bool gen7_mm_alloc_page_table(struct vgt_mm *mm);
+extern void gen7_mm_free_page_table(struct vgt_mm *mm);
+extern bool gen8_mm_alloc_page_table(struct vgt_mm *mm);
+extern void gen8_mm_free_page_table(struct vgt_mm *mm);
+
 struct vgt_vgtt_info {
 	struct vgt_mm *ggtt_mm;
 	unsigned long active_ppgtt_mm_bitmap;
@@ -1042,6 +1047,8 @@ struct vgt_device_info {
 struct vgt_gtt_info {
 	struct vgt_gtt_pte_ops *pte_ops;
 	struct vgt_gtt_gma_ops *gma_ops;
+	bool (*mm_alloc_page_table)(struct vgt_mm *mm);
+	void (*mm_free_page_table)(struct vgt_mm *mm);
 };
 
 /* per-device structure */
