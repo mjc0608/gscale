@@ -1420,6 +1420,78 @@ out:
 	return true;
 }
 
+#define ring_id_to_pp_dclv(pdev, ring_id) \
+	(RB_TAIL(pdev, ring_id) - 0x30 + 0x220)
+
+#define ring_id_to_pp_dir_base(pdev, ring_id) \
+	(RB_TAIL(pdev, ring_id) - 0x30 + 0x228)
+
+static void gen7_ppgtt_mm_switch(struct vgt_mm *mm, int ring_id)
+{
+	struct pgt_device *pdev = mm->vgt->pdev;
+	u32 base = mm->pde_base_index << GTT_PAGE_SHIFT;
+
+	VGT_MMIO_WRITE(pdev, ring_id_to_pp_dclv(pdev, ring_id), 0xffffffff);
+	VGT_MMIO_WRITE(pdev, ring_id_to_pp_dir_base(pdev, ring_id), base);
+
+	return;
+}
+
+struct vgt_mm *gen7_find_ppgtt_mm(struct vgt_device *vgt,
+		u32 pde_base_index)
+{
+	struct list_head *pos;
+	struct vgt_mm *mm;
+
+	list_for_each(pos, &vgt->gtt.mm_list_head) {
+		mm = container_of(pos, struct vgt_mm, list);
+		if (mm->type != VGT_MM_PPGTT)
+			continue;
+
+		if (mm->pde_base_index == pde_base_index)
+			return mm;
+	}
+
+	return NULL;
+}
+
+bool gen7_ppgtt_mm_setup(struct vgt_device *vgt, int ring_id)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	vgt_state_ring_t *rb = &vgt->rb[ring_id];
+	struct vgt_mm *mm = rb->active_ppgtt_mm;
+	u32 pde_base_index = rb->sring_ppgtt_info.base >> GTT_PAGE_SHIFT;
+
+	if (!IS_PREBDW(pdev))
+		return false;
+
+	if (!rb->has_ppgtt_base_set
+		|| !rb->has_ppgtt_mode_enabled)
+		return true;
+
+	if (mm)
+		vgt_destroy_mm(mm);
+
+	mm = gen7_find_ppgtt_mm(vgt, pde_base_index);
+	if (mm) {
+		atomic_inc(&mm->refcount);
+	} else {
+		mm = vgt_create_mm(vgt, VGT_MM_PPGTT, rb->ppgtt_root_pointer_type,
+				NULL, rb->ppgtt_page_table_level, pde_base_index);
+		if (!mm)
+			return false;
+	}
+
+	rb->active_ppgtt_mm = mm;
+
+	set_bit(ring_id, &vgt->gtt.active_ppgtt_mm_bitmap);
+
+	if (current_render_owner(pdev) == vgt)
+		gen7_ppgtt_mm_switch(mm, ring_id);
+
+	return true;
+}
+
 unsigned long gtt_pte_get_pfn(struct pgt_device *pdev, u32 pte)
 {
 	u64 addr = 0;

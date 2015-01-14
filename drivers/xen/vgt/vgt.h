@@ -373,6 +373,8 @@ typedef struct {
 	u8 has_ppgtt_base_set : 1;	/* Is PP dir base set? */
 	u8 has_ppgtt_mode_enabled : 1;	/* Is ring's mode reg PPGTT enable set? */
 	struct vgt_mm *active_ppgtt_mm;
+	int ppgtt_root_pointer_type;
+	int ppgtt_page_table_level;
 
 	struct cmd_general_info	patch_list;
 	struct cmd_general_info	handler_list;
@@ -580,6 +582,8 @@ extern bool vgt_set_guest_page_writeprotection(struct vgt_device *vgt,
 extern bool vgt_clear_guest_page_writeprotection(struct vgt_device *vgt,
 		guest_page_t *guest_page);
 extern guest_page_t *vgt_find_guest_page(struct vgt_device *vgt, unsigned long gfn);
+
+extern bool gen7_ppgtt_mm_setup(struct vgt_device *vgt, int ring_id);
 
 extern enum vgt_pipe surf_used_pipe;
 
