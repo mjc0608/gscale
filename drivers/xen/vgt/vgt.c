@@ -549,13 +549,21 @@ static bool vgt_initialize_platform(struct pgt_device *pdev)
 		pdev->ring_xxx_bit[RING_BUFFER_VECS] = 10;
 		pdev->ring_xxx_valid = 1;
 	} else if (IS_BDW(pdev)) {
-		/*
-		 * FIXME: BDW GT3 has 2 VCS rings.
-		 */
 		pdev->max_engines = 4;
 		pdev->ring_mmio_base[RING_BUFFER_VECS] = _REG_VECS_TAIL;
 		pdev->ring_mi_mode[RING_BUFFER_VECS] = _REG_VECS_MI_MODE;
 		pdev->ring_xxx_valid = 0;
+
+		/*
+		 * Add GT3 VCS2 ring for BDW GT3
+		 */
+		if (IS_BDWGT3(pdev)) {
+			pdev->max_engines = 5;
+			pdev->ring_mmio_base[RING_BUFFER_VCS2] = _REG_VCS2_TAIL;
+			pdev->ring_mi_mode[RING_BUFFER_VCS2] = _REG_VCS2_MI_MODE;
+			pdev->ring_xxx[RING_BUFFER_VCS2] = 0x8008;
+			pdev->ring_xxx_bit[RING_BUFFER_VCS2] = 0;
+		}
 
 		pdev->gtt.pte_ops = &gen8_gtt_pte_ops;
 		pdev->gtt.gma_ops = &gen8_gtt_gma_ops;

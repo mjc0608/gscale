@@ -90,6 +90,8 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[VCS_WATCHDOG_EXCEEDED] = "Video Command Streamer Watchdog counter exceeded",
 	[VCS_PAGE_DIRECTORY_FAULT] = "Video page directory faults",
 	[VCS_AS_CONTEXT_SWITCH] = "Video AS Context Switch Interrupt",
+	[VCS2_MI_USER_INTERRUPT] = "VCS2 Video Command Streamer MI USER INTERRUPT",
+	[VCS2_MI_FLUSH_DW] = "VCS2 Video MI FLUSH DW notify",
 	[VCS2_AS_CONTEXT_SWITCH] = "VCS2 Context Switch Interrupt",
 
 	[BCS_MI_USER_INTERRUPT] = "Blitter Command Streamer MI USER INTERRUPT",
@@ -1528,7 +1530,6 @@ static void vgt_gen8_init_irq(
 		struct vgt_irq_host_state *hstate)
 {
 	struct pgt_device *pdev = hstate->pdev;
-	struct vgt_device_info *device_info = &pdev->device_info;
 
 	hstate->pipe_mask = REGBIT_INTERRUPT_PIPE_MASK;
 
@@ -1563,7 +1564,7 @@ static void vgt_gen8_init_irq(
 	SET_BIT_INFO(hstate, 4, VCS_MI_FLUSH_DW, IRQ_INFO_GT1);
 	SET_BIT_INFO(hstate, 8, VCS_AS_CONTEXT_SWITCH, IRQ_INFO_GT1);
 
-	if (GEN_REV(device_info->gen) == 3) {
+	if (IS_BDWGT3(pdev)) {
 		SET_BIT_INFO(hstate, 16, VCS2_MI_USER_INTERRUPT, IRQ_INFO_GT1);
 		SET_BIT_INFO(hstate, 20, VCS2_MI_FLUSH_DW, IRQ_INFO_GT1);
 		SET_BIT_INFO(hstate, 24, VCS2_AS_CONTEXT_SWITCH, IRQ_INFO_GT1);

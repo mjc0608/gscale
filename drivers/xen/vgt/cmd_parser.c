@@ -451,6 +451,17 @@ static struct decode_info* ring_decode_info[MAX_ENGINES][8] = {
 		NULL,
 		NULL,
 	},
+
+	[RING_BUFFER_VCS2] = {
+		&decode_info_mi,
+		NULL,
+		NULL,
+		&decode_info_mfx_vc,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+	},
 };
 
 uint32_t vgt_get_opcode(uint32_t cmd, int ring_id)
@@ -1958,7 +1969,7 @@ static struct cmd_info cmd_info[] = {
 		0, 8, NULL},
 
 	{"3DSTATE_RAST_MULTISAMPLE", OP_3DSTATE_RAST_MULTISAMPLE, F_LEN_VAR, R_RCS,
-		D_IVB|D_HSW, 0, 8, NULL},
+		D_GEN75PLUS, 0, 8, NULL},
 
 	{"3DSTATE_STENCIL_BUFFER", OP_SNB_3DSTATE_STENCIL_BUFFER, F_LEN_VAR, R_RCS,
 		D_SNB, ADDR_FIX_1(2), 8, NULL},
@@ -2222,7 +2233,7 @@ static struct cmd_info cmd_info[] = {
 	{"MFD_JPEG_BSD_OBJECT", OP_MFD_JPEG_BSD_OBJECT, F_LEN_VAR,
 		R_VCS, D_GEN7PLUS, 0, 12, NULL},
 
-	{"VEBOX_STATE", OP_VEB_STATE, F_LEN_VAR, R_VECS, D_HSW, 0, 12, NULL},
+	{"VEBOX_STATE", OP_VEB_STATE, F_LEN_VAR, R_VECS, D_GEN75PLUS, 0, 12, NULL},
 
 	{"VEBOX_SURFACE_STATE", OP_VEB_SURFACE_STATE, F_LEN_VAR, R_VECS, D_HSW_PLUS, 0, 12, NULL},
 

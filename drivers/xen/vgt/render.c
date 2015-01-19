@@ -670,6 +670,7 @@ void vgt_ring_init(struct pgt_device *pdev, int id)
 		ring->need_switch = 1;
 		break;
 	case RING_BUFFER_VCS:
+	case RING_BUFFER_VCS2:
 	case RING_BUFFER_VECS:
 		ring->stateless = 1;
 		if (enable_video_switch)

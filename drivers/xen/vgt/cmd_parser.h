@@ -391,7 +391,9 @@ struct cmd_info{
 	uint32_t flag;
 
 #define R_RCS	(1 << RING_BUFFER_RCS )
-#define R_VCS	(1 << RING_BUFFER_VCS )
+#define R_VCS1  (1 << RING_BUFFER_VCS)
+#define R_VCS2  (1 << RING_BUFFER_VCS2)
+#define R_VCS	( R_VCS1 | R_VCS2)
 #define R_BCS	(1 << RING_BUFFER_BCS )
 #define R_VECS	(1 << RING_BUFFER_VECS )
 #define R_ALL (R_RCS | R_VCS | R_BCS | R_VECS)

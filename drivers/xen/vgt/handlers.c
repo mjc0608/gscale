@@ -558,6 +558,10 @@ static int pp_mmio_to_ring_id(unsigned int reg)
 	case _REG_VEBOX_MODE:
 		ring_id = RING_BUFFER_VECS;
 		break;
+	case _REG_VCS2_PP_DIR_BASE:
+	case _REG_VCS2_MFX_MODE_BDW:
+		ring_id = RING_BUFFER_VCS2;
+		break;
 	default:
 		ring_id = -1;
 		break;
@@ -2283,6 +2287,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_RCS_IMR, 4, F_RDR, 0, D_HSW_PLUS, NULL, vgt_reg_imr_handler},
 {_REG_BCS_IMR, 4, F_RDR, 0, D_HSW_PLUS, NULL, vgt_reg_imr_handler},
 {_REG_VCS_IMR, 4, F_RDR, 0, D_HSW_PLUS, NULL, vgt_reg_imr_handler},
+{_REG_VCS2_IMR, 4, F_RDR, 0, D_BDW_PLUS, NULL, vgt_reg_imr_handler},
 {_REG_VECS_IMR, 4, F_RDR, 0, D_HSW_PLUS, NULL, vgt_reg_imr_handler},
 
 /* Interrupt registers - Display */
@@ -2359,6 +2364,7 @@ reg_attr_t vgt_base_reg_info[] = {
 /* -------render regs---------- */
 {_REG_RCS_HWSTAM, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_VCS_HWSTAM, 4, F_RDR, 0, D_ALL, NULL, NULL},
+{_REG_VCS2_HWSTAM, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_HWSTAM, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_RCS_HWS_PGA, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_VCS_HWS_PGA, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
@@ -2375,6 +2381,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_VECS_EXCC, 4, F_RDR, 0, D_HSW, NULL, NULL},
 {_REG_RCS_UHPTR, 4, F_RDR_HWSTS, 0, D_ALL, NULL, ring_uhptr_write},
 {_REG_VCS_UHPTR, 4, F_RDR_HWSTS, 0, D_ALL, NULL, ring_uhptr_write},
+{_REG_VCS2_UHPTR, 4, F_RDR_HWSTS, 0, D_BDW_PLUS, NULL, ring_uhptr_write},
 {_REG_BCS_UHPTR, 4, F_RDR_HWSTS, 0, D_ALL, NULL, ring_uhptr_write},
 {_REG_VECS_UHPTR, 4, F_RDR_HWSTS, 0, D_HSW_PLUS, NULL, ring_uhptr_write},
 {_REG_RCS_BB_PREEMPT_ADDR, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
@@ -2405,30 +2412,41 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_VECS_START, 4, F_RDR_ADRFIX, 0xFFFFF000, D_HSW_PLUS, ring_mmio_read, ring_mmio_write},
 {_REG_VECS_CTL, 4, F_RDR, 0, D_HSW_PLUS, ring_mmio_read, ring_mmio_write},//for TLB
 
+{_REG_VCS2_TAIL, 4, F_RDR, 0, D_BDW_PLUS, ring_mmio_read, ring_mmio_write},
+{_REG_VCS2_HEAD, 4, F_RDR, 0, D_BDW_PLUS, ring_mmio_read, ring_mmio_write},
+{_REG_VCS2_START, 4, F_RDR_ADRFIX, 0xFFFFF000, D_BDW_PLUS,
+	ring_mmio_read, ring_mmio_write},
+{_REG_VCS2_CTL, 4, F_RDR, 0, D_BDW_PLUS, ring_mmio_read, ring_mmio_write},
+
 {_REG_RCS_ACTHD, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_BCS_ACTHD, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_VCS_ACTHD, 4, F_RDR, 0, D_ALL, NULL, NULL},
+{_REG_VCS2_ACTHD, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_VECS_ACTHD, 4, F_RDR, 0, D_HSW_PLUS, NULL, NULL},
 
 {_REG_RCS_ACTHD_UDW, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_ACTHD_UDW, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_VCS_ACTHD_UDW, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
+{_REG_VCS2_ACTHD_UDW, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_VECS_ACTHD_UDW, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 
 {_REG_GFX_MODE, 4, F_RDR_MODE, 0, D_SNB, NULL, NULL},
 {_REG_RCS_GFX_MODE_IVB, 4, F_RDR_MODE, 0, D_GEN7PLUS, NULL, NULL},
 {_REG_VCS_MFX_MODE_IVB, 4, F_RDR_MODE, 0, D_GEN7PLUS, NULL, NULL},
+{_REG_VCS2_MFX_MODE_BDW, 4, F_RDR_MODE, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_BLT_MODE_IVB, 4, F_RDR_MODE, 0, D_GEN7PLUS, NULL, NULL},
 {_REG_VEBOX_MODE, 4, F_RDR_MODE, 0, D_HSW_PLUS, NULL, NULL},
 {_REG_ARB_MODE, 4, F_RDR_MODE, 0, D_ALL, NULL, NULL},
 
 {_REG_RCS_MI_MODE, 4, F_RDR_MODE, 0, D_ALL, NULL, NULL},
 {_REG_VCS_MI_MODE, 4, F_RDR_MODE, 0, D_ALL, NULL, NULL},
+{_REG_VCS2_MI_MODE, 4, F_RDR_MODE, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_MI_MODE, 4, F_RDR_MODE, 0, D_ALL, NULL, NULL},
 {_REG_VECS_MI_MODE, 4, F_RDR_MODE, 0, D_HSW_PLUS, NULL, NULL},
 
 {_REG_RCS_INSTPM, 4, F_RDR_MODE, 0, D_ALL, NULL, instpm_write},
 {_REG_VCS_INSTPM, 4, F_RDR_MODE, 0, D_ALL, NULL, instpm_write},
+{_REG_VCS2_INSTPM, 4, F_RDR_MODE, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_INSTPM, 4, F_RDR_MODE, 0, D_ALL, NULL, instpm_write},
 {_REG_VECS_INSTPM, 4, F_RDR_MODE, 0, D_HSW_PLUS, NULL, instpm_write},
 
@@ -2446,10 +2464,12 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_RCS_PP_DIR_BASE_READ, 4, F_RDR_ADRFIX, 0xFFFFF000, D_SNB, NULL, NULL},
 {_REG_RCS_PP_DIR_BASE_IVB, 4, F_RDR_ADRFIX, 0xFFFFF000, D_PRE_BDW, NULL, NULL},
 {_REG_VCS_PP_DIR_BASE, 4, F_RDR_ADRFIX, 0xFFFFF000, D_PRE_BDW, NULL, NULL},
+{_REG_VCS2_PP_DIR_BASE, 4, F_RDR_ADRFIX, 0xFFFFF000, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_PP_DIR_BASE, 4, F_RDR_ADRFIX, 0xFFFFF000, D_PRE_BDW, NULL, NULL},
 {_REG_VECS_PP_DIR_BASE, 4, F_RDR_ADRFIX, 0xFFFFF000, D_HSW, NULL, NULL},
 {_REG_RCS_PP_DCLV, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_VCS_PP_DCLV, 4, F_RDR, 0, D_ALL, NULL, NULL},
+{_REG_VCS2_PP_DCLV, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_PP_DCLV, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_VECS_PP_DCLV, 4, F_RDR, 0, D_HSW, NULL, NULL},
 {_REG_RBSYNC, 4, F_RDR, 0, D_ALL, NULL, NULL},
@@ -2480,6 +2500,7 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {0x2050, 4, F_PT, 0, D_ALL, NULL, NULL},
 {0x12050, 4, F_PT, 0, D_ALL, NULL, NULL},
+{0x1c050, 4, F_PT, 0, D_BDW_PLUS, NULL, NULL},
 {0x22050, 4, F_PT, 0, D_ALL, NULL, NULL},
 {0x1A050, 4, F_PT, 0, D_HSW_PLUS, NULL, NULL},
 
@@ -2498,6 +2519,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x20e8, 4, F_RDR, 0, D_HSW, NULL, NULL},
 {_REG_RCS_TIMESTAMP, 8, F_PT, 0, D_ALL, NULL, NULL},
 {_REG_VCS_TIMESTAMP, 8, F_PT, 0, D_ALL, NULL, NULL},
+{_REG_VCS2_TIMESTAMP, 8, F_PT, 0, D_BDW_PLUS, NULL, NULL},
 {0x1a358, 8, F_PT, 0, D_ALL, NULL, NULL},
 {_REG_BCS_TIMESTAMP, 8, F_PT, 0, D_ALL, NULL, NULL},
 {0xb008, 4, F_VIRT, 0, D_HSW, NULL, NULL},
@@ -3148,6 +3170,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_GEN3_MI_ARB_STATE, 4, F_PT, 0, D_SNB, NULL, NULL},
 {_REG_RCS_ECOSKPD, 4, F_PT, 0, D_ALL, NULL, NULL},
 {0x121d0, 4, F_PT, 0, D_ALL, NULL, NULL},
+{0x1c1d0, 4, F_PT, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_ECOSKPD, 4, F_PT, 0, D_ALL, NULL, NULL},
 {0x41d0, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {_REG_GAC_ECOCHK, 4, F_VIRT, 0, D_ALL, NULL, NULL},
@@ -3229,6 +3252,7 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {_REG_RC_PWRCTX_MAXCNT, 4, F_DOM0, 0, D_ALL, NULL, NULL},
 {0x12054, 4, F_DOM0, 0, D_HSW_PLUS, NULL, NULL},
+{0x1C054, 4, F_DOM0, 0, D_BDW_PLUS, NULL, NULL},
 {0x22054, 4, F_DOM0, 0, D_HSW_PLUS, NULL, NULL},
 {0x1A054, 4, F_DOM0, 0, D_HSW_PLUS, NULL, NULL},
 
@@ -3315,6 +3339,7 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {0x2080, 4, F_RDR_ADRFIX, 0xFFFFF000, D_BDW_PLUS, NULL, NULL},
 {0x12080, 4, F_RDR_ADRFIX, 0xFFFFF000, D_BDW_PLUS, NULL, NULL},
+{0x1c080, 4, F_RDR_ADRFIX, 0xFFFFF000, D_BDW_PLUS, NULL, NULL},
 {0x1a080, 4, F_RDR_ADRFIX, 0xFFFFF000, D_BDW_PLUS, NULL, NULL},
 {0x22080, 4, F_RDR_ADRFIX, 0xFFFFF000, D_BDW_PLUS, NULL, NULL},
 
@@ -3376,6 +3401,16 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 		reg_update_handlers(pdev, _REG_VEBOX_MODE, 4,
 				ring_pp_mode_read,
 				ring_pp_mode_write);
+
+	if (IS_BDWGT3(pdev)) {
+		reg_update_handlers(pdev, _REG_VCS2_PP_DIR_BASE, 4,
+				pp_dir_base_read, pp_dir_base_write);
+		reg_update_handlers(pdev, _REG_VCS2_PP_DCLV, 4,
+				pp_dclv_read, pp_dclv_write);
+		reg_update_handlers(pdev, _REG_VCS2_MFX_MODE_BDW, 4,
+				ring_pp_mode_read,
+				ring_pp_mode_write);
+	}
 
 	return true;
 }
@@ -3458,6 +3493,7 @@ reg_list_t vgt_gen8_sticky_regs[] = {
 	{_REG_RCS_IMR, 4},
 	{_REG_BCS_IMR, 4},
 	{_REG_VCS_IMR, 4},
+	{_REG_VCS2_IMR, 4},
 	{_REG_VECS_IMR, 4},
 
 	{_REG_SDEIMR, 4},
@@ -3521,6 +3557,7 @@ reg_list_t vgt_gen8_sticky_regs[] = {
 	/* PPGTT related registers */
 	{_REG_RCS_GFX_MODE_IVB, 4},
 	{_REG_VCS_MFX_MODE_IVB, 4},
+	{_REG_VCS2_MFX_MODE_BDW, 4},
 	{_REG_BCS_BLT_MODE_IVB, 4},
 	{_REG_VEBOX_MODE, 4},
 

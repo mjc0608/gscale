@@ -149,6 +149,10 @@ void show_mode_settings(struct pgt_device *pdev)
 		SHOW_MODE(_REG_CACHE_MODE_0_IVB);
 		SHOW_MODE(_REG_CACHE_MODE_1_IVB);
 		SHOW_MODE(_REG_GT_MODE_IVB);
+	} else if (IS_BDWGT3(pdev)) {
+		SHOW_MODE(_REG_VCS2_MI_MODE);
+		SHOW_MODE(_REG_VCS2_MFX_MODE_BDW);
+		SHOW_MODE(_REG_VCS2_INSTPM);
 	} else if (IS_SNB(pdev)) {
 		SHOW_MODE(_REG_GFX_MODE);
 		SHOW_MODE(_REG_ARB_MODE);

@@ -395,6 +395,7 @@ enum vgt_ring_id {
 	RING_BUFFER_VCS,
 	RING_BUFFER_BCS,
 	RING_BUFFER_VECS,
+	RING_BUFFER_VCS2,
 	MAX_ENGINES
 };
 
@@ -1431,6 +1432,7 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 
 #define IS_PREBDW(pdev) (IS_SNB(pdev) || IS_IVB(pdev) || IS_HSW(pdev))
 #define IS_BDWPLUS(pdev) (IS_BDW(pdev))
+#define IS_BDWGT3(pdev) (IS_BDW(pdev) && (GEN_REV(pdev->device_info.gen) == 3))
 
 #define D_SNB	(1 << 0)
 #define D_IVB	(1 << 1)
