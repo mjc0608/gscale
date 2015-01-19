@@ -31,6 +31,13 @@
 #include <drm/intel-gtt.h>
 #include <asm/cacheflush.h>
 
+bool inline is_execlist_mode(struct pgt_device *pdev, int ring_id)
+{
+	unsigned long ring_mode = RB_TAIL(pdev, ring_id) - 0x30 + 0x29c;
+
+	return VGT_MMIO_READ(pdev, ring_mode) & _REGBIT_EXECLIST_ENABLE;
+}
+
 void show_debug(struct pgt_device *pdev)
 {
 	int i, cpu;
@@ -44,7 +51,7 @@ void show_debug(struct pgt_device *pdev)
 	for (i = 0; i < pdev->max_engines; i++) {
 		printk("-----------ring-%d info-------------\n", i);
 		show_ring_debug(pdev, i);
-		show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
+		show_ring_buffer(pdev, i, 16 * sizeof(vgt_reg_t));
 	}
 }
 
@@ -54,9 +61,46 @@ void show_debug(struct pgt_device *pdev)
  * Hope to introduce a sysfs interface to dump this information on demand
  * in the future
  */
-void show_ring_debug(struct pgt_device *pdev, int ring_id)
+void common_show_ring_debug(struct pgt_device *pdev, int ring_id)
 {
-	vgt_reg_t reg;
+	printk("debug registers,reg maked with <*>"
+		" may not apply to every ring):\n");
+	printk("....RING_EIR: %08x\n", VGT_MMIO_READ(pdev, RING_EIR(ring_id)));
+	printk("....RING_EMR: %08x\n", VGT_MMIO_READ(pdev, RING_EMR(ring_id)));
+	printk("....RING_ESR: %08x\n", VGT_MMIO_READ(pdev, RING_ESR(ring_id)));
+
+	if (ring_id)
+		printk("....%08x*: %08x\n", RING_REG_2064(ring_id),
+				VGT_MMIO_READ(pdev, RING_REG_2064(ring_id)));
+
+	printk("....%08x: %08x\n", RING_REG_2068(ring_id),
+		VGT_MMIO_READ(pdev, RING_REG_2068(ring_id)));
+	printk("....ACTHD(active header): %08x\n",
+			VGT_MMIO_READ(pdev, VGT_ACTHD(ring_id)));
+	printk("....UHPTR(pending header): %08x\n",
+			VGT_MMIO_READ(pdev, VGT_UHPTR(ring_id)));
+	printk("....%08x: %08x\n", RING_REG_2078(ring_id),
+		VGT_MMIO_READ(pdev, RING_REG_2078(ring_id)));
+
+	if (!ring_id) {
+		printk("....INSTPS* (parser state): %08x :\n",
+				VGT_MMIO_READ(pdev, 0x2070));
+		printk("....CSCMDOP* (instruction DWORD): %08x\n",
+				VGT_MMIO_READ(pdev, 0x220C));
+		printk("....CSCMDVLD* (command buffer valid): %08x\n",
+				VGT_MMIO_READ(pdev, 0x2210));
+	}
+
+	printk("(informative)\n");
+	printk("....INSTDONE_1(FYI): %08x\n",
+			VGT_MMIO_READ(pdev, RING_REG_206C(ring_id)));
+	if (!ring_id)
+		printk("....INSTDONE_2*: %08x\n",
+				VGT_MMIO_READ(pdev, 0x207C));
+}
+
+void legacy_show_ring_debug(struct pgt_device *pdev, int ring_id)
+{
 	int i;
 
 	for (i = 0; i < VGT_MAX_VMS; i++) {
@@ -77,44 +121,35 @@ void show_ring_debug(struct pgt_device *pdev, int ring_id)
 		}
 	}
 
-	printk("debug registers,reg maked with <*>"
-		" may not apply to every ring):\n");
-	printk("....RING_EIR: %08x\n", VGT_MMIO_READ(pdev, RING_EIR(ring_id)));
-	printk("....RING_EMR: %08x\n", VGT_MMIO_READ(pdev, RING_EMR(ring_id)));
-	printk("....RING_ESR: %08x\n", VGT_MMIO_READ(pdev, RING_ESR(ring_id)));
+	common_show_ring_debug(pdev, ring_id);
+}
 
-	if (ring_id)
-		printk("....%08x*: %08x\n", RING_REG_2064(ring_id),
-				VGT_MMIO_READ(pdev, RING_REG_2064(ring_id)));
+void execlist_show_ring_debug(struct pgt_device *pdev, int ring_id)
+{
+	int i;
 
-	printk("....%08x: %08x\n", RING_REG_2068(ring_id),
-		VGT_MMIO_READ(pdev, RING_REG_2068(ring_id)));
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		struct vgt_device *vgt;
 
-	if (!ring_id) {
-		reg = VGT_MMIO_READ(pdev, 0x2070);
-		printk("....INSTPS* (parser state): %08x :\n", reg);
+		if (!pdev->device[i])
+			continue;
+
+		vgt = pdev->device[i];
+
+		if (vgt == current_render_owner(pdev))
+			printk("VM%d(*):", vgt->vm_id);
+		else
+			printk("VM%d   :", vgt->vm_id);
 	}
 
-	printk("....ACTHD(active header): %08x\n",
-			VGT_MMIO_READ(pdev, VGT_ACTHD(ring_id)));
-	printk("....UHPTR(pending header): %08x\n",
-			VGT_MMIO_READ(pdev, VGT_UHPTR(ring_id)));
-	printk("....%08x: %08x\n", RING_REG_2078(ring_id),
-		VGT_MMIO_READ(pdev, RING_REG_2078(ring_id)));
+	common_show_ring_debug(pdev, ring_id);
+}
 
-	if (!ring_id) {
-		printk("....CSCMDOP* (instruction DWORD): %08x\n",
-				VGT_MMIO_READ(pdev, 0x220C));
-		printk("....CSCMDVLD* (command buffer valid): %08x\n",
-				VGT_MMIO_READ(pdev, 0x2210));
-	}
-
-	printk("(informative)\n");
-	printk("....INSTDONE_1(FYI): %08x\n",
-			VGT_MMIO_READ(pdev, RING_REG_206C(ring_id)));
-	if (!ring_id)
-		printk("....INSTDONE_2*: %08x\n",
-				VGT_MMIO_READ(pdev, 0x207C));
+void show_ring_debug(struct pgt_device *pdev, int ring_id)
+{
+	is_execlist_mode(pdev, ring_id) ?
+		execlist_show_ring_debug(pdev, ring_id) :
+		legacy_show_ring_debug(pdev, ring_id);
 }
 
 /*
@@ -168,12 +203,13 @@ void show_mode_settings(struct pgt_device *pdev)
 	SHOW_MODE(_REG_TILECTL);
 }
 
-static void show_batchbuffer(struct pgt_device *pdev, int ring_id, u32 addr,
+static void show_batchbuffer(struct pgt_device *pdev, int ring_id, u64 addr,
 	int bytes, int ppgtt)
 {
+	struct vgt_device_info *info = &pdev->device_info;
 	int i;
 	char *ip_va;
-	u32 start;
+	u64 start;
 	struct vgt_device *vgt = current_render_owner(pdev);
 	uint32_t val;
 
@@ -185,9 +221,9 @@ static void show_batchbuffer(struct pgt_device *pdev, int ring_id, u32 addr,
 	if (addr < bytes) {
 		bytes *= 2;
 		start = 0;
-	} else if ((addr + bytes) >= (1 << 31)) {
+	} else if ((addr + bytes) >= info->max_gtt_gm_sz) {
 		bytes *= 2;
-		start = (1 << 31) - bytes;
+		start = info->max_gtt_gm_sz - bytes;
 	} else {
 		start = addr - bytes;
 		bytes *= 2;
@@ -201,7 +237,7 @@ static void show_batchbuffer(struct pgt_device *pdev, int ring_id, u32 addr,
 		ip_va = vgt_gma_to_va(mm, start + i);
 
 		if (!(i % 32))
-			printk("\n[%08x]:", start + i);
+			printk("\n[%08llx]:", start + i);
 
 		if (ip_va == NULL)
 			printk(" %8s", "N/A");
@@ -218,19 +254,16 @@ static void show_batchbuffer(struct pgt_device *pdev, int ring_id, u32 addr,
 /*
  * Given a ring buffer, print out the current data [-bytes, bytes]
  */
-void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
+void common_show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes,
+	vgt_reg_t p_tail, vgt_reg_t p_head, vgt_reg_t p_start, vgt_reg_t p_ctl,
+	unsigned long batch_head)
 {
-	vgt_reg_t p_tail, p_head, p_start, p_ctl;
 	char *p_contents;
 	int i;
 	struct vgt_device *vgt = current_render_owner(pdev);
-	u32* cur;
-	u32 ring_len, off;
+	u32 *cur;
+	u64 ring_len, off;
 
-	p_tail = VGT_MMIO_READ(pdev, RB_TAIL(pdev, ring_id));
-	p_head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
-	p_start = VGT_MMIO_READ(pdev, RB_START(pdev, ring_id));
-	p_ctl = VGT_MMIO_READ(pdev, RB_CTL(pdev, ring_id));
 	printk("ring buffer(%d): head (0x%x) tail(0x%x), start(0x%x), "
 			"ctl(0x%x)\n", ring_id, p_head, p_tail, p_start, p_ctl);
 	printk("ring xxx:(%d), mi_mode idle:(%d)\n",
@@ -248,8 +281,8 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 
 #define WRAP_OFF(off, size)			\
 	({					\
-		u32 val = off;			\
-		if ((int32_t)val < 0)		\
+		u64 val = off;			\
+		if ((int64_t)val < 0)		\
 			val += size;	\
 		if (val >= size)		\
 			val -= size;	\
@@ -263,7 +296,7 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 		off = WRAP_OFF(off, ring_len);
 		/* print offset within the ring every 8 Dword */
 		if (!((i + bytes) % 32))
-			printk("\n[%08x]:", off);
+			printk("\n[%08llx]:", off);
 		printk(" %08x", *((u32*)(p_contents + off)));
 		if (!i)
 			printk("(*)");
@@ -289,10 +322,89 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 			*(cur + 1));
 
 		show_batchbuffer(pdev, ring_id,
-			VGT_MMIO_READ(pdev, VGT_ACTHD(ring_id)),
+			batch_head,
 			bytes,
 			ppgtt);
 	}
+}
+
+void legacy_show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes)
+{
+	vgt_reg_t p_tail, p_head, p_start, p_ctl;
+
+	p_tail = VGT_MMIO_READ(pdev, RB_TAIL(pdev, ring_id));
+	p_head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
+	p_start = VGT_MMIO_READ(pdev, RB_START(pdev, ring_id));
+	p_ctl = VGT_MMIO_READ(pdev, RB_CTL(pdev, ring_id));
+
+	common_show_ring_buffer(pdev, ring_id, bytes,
+			p_tail, p_head, p_start, p_ctl,
+			VGT_MMIO_READ(pdev, VGT_ACTHD(ring_id)));
+}
+
+unsigned long ring_id_2_current_desc_reg [] = {
+	[RING_BUFFER_RCS] = 0x4400,
+	[RING_BUFFER_VCS] = 0x4440,
+	[RING_BUFFER_VCS2] = 0x4480,
+	[RING_BUFFER_VECS] = 0x44c0,
+	[RING_BUFFER_BCS] = 0x4500,
+};
+
+void execlist_show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes)
+{
+	struct vgt_device *vgt = current_render_owner(pdev);
+	vgt_reg_t p_tail, p_head, p_start, p_ctl;
+	unsigned long reg, val;
+	u64 bb_head;
+	u32 *p;
+
+	printk("Execlist:\n");
+
+	reg = RB_TAIL(pdev, ring_id) - 0x30 + _EL_OFFSET_STATUS;
+	val = VGT_MMIO_READ(pdev, reg);
+
+	printk("....Current execlist status: %lx.\n", val);
+
+	val = VGT_MMIO_READ(pdev, ring_id_2_current_desc_reg[ring_id]);
+
+	printk("....Current element descriptor(low): %lx.\n", val);
+
+	val &= ~0xfff;
+
+	printk("....LRCA: %lx.\n", val);
+
+	if (!val)
+		return;
+
+	p = vgt_gma_to_va(vgt->gtt.ggtt_mm, val + 4096);
+	if (!p)
+		return;
+
+	if ((ring_id == RING_BUFFER_RCS && p[1] != 0x1100101b)
+		|| (ring_id != RING_BUFFER_RCS && p[1] != 0x11000015)) {
+		printk("Invalid signature: %x.\n", p[1]);
+		return;
+	}
+
+	p_head = *(p + 0x4 + 1);
+	p_tail = *(p + 0x6 + 1);
+	p_start = *(p + 0x8 + 1);
+	p_ctl = *(p + 0xa + 1);
+
+	bb_head = *(p + 0xc + 1) << 31;
+	bb_head |= *(p + 0xe + 1);
+	reg = RB_TAIL(pdev, ring_id) - 0x30 + 0x140;
+
+	common_show_ring_buffer(pdev, ring_id, bytes,
+			p_tail, p_head, p_start, p_ctl,
+			bb_head);
+}
+
+void show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes)
+{
+	is_execlist_mode(pdev, ring_id) ?
+		execlist_show_ring_buffer(pdev, ring_id, bytes) :
+		legacy_show_ring_buffer(pdev, ring_id, bytes);
 }
 
 void show_interrupt_regs(struct pgt_device *pdev,

@@ -55,7 +55,7 @@ extern struct vgt_device *vgt_dom0;
 extern struct pgt_device *perf_pgt;
 extern struct list_head pgt_devices;
 extern struct pgt_device default_device;
-extern void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes);
+extern void show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes);
 extern void show_mode_settings(struct pgt_device *pdev);
 extern void show_ring_debug(struct pgt_device *pdev, int ring_id);
 extern void show_debug(struct pgt_device *pdev);

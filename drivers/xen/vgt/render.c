@@ -1985,7 +1985,7 @@ err:
 			vgt_dom0->rb[i].sring.tail,
 			vgt_dom0->rb[i].sring.start);
 	show_ring_debug(pdev, i);
-	show_ringbuffer(pdev, i, 16 * sizeof(vgt_reg_t));
+	show_ring_buffer(pdev, i, 16 * sizeof(vgt_reg_t));
 	if (!enable_reset)
 		/* crash system now, to avoid causing more confusing errors */
 		ASSERT(0);
