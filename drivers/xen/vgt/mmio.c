@@ -278,6 +278,18 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 
 	t0 = get_cycles();
 
+	vgt_lock_dev_flags(pdev, cpu, flags);
+
+	if (atomic_read(&vgt->gtt.n_write_protected_guest_page)) {
+		guest_page_t *gp;
+		gp = vgt_find_guest_page(vgt, pa >> PAGE_SHIFT);
+		if (gp) {
+			memcpy(p_data, gp->vaddr + (pa & ~PAGE_MASK), bytes);
+			vgt_unlock_dev_flags(pdev, cpu, flags);
+			return true;
+		}
+	}
+
 	offset = vgt_pa_to_mmio_offset(vgt, pa);
 
 	/* FENCE registers / GTT entries(sometimes) are accessed in 8 bytes. */
@@ -286,8 +298,6 @@ bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data,int byte
 
 	if (bytes > 4)
 		vgt_dbg(VGT_DBG_GENERIC,"vGT: capture >4 bytes read to %x\n", offset);
-
-	vgt_lock_dev_flags(pdev, cpu, flags);
 
 	raise_ctx_sched(vgt);
 
