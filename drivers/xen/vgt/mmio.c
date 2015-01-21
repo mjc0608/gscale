@@ -397,16 +397,17 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	cycles_t t0, t1;
 	struct vgt_statistics *stat = &vgt->stat;
 
+	vgt_lock_dev_flags(pdev, cpu, flags);
+
 	t0 = get_cycles();
 
-	/* PPGTT PTE WP comes here too. */
-	if (pdev->enable_ppgtt && vgt->vm_id != 0 && vgt->ppgtt_initialized) {
-		struct vgt_wp_page_entry *wp;
-		wp = vgt_find_wp_page_entry(vgt, pa >> PAGE_SHIFT);
-		if (wp) {
-			/* XXX lock? */
-			vgt_ppgtt_handle_pte_wp(vgt, wp, pa, p_data, bytes);
-			return true;
+	if (atomic_read(&vgt->gtt.n_write_protected_guest_page)) {
+		guest_page_t *guest_page;
+		guest_page = vgt_find_guest_page(vgt, pa >> PAGE_SHIFT);
+		if (guest_page) {
+			rc = guest_page->handler(guest_page, pa, p_data, bytes);
+			vgt_unlock_dev_flags(pdev, cpu, flags);
+			return rc;
 		}
 	}
 
@@ -414,7 +415,7 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 
 	/* FENCE registers / GTT entries(sometimes) are accessed in 8 bytes. */
 	if (bytes > 8 || (offset & (bytes - 1)))
-		goto err_common_chk;
+		goto err_mmio;
 
 	if (bytes > 4)
 		vgt_dbg(VGT_DBG_GENERIC,"vGT: capture >4 bytes write to %x with val (%lx)\n", offset, *(unsigned long*)p_data);
@@ -424,8 +425,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 		return true;
 	}
 */
-
-	vgt_lock_dev_flags(pdev, cpu, flags);
 
 	raise_ctx_sched(vgt);
 
@@ -494,7 +493,6 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	return true;
 err_mmio:
 	vgt_unlock_dev_flags(pdev, cpu, flags);
-err_common_chk:
 	vgt_err("VM(%d): invalid MMIO offset(%08x),"
 		"bytes(%d)!\n", vgt->vm_id, offset, bytes);
 	show_debug(pdev);

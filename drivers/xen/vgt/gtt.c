@@ -1389,7 +1389,7 @@ err:
 	return INVALID_ADDR;
 }
 
-void *__vgt_gma_to_va(struct vgt_mm *mm, unsigned long gma)
+void *vgt_gma_to_va(struct vgt_mm *mm, unsigned long gma)
 {
 	struct vgt_device *vgt = mm->vgt;
 	unsigned long gpa;
@@ -1425,6 +1425,35 @@ bool gtt_mmio_read(struct vgt_device *vgt,
 		memcpy(p_data, &e.val64 + (off & 0x7), bytes);
 
 	return true;
+}
+
+bool gtt_emulate_read(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes)
+{
+	struct vgt_device_info *info = &vgt->pdev->device_info;
+	int ret;
+	cycles_t t0, t1;
+	struct vgt_statistics *stat = &vgt->stat;
+
+	if (bytes != 4 && bytes != 8)
+		return false;
+
+	t0 = get_cycles();
+	stat->gtt_mmio_rcnt++;
+
+	off -= info->gtt_start_offset;
+
+	if (IS_PREBDW(vgt->pdev)) {
+		ret = gtt_mmio_read(vgt, off, p_data, 4);
+		if (ret && bytes == 8)
+			ret = gtt_mmio_read(vgt, off + 4, (char*)p_data + 4, 4);
+	} else {
+		ret = gtt_mmio_read(vgt, off, p_data, bytes);
+	}
+
+	t1 = get_cycles();
+	stat->gtt_mmio_rcycles += (u64) (t1 - t0);
+	return ret;
 }
 
 static bool process_ppgtt_root_pointer(struct vgt_device *vgt,
@@ -1522,6 +1551,35 @@ bool gtt_mmio_write(struct vgt_device *vgt, unsigned int off,
 	ggtt_set_shadow_entry(ggtt_mm, &m, g_gtt_index);
 out:
 	return true;
+}
+
+bool gtt_emulate_write(struct vgt_device *vgt, unsigned int off,
+	void *p_data, unsigned int bytes)
+{
+	struct vgt_device_info *info = &vgt->pdev->device_info;
+	int ret;
+	cycles_t t0, t1;
+	struct vgt_statistics *stat = &vgt->stat;
+
+	if (bytes != 4 && bytes != 8)
+		return false;
+
+	t0 = get_cycles();
+	stat->gtt_mmio_wcnt++;
+
+	off -= info->gtt_start_offset;
+
+	if (IS_PREBDW(vgt->pdev)) {
+		ret = gtt_mmio_write(vgt, off, p_data, 4);
+		if (ret && bytes == 8)
+			ret = gtt_mmio_write(vgt, off + 4, (char*)p_data + 4, 4);
+	} else {
+		ret = gtt_mmio_write(vgt, off, p_data, bytes);
+	}
+
+	t1 = get_cycles();
+	stat->gtt_mmio_wcycles += (u64) (t1 - t0);
+	return ret;
 }
 
 #define ring_id_to_pp_dclv(pdev, ring_id) \
@@ -1673,77 +1731,6 @@ unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma)
 	pfn = gtt_pte_get_pfn(vgt->pdev, vgt->vgtt[gtt_index]);
 	pa = (pfn << PAGE_SHIFT) + (gma & ~PAGE_MASK);
 	return pa;
-}
-
-static unsigned long vgt_gma_2_shadow_gpa(struct vgt_device *vgt, unsigned long gma)
-{
-	unsigned long gpa;
-	vgt_ppgtt_pte_t *p;
-	u32 *e, pte;
-
-	ASSERT(vgt->vm_id != 0);
-
-	if (unlikely(gma >= (1 << 31))) {
-		vgt_warn("invalid gma value 0x%lx\n", gma);
-		return INVALID_ADDR;
-	}
-
-	p = &vgt->shadow_pte_table[((gma >> 22) & 0x1ff)];
-
-	/* gpa is physical pfn from shadow page table, we need VM's
-	 * pte page entry */
-	if (!p->guest_pte_va) {
-		vgt_warn("No guest pte mapping? index %lu\n",(gma >> 22) & 0x3ff);
-		return INVALID_ADDR;
-	}
-
-	e = (u32 *)p->guest_pte_va;
-	pte = *((u32*)(e + ((gma >> 12) & 0x3ff)));
-	gpa = (gtt_pte_get_pfn(vgt->pdev, pte) << PAGE_SHIFT) + (gma & ~PAGE_MASK);
-	return gpa;
-}
-
-static unsigned long vgt_gma_2_dom0_ppgtt_gpa(struct vgt_device *vgt, unsigned long gma)
-{
-	/* dom0 has no shadow PTE */
-	uint32_t gtt_index;
-	unsigned long pfn, gpa;
-	u32 *ent, pte;
-
-	if (unlikely(gma >= (1 << 31))) {
-		vgt_warn("invalid gma value 0x%lx\n", gma);
-		return INVALID_ADDR;
-	}
-
-	gtt_index = vgt->ppgtt_base + ((gma >> 22) & 0x1ff);
-	pfn = gtt_pte_get_pfn(vgt->pdev, vgt->vgtt[gtt_index]);
-
-	/* dom0 PTE page */
-	ent = (u32*)mfn_to_virt(pfn);
-	pte = *((u32*)(ent + ((gma >> 12) & 0x3ff)));
-	gpa = (gtt_pte_get_pfn(vgt->pdev, pte) << PAGE_SHIFT) + (gma & ~PAGE_MASK);
-	return gpa;
-}
-
-void* vgt_gma_to_va(struct vgt_device *vgt, unsigned long gma, bool ppgtt)
-{
-	unsigned long gpa;
-
-	if (!ppgtt) {
-		gpa = vgt_gma_2_gpa(vgt, gma);
-	} else {
-		if (vgt->vm_id != 0)
-			gpa = vgt_gma_2_shadow_gpa(vgt, gma);
-		else
-			gpa = vgt_gma_2_dom0_ppgtt_gpa(vgt, gma);
-	}
-
-	if (gpa == INVALID_ADDR) {
-		vgt_warn("invalid gpa! gma 0x%lx, ppgtt %s\n", gma, ppgtt ? "yes":"no");
-		return NULL;
-	}
-
-	return vgt_vmem_gpa_2_va(vgt, gpa);
 }
 
 /* handler to set page wp */
@@ -1928,163 +1915,6 @@ vgt_ppgtt_pde_handle(struct vgt_device *vgt, unsigned int i, u32 pde)
 
 	/* write_gtt with new shadow PTE page address */
 	vgt_write_gtt(vgt->pdev, h_index, shadow_pde);
-}
-
-
-static void
-vgt_ppgtt_pde_write(struct vgt_device *vgt, unsigned int g_gtt_index, u32 g_gtt_val)
-{
-	int i = g_gtt_index - vgt->ppgtt_base;
-	u32 h_gtt_index;
-
-	if (vgt->shadow_pde_table[i].entry == g_gtt_val) {
-		vgt_dbg(VGT_DBG_MEM, "write same PDE value?\n");
-		return;
-	}
-
-	vgt_dbg(VGT_DBG_MEM, "write PDE[%d] old: 0x%x new: 0x%x\n", i, vgt->shadow_pde_table[i].entry, g_gtt_val);
-
-	if (vgt->shadow_pde_table[i].entry & _REGBIT_PDE_VALID)
-		vgt_unset_wp_page(vgt, vgt->shadow_pde_table[i].virtual_phyaddr >> PAGE_SHIFT);
-
-	if (!(g_gtt_val & _REGBIT_PDE_VALID)) {
-		h_gtt_index = g2h_gtt_index(vgt, g_gtt_index);
-		vgt_write_gtt(vgt->pdev, h_gtt_index, 0);
-	} else {
-		vgt_ppgtt_pde_handle(vgt, i, g_gtt_val);
-	}
-}
-
-static bool gtt_mmio_read32(struct vgt_device *vgt, unsigned int off,
-	void *p_data, unsigned int bytes)
-{
-	struct vgt_device_info *info = &vgt->pdev->device_info;
-	uint32_t g_gtt_index;
-
-	ASSERT(bytes == 4);
-
-	off -= info->gtt_start_offset;
-	/*
-	if (off >= vgt->vgtt_sz) {
-		vgt_dbg(VGT_DBG_MEM, "vGT(%d): captured out of range GTT read on off %x\n", vgt->vgt_id, off);
-		return false;
-	}
-	*/
-
-	g_gtt_index = off >> info->gtt_entry_size_shift;
-	*(uint32_t*)p_data = vgt->vgtt[g_gtt_index];
-	if (vgt->vm_id == 0) {
-		*(uint32_t*)p_data = vgt_read_gtt(vgt->pdev,
-						  g_gtt_index);
-	} else if (off < vgt->vgtt_sz) {
-		*(uint32_t*)p_data = vgt->vgtt[g_gtt_index];
-	} else {
-		printk("vGT(%d): captured out of range GTT read on "
-		       "off %x\n", vgt->vgt_id, off);
-		return false;
-	}
-	
-	return true;
-}
-
-bool gtt_emulate_read(struct vgt_device *vgt, unsigned int off,
-	void *p_data, unsigned int bytes)
-{
-	int ret;
-	cycles_t t0, t1;
-	struct vgt_statistics *stat = &vgt->stat;
-
-	t0 = get_cycles();
-	stat->gtt_mmio_rcnt++;
-
-	ASSERT(bytes == 4 || bytes == 8);
-
-	ret = gtt_mmio_read32(vgt, off, p_data, 4);
-	if (ret && bytes == 8)
-		ret = gtt_mmio_read32(vgt, off + 4, (char*)p_data + 4, 4);
-
-	t1 = get_cycles();
-	stat->gtt_mmio_rcycles += (u64) (t1 - t0);
-	return ret;
-}
-
-#define GTT_INDEX_MB(x) ((SIZE_1MB*(x)) >> GTT_PAGE_SHIFT)
-
-static bool gtt_mmio_write32(struct vgt_device *vgt, unsigned int off,
-	void *p_data, unsigned int bytes)
-{
-	struct vgt_device_info *info = &vgt->pdev->device_info;
-	uint32_t g_gtt_val, h_gtt_val, g_gtt_index, h_gtt_index;
-	int rc;
-	uint64_t g_addr;
-
-	ASSERT(bytes == 4);
-
-	off -= info->gtt_start_offset;
-
-	g_gtt_index = off >> info->gtt_entry_size_shift;
-	g_gtt_val = *(uint32_t*)p_data;
-	vgt->vgtt[g_gtt_index] = g_gtt_val;
-
-	g_addr = g_gtt_index << GTT_PAGE_SHIFT;
-	/* the VM may configure the whole GM space when ballooning is used */
-	if (!g_gm_is_valid(vgt, g_addr)) {
-		static int count = 0;
-
-		/* print info every 32MB */
-		if (!(count % 8192))
-			vgt_dbg(VGT_DBG_MEM, "vGT(%d): capture ballooned write for %d times (%x)\n",
-				vgt->vgt_id, count, off);
-
-		count++;
-		/* in this case still return true since the impact is on vgtt only */
-		goto out;
-	}
-
-	if (vgt->ppgtt_initialized && vgt->vm_id &&
-			g_gtt_index >= vgt->ppgtt_base &&
-			g_gtt_index < vgt->ppgtt_base + VGT_PPGTT_PDE_ENTRIES) {
-		vgt_dbg(VGT_DBG_MEM, "vGT(%d): Change PPGTT PDE %d!\n", vgt->vgt_id, g_gtt_index);
-		vgt_ppgtt_pde_write(vgt, g_gtt_index, g_gtt_val);
-		goto out;
-	}
-
-	rc = gtt_p2m(vgt, g_gtt_val, &h_gtt_val);
-	if (rc < 0){
-		vgt_err("vGT(%d): failed to translate g_gtt_val(%x)\n", vgt->vgt_id, g_gtt_val);
-		return false;
-	}
-
-	h_gtt_index = g2h_gtt_index(vgt, g_gtt_index);
-	vgt_write_gtt( vgt->pdev, h_gtt_index, h_gtt_val );
-#ifdef DOM0_DUAL_MAP
-	if ( (h_gtt_index >= GTT_INDEX_MB(128)) && (h_gtt_index < GTT_INDEX_MB(192)) ){
-		vgt_write_gtt( vgt->pdev, h_gtt_index - GTT_INDEX_MB(128), h_gtt_val );
-	}
-#endif
-out:
-	return true;
-}
-
-bool gtt_emulate_write(struct vgt_device *vgt, unsigned int off,
-	void *p_data, unsigned int bytes)
-{
-	int ret;
-	cycles_t t0, t1;
-	struct vgt_statistics *stat = &vgt->stat;
-
-	t0 = get_cycles();
-	stat->gtt_mmio_wcnt++;
-
-	ASSERT(bytes == 4 || bytes == 8);
-
-	ret = gtt_mmio_write32(vgt, off, p_data, 4);
-	if (ret && bytes == 8)
-		ret = gtt_mmio_write32(vgt, off + 4, (char*)p_data + 4, 4);
-
-	t1 = get_cycles();
-	stat->gtt_mmio_wcycles += (u64) (t1 - t0);
-	return ret;
 }
 
 /* So idea is that for PPGTT base in GGTT, real PDE entry will point to shadow
@@ -2345,8 +2175,9 @@ void vgt_try_setup_ppgtt(struct vgt_device *vgt)
 
 int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
 {
-	vgt_ring_ppgtt_t *v_info = &vgt->rb[ring_id].vring_ppgtt_info;
-	vgt_ring_ppgtt_t *s_info = &vgt->rb[ring_id].sring_ppgtt_info;
+	vgt_state_ring_t *rb = &vgt->rb[ring_id];
+	vgt_ring_ppgtt_t *v_info = &rb->vring_ppgtt_info;
+	vgt_ring_ppgtt_t *s_info = &rb->sring_ppgtt_info;
 
 	v_info->mode = mode;
 	s_info->mode = mode;
@@ -2361,12 +2192,29 @@ int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
 
 	/* sanity check */
 	if ((mode & _REGBIT_PPGTT_ENABLE) && (mode & (_REGBIT_PPGTT_ENABLE << 16))) {
-		printk("PPGTT enabling on ring %d\n", ring_id);
 		/* XXX the order of mode enable for PPGTT and PPGTT dir base
 		 * setting is not strictly defined, e.g linux driver first
 		 * enables PPGTT bit in mode reg, then write PP dir base...
 		 */
 		vgt->rb[ring_id].has_ppgtt_mode_enabled = 1;
+		if (IS_PREBDW(vgt->pdev)) {
+			rb->ppgtt_page_table_level = 2;
+			rb->ppgtt_root_pointer_type = GTT_TYPE_PPGTT_PDE_ENTRY;
+		} else {
+			rb->ppgtt_page_table_level = 3;
+			rb->ppgtt_root_pointer_type = GTT_TYPE_PPGTT_ROOT_L3_ENTRY;
+
+			if ((mode & _REGBIT_PPGTT64_ENABLE)
+					&& (mode & (_REGBIT_PPGTT64_ENABLE << 16))) {
+				printk("PPGTT 64 bit VA enabling on ring %d\n", ring_id);
+				rb->ppgtt_page_table_level = 4;
+				rb->ppgtt_root_pointer_type = GTT_TYPE_PPGTT_ROOT_L4_ENTRY;
+			}
+		}
+
+		printk("PPGTT enabling on ring %d page table level %d type %d\n",
+				ring_id, rb->ppgtt_page_table_level,
+				rb->ppgtt_root_pointer_type);
 	}
 
 	return 0;

@@ -164,7 +164,7 @@ void show_mode_settings(struct pgt_device *pdev)
 	SHOW_MODE(_REG_TILECTL);
 }
 
-static void show_batchbuffer(struct pgt_device *pdev, u32 addr,
+static void show_batchbuffer(struct pgt_device *pdev, int ring_id, u32 addr,
 	int bytes, int ppgtt)
 {
 	int i;
@@ -190,7 +190,10 @@ static void show_batchbuffer(struct pgt_device *pdev, u32 addr,
 
 	printk("Batch buffer contents: \n");
 	for (i = 0; i < bytes; i += 4) {
-		ip_va = vgt_gma_to_va(vgt, start + i, ppgtt);
+		struct vgt_mm *mm = ppgtt ? vgt->rb[ring_id].active_ppgtt_mm :
+			vgt->gtt.ggtt_mm;
+
+		ip_va = vgt_gma_to_va(mm, start + i);
 
 		if (!(i % 32))
 			printk("\n[%08x]:", start + i);
@@ -260,12 +263,16 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 	}
 	printk("\n");
 
-	off = WRAP_OFF(p_head - 8, ring_len);
+	if (IS_PREBDW(pdev))
+		off = WRAP_OFF(p_head - 8, ring_len);
+	else
+		off = WRAP_OFF(p_head - 12, ring_len);
+
 	cur = (u32*)(p_contents + off);
 	if ((*cur & 0xfff00000) == 0x18800000 && vgt) {
 		int ppgtt = (*cur & _CMDBIT_BB_START_IN_PPGTT);
 
-		if (ppgtt && !vgt->ppgtt_initialized) {
+		if (ppgtt && !test_bit(ring_id, &vgt->gtt.active_ppgtt_mm_bitmap)) {
 			printk("Batch buffer in PPGTT with PPGTT disabled?\n");
 			return;
 		}
@@ -274,7 +281,7 @@ void show_ringbuffer(struct pgt_device *pdev, int ring_id, int bytes)
 			ppgtt ? "PPGTT" : "GTT",
 			*(cur + 1));
 
-		show_batchbuffer(pdev,
+		show_batchbuffer(pdev, ring_id,
 			VGT_MMIO_READ(pdev, VGT_ACTHD(ring_id)),
 			bytes,
 			ppgtt);

@@ -599,8 +599,7 @@ static bool pp_dir_base_write(struct vgt_device *vgt, unsigned int off,
 
 	vgt->rb[ring_id].has_ppgtt_base_set = 1;
 
-	vgt_try_setup_ppgtt(vgt);
-	return true;
+	return gen7_ppgtt_mm_setup(vgt, ring_id);
 }
 
 static bool pp_dclv_read(struct vgt_device *vgt, unsigned int off,

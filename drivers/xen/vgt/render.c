@@ -1697,7 +1697,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	/* STEP-5: switch PPGTT */
 	current_render_owner(pdev) = next;
 	/* ppgtt switch must be done after render owner switch */
-	if (pdev->enable_ppgtt && next->ppgtt_initialized)
+	if (pdev->enable_ppgtt && next->gtt.active_ppgtt_mm_bitmap)
 		vgt_ppgtt_switch(next);
 
 	/* STEP-6: ctx switch ends, and then kicks of new tail */

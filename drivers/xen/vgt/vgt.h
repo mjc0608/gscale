@@ -2556,7 +2556,7 @@ extern bool gtt_emulate_write(struct vgt_device *vgt, unsigned int off,
 #define INVALID_ADDR (~0UL)
 extern unsigned long vgt_gma_2_gpa(struct vgt_device *vgt, unsigned long gma);
 
-extern void* vgt_gma_to_va(struct vgt_device *vgt, unsigned long gma, bool ppgtt);
+extern void* vgt_gma_to_va(struct vgt_mm *mm, unsigned long gma);
 
 extern int gtt_p2m(struct vgt_device *vgt, uint32_t p_gtt_val, uint32_t *m_gtt_val);
 

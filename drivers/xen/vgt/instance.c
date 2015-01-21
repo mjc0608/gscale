@@ -108,7 +108,6 @@ static int create_state_instance(struct vgt_device *vgt)
  */
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp)
 {
-	struct vgt_device_info *info = &pdev->device_info;
 	int cpu;
 	struct vgt_device *vgt;
 	char *cfg_space;
@@ -163,18 +162,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt->aperture_offset = aperture_2_gm(pdev, vgt->aperture_base);
 	vgt->aperture_base_va = phys_aperture_vbase(pdev) +
 		vgt->aperture_offset;
-
-	if (vgt->ballooning)
-		vgt->vgtt_sz = (gm_sz(pdev) >> GTT_PAGE_SHIFT) * info->gtt_entry_size;
-	else
-		vgt->vgtt_sz = (vgt->gm_sz >> GTT_PAGE_SHIFT) * info->gtt_entry_size;
-	vgt_info("Virtual GTT size: 0x%lx\n", (long)vgt->vgtt_sz);
-	vgt->vgtt = vzalloc(vgt->vgtt_sz);
-	if (!vgt->vgtt) {
-		printk("vGT: failed to allocate virtual GTT table\n");
-		rc = -ENOMEM;
-		goto err;
-	}
 
 	alloc_vm_rsvd_aperture(vgt);
 
@@ -273,15 +260,16 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	vgt_unlock_dev(pdev, cpu);
 
+	if (!vgt_init_vgtt(vgt)) {
+		vgt_err("fail to initialize vgt vgtt.\n");
+		goto err;
+	}
+
 	if (vgt->vm_id != 0){
 		/* HVM specific init */
 		if ((rc = vgt_hvm_info_init(vgt)) < 0 ||
 			(rc = vgt_hvm_enable(vgt)) < 0)
 			goto err;
-		if (pdev->enable_ppgtt) {
-			hash_init((vgt->wp_table));
-			vgt_init_shadow_ppgtt(vgt);
-		}
 	}
 
 	if (vgt->vm_id) {
@@ -333,7 +321,7 @@ err:
 	vgt_hvm_info_deinit(vgt);
 	if ( vgt->aperture_base > 0)
 		free_vm_aperture_gm_and_fence(vgt);
-	vfree(vgt->vgtt);
+	vgt_clean_vgtt(vgt);
 	vfree(vgt->state.vReg);
 	vfree(vgt->state.sReg);
 	if (vgt->vgt_id >= 0)
@@ -434,8 +422,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 		}
 	}
 
-	if (vgt->pdev->enable_ppgtt)
-		vgt_destroy_shadow_ppgtt(vgt);
+	vgt_clean_vgtt(vgt);
 
 	/* clear the gtt entries for GM of this vgt device */
 	vgt_clear_gtt(vgt);
@@ -443,7 +430,6 @@ void vgt_release_instance(struct vgt_device *vgt)
 	free_vm_aperture_gm_and_fence(vgt);
 	free_vm_rsvd_aperture(vgt);
 	vgt_vmem_destroy(vgt);
-	vfree(vgt->vgtt);
 	vfree(vgt->state.vReg);
 	vfree(vgt->state.sReg);
 	vfree(vgt);

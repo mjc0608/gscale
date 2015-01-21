@@ -533,6 +533,14 @@ static void parser_exec_state_dump(struct parser_exec_state *s)
 #define RING_BUF_WRAP(s, ip_gma)	(((s)->buf_type == RING_BUFFER_INSTRUCTION) && \
 		((ip_gma) >= (s)->ring_start + (s)->ring_size))
 
+static inline struct vgt_mm *parser_exec_state_to_mm(struct parser_exec_state *s)
+{
+	if (s->buf_addr_type != PPGTT_BUFFER)
+		return s->vgt->gtt.ggtt_mm;
+	else
+		return s->vgt->rb[s->ring_id].active_ppgtt_mm;
+}
+
 static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)
 {
 	unsigned long gma_next_page;
@@ -546,9 +554,7 @@ static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)
 	}
 
 	s->ip_gma = ip_gma;
-	s->ip_va = vgt_gma_to_va(s->vgt, ip_gma,
-			s->buf_addr_type == PPGTT_BUFFER);
-
+	s->ip_va = vgt_gma_to_va(parser_exec_state_to_mm(s), ip_gma);
 	if (s->ip_va == NULL) {
 		vgt_err("ERROR: gma %lx is invalid, fail to set\n", s->ip_gma);
 		dump_stack();
@@ -566,9 +572,7 @@ static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)
 	else
 		gma_next_page = ((ip_gma >> PAGE_SHIFT) + 1) << PAGE_SHIFT;
 
-	s->ip_va_next_page = vgt_gma_to_va(s->vgt, gma_next_page,
-			s->buf_addr_type == PPGTT_BUFFER);
-
+	s->ip_va_next_page = vgt_gma_to_va(parser_exec_state_to_mm(s), gma_next_page);
 	if (s->ip_va_next_page == NULL) {
 		vgt_err("ERROR: next page gma %lx is invalid, fail to set\n",gma_next_page);
 		dump_stack();

@@ -114,6 +114,7 @@
 #define        _REGBIT_FLUSH_TLB_INVALIDATION_MODE	(1 << 13)
 #define        _REGBIT_REPLAY_MODE			(1 << 11)
 #define        _REGBIT_PPGTT_ENABLE			(1 << 9)
+#define        _REGBIT_PPGTT64_ENABLE                   (1 << 7)
 #define _REG_ARB_MODE	0x4030
 #define        _REGBIT_ADDRESS_SWIZZLING		(3 << 4)
 #define _REG_GT_MODE	0x20D0
