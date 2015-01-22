@@ -658,7 +658,10 @@ bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe)
 
 	/*fixed panel fitting mode to 3x3 mode, Restriction : A 3x3 capable filter must not be enabled
 		when the pipe horizontal source size is greater than 2048 pixels*/
-	pf_ctl =  _REGBIT_PF_FILTER_MED_3x3 | _REGBIT_PF_PIPE_SEL(real_pipe);
+	if (IS_HSW(vgt->pdev))
+		pf_ctl =  _REGBIT_PF_FILTER_MED_3x3 | _REGBIT_PF_PIPE_SEL(real_pipe);
+	else /*after BDW the panel fitter is on the pipe, no need to assign.*/
+		pf_ctl =  _REGBIT_PF_FILTER_MED_3x3;
 
 	/*enable panel fitting only when the source mode does not eqaul to the target mode*/
 	if (src_width != target_width || src_height != target_height ) {

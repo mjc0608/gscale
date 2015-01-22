@@ -655,8 +655,12 @@ static bool dpy_trans_ddi_ctl_write(struct vgt_device *vgt, unsigned int offset,
 	uint32_t old_data;
 	int i;
 
-	/* force to use panel fitting path for eDP */
-	if (enable_panel_fitting &&
+	/* force to use panel fitting path for eDP for HSW,
+	 * it's no need for BDW as the panel fitter for pipe A
+	 * is now also in the always-on power well.
+	 */
+	if (IS_HSW(vgt->pdev) &&
+		enable_panel_fitting &&
 		is_current_display_owner(vgt) &&
 		offset == _REG_TRANS_DDI_FUNC_CTL_EDP &&
 		PIPE_A  == get_edp_input(*((uint32_t *)p_data))) {
@@ -2075,7 +2079,7 @@ static bool power_well_ctl_read(struct vgt_device *vgt, unsigned int offset,
 		data = __vreg(vgt, offset);
 	}
 
-	if (enable_panel_fitting && offset == _REG_HSW_PWR_WELL_CTL2) {
+	if (IS_HSW(vgt->pdev) && enable_panel_fitting && offset == _REG_HSW_PWR_WELL_CTL2) {
 		data = __vreg(vgt, offset);
 	}
 
@@ -2099,7 +2103,7 @@ static bool power_well_ctl_write(struct vgt_device *vgt, unsigned int offset,
 
 	if (is_current_display_owner(vgt)) {
 		/* force to enable power well physically */
-		if (enable_panel_fitting && offset == _REG_HSW_PWR_WELL_CTL2) {
+		if (IS_HSW(vgt->pdev) && enable_panel_fitting && offset == _REG_HSW_PWR_WELL_CTL2) {
 			value |= _REGBIT_HSW_PWR_WELL_ENABLE;
 		}
 		VGT_MMIO_WRITE(vgt->pdev, offset, value);
