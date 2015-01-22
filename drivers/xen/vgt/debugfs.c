@@ -551,7 +551,7 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 		reg = _VGT_TRANS_DDI_FUNC_CTL(pipe);
 		val = vgt_get_mmio_value(pdev, vgt, reg);
 		enabled = !!(val & _REGBIT_TRANS_DDI_FUNC_ENABLE);
-		seq_printf(m, "\tPIPE_DDI_FUNC_CTL_%c(0x%x): 0x%08x (%s)\n",
+		seq_printf(m, "\tTRANS_DDI_FUNC_CTL_%c(0x%x): 0x%08x (%s)\n",
 			P, reg, val, (enabled ? "enabled" : "disabled"));
 
 		if (enabled) {
@@ -615,7 +615,7 @@ static void vgt_dump_dpy_mmio(struct seq_file *m, struct pgt_device *pdev,
 	reg = _REG_TRANS_DDI_FUNC_CTL_EDP;
 	val = vgt_get_mmio_value(pdev, vgt, reg);
 	enabled = !!(val & _REGBIT_TRANS_DDI_FUNC_ENABLE);
-	seq_printf(m, "\tPIPE_DDI_FUNC_CTL_EDP(0x%x): 0x%08x (%s)\n",
+	seq_printf(m, "\tTRANS_DDI_FUNC_CTL_EDP(0x%x): 0x%08x (%s)\n",
 		reg, val, (enabled ? "enabled" : "disabled"));
 	if (enabled) {
 		vgt_reg_t edp_input = val &_REGBIT_TRANS_DDI_EDP_INPUT_MASK;

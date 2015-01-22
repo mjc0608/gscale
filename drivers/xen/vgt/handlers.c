@@ -2535,21 +2535,23 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PIPEADSL, 4, F_DPY, 0, D_ALL, pipe_dsl_mmio_read, NULL},
 {_REG_PIPEACONF, 4, F_DPY, 0, D_ALL, NULL, pipe_conf_mmio_write},
 {_REG_PIPEASTAT, 4, F_DPY, 0, D_ALL, NULL, NULL},
-{_REG_DSPARB, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PIPEA_FRMCOUNT, 4, F_DPY, 0, D_ALL, pipe_frmcount_mmio_read, NULL},
 {_REG_PIPEA_FLIPCOUNT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PIPE_MISC_A, 4, F_DPY, 0, D_BDW_PLUS, NULL, NULL},
 
 {_REG_PIPEBDSL, 4, F_DPY, 0, D_ALL, pipe_dsl_mmio_read, NULL},
 {_REG_PIPEBCONF, 4, F_DPY, 0, D_ALL, NULL, pipe_conf_mmio_write},
 {_REG_PIPEBSTAT, 4, F_DPY, 0, D_ALL, NULL, NULL},
 {_REG_PIPEB_FRMCOUNT, 4, F_DPY, 0, D_ALL, pipe_frmcount_mmio_read, NULL},
 {_REG_PIPEB_FLIPCOUNT, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_PIPE_MISC_B, 4, F_DPY, 0, D_BDW_PLUS, NULL, NULL},
 
 {_REG_PIPECDSL, 4, F_DPY, 0, D_HSW_PLUS, pipe_dsl_mmio_read, NULL},
 {_REG_PIPECCONF, 4, F_DPY, 0, D_HSW_PLUS, NULL, pipe_conf_mmio_write},
 {_REG_PIPECSTAT, 4, F_DPY, 0, D_HSW, NULL, NULL},
 {_REG_PIPEC_FRMCOUNT, 4, F_DPY, 0, D_HSW_PLUS, pipe_frmcount_mmio_read, NULL},
 {_REG_PIPEC_FLIPCOUNT, 4, F_VIRT, 0, D_HSW_PLUS, NULL, NULL},
+{_REG_PIPE_MISC_C, 4, F_DPY, 0, D_BDW_PLUS, NULL, NULL},
 
 {_REG_PIPE_EDP_CONF, 4, F_DPY, 0, D_HSW_PLUS, NULL, pipe_conf_mmio_write},
 
