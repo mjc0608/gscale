@@ -1488,15 +1488,10 @@ static int gen6_do_reset(struct drm_device *dev)
 	int	ret;
 
 	/* Reset the chip */
-
-	/* GEN6_GDRST is not in the gt power well, no need to check
-	 * for fifo space for the write or forcewake the chip for
-	 * the read
-	 */
-	__raw_i915_write32(dev_priv, GEN6_GDRST, GEN6_GRDOM_FULL);
+	I915_WRITE(GEN6_GDRST, GEN6_GRDOM_FULL);
 
 	/* Spin waiting for the device to ack the reset request */
-	ret = wait_for((__raw_i915_read32(dev_priv, GEN6_GDRST) & GEN6_GRDOM_FULL) == 0, 500);
+	ret = wait_for((I915_READ(GEN6_GDRST) & GEN6_GRDOM_FULL) == 0, 500);
 
 	intel_uncore_forcewake_reset(dev, true);
 
