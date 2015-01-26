@@ -635,14 +635,11 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
  *  return 0: success
  *	-1: error
  */
-int vgt_initialize(struct pci_dev *dev)
+static int vgt_initialize(struct pci_dev *dev)
 {
 	struct pgt_device *pdev = &default_device;
 	struct task_struct *p_thread;
 	vgt_params_t vp;
-
-	if (!vgt_enabled)
-		return -1;
 
 	spin_lock_init(&pdev->lock);
 
@@ -1086,9 +1083,11 @@ int vgt_reset_device(struct pgt_device *pdev)
 	return 0;
 }
 
-/* for GFX driver */
 bool i915_start_vgt(struct pci_dev *pdev)
 {
+	if (!vgt_enabled)
+		return false;
+
 	if (!vgt_pkdm)
 		return false;
 

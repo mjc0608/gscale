@@ -580,7 +580,6 @@ extern bool vgt_do_render_sched(struct pgt_device *pdev);
 extern void vgt_destroy(void);
 extern void vgt_destroy_debugfs(struct vgt_device *vgt);
 extern void vgt_release_debugfs(void);
-extern int vgt_initialize(struct pci_dev *dev);
 extern bool vgt_register_mmio_handler(unsigned int start, int bytes,
 	vgt_mmio_read read, vgt_mmio_write write);
 extern void vgt_clear_mmio_table(void);
