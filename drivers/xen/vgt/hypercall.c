@@ -409,6 +409,17 @@ static void *xen_mfn_to_virt(int mfn)
 	return mfn_to_virt(mfn);
 }
 
+static int xen_inject_msi(int vm_id, u32 addr_lo, u16 data)
+{
+	struct xen_hvm_inject_msi info = {
+		.domid	= vm_id,
+		.addr	= addr_lo, /* only low addr used */
+		.data	= data,
+	};
+
+	return HYPERVISOR_hvm_op(HVMOP_inject_msi, &info);
+}
+
 struct kernel_dm xen_kdm = {
 	.g2m_pfn = xen_g2m_pfn,
 	.get_max_gpfn = xen_get_max_gpfn,
@@ -424,4 +435,5 @@ struct kernel_dm xen_kdm = {
 	.check_host = xen_check_host,
 	.from_virt_to_mfn = xen_virt_to_mfn,
 	.from_mfn_to_virt = xen_mfn_to_virt,
+	.inject_msi = xen_inject_msi,
 };
