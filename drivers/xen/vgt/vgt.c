@@ -1083,7 +1083,7 @@ int vgt_reset_device(struct pgt_device *pdev)
 	return 0;
 }
 
-bool i915_start_vgt(struct pci_dev *pdev)
+bool vgt_check_host(void)
 {
 	if (!vgt_enabled)
 		return false;
@@ -1092,6 +1092,14 @@ bool i915_start_vgt(struct pci_dev *pdev)
 		return false;
 
 	if (!hypervisor_check_host())
+		return false;
+
+	return true;
+}
+
+bool i915_start_vgt(struct pci_dev *pdev)
+{
+	if (!vgt_check_host())
 		return false;
 
 	if (vgt_xops.initialized) {

@@ -18,6 +18,7 @@ void vgt_fini_irq(struct pci_dev *);
 irqreturn_t vgt_interrupt(int, void *);
 int vgt_suspend(struct pci_dev *pdev);
 int vgt_resume(struct pci_dev *pdev);
+bool vgt_check_host(void);
 
 #else /* !CONFIG_I915_VGT */
 
@@ -64,6 +65,11 @@ static inline int vgt_suspend(struct pci_dev *pdev)
 static inline int vgt_resume(struct pci_dev *pdev)
 {
 	return 0;
+}
+
+static inline bool vgt_check_host(void)
+{
+	return false;
 }
 
 #endif /* CONFIG_I915_VGT */

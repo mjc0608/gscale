@@ -74,7 +74,7 @@ i915_gem_vgtbuffer_ioctl(struct drm_device *dev, void *data,
 	/* Allocate the new object */
 	DRM_DEBUG_DRIVER("VGT: gem_vgtbuffer_ioctl\n");
 
-	if (!xen_initial_domain())
+	if (!vgt_check_host())
 		return -EPERM;
 
 	obj = i915_gem_object_alloc(dev);
