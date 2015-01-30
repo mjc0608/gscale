@@ -44,8 +44,10 @@ intel_ring_initialized(struct intel_engine_cs *ring)
 	if (i915.enable_execlists) {
 		struct intel_context *dctx = ring->default_context;
 		struct intel_ringbuffer *ringbuf = dctx->engine[ring->id].ringbuf;
-
-		return ringbuf->obj;
+		if (!ringbuf)
+			return false;
+		else
+			return ringbuf->obj;
 	} else
 		return ring->buffer && ring->buffer->obj;
 }
