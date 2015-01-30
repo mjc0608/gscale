@@ -209,22 +209,6 @@ int vgt_hvm_map_aperture (struct vgt_device *vgt, int map)
 	return r;
 }
 
-int vgt_io_trap(struct xen_domctl *ctl)
-{
-	int r;
-
-	ctl->cmd = XEN_DOMCTL_vgt_io_trap;
-	ctl->interface_version = XEN_DOMCTL_INTERFACE_VERSION;
-
-	r = HYPERVISOR_domctl(ctl);
-	if (r) {
-		printk(KERN_ERR "%s(): HYPERVISOR_domctl fail: %d\n", __func__, r);
-		return r;
-	}
-
-	return 0;
-}
-
 /*
  * Zap the GTTMMIO bar area for vGT trap and emulation.
  */
