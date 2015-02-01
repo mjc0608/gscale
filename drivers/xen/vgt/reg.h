@@ -1845,4 +1845,6 @@ static inline int port_type_to_port(int port_sel)
 #define _REG_PCU_IIR 0x444e8
 #define _REG_PCU_IER 0x444ec
 
+#define _REG_GEN8_PRIVATE_PAT  0x40e0
+
 #endif	/* _VGT_REG_H_ */

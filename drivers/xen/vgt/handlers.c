@@ -3213,6 +3213,10 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x124b8, 4, F_RDR, 0, D_HSW, NULL, NULL},
 {0x124bc, 4, F_RDR, 0, D_HSW, NULL, NULL},
 {0x124d0, 4, F_RDR, 0, D_HSW, NULL, NULL},
+
+/* BDW */
+{_REG_GEN8_PRIVATE_PAT, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
+{_REG_GEN8_PRIVATE_PAT + 4, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 };
 
 bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
