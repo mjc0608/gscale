@@ -1095,7 +1095,7 @@ struct pgt_device {
 
 	struct page *dummy_page;
 	struct page *(*rsvd_aperture_pages)[VGT_APERTURE_PAGES];
-	uint32_t dummy_pte;
+	gtt_entry_t dummy_gtt_entry;
 
 	uint64_t rsvd_aperture_sz;
 	uint64_t rsvd_aperture_base;

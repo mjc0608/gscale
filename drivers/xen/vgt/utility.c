@@ -532,22 +532,42 @@ void check_gtt(struct pgt_device *pdev)
 			vgt_read_gtt(pdev, GTT_INDEX(pdev, addr[i])));
 }
 
-u32 __inline dma_addr_to_pte_uc(struct pgt_device *pdev, dma_addr_t addr)
+static inline u64 dma_addr_to_pte_uc(struct pgt_device *pdev, dma_addr_t addr)
 {
-	u32 pte;
+	u64 v;
 
-	if (IS_HSW(pdev)) {
-		/* Haswell has new cache control bits */
-		pte = addr & ~0xfff;
-		pte |= (addr >> 28) & 0x7f0;
-		pte |= 1; /* valid */
+	if (IS_BDWPLUS(pdev)) {
+		v = addr & (0x7ffffff << 12);
 	} else {
-		pte = addr & ~0xfff;
-		pte |= (addr >> 28) & 0xff0;
-		pte |= (1 << 1); /* UC */
-		pte |= 1; /* valid */
+		if (IS_HSW(pdev)) {
+			/* Haswell has new cache control bits */
+			v = addr & ~0xfff;
+			v |= (addr >> 28) & 0x7f0;
+		} else {
+			v = addr & ~0xfff;
+			v |= (addr >> 28) & 0xff0;
+			v |= (1 << 1); /* UC */
+		}
 	}
-	return pte;
+	v |= 1;
+	return v;
+}
+
+void init_gm_space(struct pgt_device *pdev)
+{
+	struct vgt_gtt_pte_ops *ops = pdev->gtt.pte_ops;
+	unsigned long i;
+
+	/* clear all GM space, instead of only aperture */
+	for (i = 0; i < gm_pages(pdev); i++)
+		ops->set_entry(NULL, &pdev->dummy_gtt_entry, i, false, NULL);
+
+	vgt_dbg(VGT_DBG_MEM, "content at 0x0: %lx\n",
+			*(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
+	vgt_dbg(VGT_DBG_MEM, "content at 0x64000: %lx\n",
+			*(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x64000));
+	vgt_dbg(VGT_DBG_MEM, "content at 0x8064000: %lx\n",
+			*(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x8064000));
 }
 
 static void vgt_free_gtt_pages(struct pgt_device *pdev)
@@ -575,6 +595,8 @@ static void vgt_free_gtt_pages(struct pgt_device *pdev)
 
 void vgt_clear_gtt(struct vgt_device *vgt)
 {
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_gtt_pte_ops *ops = pdev->gtt.pte_ops;
 	uint32_t index;
 	uint32_t offset;
 	uint32_t num_entries;
@@ -582,25 +604,27 @@ void vgt_clear_gtt(struct vgt_device *vgt)
 	index = vgt_visible_gm_base(vgt) >> PAGE_SHIFT;
 	num_entries = vgt_aperture_sz(vgt) >> PAGE_SHIFT;
 	for (offset = 0; offset < num_entries; offset++){
-		vgt_write_gtt(vgt->pdev, index+offset, vgt->pdev->dummy_pte);
+		ops->set_entry(NULL, &pdev->dummy_gtt_entry, index+offset, false, NULL);
 	}
 
 	index = vgt_hidden_gm_base(vgt) >> PAGE_SHIFT;
 	num_entries = vgt_hidden_gm_sz(vgt) >> PAGE_SHIFT;
 	for (offset = 0; offset < num_entries; offset++){
-		vgt_write_gtt(vgt->pdev, index+offset, vgt->pdev->dummy_pte);
+		ops->set_entry(NULL, &pdev->dummy_gtt_entry, index+offset, false, NULL);
 	}
 }
 
 int setup_gtt(struct pgt_device *pdev)
 {
+	struct vgt_gtt_pte_ops *ops = pdev->gtt.pte_ops;
 	struct page *dummy_page;
 	struct page *(*pages)[VGT_APERTURE_PAGES];
 	struct page *page;
 
 	int i, ret, index;
 	dma_addr_t dma_addr;
-	u32 pte;
+	gtt_entry_t e;
+	u64 v;
 
 	check_gtt(pdev);
 
@@ -619,20 +643,16 @@ int setup_gtt(struct pgt_device *pdev)
 		goto err_out;
 	}
 
-	pte = dma_addr_to_pte_uc(pdev, dma_addr);
 	printk("....dummy page (0x%llx, 0x%llx)\n", page_to_phys(dummy_page), dma_addr);
-	pdev->dummy_pte = pte;
 
 	/* for debug purpose */
 	memset(pfn_to_kaddr(page_to_pfn(dummy_page)), 0x77, PAGE_SIZE);
 
-	/* clear all GM space, instead of only aperture */
-	for (i = 0; i < gm_pages(pdev); i++)
-		vgt_write_gtt(pdev, i, pte);
+	v = dma_addr_to_pte_uc(pdev, dma_addr);
+	gtt_init_entry(&e, GTT_TYPE_GGTT_PTE, pdev, v);
+	pdev->dummy_gtt_entry = e;
 
-	vgt_dbg(VGT_DBG_MEM, "content at 0x0: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x0));
-	vgt_dbg(VGT_DBG_MEM, "content at 0x64000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x64000));
-	vgt_dbg(VGT_DBG_MEM, "content at 0x8064000: %lx\n", *(unsigned long *)((char *)phys_aperture_vbase(pdev) + 0x8064000));
+	init_gm_space(pdev);
 
 	check_gtt(pdev);
 
@@ -671,8 +691,8 @@ int setup_gtt(struct pgt_device *pdev)
 			goto err_out;
 		}
 
-		pte = dma_addr_to_pte_uc(pdev, dma_addr);
-		vgt_write_gtt(pdev, index + i, pte);
+		ops->set_pfn(&e, dma_addr >> GTT_PAGE_SHIFT);
+		ops->set_entry(NULL, &e, index + i, false, NULL);
 
 		if (!(i % 1024))
 			vgt_dbg(VGT_DBG_MEM, "vGT: write GTT-%x phys: %llx, dma: %llx\n",
