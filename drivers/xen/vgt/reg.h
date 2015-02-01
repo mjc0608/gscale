@@ -184,6 +184,12 @@
 #define _REG_VCS_ACTHD		0x12074
 #define _REG_BCS_ACTHD		0x22074
 #define _REG_VECS_ACTHD		0x1A074
+
+#define _REG_RCS_ACTHD_UDW	0x205c
+#define _REG_VCS_ACTHD_UDW	0x1205c
+#define _REG_BCS_ACTHD_UDW	0x2205c
+#define _REG_VECS_ACTHD_UDW	0x1A05c
+
 #define VGT_ACTHD(ring_id) __RING_REG(ring_id, _REG_RCS_ACTHD, _REG_VCS_ACTHD, _REG_VECS_ACTHD)
 
 #define _REG_RCS_HWSTAM		0x2098
@@ -1768,6 +1774,7 @@ static inline int port_type_to_port(int port_sel)
 #define _REG_TRANS_MSA_MISC_C	0x62410
 
 #define _REG_GEN7_COMMON_SLICE_CHICKEN1		0x7010
+#define _REG_GEN7_COMMON_SLICE_CHICKEN2		0x7014
 #define _REG_GEN7_L3CNTLREG1			0xB01C
 #define _REG_GEN7_L3_CHICKEN_MODE_REGISTER	0xB030
 #define _REG_GEN7_SQ_CHICKEN_MBCUNIT_CONFIG	0x9030
@@ -1846,5 +1853,25 @@ static inline int port_type_to_port(int port_sel)
 #define _REG_PCU_IER 0x444ec
 
 #define _REG_GEN8_PRIVATE_PAT  0x40e0
+
+#define _REG_GAMTARBMODE		0x04a08
+
+#define _REG_RING_PDP_UDW(base, n)      (base + 0x270 + ((n) * 8 + 4))
+#define _REG_RING_PDP_LDW(base, n)      (base + 0x270 + (n) * 8)
+
+#define _REG_RCS_PDP_UDW(n)	_REG_RING_PDP_UDW(0x2000, n)
+#define _REG_RCS_PDP_LDW(n)	_REG_RING_PDP_LDW(0x2000, n)
+
+#define _REG_VCS_PDP_UDW(n)	_REG_RING_PDP_UDW(0x12000, n)
+#define _REG_VCS_PDP_LDW(n)	_REG_RING_PDP_LDW(0x12000, n)
+
+#define _REG_VCS2_PDP_UDW(n)	_REG_RING_PDP_UDW(0x1c000, n)
+#define _REG_VCS2_PDP_LDW(n)	_REG_RING_PDP_LDW(0x1c000, n)
+
+#define _REG_VECS_PDP_UDW(n)	_REG_RING_PDP_UDW(0x1a000, n)
+#define _REG_VECS_PDP_LDW(n)	_REG_RING_PDP_LDW(0x1a000, n)
+
+#define _REG_BCS_PDP_UDW(n)	_REG_RING_PDP_UDW(0x22000, n)
+#define _REG_BCS_PDP_LDW(n)	_REG_RING_PDP_LDW(0x22000, n)
 
 #endif	/* _VGT_REG_H_ */
