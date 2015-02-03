@@ -253,9 +253,16 @@ config XEN_EFI
 	def_bool y
 	depends on X86_64 && EFI
 
+endmenu
+
+config XENGT
+	bool "Xen Dom0 support for i915 vgt device model"
+	depends on XEN_DOM0
+	default y
+
 config I915_VGT
-	tristate "Xen vGT i915 driver"
-	depends on X86 && XEN && DRM_I915
+	tristate "iGVT-g vGT driver of i915"
+	depends on XENGT && DRM_I915
 	select IRQ_WORK
 	default y
 	help
@@ -269,4 +276,3 @@ config I915_VGT
 	  its aperture space and submit commands like running on native, and
 	  the feature completeness, given that a true GEN hardware is exposed.
 
-endmenu
