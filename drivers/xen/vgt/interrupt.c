@@ -619,8 +619,8 @@ struct vgt_irq_map gen8_irq_map[] = {
 	{ IRQ_INFO_MASTER, 18, IRQ_INFO_DE_PIPE_C, ~0 },
 	{ IRQ_INFO_MASTER, 20, IRQ_INFO_DE_PORT, ~0 },
 	{ IRQ_INFO_MASTER, 22, IRQ_INFO_DE_MISC, ~0 },
-	{ IRQ_INFO_MASTER, 23, IRQ_INFO_PCU, ~0 },
-	{ IRQ_INFO_MASTER, 30, IRQ_INFO_PCH, ~0 },
+	{ IRQ_INFO_MASTER, 23, IRQ_INFO_PCH, ~0 },
+	{ IRQ_INFO_MASTER, 30, IRQ_INFO_PCU, ~0 },
 	{ -1, -1, ~0 },
 };
 
@@ -669,7 +669,7 @@ static void update_upstream_irq(struct vgt_device *vgt,
 			clear_bits |= (1 << bit);
 	}
 
-	if (info->group == IRQ_INFO_MASTER) {
+	if (up_irq_info->group == IRQ_INFO_MASTER) {
 		u32 isr = up_irq_info->reg_base;
 		__vreg(vgt, isr) &= ~clear_bits;
 		__vreg(vgt, isr) |= set_bits;
@@ -1413,6 +1413,9 @@ static void vgt_gen8_check_pending_irq(struct vgt_device *vgt)
 
 	for_each_set_bit(i, hstate->irq_info_bitmap, IRQ_INFO_MAX) {
 		struct vgt_irq_info *info = hstate->info[i];
+
+		if (!info->has_upstream_irq)
+			continue;
 
 		if ((__vreg(vgt, regbase_to_iir(info->reg_base))
 					& __vreg(vgt, regbase_to_ier(info->reg_base))))

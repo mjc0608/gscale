@@ -1396,7 +1396,7 @@ static bool process_ppgtt_root_pointer(struct vgt_device *vgt,
 	struct list_head *pos;
 
 	if (!IS_PREBDW(pdev))
-		return false;
+		return true;
 
 	list_for_each(pos, &vgt->gtt.mm_list_head) {
 		struct vgt_mm *ppgtt_mm = container_of(pos, struct vgt_mm, list);
