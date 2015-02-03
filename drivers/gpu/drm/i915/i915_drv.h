@@ -1783,8 +1783,6 @@ struct drm_i915_private {
 
 	uint32_t bios_vgacntr;
 
-	int mmio_size;
-
 #ifdef CONFIG_I915_VGT
 	/* vgt host-side mediation */
 	void *pgt;

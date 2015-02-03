@@ -5,11 +5,17 @@
 #include "host.h"
 
 static struct drm_i915_private *dev_priv = NULL;
+static unsigned long gtt_offset = 0;
+
 void i915_vgt_record_priv(struct drm_i915_private *priv)
 {
-	dev_priv = priv;
-}
+	struct drm_device *dev = priv->dev;
 
+	BUG_ON(!dev);
+
+	dev_priv = priv;
+	gtt_offset = pci_resource_len(dev->pdev, 0) / 2;
+}
 
 bool vgt_native_mmio_read(u32 reg, void *val, int len, bool trace)
 {
@@ -61,7 +67,7 @@ bool vgt_native_mmio_write(u32 reg, void *val, int len, bool trace)
 
 bool vgt_native_gtt_read(u32 reg, void *val, int len)
 {
-	void *va = (void *)vgt_gttmmio_va(pdev_default, reg + dev_priv->mmio_size);
+	void *va = (void *)vgt_gttmmio_va(pdev_default, reg + gtt_offset);
 
 #if 0
 	if (dev_priv && vgt_ops && vgt_ops->initialized) {
@@ -97,7 +103,7 @@ bool vgt_native_gtt_read(u32 reg, void *val, int len)
 
 bool vgt_native_gtt_write(u32 reg, void *val, int len)
 {
-	void *va = (void *)vgt_gttmmio_va(pdev_default, reg + dev_priv->mmio_size);
+	void *va = (void *)vgt_gttmmio_va(pdev_default, reg + gtt_offset);
 
 #if 0
 	if (dev_priv) {
@@ -138,7 +144,7 @@ bool vgt_host_read(u32 reg, void *val, int len, bool is_gtt, bool trace)
 	BUG_ON(!dev_priv);
 
 	pa = is_gtt ?
-		vgt_gttmmio_pa(pdev_default, reg + dev_priv->mmio_size) :
+		vgt_gttmmio_pa(pdev_default, reg + gtt_offset) :
 		vgt_gttmmio_pa(pdev_default, reg);
 	return vgt_ops->mem_read(vgt_dom0, pa, val, len);
 }
@@ -150,7 +156,7 @@ bool vgt_host_write(u32 reg, void *val, int len, bool is_gtt, bool trace)
 	BUG_ON(!dev_priv);
 
 	pa = is_gtt ?
-		vgt_gttmmio_pa(pdev_default, reg + dev_priv->mmio_size) :
+		vgt_gttmmio_pa(pdev_default, reg + gtt_offset) :
 		vgt_gttmmio_pa(pdev_default, reg);
 	return vgt_ops->mem_write(vgt_dom0, pa, val, len);
 }
