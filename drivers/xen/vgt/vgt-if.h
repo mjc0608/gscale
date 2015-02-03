@@ -208,7 +208,4 @@ static inline void vgt_exit(int cpu)
 	put_cpu();
 }
 
-/* from "include/xen/interface/xen.h" */
-typedef uint16_t domid_t;
-
 #endif /* _VGT_IF_H */
