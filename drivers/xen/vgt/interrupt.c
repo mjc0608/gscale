@@ -1532,6 +1532,8 @@ static void vgt_gen8_init_irq(
 	/* GEN8 interrupt PCU events */
 	SET_BIT_INFO(hstate, 24, PCU_THERMAL, IRQ_INFO_PCU);
 	SET_BIT_INFO(hstate, 25, PCU_PCODE2DRIVER_MAILBOX, IRQ_INFO_PCU);
+
+	irq_based_ctx_switch = false;
 }
 
 static void vgt_gen8_disable_irq(struct vgt_irq_host_state *hstate)
