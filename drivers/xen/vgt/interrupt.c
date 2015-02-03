@@ -30,10 +30,6 @@
 #include <linux/slab.h>
 #include <linux/list.h>
 
-#include <xen/events.h>
-#include <xen/interface/vcpu.h>
-#include <xen/interface/hvm/hvm_op.h>
-
 #include "vgt.h"
 
 /*

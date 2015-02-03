@@ -27,9 +27,6 @@
 #include <linux/kthread.h>
 #include <linux/freezer.h>
 
-#include <xen/events.h>
-#include <xen/xen-ops.h>
-
 #include "vgt.h"
 
 #define CREATE_TRACE_POINTS
@@ -238,11 +235,10 @@ bool default_passthrough_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-#define PCI_BAR_ADDR_MASK (~0xFUL)  /* 4 LSB bits are not address */
-
-static inline unsigned int vgt_pa_to_mmio_offset(struct vgt_device *vgt,
+unsigned int vgt_pa_to_mmio_offset(struct vgt_device *vgt,
 	uint64_t pa)
 {
+#define PCI_BAR_ADDR_MASK (~0xFUL)  /* 4 LSB bits are not address */
 	return (vgt->vm_id == 0)?
 		pa - vgt->pdev->gttmmio_base :
 		pa - ( (*(uint64_t*)(vgt->state.cfg_space + VGT_REG_CFG_SPACE_BAR0))
@@ -461,315 +457,6 @@ err_mmio:
 	return false;
 }
 
-static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq);
-static void vgt_crash_domain(struct vgt_device *vgt)
-{
-	hypervisor_pause_domain(vgt);
-	hypervisor_shutdown_domain(vgt);
-}
-
-static int vgt_emulation_thread(void *priv)
-{
-	struct vgt_device *vgt = (struct vgt_device *)priv;
-	struct vgt_hvm_info *info = vgt->hvm_info;
-
-	int vcpu;
-	int nr_vcpus = info->nr_vcpu;
-
-	struct ioreq *ioreq;
-	int irq, ret;
-
-	vgt_info("start kthread for VM%d\n", vgt->vm_id);
-
-	ASSERT(info->nr_vcpu <= MAX_HVM_VCPUS_SUPPORTED);
-
-	set_freezable();
-	while (1) {
-		ret = wait_event_freezable(info->io_event_wq,
-			kthread_should_stop() ||
-			bitmap_weight(info->ioreq_pending, nr_vcpus));
-		if (ret)
-			vgt_warn("Emulation thread(%d) waken up"
-				 "by unexpected signal!\n", vgt->vm_id);
-
-		if (kthread_should_stop())
-			return 0;
-
-		for (vcpu = 0; vcpu < nr_vcpus; vcpu++) {
-			if (!test_and_clear_bit(vcpu, info->ioreq_pending))
-				continue;
-
-			ioreq = vgt_get_hvm_ioreq(vgt, vcpu);
-
-			ret = vgt_hvm_do_ioreq(vgt, ioreq);
-			if (unlikely(ret))
-				vgt_crash_domain(vgt);
-
-			if (vgt->force_removal)
-				wait_event(vgt->pdev->destroy_wq, !vgt->force_removal);
-
-			ioreq->state = STATE_IORESP_READY;
-
-			irq = info->evtchn_irq[vcpu];
-			notify_remote_via_irq(irq);
-		}
-	}
-
-	BUG(); /* It's actually impossible to reach here */
-	return 0;
-}
-
-int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
-{
-	int i, sign;
-	void *gva;
-	unsigned long gpa;
-	char *cfg_space = &vgt->state.cfg_space[0];
-	uint64_t base = * (uint64_t *) (cfg_space + VGT_REG_CFG_SPACE_BAR0);
-	uint64_t tmp;
-	int pvinfo_page;
-
-	if (vgt->vmem_vma == NULL) {
-		tmp = vgt_pa_to_mmio_offset(vgt, req->addr);
-		pvinfo_page = (tmp >= VGT_PVINFO_PAGE
-				&& tmp < (VGT_PVINFO_PAGE + VGT_PVINFO_SIZE));
-		/*
-		 * hvmloader will read PVINFO to identify if HVM is in VGT
-		 * or VTD. So we don't trigger HVM mapping logic here.
-		 */
-		if (!pvinfo_page && vgt_hvm_vmem_init(vgt) < 0) {
-			vgt_err("can not map the memory of VM%d!!!\n", vgt->vm_id);
-			ASSERT_VM(vgt->vmem_vma != NULL, vgt);
-			return -EINVAL;
-		}
-	}
-
-	sign = req->df ? -1 : 1;
-
-	if (req->dir == IOREQ_READ) {
-		/* MMIO READ */
-		if (!req->data_is_ptr) {
-			if (req->count != 1)
-				goto err_ioreq_count;
-
-			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_read: target register (%lx).\n",
-			//	(unsigned long)req->addr);
-			if (!vgt_emulate_read(vgt, req->addr, &req->data, req->size))
-				return -EINVAL;
-		}
-		else {
-			if ((req->addr + sign * req->count * req->size < base)
-			   || (req->addr + sign * req->count * req->size >=
-				base + vgt->state.bar_size[0]))
-				goto err_ioreq_range;
-			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_read: rep %d target memory %lx, slow!\n",
-			//	req->count, (unsigned long)req->addr);
-
-			for (i = 0; i < req->count; i++) {
-				if (!vgt_emulate_read(vgt, req->addr + sign * i * req->size,
-					&tmp, req->size))
-					return -EINVAL;
-				gpa = req->data + sign * i * req->size;
-				gva = vgt_vmem_gpa_2_va(vgt, gpa);
-				if (gva) {
-					if (!IS_SNB(vgt->pdev))
-						memcpy(gva, &tmp, req->size);
-					else {
-						// On the SNB laptop, writing tmp to gva can
-						//cause bug 119. So let's do the writing only on HSW for now.
-						vgt_err("vGT: disable support of string copy instruction on SNB, gpa: 0x%lx\n", gpa);
-					}
-				} else
-					vgt_err("VM %d is trying to store mmio data block to invalid gpa: 0x%lx.\n", vgt->vm_id, gpa);
-			}
-		}
-	}
-	else { /* MMIO Write */
-		if (!req->data_is_ptr) {
-			if (req->count != 1)
-				goto err_ioreq_count;
-			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
-			if (!vgt_emulate_write(vgt, req->addr, &req->data, req->size))
-				return -EINVAL;
-		}
-		else {
-			if ((req->addr + sign * req->count * req->size < base)
-			    || (req->addr + sign * req->count * req->size >=
-				base + vgt->state.bar_size[0]))
-				goto err_ioreq_range;
-			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_write: rep %d target memory %lx, slow!\n",
-			//	req->count, (unsigned long)req->addr);
-
-			for (i = 0; i < req->count; i++) {
-				gpa = req->data + sign * i * req->size;
-				gva = vgt_vmem_gpa_2_va(vgt, gpa);
-				if (gva != NULL)
-					memcpy(&tmp, gva, req->size);
-				else {
-					tmp = 0;
-					vgt_dbg(VGT_DBG_GENERIC, "vGT: can not read gpa = 0x%lx!!!\n", gpa);
-				}
-				if (!vgt_emulate_write(vgt, req->addr + sign * i * req->size, &tmp, req->size))
-					return -EINVAL;
-			}
-		}
-	}
-	return 0;
-
-err_ioreq_count:
-	vgt_err("VM(%d): Unexpected %s request count(%d)\n",
-		vgt->vm_id, req->dir == IOREQ_READ ? "read" : "write",
-		req->count);
-	return -EINVAL;
-
-err_ioreq_range:
-	vgt_err("VM(%d): Invalid %s request addr end(%016llx)\n",
-		vgt->vm_id, req->dir == IOREQ_READ ? "read" : "write",
-		req->addr + sign * req->count * req->size);
-	return -ERANGE;
-}
-
-int _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
-{
-	int sign;
-	//char *pdata;
-
-	sign = ioreq->df ? -1 : 1;
-
-	if (ioreq->dir == IOREQ_READ) {
-		/* PIO READ */
-		if (!ioreq->data_is_ptr) {
-			if(!vgt_hvm_read_cfg_space(vgt,
-				ioreq->addr,
-				ioreq->size,
-				(unsigned long*) &ioreq->data))
-				return -EINVAL;
-		}
-		else {
-			vgt_dbg(VGT_DBG_GENERIC,"VGT: _hvm_pio_emulation read data_ptr %lx\n",
-			(long)ioreq->data);
-			goto err_data_ptr;
-#if 0
-			pdata = (char *)ioreq->data;
-			for (i=0; i < ioreq->count; i++) {
-				vgt_hvm_read_cf8_cfc(vgt,
-					ioreq->addr,
-					ioreq->size,
-					(unsigned long *)pdata);
-				pdata += ioreq->size * sign;
-			}
-#endif
-		}
-	}
-	else {
-		/* PIO WRITE */
-		if (!ioreq->data_is_ptr) {
-			if (!vgt_hvm_write_cfg_space(vgt,
-				ioreq->addr,
-				ioreq->size,
-				(unsigned long) ioreq->data))
-				return -EINVAL;
-		}
-		else {
-			vgt_dbg(VGT_DBG_GENERIC,"VGT: _hvm_pio_emulation write data_ptr %lx\n",
-			(long)ioreq->data);
-			goto err_data_ptr;
-#if 0
-			pdata = (char *)ioreq->data;
-
-			for (i=0; i < ioreq->count; i++) {
-				vgt_hvm_write_cf8_cfc(vgt,
-					ioreq->addr,
-					ioreq->size, *(unsigned long *)pdata);
-				pdata += ioreq->size * sign;
-			}
-#endif
-		}
-	}
-	return 0;
-err_data_ptr:
-	/* The data pointer of emulation is guest physical address
-	 * so far, which goes to Qemu emulation, but hard for
-	 * vGT driver which doesn't know gpn_2_mfn translation.
-	 * We may ask hypervisor to use mfn for vGT driver.
-	 * We mark it as unsupported in case guest really it.
-	 */
-	vgt_err("VM(%d): Unsupported %s data_ptr(%lx)\n",
-		vgt->vm_id, ioreq->dir == IOREQ_READ ? "read" : "write",
-		(long)ioreq->data);
-	return -EINVAL;
-}
-
-static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
-{
-	struct pgt_device *pdev = vgt->pdev;
-	uint64_t bdf = PCI_BDF2(pdev->pbus->number, pdev->devfn);
-
-	/* When using ioreq-server, sometimes an event channal
-	 * notification is received with invalid ioreq. Don't
-	 * know the root cause. Put the workaround here.
-	 */
-	if (ioreq->state == STATE_IOREQ_NONE)
-		return 0;
-
-	if (ioreq->type == IOREQ_TYPE_INVALIDATE)
-		return 0;
-
-	switch (ioreq->type) {
-		case IOREQ_TYPE_PCI_CONFIG:
-		/* High 32 bit of ioreq->addr is bdf */
-		if ((ioreq->addr >> 32) != bdf) {
-			printk(KERN_ERR "vGT: Unexpected PCI Dev %lx emulation\n",
-				(unsigned long) (ioreq->addr>>32));
-				return -EINVAL;
-			} else
-				return _hvm_pio_emulation(vgt, ioreq);
-			break;
-		case IOREQ_TYPE_COPY:	/* MMIO */
-			return _hvm_mmio_emulation(vgt, ioreq);
-			break;
-		default:
-			printk(KERN_ERR "vGT: Unknown ioreq type %x addr %llx size %u state %u\n",
-				ioreq->type, ioreq->addr, ioreq->size, ioreq->state);
-			return -EINVAL;
-	}
-	return 0;
-}
-
-static inline void vgt_raise_emulation_request(struct vgt_device *vgt,
-	int vcpu)
-{
-	struct vgt_hvm_info *info = vgt->hvm_info;
-	set_bit(vcpu, info->ioreq_pending);
-	if (waitqueue_active(&info->io_event_wq))
-		wake_up(&info->io_event_wq);
-}
-
-static irqreturn_t vgt_hvm_io_req_handler(int irq, void* dev)
-{
-	struct vgt_device *vgt;
-	struct vgt_hvm_info *info;
-	int vcpu;
-
-	vgt = (struct vgt_device *)dev;
-	info = vgt->hvm_info;
-
-	for(vcpu=0; vcpu < info->nr_vcpu; vcpu++){
-		if(info->evtchn_irq[vcpu] == irq)
-			break;
-	}
-	if (vcpu == info->nr_vcpu){
-		/*opps, irq is not the registered one*/
-		vgt_info("Received a IOREQ w/o vcpu target\n");
-		vgt_info("Possible a false request from event binding\n");
-		return IRQ_NONE;
-	}
-
-	vgt_raise_emulation_request(vgt, vcpu);
-
-	return IRQ_HANDLED;
-}
-
 static bool vgt_hvm_opregion_resinit(struct vgt_device *vgt, uint32_t gpa)
 {
 	void *orig_va = vgt->pdev->opregion_va;
@@ -825,16 +512,14 @@ int vgt_hvm_opregion_map(struct vgt_device *vgt, int map)
 			1,
 			map);
 		if (rc != 0)
-			vgt_err("vgt_hvm_map_opregion fail with %d!\n", rc);
+			vgt_err("hypervisor_map_mfn_to_gpfn fail with %d!\n", rc);
 	}
 
 	return rc;
 }
 
-
 int vgt_hvm_opregion_init(struct vgt_device *vgt, uint32_t gpa)
 {
-
 	if (vgt_hvm_opregion_resinit(vgt, gpa)) {
 
 		/* modify the vbios parameters for PORTs,
@@ -858,109 +543,6 @@ void vgt_initial_opregion_setup(struct pgt_device *pdev)
 			VGT_OPREGION_SIZE);
 	if (pdev->opregion_va == NULL)
 		vgt_err("Directly map OpRegion failed\n");
-}
-
-int vgt_hvm_info_init(struct vgt_device *vgt)
-{
-	struct vgt_hvm_info *info;
-	int vcpu, irq, rc = 0;
-	struct task_struct *thread;
-	struct pgt_device *pdev = vgt->pdev;
-
-	info = kzalloc(sizeof(struct vgt_hvm_info), GFP_KERNEL);
-	if (info == NULL)
-		return -ENOMEM;
-
-	vgt->hvm_info = info;
-
-	info->iopage_vma = hypervisor_map_iopage(vgt);
-	if (info->iopage_vma == NULL) {
-		printk(KERN_ERR "Failed to map HVM I/O page for VM%d\n", vgt->vm_id);
-		rc = -EFAULT;
-		goto err;
-	}
-	info->iopage = info->iopage_vma->addr;
-
-	init_waitqueue_head(&info->io_event_wq);
-
-	info->nr_vcpu = xen_get_nr_vcpu(vgt->vm_id);
-	ASSERT(info->nr_vcpu > 0);
-	ASSERT(info->nr_vcpu <= MAX_HVM_VCPUS_SUPPORTED);
-
-	info->evtchn_irq = kmalloc(info->nr_vcpu * sizeof(int), GFP_KERNEL);
-	if (info->evtchn_irq == NULL){
-		rc = -ENOMEM;
-		goto err;
-	}
-	for( vcpu = 0; vcpu < info->nr_vcpu; vcpu++ )
-		info->evtchn_irq[vcpu] = -1;
-
-	rc = hvm_map_pcidev_to_ioreq_server(vgt, PCI_BDF2(pdev->pbus->number, pdev->devfn));
-	if (rc < 0)
-		goto err;
-	rc = hvm_toggle_iorequest_server(vgt, 1);
-	if (rc < 0)
-		goto err;
-
-	for( vcpu = 0; vcpu < info->nr_vcpu; vcpu++ ){
-		irq = bind_interdomain_evtchn_to_irqhandler( vgt->vm_id,
-				info->iopage->vcpu_ioreq[vcpu].vp_eport,
-				vgt_hvm_io_req_handler, 0,
-				"vgt", vgt );
-		if ( irq < 0 ){
-			rc = irq;
-			printk(KERN_ERR "Failed to bind event channle for vgt HVM IO handler, rc=%d\n", rc);
-			goto err;
-		}
-		info->evtchn_irq[vcpu] = irq;
-	}
-
-	thread = kthread_run(vgt_emulation_thread, vgt,
-			"vgt_emulation:%d", vgt->vm_id);
-	if(IS_ERR(thread))
-		goto err;
-	info->emulation_thread = thread;
-
-	return 0;
-
-err:
-	vgt_hvm_info_deinit(vgt);
-	return rc;
-}
-
-void vgt_hvm_info_deinit(struct vgt_device *vgt)
-{
-	struct vgt_hvm_info *info;
-	int vcpu;
-
-	if (vgt->iosrv_id != 0)
-		hvm_destroy_iorequest_server(vgt);
-
-	info = vgt->hvm_info;
-
-	if (info == NULL)
-		return;
-
-	if (info->emulation_thread != NULL)
-		kthread_stop(info->emulation_thread);
-
-	if (!info->nr_vcpu || info->evtchn_irq == NULL)
-		goto out1;
-
-	for (vcpu=0; vcpu < info->nr_vcpu; vcpu++){
-		if( info->evtchn_irq[vcpu] >= 0)
-			unbind_from_irqhandler(info->evtchn_irq[vcpu], vgt);
-	}
-
-	if (info->iopage_vma != NULL)
-		xen_unmap_domain_mfn_range_in_kernel(info->iopage_vma, 1, vgt->vm_id);
-
-	kfree(info->evtchn_irq);
-
-out1:
-	kfree(info);
-
-	return;
 }
 
 static void vgt_set_reg_attr(struct pgt_device *pdev,

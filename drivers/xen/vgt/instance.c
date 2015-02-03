@@ -130,7 +130,6 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		goto err;
 
 	vgt->vm_id = vp.vm_id;
-	vgt->iosrv_id = 0;
 	vgt->pdev = pdev;
 
 	vgt->force_removal = 0;
@@ -268,7 +267,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	if (vgt->vm_id != 0){
 		/* HVM specific init */
-		if ((rc = vgt_hvm_info_init(vgt)) < 0)
+		if ((rc = hypervisor_hvm_init(vgt)) < 0)
 			goto err;
 	}
 
@@ -319,8 +318,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	return 0;
 err:
 	vgt_clean_vgtt(vgt);
-	vgt_hvm_info_deinit(vgt);
-	if ( vgt->aperture_base > 0)
+	hypervisor_hvm_exit(vgt);
+	if (vgt->aperture_base > 0)
 		free_vm_aperture_gm_and_fence(vgt);
 	vfree(vgt->state.vReg);
 	vfree(vgt->state.sReg);
@@ -390,8 +389,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 		vgt_destroy_rb_tailq(vgt);
 
 	vgt_clean_vgtt(vgt);
-
-	vgt_hvm_info_deinit(vgt);
+	hypervisor_hvm_exit(vgt);
 
 	if (vgt->state.opregion_va) {
 		vgt_hvm_opregion_map(vgt, 0);

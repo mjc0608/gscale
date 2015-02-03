@@ -24,12 +24,6 @@
  */
 
 #include <linux/highmem.h>
-
-#include <xen/page.h>
-#include <xen/events.h>
-#include <xen/xen-ops.h>
-#include <xen/interface/hvm/hvm_op.h>
-
 #include "vgt.h"
 #include "trace.h"
 
@@ -515,7 +509,7 @@ bool vgt_init_guest_page(struct vgt_device *vgt, guest_page_t *guest_page,
 {
 	INIT_HLIST_NODE(&guest_page->node);
 
-	guest_page->vaddr = vgt_vmem_gpa_2_va(vgt, gfn << GTT_PAGE_SHIFT);
+	guest_page->vaddr = hypervisor_gpa_to_va(vgt, gfn << GTT_PAGE_SHIFT);
 	if (!guest_page->vaddr)
 		return false;
 
@@ -566,7 +560,7 @@ static inline bool vgt_init_shadow_page(struct vgt_device *vgt,
 	memset(sp->vaddr, 0, PAGE_SIZE);
 
 	INIT_HLIST_NODE(&sp->node);
-	sp->mfn = pfn_to_mfn(page_to_pfn(sp->page));
+	sp->mfn = hypervisor_virt_to_mfn(sp->vaddr);
 	hash_add(vgt->gtt.shadow_page_hash_table, &sp->node, sp->mfn);
 
 	return true;
@@ -1260,7 +1254,7 @@ static inline bool ppgtt_get_next_level_entry(struct vgt_mm *mm,
 		else
 			ppgtt_get_guest_entry(s, e, index);
 	} else {
-		pt = mfn_to_virt(ops->get_pfn(e));
+		pt = hypervisor_mfn_to_virt(ops->get_pfn(e));
 		ops->get_entry(pt, e, index);
 		e->type = get_entry_type(get_next_pt_type(e->type));
 	}
@@ -1342,7 +1336,7 @@ void *vgt_gma_to_va(struct vgt_mm *mm, unsigned long gma)
 		return NULL;
 	}
 
-	return vgt_vmem_gpa_2_va(vgt, gpa);
+	return hypervisor_gpa_to_va(vgt, gpa);
 }
 
 /*

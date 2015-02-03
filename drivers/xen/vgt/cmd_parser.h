@@ -436,7 +436,7 @@ typedef enum{
 	PPGTT_BUFFER
 }gtt_addr_t;
 
-struct parser_exec_state{
+struct parser_exec_state {
 	struct vgt_device *vgt;
 	int ring_id;
 

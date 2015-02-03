@@ -36,10 +36,6 @@
 #include <linux/pci.h>
 #include <drm/drmP.h>
 
-#include <xen/interface/hvm/ioreq.h>
-#include <xen/interface/platform.h>
-#include <xen/interface/hvm/params.h>
-
 #include "vgt-if.h"
 #include "host.h"
 
@@ -600,21 +596,6 @@ extern void vgt_check_pending_context_switch(struct vgt_device *vgt);
 
 struct vgt_irq_virt_state;
 
-#define MAX_HVM_VCPUS_SUPPORTED 128
-struct vgt_hvm_info {
-	shared_iopage_t *iopage;
-	DECLARE_BITMAP(ioreq_pending, MAX_HVM_VCPUS_SUPPORTED);
-	wait_queue_head_t io_event_wq;
-	struct task_struct *emulation_thread;
-
-	/* iopage_vma->addr is just iopage. We need iopage_vma on VM destroy */
-	struct vm_struct *iopage_vma;
-
-	int nr_vcpu;
-	int* evtchn_irq; /* the event channle irqs to handle HVM io request
-				index is vcpu id */
-};
-
 struct vgt_statistics {
 	u64	schedule_in_time;	/* TSC time when it is last scheduled in */
 	u64	allocated_cycles;
@@ -766,7 +747,6 @@ struct vgt_device {
 	enum vgt_pipe pipe_mapping[I915_MAX_PIPES];
 	int vgt_id;		/* 0 is always for dom0 */
 	int vm_id;		/* domain ID per hypervisor */
-	ioservid_t iosrv_id;    /* io-request server id */
 	struct pgt_device *pdev;	/* the pgt device where the GT device registered. */
 	struct list_head	list;	/* FIXME: used for context switch ?? */
 	vgt_state_t	state;		/* MMIO state except ring buffers */
@@ -803,6 +783,7 @@ struct vgt_device {
 	vgt_reg_t	saved_wakeup;		/* disable PM before switching */
 
 	struct vgt_hvm_info *hvm_info;
+
 	struct kobject kobj;
 	struct vgt_statistics	stat;		/* statistics info */
 
@@ -1399,10 +1380,17 @@ static inline bool reg_hw_access(struct vgt_device *vgt, unsigned int reg)
 	return false;
 }
 
-#define IS_SNB(pdev)	((pdev)->gen_dev_type == XEN_IGD_SNB)
-#define IS_IVB(pdev)	((pdev)->gen_dev_type == XEN_IGD_IVB)
-#define IS_HSW(pdev)	((pdev)->gen_dev_type == XEN_IGD_HSW)
-#define IS_BDW(pdev)	((pdev)->gen_dev_type == XEN_IGD_BDW)
+#define IGD_INVALID	0
+#define IGD_SNB		1
+#define IGD_IVB		2
+#define IGD_HSW		3
+#define IGD_BDW		4
+#define IGD_MAX		IGD_BDW
+
+#define IS_SNB(pdev)	((pdev)->gen_dev_type == IGD_SNB)
+#define IS_IVB(pdev)	((pdev)->gen_dev_type == IGD_IVB)
+#define IS_HSW(pdev)	((pdev)->gen_dev_type == IGD_HSW)
+#define IS_BDW(pdev)	((pdev)->gen_dev_type == IGD_BDW)
 
 #define IS_PREBDW(pdev) (IS_SNB(pdev) || IS_IVB(pdev) || IS_HSW(pdev))
 #define IS_BDWPLUS(pdev) (IS_BDW(pdev))
@@ -1593,6 +1581,13 @@ extern void state_sreg_init(struct vgt_device *vgt);
 #define vm_aperture_sz(pdev)		(pdev->vm_aperture_sz)
 #define vm_gm_sz(pdev)			(pdev->vm_gm_sz)
 #define vm_gm_hidden_sz(pdev)		(vm_gm_sz(pdev) - vm_aperture_sz(pdev))
+
+static inline uint64_t vgt_mmio_bar_base(struct vgt_device *vgt)
+{
+	char *cfg_space = &vgt->state.cfg_space[0];
+	return *(uint64_t *)(cfg_space + VGT_REG_CFG_SPACE_BAR0);
+}
+
 
 /*
  * Aperture/GM virtualization
@@ -1863,13 +1858,6 @@ static inline uint32_t h2g_gtt_index(struct vgt_device *vgt, uint32_t h_index)
 
 	return (uint32_t)(h2g_gm(vgt, h_addr) >> GTT_PAGE_SHIFT);
 }
-
-#ifndef CONFIG_KVMGT
-static inline struct ioreq * vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
-{
-	return &(vgt->hvm_info->iopage->vcpu_ioreq[vcpu]);
-}
-#endif
 
 static inline void __REG_WRITE(struct pgt_device *pdev,
 	unsigned long reg, unsigned long val, int bytes)
@@ -2463,6 +2451,7 @@ void initialize_gm_fence_allocation_bitmaps(struct pgt_device *pdev);
 void vgt_init_reserved_aperture(struct pgt_device *pdev);
 bool vgt_map_plane_reg(struct vgt_device *vgt, unsigned int reg, unsigned int *p_real_offset);
 
+unsigned int vgt_pa_to_mmio_offset(struct vgt_device *vgt, uint64_t pa);
 
 static inline void vgt_set_pipe_mapping(struct vgt_device *vgt,
 	unsigned int v_pipe, unsigned int p_pipe)
@@ -2529,7 +2518,6 @@ extern bool gtt_emulate_write(struct vgt_device *vgt, unsigned int off,
 
 extern void* vgt_gma_to_va(struct vgt_mm *mm, unsigned long gma);
 
-extern void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 
 #define INVALID_MFN	(~0UL)
 
@@ -2619,14 +2607,7 @@ bool vgt_hvm_read_cfg_space(struct vgt_device *vgt,
        uint64_t addr, unsigned int bytes, unsigned long *val);
 
 int vgt_hvm_opregion_map(struct vgt_device *vgt, int map);
-int hvm_destroy_iorequest_server(struct vgt_device *vgt);
-int hvm_toggle_iorequest_server(struct vgt_device *vgt, bool enable);
-int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
-		int is_mmio, uint64_t start, uint64_t end, int map);
-int hvm_map_pcidev_to_ioreq_server(struct vgt_device *vgt, uint64_t sbdf);
-int xen_get_nr_vcpu(int vm_id);
 int vgt_hvm_set_trap_area(struct vgt_device *vgt, int map);
-
 int vgt_hvm_map_aperture (struct vgt_device *vgt, int map);
 int setup_gtt(struct pgt_device *pdev);
 void check_gtt(struct pgt_device *pdev);
@@ -2638,7 +2619,6 @@ uint64_t vgt_get_gtt_size(struct pgt_device *pdev);
 uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off);
 int vgt_hvm_vmem_init(struct vgt_device *vgt);
 void vgt_vmem_destroy(struct vgt_device *vgt);
-void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa);
 struct vgt_device *vmid_2_vgt_device(int vmid);
 extern void vgt_print_edid(struct vgt_edid_data_t *edid);
 extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);
@@ -2684,7 +2664,10 @@ static inline int hypervisor_shutdown_domain(struct vgt_device *vgt)
 static inline int hypervisor_map_mfn_to_gpfn(struct vgt_device *vgt,
 	unsigned long gpfn, unsigned long mfn, int nr, int map)
 {
-	return vgt_pkdm->map_mfn_to_gpfn(vgt->vm_id, gpfn, mfn, nr, map);
+	if (vgt_pkdm && vgt_pkdm->map_mfn_to_gpfn)
+		return vgt_pkdm->map_mfn_to_gpfn(vgt->vm_id, gpfn, mfn, nr, map);
+
+	return 0;
 }
 
 static inline int hypervisor_set_trap_area(struct vgt_device *vgt,
@@ -2762,6 +2745,65 @@ static inline void hypervisor_inject_msi(struct vgt_device *vgt)
 	if (r < 0)
 		vgt_err("vGT(%d): failed to inject vmsi\n", vgt->vgt_id);
 }
+
+static inline int hypervisor_hvm_init(struct vgt_device *vgt)
+{
+	if (vgt_pkdm && vgt_pkdm->hvm_init)
+		return vgt_pkdm->hvm_init(vgt);
+
+	return 0;
+}
+
+static inline void hypervisor_hvm_exit(struct vgt_device *vgt)
+{
+	if (vgt_pkdm && vgt_pkdm->hvm_exit)
+		vgt_pkdm->hvm_exit(vgt);
+}
+
+static inline void *hypervisor_gpa_to_va(struct vgt_device *vgt, unsigned long gpa)
+{
+	if (!vgt->vm_id)
+		return (char *)hypervisor_mfn_to_virt(gpa >> PAGE_SHIFT) + offset_in_page(gpa);
+
+	return vgt_pkdm->gpa_to_va(vgt, gpa);
+}
+
+static inline bool hypervisor_read_va(struct vgt_device *vgt, void *va,
+		void *val, int len, int atomic)
+{
+	bool ret;
+
+	if (!vgt->vm_id) {
+		memcpy(val, va, len);
+		return true;
+	}
+
+	ret = vgt_pkdm->read_va(vgt, va, val, len, atomic);
+	if (unlikely(!ret))
+		vgt_err("VM(%d): read va failed, va: 0x%p, atomic : %s\n", vgt->vm_id,
+				va, atomic ? "yes" : "no");
+
+	return ret;
+}
+
+static inline bool hypervisor_write_va(struct vgt_device *vgt, void *va,
+		void *val, int len, int atomic)
+{
+	bool ret;
+
+	if (!vgt->vm_id) {
+		memcpy(va, val, len);
+		return true;
+	}
+
+	ret = vgt_pkdm->write_va(vgt, va, val, len, atomic);
+	if (unlikely(!ret))
+		vgt_err("VM(%d): write va failed, va: 0x%p, atomic : %s\n", vgt->vm_id,
+				va, atomic ? "yes" : "no");
+
+	return ret;
+}
+
 
 #define ASSERT_VM(x, vgt)						\
 	do {								\

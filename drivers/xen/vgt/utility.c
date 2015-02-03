@@ -171,6 +171,7 @@ static void show_batchbuffer(struct pgt_device *pdev, int ring_id, u32 addr,
 	char *ip_va;
 	u32 start;
 	struct vgt_device *vgt = current_render_owner(pdev);
+	uint32_t val;
 
 	if (!vgt) {
 		vgt_err("no render owner at hanging point\n");
@@ -200,8 +201,10 @@ static void show_batchbuffer(struct pgt_device *pdev, int ring_id, u32 addr,
 
 		if (ip_va == NULL)
 			printk(" %8s", "N/A");
-		else
-			printk(" %08x", *((u32 *)ip_va));
+		else {
+			hypervisor_read_va(vgt, ip_va, &val, sizeof(val), 0);
+			printk(" %08x", val);
+		}
 		if (start + i == addr)
 			printk("(*)");
 	}
@@ -790,9 +793,6 @@ void vgt_print_dpcd(struct vgt_dpcd_data *dpcd)
 	}
 }
 
-/* TODO: turn into registration mechanism */
-struct kernel_dm *vgt_pkdm = &xen_kdm;
-
 int vgt_hvm_map_aperture (struct vgt_device *vgt, int map)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
@@ -1009,47 +1009,4 @@ void vgt_vmem_destroy(struct vgt_device *vgt)
 	kfree(vgt->vmem_vma);
 	kfree(vgt->vmem_vma_low_1mb);
 	vfree(vgt->vmem_vma_4k);
-}
-
-void* vgt_vmem_gpa_2_va(struct vgt_device *vgt, unsigned long gpa)
-{
-	unsigned long buck_index, buck_4k_index;
-
-	if (vgt->vm_id == 0)
-		return (char*)hypervisor_mfn_to_virt(gpa>>PAGE_SHIFT) + (gpa & (PAGE_SIZE-1));
-
-	/*
-	 * At the beginning of _hvm_mmio_emulation(), we already initialize
-	 * vgt->vmem_vma and vgt->vmem_vma_low_1mb.
-	 */
-	ASSERT(vgt->vmem_vma != NULL && vgt->vmem_vma_low_1mb != NULL);
-
-	/* handle the low 1MB memory */
-	if (gpa < VMEM_1MB) {
-		buck_index = gpa >> PAGE_SHIFT;
-		if (!vgt->vmem_vma_low_1mb[buck_index])
-			return NULL;
-
-		return (char*)(vgt->vmem_vma_low_1mb[buck_index]->addr) +
-			(gpa & ~PAGE_MASK);
-
-	}
-
-	/* handle the >1MB memory */
-	buck_index = gpa >> VMEM_BUCK_SHIFT;
-
-	if (!vgt->vmem_vma[buck_index]) {
-		buck_4k_index = gpa >> PAGE_SHIFT;
-		if (!vgt->vmem_vma_4k[buck_4k_index]) {
-			if (buck_4k_index > vgt->low_mem_max_gpfn)
-				vgt_err("vGT failed to map gpa=0x%lx?\n", gpa);
-			return NULL;
-		}
-
-		return (char*)(vgt->vmem_vma_4k[buck_4k_index]->addr) +
-			(gpa & ~PAGE_MASK);
-	}
-
-	return (char*)(vgt->vmem_vma[buck_index]->addr) +
-		(gpa & (VMEM_BUCK_SIZE -1));
 }

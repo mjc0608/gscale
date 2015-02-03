@@ -39,9 +39,11 @@ struct kernel_dm {
 	int (*from_virt_to_mfn)(void *addr);
 	void *(*from_mfn_to_virt)(int mfn);
 	int (*inject_msi)(int vm_id, u32 addr, u16 data);
+	int (*hvm_init)(struct vgt_device *vgt);
+	void (*hvm_exit)(struct vgt_device *vgt);
+	void *(*gpa_to_va)(struct vgt_device *vgt, unsigned long gap);
+	bool (*read_va)(struct vgt_device *vgt, void *va, void *val, int len, int atomic);
+	bool (*write_va)(struct vgt_device *vgt, void *va, void *val, int len, int atomic);
 };
 
-extern struct kernel_dm xen_kdm;
 #endif /* _VGT_HYPERCALL_H_ */
-
-

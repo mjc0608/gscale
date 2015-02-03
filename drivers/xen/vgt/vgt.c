@@ -27,9 +27,6 @@
 #include <linux/kthread.h>
 #include <linux/freezer.h>
 
-#include <asm/xen/hypercall.h>
-#include <xen/interface/vcpu.h>
-
 #include "vgt.h"
 
 
@@ -145,6 +142,8 @@ module_param_named(vgt_lock_irq, vgt_lock_irq, bool, 0400);
 
 bool vgt_preliminary_hw_support = false;
 module_param_named(vgt_preliminary_hw_support, vgt_preliminary_hw_support, bool, 0400);
+
+struct kernel_dm *vgt_pkdm __weak = NULL;
 
 static vgt_ops_t vgt_xops = {
 	.mem_read = vgt_emulate_read,
@@ -417,25 +416,25 @@ bool initial_phys_states(struct pgt_device *pdev)
 static bool vgt_set_device_type(struct pgt_device *pdev)
 {
 	if (_is_sandybridge(pdev->pdev->device)) {
-		pdev->gen_dev_type = XEN_IGD_SNB;
+		pdev->gen_dev_type = IGD_SNB;
 		vgt_info("Detected Sandybridge\n");
 		return true;
 	}
 
 	if (_is_ivybridge(pdev->pdev->device)) {
-		pdev->gen_dev_type = XEN_IGD_IVB;
+		pdev->gen_dev_type = IGD_IVB;
 		vgt_info("Detected Ivybridge\n");
 		return true;
 	}
 
 	if (_is_haswell(pdev->pdev->device)) {
-		pdev->gen_dev_type = XEN_IGD_HSW;
+		pdev->gen_dev_type = IGD_HSW;
 		vgt_info("Detected Haswell\n");
 		return true;
 	}
 
 	if (_is_broadwell(pdev->pdev->device)) {
-		pdev->gen_dev_type = XEN_IGD_BDW;
+		pdev->gen_dev_type = IGD_BDW;
 		vgt_info("Detected Broadwell\n");
 		return true;
 	}
@@ -1090,6 +1089,9 @@ int vgt_reset_device(struct pgt_device *pdev)
 /* for GFX driver */
 bool i915_start_vgt(struct pci_dev *pdev)
 {
+	if (!vgt_pkdm)
+		return false;
+
 	if (!hypervisor_check_host())
 		return false;
 

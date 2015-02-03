@@ -27,6 +27,15 @@
  * Now temporarily in vgt code. long-term this should be
  * in hypervisor (xen/kvm) specific directory
  */
+#include <linux/kernel.h>
+#include <linux/mm.h>
+#include <linux/types.h>
+#include <linux/kthread.h>
+#include <linux/time.h>
+#include <linux/freezer.h>
+#include <linux/wait.h>
+#include <linux/sched.h>
+
 #include <asm/xen/hypercall.h>
 #include <asm/xen/page.h>
 #include <xen/xen-ops.h>
@@ -34,6 +43,24 @@
 #include <xen/interface/hvm/params.h>
 
 #include "vgt.h"
+#include "xengt.h"
+
+#define MAX_HVM_VCPUS_SUPPORTED 128
+struct vgt_hvm_info {
+	/* iopage_vma->addr is just iopage. We need iopage_vma on VM destroy */
+	shared_iopage_t *iopage;
+	struct vm_struct *iopage_vma;
+	int *evtchn_irq; /* the event channle irqs to handle HVM io request
+				index is vcpu id */
+
+	DECLARE_BITMAP(ioreq_pending, MAX_HVM_VCPUS_SUPPORTED);
+	wait_queue_head_t io_event_wq;
+	struct task_struct *emulation_thread;
+
+	int nr_vcpu;
+
+	ioservid_t iosrv_id;    /* io-request server id */
+};
 
 /* Translate from VM's guest pfn to machine pfn */
 static unsigned long xen_g2m_pfn(int vm_id, unsigned long g_pfn)
@@ -57,7 +84,7 @@ static unsigned long xen_g2m_pfn(int vm_id, unsigned long g_pfn)
 	return pfn_list[0];
 }
 
-static int xen_get_max_gpfn(int vm_id)
+int xen_get_max_gpfn(int vm_id)
 {
 	domid_t dom_id = vm_id;
 	int max_gpfn = HYPERVISOR_memory_op(XENMEM_maximum_gpfn, &dom_id);
@@ -161,15 +188,7 @@ static int xen_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
 	return rc;
 }
 
-static int xen_set_trap_area(struct vgt_device *vgt, uint64_t start, uint64_t end, bool map)
-{
-	if (!vgt_pci_mmio_is_enabled(vgt))
-		return 0;
-
-	return hvm_map_io_range_to_ioreq_server(vgt, 1, start, end, map);
-}
-
-int xen_get_nr_vcpu(int vm_id)
+static int xen_get_nr_vcpu(int vm_id)
 {
 	struct xen_domctl arg;
 	int rc;
@@ -190,6 +209,7 @@ int xen_get_nr_vcpu(int vm_id)
 
 static int hvm_create_iorequest_server(struct vgt_device *vgt)
 {
+	struct vgt_hvm_info *info = vgt->hvm_info;
 	struct xen_hvm_create_ioreq_server arg;
 	int r;
 
@@ -200,18 +220,19 @@ static int hvm_create_iorequest_server(struct vgt_device *vgt)
 		printk(KERN_ERR "Cannot create io-requset server: %d!\n", r);
 		return r;
 	}
-	vgt->iosrv_id = arg.id;
+	info->iosrv_id = arg.id;
 
 	return r;
 }
 
-int hvm_toggle_iorequest_server(struct vgt_device *vgt, bool enable)
+static int hvm_toggle_iorequest_server(struct vgt_device *vgt, bool enable)
 {
+	struct vgt_hvm_info *info = vgt->hvm_info;
 	struct xen_hvm_set_ioreq_server_state arg;
 	int r;
 
 	arg.domid = vgt->vm_id;
-	arg.id = vgt->iosrv_id;
+	arg.id = info->iosrv_id;
 	arg.enabled = enable;
 	r = HYPERVISOR_hvm_op(HVMOP_set_ioreq_server_state, &arg);
 	if (r < 0) {
@@ -225,11 +246,12 @@ int hvm_toggle_iorequest_server(struct vgt_device *vgt, bool enable)
 
 static int hvm_get_ioreq_pfn(struct vgt_device *vgt, uint64_t *value)
 {
+	struct vgt_hvm_info *info = vgt->hvm_info;
 	struct xen_hvm_get_ioreq_server_info arg;
 	int r;
 
 	arg.domid = vgt->vm_id;
-	arg.id = vgt->iosrv_id;
+	arg.id = info->iosrv_id;
 	r = HYPERVISOR_hvm_op(HVMOP_get_ioreq_server_info, &arg);
 	if (r < 0) {
 		printk(KERN_ERR "Cannot get ioreq pfn: %d!\n", r);
@@ -239,31 +261,34 @@ static int hvm_get_ioreq_pfn(struct vgt_device *vgt, uint64_t *value)
 	return r;
 }
 
-int hvm_destroy_iorequest_server(struct vgt_device *vgt)
+static int hvm_destroy_iorequest_server(struct vgt_device *vgt)
 {
+	struct vgt_hvm_info *info = vgt->hvm_info;
 	struct xen_hvm_destroy_ioreq_server arg;
 	int r;
 
 	arg.domid = vgt->vm_id;
-	arg.id = vgt->iosrv_id;
+	arg.id = info->iosrv_id;
 	r = HYPERVISOR_hvm_op(HVMOP_destroy_ioreq_server, &arg);
 	if (r < 0) {
 		printk(KERN_ERR "Cannot destroy io-request server(%d): %d!\n",
-			vgt->iosrv_id, r);
+			info->iosrv_id, r);
 		return r;
 	}
-	vgt->iosrv_id = 0;
+	info->iosrv_id = 0;
+
 	return r;
 }
 
-int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
+static int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
 	int is_mmio, uint64_t start, uint64_t end, int map)
 {
+	struct vgt_hvm_info *info = vgt->hvm_info;
 	xen_hvm_io_range_t arg;
 	int rc;
 
 	arg.domid = vgt->vm_id;
-	arg.id = vgt->iosrv_id;
+	arg.id = info->iosrv_id;
 	arg.type = is_mmio ? HVMOP_IO_RANGE_MEMORY : HVMOP_IO_RANGE_PORT;
 	arg.start = start;
 	arg.end = end;
@@ -276,13 +301,14 @@ int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
 	return rc;
 }
 
-int hvm_map_pcidev_to_ioreq_server(struct vgt_device *vgt, uint64_t sbdf)
+static int hvm_map_pcidev_to_ioreq_server(struct vgt_device *vgt, uint64_t sbdf)
 {
+	struct vgt_hvm_info *info = vgt->hvm_info;
 	xen_hvm_io_range_t arg;
 	int rc;
 
 	arg.domid = vgt->vm_id;
-	arg.id = vgt->iosrv_id;
+	arg.id = info->iosrv_id;
 	arg.type = HVMOP_IO_RANGE_PCI;
 	arg.start = arg.end = sbdf;
 	rc = HYPERVISOR_hvm_op(HVMOP_map_io_range_to_ioreq_server, &arg);
@@ -333,6 +359,14 @@ static int hvm_wp_page_to_ioreq_server(struct vgt_device *vgt, unsigned long pag
 		return rc;
 	}
 	return rc;
+}
+
+static int xen_set_trap_area(struct vgt_device *vgt, uint64_t start, uint64_t end, bool map)
+{
+	if (!vgt_pci_mmio_is_enabled(vgt))
+		return 0;
+
+	return hvm_map_io_range_to_ioreq_server(vgt, 1, start, end, map);
 }
 
 struct vm_struct *xen_map_iopage(struct vgt_device *vgt)
@@ -420,7 +454,453 @@ static int xen_inject_msi(int vm_id, u32 addr_lo, u16 data)
 	return HYPERVISOR_hvm_op(HVMOP_inject_msi, &info);
 }
 
-struct kernel_dm xen_kdm = {
+static int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
+{
+	int i, sign;
+	void *gva;
+	unsigned long gpa;
+	uint64_t base = vgt_mmio_bar_base(vgt);
+	uint64_t tmp;
+	int pvinfo_page;
+
+	if (vgt->vmem_vma == NULL) {
+		tmp = vgt_pa_to_mmio_offset(vgt, req->addr);
+		pvinfo_page = (tmp >= VGT_PVINFO_PAGE
+				&& tmp < (VGT_PVINFO_PAGE + VGT_PVINFO_SIZE));
+		/*
+		 * hvmloader will read PVINFO to identify if HVM is in VGT
+		 * or VTD. So we don't trigger HVM mapping logic here.
+		 */
+		if (!pvinfo_page && vgt_hvm_vmem_init(vgt) < 0) {
+			vgt_err("can not map the memory of VM%d!!!\n", vgt->vm_id);
+			ASSERT_VM(vgt->vmem_vma != NULL, vgt);
+			return -EINVAL;
+		}
+	}
+
+	sign = req->df ? -1 : 1;
+
+	if (req->dir == IOREQ_READ) {
+		/* MMIO READ */
+		if (!req->data_is_ptr) {
+			if (req->count != 1)
+				goto err_ioreq_count;
+
+			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_read: target register (%lx).\n",
+			//	(unsigned long)req->addr);
+			if (!vgt_emulate_read(vgt, req->addr, &req->data, req->size))
+				return -EINVAL;
+		}
+		else {
+			if ((req->addr + sign * req->count * req->size < base)
+			   || (req->addr + sign * req->count * req->size >=
+				base + vgt->state.bar_size[0]))
+				goto err_ioreq_range;
+			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_read: rep %d target memory %lx, slow!\n",
+			//	req->count, (unsigned long)req->addr);
+
+			for (i = 0; i < req->count; i++) {
+				if (!vgt_emulate_read(vgt, req->addr + sign * i * req->size,
+					&tmp, req->size))
+					return -EINVAL;
+				gpa = req->data + sign * i * req->size;
+				gva = hypervisor_gpa_to_va(vgt, gpa);
+				if (gva) {
+					if (!IS_SNB(vgt->pdev))
+						memcpy(gva, &tmp, req->size);
+					else {
+						// On the SNB laptop, writing tmp to gva can
+						//cause bug 119. So let's do the writing only on HSW for now.
+						vgt_err("vGT: disable support of string copy instruction on SNB, gpa: 0x%lx\n", gpa);
+					}
+				} else
+					vgt_err("VM %d is trying to store mmio data block to invalid gpa: 0x%lx.\n", vgt->vm_id, gpa);
+			}
+		}
+	}
+	else { /* MMIO Write */
+		if (!req->data_is_ptr) {
+			if (req->count != 1)
+				goto err_ioreq_count;
+			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
+			if (!vgt_emulate_write(vgt, req->addr, &req->data, req->size))
+				return -EINVAL;
+		}
+		else {
+			if ((req->addr + sign * req->count * req->size < base)
+			    || (req->addr + sign * req->count * req->size >=
+				base + vgt->state.bar_size[0]))
+				goto err_ioreq_range;
+			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_write: rep %d target memory %lx, slow!\n",
+			//	req->count, (unsigned long)req->addr);
+
+			for (i = 0; i < req->count; i++) {
+				gpa = req->data + sign * i * req->size;
+				gva = hypervisor_gpa_to_va(vgt, gpa);
+				if (gva != NULL)
+					memcpy(&tmp, gva, req->size);
+				else {
+					tmp = 0;
+					vgt_dbg(VGT_DBG_GENERIC, "vGT: can not read gpa = 0x%lx!!!\n", gpa);
+				}
+				if (!vgt_emulate_write(vgt, req->addr + sign * i * req->size, &tmp, req->size))
+					return -EINVAL;
+			}
+		}
+	}
+	return 0;
+
+err_ioreq_count:
+	vgt_err("VM(%d): Unexpected %s request count(%d)\n",
+		vgt->vm_id, req->dir == IOREQ_READ ? "read" : "write",
+		req->count);
+	return -EINVAL;
+
+err_ioreq_range:
+	vgt_err("VM(%d): Invalid %s request addr end(%016llx)\n",
+		vgt->vm_id, req->dir == IOREQ_READ ? "read" : "write",
+		req->addr + sign * req->count * req->size);
+	return -ERANGE;
+}
+
+static int _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
+{
+	int sign;
+
+	sign = ioreq->df ? -1 : 1;
+
+	if (ioreq->dir == IOREQ_READ) {
+		/* PIO READ */
+		if (!ioreq->data_is_ptr) {
+			if(!vgt_hvm_read_cfg_space(vgt,
+				ioreq->addr,
+				ioreq->size,
+				(unsigned long*)&ioreq->data))
+				return -EINVAL;
+		} else {
+			vgt_dbg(VGT_DBG_GENERIC,"VGT: _hvm_pio_emulation read data_ptr %lx\n",
+			(long)ioreq->data);
+			goto err_data_ptr;
+		}
+	} else {
+		/* PIO WRITE */
+		if (!ioreq->data_is_ptr) {
+			if (!vgt_hvm_write_cfg_space(vgt,
+				ioreq->addr,
+				ioreq->size,
+				(unsigned long)ioreq->data))
+				return -EINVAL;
+		} else {
+			vgt_dbg(VGT_DBG_GENERIC,"VGT: _hvm_pio_emulation write data_ptr %lx\n",
+			(long)ioreq->data);
+			goto err_data_ptr;
+		}
+	}
+	return 0;
+err_data_ptr:
+	/* The data pointer of emulation is guest physical address
+	 * so far, which goes to Qemu emulation, but hard for
+	 * vGT driver which doesn't know gpn_2_mfn translation.
+	 * We may ask hypervisor to use mfn for vGT driver.
+	 * We mark it as unsupported in case guest really it.
+	 */
+	vgt_err("VM(%d): Unsupported %s data_ptr(%lx)\n",
+		vgt->vm_id, ioreq->dir == IOREQ_READ ? "read" : "write",
+		(long)ioreq->data);
+	return -EINVAL;
+}
+
+static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	uint64_t bdf = PCI_BDF2(pdev->pbus->number, pdev->devfn);
+
+	/* When using ioreq-server, sometimes an event channal
+	 * notification is received with invalid ioreq. Don't
+	 * know the root cause. Put the workaround here.
+	 */
+	if (ioreq->state == STATE_IOREQ_NONE)
+		return 0;
+
+	if (ioreq->type == IOREQ_TYPE_INVALIDATE)
+		return 0;
+
+	switch (ioreq->type) {
+		case IOREQ_TYPE_PCI_CONFIG:
+		/* High 32 bit of ioreq->addr is bdf */
+		if ((ioreq->addr >> 32) != bdf) {
+			printk(KERN_ERR "vGT: Unexpected PCI Dev %lx emulation\n",
+				(unsigned long) (ioreq->addr>>32));
+				return -EINVAL;
+			} else
+				return _hvm_pio_emulation(vgt, ioreq);
+			break;
+		case IOREQ_TYPE_COPY:	/* MMIO */
+			return _hvm_mmio_emulation(vgt, ioreq);
+			break;
+		default:
+			printk(KERN_ERR "vGT: Unknown ioreq type %x addr %llx size %u state %u\n",
+				ioreq->type, ioreq->addr, ioreq->size, ioreq->state);
+			return -EINVAL;
+	}
+
+	return 0;
+}
+
+static struct ioreq *vgt_get_hvm_ioreq(struct vgt_device *vgt, int vcpu)
+{
+	struct vgt_hvm_info *info = vgt->hvm_info;
+	return &(info->iopage->vcpu_ioreq[vcpu]);
+}
+
+static int vgt_emulation_thread(void *priv)
+{
+	struct vgt_device *vgt = (struct vgt_device *)priv;
+	struct vgt_hvm_info *info = vgt->hvm_info;
+
+	int vcpu;
+	int nr_vcpus = info->nr_vcpu;
+
+	struct ioreq *ioreq;
+	int irq, ret;
+
+	vgt_info("start kthread for VM%d\n", vgt->vm_id);
+
+	ASSERT(info->nr_vcpu <= MAX_HVM_VCPUS_SUPPORTED);
+
+	set_freezable();
+	while (1) {
+		ret = wait_event_freezable(info->io_event_wq,
+			kthread_should_stop() ||
+			bitmap_weight(info->ioreq_pending, nr_vcpus));
+		if (ret)
+			vgt_warn("Emulation thread(%d) waken up"
+				 "by unexpected signal!\n", vgt->vm_id);
+
+		if (kthread_should_stop())
+			return 0;
+
+		for (vcpu = 0; vcpu < nr_vcpus; vcpu++) {
+			if (!test_and_clear_bit(vcpu, info->ioreq_pending))
+				continue;
+
+			ioreq = vgt_get_hvm_ioreq(vgt, vcpu);
+
+			ret = vgt_hvm_do_ioreq(vgt, ioreq);
+			if (unlikely(ret)) {
+				hypervisor_pause_domain(vgt);
+				hypervisor_shutdown_domain(vgt);
+			}
+
+			if (vgt->force_removal)
+				wait_event(vgt->pdev->destroy_wq, !vgt->force_removal);
+
+			ioreq->state = STATE_IORESP_READY;
+
+			irq = info->evtchn_irq[vcpu];
+			notify_remote_via_irq(irq);
+		}
+	}
+
+	BUG(); /* It's actually impossible to reach here */
+	return 0;
+}
+
+static inline void vgt_raise_emulation_request(struct vgt_device *vgt,
+	int vcpu)
+{
+	struct vgt_hvm_info *info = vgt->hvm_info;
+	set_bit(vcpu, info->ioreq_pending);
+	if (waitqueue_active(&info->io_event_wq))
+		wake_up(&info->io_event_wq);
+}
+
+static irqreturn_t vgt_hvm_io_req_handler(int irq, void* dev)
+{
+	struct vgt_device *vgt;
+	struct vgt_hvm_info *info;
+	int vcpu;
+
+	vgt = (struct vgt_device *)dev;
+	info = vgt->hvm_info;
+
+	for(vcpu=0; vcpu < info->nr_vcpu; vcpu++){
+		if(info->evtchn_irq[vcpu] == irq)
+			break;
+	}
+	if (vcpu == info->nr_vcpu){
+		/*opps, irq is not the registered one*/
+		vgt_info("Received a IOREQ w/o vcpu target\n");
+		vgt_info("Possible a false request from event binding\n");
+		return IRQ_NONE;
+	}
+
+	vgt_raise_emulation_request(vgt, vcpu);
+
+	return IRQ_HANDLED;
+}
+
+static void xen_hvm_exit(struct vgt_device *vgt)
+{
+	struct vgt_hvm_info *info;
+	int vcpu;
+
+	info = vgt->hvm_info;
+
+	if (info == NULL)
+		return;
+
+	if (info->iosrv_id != 0)
+		hvm_destroy_iorequest_server(vgt);
+
+	if (info->emulation_thread != NULL)
+		kthread_stop(info->emulation_thread);
+
+	if (!info->nr_vcpu || info->evtchn_irq == NULL)
+		goto out1;
+
+	for (vcpu = 0; vcpu < info->nr_vcpu; vcpu++){
+		if(info->evtchn_irq[vcpu] >= 0)
+			unbind_from_irqhandler(info->evtchn_irq[vcpu], vgt);
+	}
+
+	if (info->iopage_vma != NULL)
+		xen_unmap_domain_mfn_range_in_kernel(info->iopage_vma, 1, vgt->vm_id);
+
+	kfree(info->evtchn_irq);
+
+out1:
+	kfree(info);
+
+	return;
+}
+
+static int xen_hvm_init(struct vgt_device *vgt)
+{
+	struct vgt_hvm_info *info;
+	int vcpu, irq, rc = 0;
+	struct task_struct *thread;
+	struct pgt_device *pdev = vgt->pdev;
+
+	info = kzalloc(sizeof(struct vgt_hvm_info), GFP_KERNEL);
+	if (info == NULL)
+		return -ENOMEM;
+
+	vgt->hvm_info = info;
+
+	info->iopage_vma = hypervisor_map_iopage(vgt);
+	if (info->iopage_vma == NULL) {
+		printk(KERN_ERR "Failed to map HVM I/O page for VM%d\n", vgt->vm_id);
+		rc = -EFAULT;
+		goto err;
+	}
+	info->iopage = info->iopage_vma->addr;
+
+	init_waitqueue_head(&info->io_event_wq);
+
+	info->nr_vcpu = xen_get_nr_vcpu(vgt->vm_id);
+	ASSERT(info->nr_vcpu > 0);
+	ASSERT(info->nr_vcpu <= MAX_HVM_VCPUS_SUPPORTED);
+
+	info->evtchn_irq = kmalloc(info->nr_vcpu * sizeof(int), GFP_KERNEL);
+	if (info->evtchn_irq == NULL){
+		rc = -ENOMEM;
+		goto err;
+	}
+	for( vcpu = 0; vcpu < info->nr_vcpu; vcpu++ )
+		info->evtchn_irq[vcpu] = -1;
+
+	rc = hvm_map_pcidev_to_ioreq_server(vgt, PCI_BDF2(pdev->pbus->number, pdev->devfn));
+	if (rc < 0)
+		goto err;
+	rc = hvm_toggle_iorequest_server(vgt, 1);
+	if (rc < 0)
+		goto err;
+
+	for( vcpu = 0; vcpu < info->nr_vcpu; vcpu++ ){
+		irq = bind_interdomain_evtchn_to_irqhandler( vgt->vm_id,
+				info->iopage->vcpu_ioreq[vcpu].vp_eport,
+				vgt_hvm_io_req_handler, 0,
+				"vgt", vgt );
+		if ( irq < 0 ){
+			rc = irq;
+			printk(KERN_ERR "Failed to bind event channle for vgt HVM IO handler, rc=%d\n", rc);
+			goto err;
+		}
+		info->evtchn_irq[vcpu] = irq;
+	}
+
+	thread = kthread_run(vgt_emulation_thread, vgt,
+			"vgt_emulation:%d", vgt->vm_id);
+	if(IS_ERR(thread))
+		goto err;
+	info->emulation_thread = thread;
+
+	return 0;
+
+err:
+	xen_hvm_exit(vgt);
+	return rc;
+}
+
+static void *xen_gpa_to_va(struct vgt_device *vgt, unsigned long gpa)
+{
+	unsigned long buck_index, buck_4k_index;
+
+	if (!vgt->vm_id)
+		return (char*)hypervisor_mfn_to_virt(gpa>>PAGE_SHIFT) + (gpa & (PAGE_SIZE-1));
+	/*
+	 * At the beginning of _hvm_mmio_emulation(), we already initialize
+	 * vgt->vmem_vma and vgt->vmem_vma_low_1mb.
+	 */
+	ASSERT(vgt->vmem_vma != NULL && vgt->vmem_vma_low_1mb != NULL);
+
+	/* handle the low 1MB memory */
+	if (gpa < VMEM_1MB) {
+		buck_index = gpa >> PAGE_SHIFT;
+		if (!vgt->vmem_vma_low_1mb[buck_index])
+			return NULL;
+
+		return (char*)(vgt->vmem_vma_low_1mb[buck_index]->addr) +
+			(gpa & ~PAGE_MASK);
+
+	}
+
+	/* handle the >1MB memory */
+	buck_index = gpa >> VMEM_BUCK_SHIFT;
+
+	if (!vgt->vmem_vma[buck_index]) {
+		buck_4k_index = gpa >> PAGE_SHIFT;
+		if (!vgt->vmem_vma_4k[buck_4k_index]) {
+			if (buck_4k_index > vgt->low_mem_max_gpfn)
+				vgt_err("vGT failed to map gpa=0x%lx?\n", gpa);
+			return NULL;
+		}
+
+		return (char*)(vgt->vmem_vma_4k[buck_4k_index]->addr) +
+			(gpa & ~PAGE_MASK);
+	}
+
+	return (char*)(vgt->vmem_vma[buck_index]->addr) +
+		(gpa & (VMEM_BUCK_SIZE -1));
+}
+
+static bool xen_read_va(struct vgt_device *vgt, void *va, void *val,
+		int len, int atomic)
+{
+	memcpy(val, va, len);
+
+	return true;
+}
+
+static bool xen_write_va(struct vgt_device *vgt, void *va, void *val,
+		int len, int atomic)
+{
+	memcpy(va, val, len);
+	return true;
+}
+
+static struct kernel_dm xen_kdm = {
 	.g2m_pfn = xen_g2m_pfn,
 	.get_max_gpfn = xen_get_max_gpfn,
 	.pause_domain = xen_pause_domain,
@@ -436,4 +916,11 @@ struct kernel_dm xen_kdm = {
 	.from_virt_to_mfn = xen_virt_to_mfn,
 	.from_mfn_to_virt = xen_mfn_to_virt,
 	.inject_msi = xen_inject_msi,
+	.hvm_init = xen_hvm_init,
+	.hvm_exit = xen_hvm_exit,
+	.gpa_to_va = xen_gpa_to_va,
+	.read_va = xen_read_va,
+	.write_va = xen_write_va,
 };
+
+struct kernel_dm *vgt_pkdm = &xen_kdm;

@@ -26,8 +26,6 @@
 #include <linux/module.h>
 #include <linux/kthread.h>
 #include <linux/delay.h>
-#include <xen/interface/vcpu.h>
-#include <xen/interface/hvm/hvm_op.h>
 #include "vgt.h"
 
 /*

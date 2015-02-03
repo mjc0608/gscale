@@ -120,7 +120,7 @@ static int get_next_entry(struct cmd_general_info *list)
 static int add_patch_entry(struct parser_exec_state *s,
 	void *addr, uint32_t val)
 {
-	vgt_state_ring_t* rs = &s->vgt->rb[s->ring_id];
+	vgt_state_ring_t *rs = &s->vgt->rb[s->ring_id];
 	struct cmd_general_info *list = &rs->patch_list;
 	struct cmd_patch_info *patch;
 	int next;
@@ -138,7 +138,10 @@ static int add_patch_entry(struct parser_exec_state *s,
 	patch = &list->patch[next];
 	patch->addr = addr;
 	patch->new_val = val;
-	patch->old_val = *(uint32_t *)addr;
+
+	hypervisor_read_va(s->vgt, addr, &patch->old_val,
+				sizeof(patch->old_val), 1);
+
 	patch->request_id = s->request_id;
 
 	list->tail = next;
@@ -196,12 +199,12 @@ static int add_tail_entry(struct parser_exec_state *s,
 
 }
 
-static void apply_patch_entry(struct cmd_patch_info *patch)
+static void apply_patch_entry(struct vgt_device *vgt, struct cmd_patch_info *patch)
 {
 	ASSERT(patch->addr);
 
-	*(uint32_t *)patch->addr = patch->new_val;
-
+	hypervisor_write_va(vgt, patch->addr, &patch->new_val,
+				sizeof(patch->new_val), 1);
 	clflush(patch->addr);
 }
 
@@ -218,7 +221,8 @@ static void revert_batch_entry(struct batch_info *info)
  * Apply all patch entries with request ID before or
  * equal to the submission ID
  */
-static void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id)
+static void apply_patch_list(struct vgt_device *vgt, vgt_state_ring_t *rs,
+		uint64_t submission_id)
 {
 	int next;
 	struct cmd_general_info *list = &rs->patch_list;
@@ -237,7 +241,7 @@ static void apply_patch_list(vgt_state_ring_t *rs, uint64_t submission_id)
 		vgt_dbg(VGT_DBG_CMD, "submission-%lld: apply patch entry-%d (addr: %llx, val: %x->%x, id: %lld\n",
 			submission_id, next, (uint64_t)patch->addr,
 			patch->old_val, patch->new_val, patch->request_id);
-		apply_patch_entry(patch);
+		apply_patch_entry(vgt, patch);
 		list->head = next;
 	}
 }
@@ -288,7 +292,7 @@ void apply_tail_list(struct vgt_device *vgt, int ring_id,
 			break;
 
 		apply_post_handle_list(rs, entry->request_id);
-		apply_patch_list(rs, entry->request_id);
+		apply_patch_list(vgt, rs, entry->request_id);
 
 		if ((rs->uhptr & _REGBIT_UHPTR_VALID) &&
 		    (rs->uhptr_id < entry->request_id)) {
@@ -499,17 +503,22 @@ static inline struct cmd_info* vgt_get_cmd_info(uint32_t cmd, int ring_id)
 	return vgt_find_cmd_entry(opcode, ring_id);
 }
 
-static inline uint32_t* cmd_ptr(struct parser_exec_state *s, int index)
+static inline uint32_t *cmd_ptr(struct parser_exec_state *s, int index)
 {
 	if (index < s->ip_buf_len)
 		return s->ip_va + index;
 	else
-		return s->ip_va_next_page+ (index - s->ip_buf_len);
+		return s->ip_va_next_page + (index - s->ip_buf_len);
 }
 
 static inline uint32_t cmd_val(struct parser_exec_state *s, int index)
 {
-	return *cmd_ptr(s, index);
+	uint32_t *addr = cmd_ptr(s, index);
+	uint32_t ret = 0;
+
+	hypervisor_read_va(s->vgt, addr, &ret, sizeof(ret), 1);
+
+	return ret;
 }
 
 static void parser_exec_state_dump(struct parser_exec_state *s)
@@ -929,9 +938,9 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 	struct fb_notify_msg msg;
 	uint32_t value;
 
-	opcode = *(cmd_ptr(s, 0));
-	stride_val = *(cmd_ptr(s, 1));
-	surf_val = *(cmd_ptr(s, 2));
+	opcode = cmd_val(s, 0);
+	stride_val = cmd_val(s, 1);
+	surf_val = cmd_val(s, 2);
 
 	if (resubmitted) {
 		plane_code = (opcode & PLANE_INFO_MASK) >> PLANE_INFO_SHIFT;
@@ -991,7 +1000,7 @@ static int vgt_handle_mi_display_flip(struct parser_exec_state *s, bool resubmit
 		if(!display_flip_encode_plane_info(real_pipe, plane, &real_plane_code))
 			goto wrong_command;
 
-		value = *(cmd_ptr(s, 0));
+		value = cmd_val(s, 0);
 		add_patch_entry(s,
 			cmd_ptr(s, 0),
 			((value & ~PLANE_SELECT_MASK) |
@@ -1042,7 +1051,7 @@ static int vgt_handle_mi_wait_for_event(struct parser_exec_state *s)
 	int rc = 0;
 	enum vgt_pipe virtual_pipe = I915_MAX_PIPES;
 	enum vgt_pipe real_pipe = I915_MAX_PIPES;
-	uint32_t cmd = *cmd_ptr(s, 0);
+	uint32_t cmd = cmd_val(s, 0);
 	uint32_t new_cmd = cmd;
 	enum vgt_plane_type plane_type = MAX_PLANE;
 
@@ -2237,16 +2246,18 @@ static void trace_cs_command(struct parser_exec_state *s)
 static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 {
 	struct cmd_info *info;
-
+	uint32_t cmd;
 	int rc = 0;
 
-	info = vgt_get_cmd_info(*s->ip_va, s->ring_id);
+	hypervisor_read_va(s->vgt, s->ip_va, &cmd, sizeof(cmd), 1);
+
+	info = vgt_get_cmd_info(cmd, s->ring_id);
 	if (info == NULL) {
-		vgt_err("ERROR: unknown cmd 0x%x, opcode=0x%x\n", *s->ip_va,
-				vgt_get_opcode(*s->ip_va, s->ring_id));
+		vgt_err("ERROR: unknown cmd 0x%x, opcode=0x%x\n", cmd,
+				vgt_get_opcode(cmd, s->ring_id));
 		parser_exec_state_dump(s);
 		klog_printk("ERROR: unknown cmd %x, ring%d[%lx, %lx] gma[%lx] va[%p]\n",
-				*s->ip_va, s->ring_id, s->ring_start,
+				cmd, s->ring_id, s->ring_start,
 				s->ring_start + s->ring_size, s->ip_gma, s->ip_va);
 
 		return -EFAULT;
