@@ -51,6 +51,10 @@ void i915_isr_wrapper(struct irq_work *work)
 {
 	struct drm_i915_private *dev_priv = container_of(work,
 				struct drm_i915_private, irq_work);
+
+	if (!vgt_can_process_irq())
+		return;
+
 	dev_priv->irq_ops.irq_handler(dev_priv->dev->pdev->irq, dev_priv->dev);
 }
 
@@ -2199,9 +2203,6 @@ static irqreturn_t ironlake_irq_handler(int irq, void *arg)
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	u32 de_iir, gt_iir, de_ier, sde_ier = 0;
 	irqreturn_t ret = IRQ_NONE;
-
-	if (i915_host_mediate && !vgt_can_process_irq())
-		return IRQ_HANDLED;
 
 	/* We get interrupts on unclaimed registers, so check for this before we
 	 * do any I915_{READ,WRITE}. */
