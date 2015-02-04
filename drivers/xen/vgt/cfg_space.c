@@ -364,43 +364,32 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 	return rc;
 }
 
-bool vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
-	unsigned int port, unsigned int bytes, unsigned long val)
+bool vgt_hvm_write_cfg_space(struct vgt_device *vgt,
+	uint64_t addr, unsigned int bytes, unsigned long val)
 {
-	vgt_dbg(VGT_DBG_GENERIC, "vgt_hvm_write_cf8_cfc %x %d %lx\n", port, bytes, val);
-	if ( (port & ~3) == 0xcf8 ) {
-		ASSERT (bytes == 4);
-		ASSERT ((port & 3) == 0);
-		vgt->last_cf8 = (uint32_t) val;
-	}
-	else {
-		ASSERT((vgt->last_cf8 & 3) == 0);
-		ASSERT(((bytes == 4) && ((port & 3) == 0)) ||
-			((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
-		vgt_emulate_cfg_write (vgt,
-			(vgt->last_cf8 & 0xfc) + (port & 3),
-			&val, bytes);
-	}
+	/* Low 32 bit of addr is real address, high 32 bit is bdf */
+	unsigned int port = addr & 0xffffffff;
+
+	vgt_dbg(VGT_DBG_GENERIC, "vgt_hvm_write_cfg_space %x %d %lx\n", port, bytes, val);
+	ASSERT(((bytes == 4) && ((port & 3) == 0)) ||
+		((bytes == 2) && ((port & 1) == 0)) || (bytes == 1));
+	vgt_emulate_cfg_write (vgt, port, &val, bytes);
+
 	return true;
 }
 
-bool vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
-	unsigned int port, unsigned int bytes, unsigned long *val)
+bool vgt_hvm_read_cfg_space(struct vgt_device *vgt,
+	uint64_t addr, unsigned int bytes, unsigned long *val)
 {
 	unsigned long data;
+	/* Low 32 bit of addr is real address, high 32 bit is bdf */
+	unsigned int port = addr & 0xffffffff;
 
-	if ((port & ~3)== 0xcf8) {
-		memcpy(val, (uint8_t*)&vgt->last_cf8 + (port & 3), bytes);
-	}
-	else {
-//		ASSERT ( (vgt->last_cf8 & 3) == 0);
-		ASSERT ( ((bytes == 4) && ((port & 3) == 0)) ||
-			((bytes == 2) && ((port & 1) == 0)) || (bytes ==1));
-		vgt_emulate_cfg_read(vgt, (vgt->last_cf8 & 0xfc) + (port & 3),
-					&data, bytes);
-		memcpy(val, &data, bytes);
-	}
-	vgt_dbg(VGT_DBG_GENERIC, "VGT: vgt_cfg_read_emul port %x bytes %x got %lx\n",
+	ASSERT (((bytes == 4) && ((port & 3) == 0)) ||
+		((bytes == 2) && ((port & 1) == 0)) || (bytes == 1));
+	vgt_emulate_cfg_read(vgt, port, &data, bytes);
+	memcpy(val, &data, bytes);
+	vgt_dbg(VGT_DBG_GENERIC, "VGT: vgt_hvm_read_cfg_space port %x bytes %x got %lx\n",
 			port, bytes, *val);
 	return true;
 }

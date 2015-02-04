@@ -55,20 +55,6 @@ int vgt_get_hvm_max_gpfn(int vm_id)
 	return max_gpfn;
 }
 
-int vgt_hvm_enable(struct vgt_device *vgt)
-{
-	struct xen_hvm_vgt_enable vgt_enable;
-	int rc;
-
-	vgt_enable.domid = vgt->vm_id;
-
-	rc = HYPERVISOR_hvm_op(HVMOP_vgt_enable, &vgt_enable);
-	if (rc != 0)
-		printk(KERN_ERR "Enable HVM vgt fail with %d!\n", rc);
-
-	return rc;
-}
-
 int vgt_pause_domain(struct vgt_device *vgt)
 {
 	int rc;
@@ -192,9 +178,6 @@ int vgt_io_trap(struct xen_domctl *ctl)
  */
 int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 {
-	struct xen_domctl domctl;
-	struct xen_domctl_vgt_io_trap *info = &domctl.u.vgt_io_trap;
-
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint64_t bar_s, bar_e;
 
@@ -202,13 +185,6 @@ int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 
 	if (!vgt_pci_mmio_is_enabled(vgt))
 		return 0;
-
-	domctl.domain = vgt->vm_id;
-	domctl.cmd = XEN_DOMCTL_vgt_io_trap;
-	domctl.interface_version = XEN_DOMCTL_INTERFACE_VERSION;
-
-	info->n_pio = 0;
-	info->n_mmio = 1;
 
 	cfg_space += VGT_REG_CFG_SPACE_BAR0;
 	if (VGT_GET_BITS(*cfg_space, 2, 1) == 2) {
@@ -222,11 +198,8 @@ int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 	bar_s &= ~0xF; /* clear the LSB 4 bits */
 	bar_e = bar_s + vgt->state.bar_size[0] - 1;
 
-	info->mmio[0].s = bar_s;
-	info->mmio[0].e = bar_e;
-
-	r = HYPERVISOR_domctl(&domctl);
-	if (r) {
+	r = hvm_map_io_range_to_ioreq_server(vgt, 1, bar_s, bar_e);
+	if (r < 0) {
 		printk(KERN_ERR "VGT: %s(): fail to trap area: %d.\n", __func__, r);
 		return r;
 	}
@@ -253,21 +226,110 @@ int xen_get_nr_vcpu(int vm_id)
 	return arg.u.getdomaininfo.max_vcpu_id + 1;
 }
 
-int hvm_get_parameter_by_dom(domid_t domid, int idx, uint64_t *value)
+static int hvm_create_iorequest_server(struct vgt_device *vgt)
 {
-	struct xen_hvm_param xhv;
+	struct xen_hvm_create_ioreq_server arg;
 	int r;
 
-	xhv.domid = domid;
-	xhv.index = idx;
-	r = HYPERVISOR_hvm_op(HVMOP_get_param, &xhv);
+	arg.domid = vgt->vm_id;
+	arg.handle_bufioreq = 0;
+	r = HYPERVISOR_hvm_op(HVMOP_create_ioreq_server, &arg);
 	if (r < 0) {
-		printk(KERN_ERR "Cannot get hvm parameter %d: %d!\n",
-			idx, r);
+		printk(KERN_ERR "Cannot create io-requset server: %d!\n", r);
 		return r;
 	}
-	*value = xhv.value;
+	vgt->iosrv_id = arg.id;
+
 	return r;
+}
+
+int hvm_toggle_iorequest_server(struct vgt_device *vgt, bool enable)
+{
+	struct xen_hvm_set_ioreq_server_state arg;
+	int r;
+
+	arg.domid = vgt->vm_id;
+	arg.id = vgt->iosrv_id;
+	arg.enabled = enable;
+	r = HYPERVISOR_hvm_op(HVMOP_set_ioreq_server_state, &arg);
+	if (r < 0) {
+		printk(KERN_ERR "Cannot %s io-request server: %d!\n",
+			enable ? "enable" : "disbale",  r);
+		return r;
+	}
+
+       return r;
+}
+
+static int hvm_get_ioreq_pfn(struct vgt_device *vgt, uint64_t *value)
+{
+	struct xen_hvm_get_ioreq_server_info arg;
+	int r;
+
+	arg.domid = vgt->vm_id;
+	arg.id = vgt->iosrv_id;
+	r = HYPERVISOR_hvm_op(HVMOP_get_ioreq_server_info, &arg);
+	if (r < 0) {
+		printk(KERN_ERR "Cannot get ioreq pfn: %d!\n", r);
+		return r;
+	}
+	*value = arg.ioreq_pfn;
+	return r;
+}
+
+int hvm_destroy_iorequest_server(struct vgt_device *vgt)
+{
+	struct xen_hvm_destroy_ioreq_server arg;
+	int r;
+
+	arg.domid = vgt->vm_id;
+	arg.id = vgt->iosrv_id;
+	r = HYPERVISOR_hvm_op(HVMOP_destroy_ioreq_server, &arg);
+	if (r < 0) {
+		printk(KERN_ERR "Cannot destroy io-request server(%d): %d!\n",
+			vgt->iosrv_id, r);
+		return r;
+	}
+	vgt->iosrv_id = 0;
+	return r;
+}
+
+int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
+       int is_mmio, uint64_t start, uint64_t end)
+{
+	xen_hvm_io_range_t arg;
+	int rc;
+
+	arg.domid = vgt->vm_id;
+	arg.id = vgt->iosrv_id;
+	arg.type = is_mmio ? HVMOP_IO_RANGE_MEMORY : HVMOP_IO_RANGE_PORT;
+	arg.start = start;
+	arg.end = end;
+	rc = HYPERVISOR_hvm_op(HVMOP_map_io_range_to_ioreq_server, &arg);
+	if (rc < 0) {
+		printk(KERN_ERR "Cannot map io range to ioreq_server: %d!\n", rc);
+		return rc;
+	}
+
+	return rc;
+}
+
+int hvm_map_pcidev_to_ioreq_server(struct vgt_device *vgt, uint64_t sbdf)
+{
+	xen_hvm_io_range_t arg;
+	int rc;
+
+	arg.domid = vgt->vm_id;
+	arg.id = vgt->iosrv_id;
+	arg.type = HVMOP_IO_RANGE_PCI;
+	arg.start = arg.end = sbdf;
+	rc = HYPERVISOR_hvm_op(HVMOP_map_io_range_to_ioreq_server, &arg);
+	if (rc < 0) {
+		printk(KERN_ERR "Cannot map pci_dev to ioreq_server: %d!\n", rc);
+		return rc;
+	}
+
+	return rc;
 }
 
 struct vm_struct *map_hvm_iopage(struct vgt_device *vgt)
@@ -275,9 +337,14 @@ struct vm_struct *map_hvm_iopage(struct vgt_device *vgt)
 	uint64_t ioreq_pfn;
 	int rc;
 
-	rc =hvm_get_parameter_by_dom(vgt->vm_id, HVM_PARAM_IOREQ_PFN, &ioreq_pfn);
+	rc = hvm_create_iorequest_server(vgt);
 	if (rc < 0)
 		return NULL;
+	rc = hvm_get_ioreq_pfn(vgt, &ioreq_pfn);
+	if (rc < 0) {
+		hvm_destroy_iorequest_server(vgt);
+		return NULL;
+	}
 
 	return xen_remap_domain_mfn_range_in_kernel(ioreq_pfn, 1, vgt->vm_id);
 }

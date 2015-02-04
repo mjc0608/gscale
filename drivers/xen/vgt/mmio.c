@@ -639,7 +639,7 @@ int _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 	if (ioreq->dir == IOREQ_READ) {
 		/* PIO READ */
 		if (!ioreq->data_is_ptr) {
-			if(!vgt_hvm_read_cf8_cfc(vgt,
+			if(!vgt_hvm_read_cfg_space(vgt,
 				ioreq->addr,
 				ioreq->size,
 				(unsigned long*) &ioreq->data))
@@ -664,7 +664,7 @@ int _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 	else {
 		/* PIO WRITE */
 		if (!ioreq->data_is_ptr) {
-			if (!vgt_hvm_write_cf8_cfc(vgt,
+			if (!vgt_hvm_write_cfg_space(vgt,
 				ioreq->addr,
 				ioreq->size,
 				(unsigned long) ioreq->data))
@@ -702,17 +702,25 @@ err_data_ptr:
 
 static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
 {
-	if (!ioreq->is_vgt) {
-		vgt_info("Recieved a non-VGT ioreq (addr: %lx).\n", (long)ioreq->addr);
-		vgt_info("Possible a false request from event binding\n");
+	struct pgt_device *pdev = vgt->pdev;
+	uint64_t bdf = PCI_BDF2(pdev->pbus->number, pdev->devfn);
+
+	/* When using ioreq-server, sometimes an event channal
+	 * notification is received with invalid ioreq. Don't
+	 * know the root cause. Put the workaround here.
+	 */
+	if (ioreq->state == STATE_IOREQ_NONE)
 		return 0;
-	}
+
+	if (ioreq->type == IOREQ_TYPE_INVALIDATE)
+		return 0;
 
 	switch (ioreq->type) {
-		case IOREQ_TYPE_PIO:	/* PIO */
-			if ((ioreq->addr & ~7) != 0xcf8) {
-				printk(KERN_ERR "vGT: Unexpected PIO %lx emulation\n",
-					(long) ioreq->addr);
+		case IOREQ_TYPE_PCI_CONFIG:
+		/* High 32 bit of ioreq->addr is bdf */
+		if ((ioreq->addr >> 32) != bdf) {
+			printk(KERN_ERR "vGT: Unexpected PCI Dev %lx emulation\n",
+				(unsigned long) (ioreq->addr>>32));
 				return -EINVAL;
 			} else
 				return _hvm_pio_emulation(vgt, ioreq);
@@ -721,7 +729,8 @@ static int vgt_hvm_do_ioreq(struct vgt_device *vgt, struct ioreq *ioreq)
 			return _hvm_mmio_emulation(vgt, ioreq);
 			break;
 		default:
-			printk(KERN_ERR "vGT: Unknown ioreq type %x\n", ioreq->type);
+			printk(KERN_ERR "vGT: Unknown ioreq type %x addr %llx size %u state %u\n",
+				ioreq->type, ioreq->addr, ioreq->size, ioreq->state);
 			return -EINVAL;
 	}
 	return 0;
@@ -834,6 +843,7 @@ int vgt_hvm_info_init(struct vgt_device *vgt)
 	struct vgt_hvm_info *info;
 	int vcpu, irq, rc = 0;
 	struct task_struct *thread;
+	struct pgt_device *pdev = vgt->pdev;
 
 	info = kzalloc(sizeof(struct vgt_hvm_info), GFP_KERNEL);
 	if (info == NULL)
@@ -863,9 +873,16 @@ int vgt_hvm_info_init(struct vgt_device *vgt)
 	for( vcpu = 0; vcpu < info->nr_vcpu; vcpu++ )
 		info->evtchn_irq[vcpu] = -1;
 
+	rc = hvm_map_pcidev_to_ioreq_server(vgt, PCI_BDF2(pdev->pbus->number, pdev->devfn));
+	if (rc < 0)
+		goto err;
+	rc = hvm_toggle_iorequest_server(vgt, 1);
+	if (rc < 0)
+		goto err;
+
 	for( vcpu = 0; vcpu < info->nr_vcpu; vcpu++ ){
 		irq = bind_interdomain_evtchn_to_irqhandler( vgt->vm_id,
-				info->iopage->vcpu_ioreq[vcpu].vgt_eport,
+				info->iopage->vcpu_ioreq[vcpu].vp_eport,
 				vgt_hvm_io_req_handler, 0,
 				"vgt", vgt );
 		if ( irq < 0 ){
@@ -893,6 +910,9 @@ void vgt_hvm_info_deinit(struct vgt_device *vgt)
 {
 	struct vgt_hvm_info *info;
 	int vcpu;
+
+	if (vgt->iosrv_id != 0)
+		hvm_destroy_iorequest_server(vgt);
 
 	info = vgt->hvm_info;
 

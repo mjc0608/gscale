@@ -38,6 +38,7 @@
 
 #include <xen/interface/hvm/ioreq.h>
 #include <xen/interface/platform.h>
+#include <xen/interface/hvm/params.h>
 
 #include "vgt-if.h"
 #include "host.h"
@@ -766,6 +767,7 @@ struct vgt_device {
 	enum vgt_pipe pipe_mapping[I915_MAX_PIPES];
 	int vgt_id;		/* 0 is always for dom0 */
 	int vm_id;		/* domain ID per hypervisor */
+	ioservid_t iosrv_id;    /* io-request server id */
 	struct pgt_device *pdev;	/* the pgt device where the GT device registered. */
 	struct list_head	list;	/* FIXME: used for context switch ?? */
 	vgt_state_t	state;		/* MMIO state except ring buffers */
@@ -802,7 +804,6 @@ struct vgt_device {
 	vgt_reg_t	saved_wakeup;		/* disable PM before switching */
 
 	struct vgt_hvm_info *hvm_info;
-		uint32_t		last_cf8;
 	struct kobject kobj;
 	struct vgt_statistics	stat;		/* statistics info */
 
@@ -2615,14 +2616,18 @@ extern int vgt_get_base_reg_num(void);
 extern int vgt_get_sticky_reg_num(void);
 extern int vgt_get_reg_addr_sz_num(void);
 
-bool vgt_hvm_write_cf8_cfc(struct vgt_device *vgt,
-	unsigned int port, unsigned int bytes, unsigned long val);
-bool vgt_hvm_read_cf8_cfc(struct vgt_device *vgt,
-	unsigned int port, unsigned int bytes, unsigned long *val);
+bool vgt_hvm_write_cfg_space(struct vgt_device *vgt,
+       uint64_t addr, unsigned int bytes, unsigned long val);
+bool vgt_hvm_read_cfg_space(struct vgt_device *vgt,
+       uint64_t addr, unsigned int bytes, unsigned long *val);
 
 int vgt_hvm_opregion_map(struct vgt_device *vgt, int map);
+int hvm_destroy_iorequest_server(struct vgt_device *vgt);
+int hvm_toggle_iorequest_server(struct vgt_device *vgt, bool enable);
+int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
+    int is_mmio, uint64_t start, uint64_t end);
+int hvm_map_pcidev_to_ioreq_server(struct vgt_device *vgt, uint64_t sbdf);
 struct vm_struct *map_hvm_iopage(struct vgt_device *vgt);
-int hvm_get_parameter_by_dom(domid_t domid, int idx, uint64_t *value);
 int xen_get_nr_vcpu(int vm_id);
 int vgt_hvm_set_trap_area(struct vgt_device *vgt);
 int vgt_hvm_map_aperture (struct vgt_device *vgt, int map);

@@ -25,6 +25,7 @@
 
 #define IOREQ_TYPE_PIO          0 /* pio */
 #define IOREQ_TYPE_COPY         1 /* mmio ops */
+#define IOREQ_TYPE_PCI_CONFIG   2
 #define IOREQ_TYPE_TIMEOFFSET   7
 #define IOREQ_TYPE_INVALIDATE   8 /* mapcache */
 
@@ -45,9 +46,8 @@ struct ioreq {
                              * of the real data to use. */
     uint8_t dir:1;          /* 1=read, 0=write */
     uint8_t df:1;
-    uint8_t is_vgt:1;       /* if 1, it is vGT I/O request */
+    uint8_t _pad1:1;
     uint8_t type;           /* I/O type */
-    uint32_t vgt_eport;     /* evtchn for notification to/from vGT driver */
 };
 typedef struct ioreq ioreq_t;
 

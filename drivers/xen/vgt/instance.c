@@ -130,6 +130,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		goto err;
 
 	vgt->vm_id = vp.vm_id;
+	vgt->iosrv_id = 0;
 	vgt->pdev = pdev;
 
 	vgt->force_removal = 0;
@@ -267,8 +268,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	if (vgt->vm_id != 0){
 		/* HVM specific init */
-		if ((rc = vgt_hvm_info_init(vgt)) < 0 ||
-			(rc = vgt_hvm_enable(vgt)) < 0)
+		if ((rc = vgt_hvm_info_init(vgt)) < 0)
 			goto err;
 	}
 
