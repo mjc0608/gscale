@@ -221,7 +221,7 @@ static void show_batchbuffer(struct pgt_device *pdev, int ring_id, u64 addr,
 	if (addr < bytes) {
 		bytes *= 2;
 		start = 0;
-	} else if ((addr + bytes) >= info->max_gtt_gm_sz) {
+	} else if (!ppgtt && (addr + bytes) >= info->max_gtt_gm_sz) {
 		bytes *= 2;
 		start = info->max_gtt_gm_sz - bytes;
 	} else {
@@ -277,7 +277,7 @@ void common_show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes,
 
 	p_head &= RB_HEAD_OFF_MASK;
 	ring_len = _RING_CTL_BUF_SIZE(p_ctl);
-	p_contents = phys_aperture_vbase(pdev) + p_start;
+	p_contents = vgt_gma_to_va(vgt->gtt.ggtt_mm, p_start);
 
 #define WRAP_OFF(off, size)			\
 	({					\
@@ -391,7 +391,8 @@ void execlist_show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes)
 	p_start = *(p + 0x8 + 1);
 	p_ctl = *(p + 0xa + 1);
 
-	bb_head = *(p + 0xc + 1) << 31;
+	bb_head = *(p + 0xc + 1) & 0xFFFF;
+	bb_head <<= 32;
 	bb_head |= *(p + 0xe + 1);
 	reg = RB_TAIL(pdev, ring_id) - 0x30 + 0x140;
 
