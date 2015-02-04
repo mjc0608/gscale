@@ -181,24 +181,6 @@ struct pci_dev *pgt_to_pci(struct pgt_device *pdev)
 	return pdev->pdev;
 }
 
-static bool vgt_start_io_forwarding(struct pgt_device *pdev)
-{
-	struct xen_platform_op xpop;
-
-	/*
-	 * Pass the GEN device's BDF and the type(SNB/IVB/HSW?) to
-	 * the xen hypervisor: xen needs the info to decide which device's
-	 * PCI CFG R/W access should be forwarded to the vgt driver.
-	 */
-	xpop.cmd = XENPF_set_vgt_info;
-	xpop.u.vgt_info.gen_dev_bdf = PCI_BDF2(pdev->pbus->number, pdev->devfn);
-	xpop.u.vgt_info.gen_dev_type = pdev->gen_dev_type;
-	if (HYPERVISOR_dom0_op(&xpop) != 0)
-		return false;
-
-	return true;
-}
-
 /*
  * The thread to perform the VGT ownership switch.
  *
@@ -400,10 +382,6 @@ bool initial_phys_states(struct pgt_device *pdev)
 		return false;
 	}
 	printk("gttmmio_base_va: 0x%llx\n", (uint64_t)pdev->gttmmio_base_va);
-
-	/* start the io forwarding! */
-	if (!vgt_start_io_forwarding(pdev))
-		return false;;
 
 	/*
 	 * From now on, the vgt driver can invoke the
