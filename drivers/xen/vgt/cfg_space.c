@@ -269,11 +269,11 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 			if (cmd_changed & _REGBIT_CFG_COMMAND_MEMORY) {
 				if (old_cmd & _REGBIT_CFG_COMMAND_MEMORY) {
 					 vgt_hvm_map_aperture(vgt, 0);
-					/* need unset trap area? */
 				} else {
-
-					vgt_hvm_map_aperture(vgt, 1);
-					vgt_hvm_set_trap_area(vgt);
+					if(!vgt->state.bar_mapped[1]) {
+						vgt_hvm_map_aperture(vgt, 1);
+						vgt_hvm_set_trap_area(vgt, 1);
+					}
 				}
 			} else {
 				vgt_dbg(VGT_DBG_GENERIC, "need to trap the PIO BAR? "
@@ -300,15 +300,19 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 				new = new & ~(size-1);
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
 					vgt_hvm_map_aperture(vgt, 0);
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR0)
+					vgt_hvm_set_trap_area(vgt, 0);
 				vgt_pci_bar_write_32(vgt, off, new);
 			} else {
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
 					vgt_hvm_map_aperture(vgt, 0);
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR0)
+					vgt_hvm_set_trap_area(vgt, 0);
 				vgt_pci_bar_write_32(vgt, off, new);
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1)
 					vgt_hvm_map_aperture(vgt, 1);
 				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR0)
-					vgt_hvm_set_trap_area(vgt);
+					vgt_hvm_set_trap_area(vgt, 1);
 			}
 			break;
 

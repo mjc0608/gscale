@@ -190,7 +190,7 @@ int vgt_io_trap(struct xen_domctl *ctl)
 /*
  * Zap the GTTMMIO bar area for vGT trap and emulation.
  */
-int vgt_hvm_set_trap_area(struct vgt_device *vgt)
+int vgt_hvm_set_trap_area(struct vgt_device *vgt, int map)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint64_t bar_s, bar_e;
@@ -211,8 +211,7 @@ int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 
 	bar_s &= ~0xF; /* clear the LSB 4 bits */
 	bar_e = bar_s + vgt->state.bar_size[0] - 1;
-
-	r = hvm_map_io_range_to_ioreq_server(vgt, 1, bar_s, bar_e);
+	r = hvm_map_io_range_to_ioreq_server(vgt, 1, bar_s, bar_e, map);
 	if (r < 0) {
 		printk(KERN_ERR "VGT: %s(): fail to trap area: %d.\n", __func__, r);
 		return r;
@@ -220,6 +219,7 @@ int vgt_hvm_set_trap_area(struct vgt_device *vgt)
 
 	return r;
 }
+
 
 int xen_get_nr_vcpu(int vm_id)
 {
@@ -309,7 +309,7 @@ int hvm_destroy_iorequest_server(struct vgt_device *vgt)
 }
 
 int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
-       int is_mmio, uint64_t start, uint64_t end)
+	int is_mmio, uint64_t start, uint64_t end, int map)
 {
 	xen_hvm_io_range_t arg;
 	int rc;
@@ -319,7 +319,12 @@ int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
 	arg.type = is_mmio ? HVMOP_IO_RANGE_MEMORY : HVMOP_IO_RANGE_PORT;
 	arg.start = start;
 	arg.end = end;
-	rc = HYPERVISOR_hvm_op(HVMOP_map_io_range_to_ioreq_server, &arg);
+
+	if (map)
+		rc = HYPERVISOR_hvm_op(HVMOP_map_io_range_to_ioreq_server, &arg);
+	else
+		rc = HYPERVISOR_hvm_op(HVMOP_unmap_io_range_from_ioreq_server, &arg);
+
 	if (rc < 0) {
 		printk(KERN_ERR "Cannot map io range to ioreq_server: %d!\n", rc);
 		return rc;

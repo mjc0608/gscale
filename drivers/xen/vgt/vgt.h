@@ -2625,11 +2625,11 @@ int vgt_hvm_opregion_map(struct vgt_device *vgt, int map);
 int hvm_destroy_iorequest_server(struct vgt_device *vgt);
 int hvm_toggle_iorequest_server(struct vgt_device *vgt, bool enable);
 int hvm_map_io_range_to_ioreq_server(struct vgt_device *vgt,
-    int is_mmio, uint64_t start, uint64_t end);
+		int is_mmio, uint64_t start, uint64_t end, int map);
 int hvm_map_pcidev_to_ioreq_server(struct vgt_device *vgt, uint64_t sbdf);
 struct vm_struct *map_hvm_iopage(struct vgt_device *vgt);
 int xen_get_nr_vcpu(int vm_id);
-int vgt_hvm_set_trap_area(struct vgt_device *vgt);
+int vgt_hvm_set_trap_area(struct vgt_device *vgt, int map);
 int vgt_hvm_map_aperture (struct vgt_device *vgt, int map);
 int setup_gtt(struct pgt_device *pdev);
 void check_gtt(struct pgt_device *pdev);
