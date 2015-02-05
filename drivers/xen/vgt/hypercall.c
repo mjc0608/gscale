@@ -60,6 +60,18 @@ struct vgt_hvm_info {
 	int nr_vcpu;
 
 	ioservid_t iosrv_id;    /* io-request server id */
+
+#define VMEM_1MB		(1ULL << 20)	/* the size of the first 1MB */
+#define VMEM_BUCK_SHIFT		20
+#define VMEM_BUCK_SIZE		(1ULL << VMEM_BUCK_SHIFT)
+#define VMEM_BUCK_MASK		(~(VMEM_BUCK_SIZE - 1))
+	uint64_t vmem_sz;
+	/* for the 1st 1MB memory of HVM: each vm_struct means one 4K-page */
+	struct vm_struct **vmem_vma_low_1mb;
+	/* for >1MB memory of HVM: each vm_struct means 1MB */
+	struct vm_struct **vmem_vma;
+	/* for >1MB memory of HVM: each vm_struct means 4KB */
+	struct vm_struct **vmem_vma_4k;
 };
 
 /* Translate from VM's guest pfn to machine pfn */
@@ -458,43 +470,44 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 {
 	unsigned long i, j, gpfn, count;
 	unsigned long nr_low_1mb_bkt, nr_high_bkt, nr_high_4k_bkt;
+	struct vgt_hvm_info *info = vgt->hvm_info;
 
-	/* Dom0 already has mapping for itself */
-	ASSERT(vgt->vm_id != 0)
+	if (!vgt->vm_id)
+		return 0;
 
-	ASSERT(vgt->vmem_vma == NULL && vgt->vmem_vma_low_1mb == NULL);
+	ASSERT(info->vmem_vma == NULL && info->vmem_vma_low_1mb == NULL);
 
-	vgt->vmem_sz = hypervisor_get_max_gpfn(vgt) + 1;
-	vgt->vmem_sz <<= PAGE_SHIFT;
+	info->vmem_sz = hypervisor_get_max_gpfn(vgt) + 1;
+	info->vmem_sz <<= PAGE_SHIFT;
 
 	/* warn on non-1MB-aligned memory layout of HVM */
-	if (vgt->vmem_sz & ~VMEM_BUCK_MASK)
-		vgt_warn("VM%d: vmem_sz=0x%llx!\n", vgt->vm_id, vgt->vmem_sz);
+	if (info->vmem_sz & ~VMEM_BUCK_MASK)
+		vgt_warn("VM%d: vmem_sz=0x%llx!\n", vgt->vm_id, info->vmem_sz);
 
 	nr_low_1mb_bkt = VMEM_1MB >> PAGE_SHIFT;
-	nr_high_bkt = (vgt->vmem_sz >> VMEM_BUCK_SHIFT);
-	nr_high_4k_bkt = (vgt->vmem_sz >> PAGE_SHIFT);
+	nr_high_bkt = (info->vmem_sz >> VMEM_BUCK_SHIFT);
+	nr_high_4k_bkt = (info->vmem_sz >> PAGE_SHIFT);
 
-	vgt->vmem_vma_low_1mb =
-		kmalloc(sizeof(*vgt->vmem_vma) * nr_low_1mb_bkt, GFP_KERNEL);
-	vgt->vmem_vma =
-		kmalloc(sizeof(*vgt->vmem_vma) * nr_high_bkt, GFP_KERNEL);
-	vgt->vmem_vma_4k =
-		vzalloc(sizeof(*vgt->vmem_vma) * nr_high_4k_bkt);
+	info->vmem_vma_low_1mb =
+		kmalloc(sizeof(*info->vmem_vma) * nr_low_1mb_bkt, GFP_KERNEL);
+	info->vmem_vma =
+		kmalloc(sizeof(*info->vmem_vma) * nr_high_bkt, GFP_KERNEL);
+	info->vmem_vma_4k =
+		vzalloc(sizeof(*info->vmem_vma) * nr_high_4k_bkt);
 
-	if (vgt->vmem_vma_low_1mb == NULL || vgt->vmem_vma == NULL ||
-		vgt->vmem_vma_4k == NULL) {
+	if (info->vmem_vma_low_1mb == NULL || info->vmem_vma == NULL ||
+		info->vmem_vma_4k == NULL) {
 		vgt_err("Insufficient memory for vmem_vma, vmem_sz=0x%llx\n",
-				vgt->vmem_sz );
+				info->vmem_sz );
 		goto err;
 	}
 
 	/* map the low 1MB memory */
 	for (i = 0; i < nr_low_1mb_bkt; i++) {
-		vgt->vmem_vma_low_1mb[i] =
+		info->vmem_vma_low_1mb[i] =
 			hypervisor_remap_mfn_range(i, 1, vgt);
 
-		if (vgt->vmem_vma[i] != NULL)
+		if (info->vmem_vma[i] != NULL)
 			continue;
 
 		/* Don't warn on [0xa0000, 0x100000): a known non-RAM hole */
@@ -508,10 +521,10 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 	/* map the >1MB memory */
 	for (i = 1; i < nr_high_bkt; i++) {
 		gpfn = i << (VMEM_BUCK_SHIFT - PAGE_SHIFT);
-		vgt->vmem_vma[i] = hypervisor_remap_mfn_range(
+		info->vmem_vma[i] = hypervisor_remap_mfn_range(
 				gpfn, VMEM_BUCK_SIZE >> PAGE_SHIFT, vgt);
 
-		if (vgt->vmem_vma[i] != NULL)
+		if (info->vmem_vma[i] != NULL)
 			continue;
 
 
@@ -524,10 +537,10 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 		for (j = gpfn;
 		     j < ((i + 1) << (VMEM_BUCK_SHIFT - PAGE_SHIFT));
 		     j++) {
-			vgt->vmem_vma_4k[j] =
+			info->vmem_vma_4k[j] =
 				hypervisor_remap_mfn_range(j, 1, vgt);
 
-			if (vgt->vmem_vma_4k[j]) {
+			if (info->vmem_vma_4k[j]) {
 				count++;
 				vgt_dbg(VGT_DBG_GENERIC, "map 4k gpa (%lx)\n", j << PAGE_SHIFT);
 			}
@@ -545,10 +558,10 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 
 	return 0;
 err:
-	kfree(vgt->vmem_vma);
-	kfree(vgt->vmem_vma_low_1mb);
-	vfree(vgt->vmem_vma_4k);
-	vgt->vmem_vma = vgt->vmem_vma_low_1mb = vgt->vmem_vma_4k = NULL;
+	kfree(info->vmem_vma);
+	kfree(info->vmem_vma_low_1mb);
+	vfree(info->vmem_vma_4k);
+	info->vmem_vma = info->vmem_vma_low_1mb = info->vmem_vma_4k = NULL;
 	return -ENOMEM;
 }
 
@@ -556,6 +569,7 @@ static void vgt_vmem_destroy(struct vgt_device *vgt)
 {
 	int i, j;
 	unsigned long nr_low_1mb_bkt, nr_high_bkt, nr_high_bkt_4k;
+	struct vgt_hvm_info *info = vgt->hvm_info;
 
 	if (vgt->vm_id == 0)
 		return;
@@ -564,42 +578,42 @@ static void vgt_vmem_destroy(struct vgt_device *vgt)
 	 * Maybe the VM hasn't accessed GEN MMIO(e.g., still in the legacy VGA
 	 * mode), so no mapping is created yet.
 	 */
-	if (vgt->vmem_vma == NULL && vgt->vmem_vma_low_1mb == NULL)
+	if (info->vmem_vma == NULL && info->vmem_vma_low_1mb == NULL)
 		return;
 
-	ASSERT(vgt->vmem_vma != NULL && vgt->vmem_vma_low_1mb != NULL);
+	ASSERT(info->vmem_vma != NULL && info->vmem_vma_low_1mb != NULL);
 
 	nr_low_1mb_bkt = VMEM_1MB >> PAGE_SHIFT;
-	nr_high_bkt = (vgt->vmem_sz >> VMEM_BUCK_SHIFT);
-	nr_high_bkt_4k = (vgt->vmem_sz >> PAGE_SHIFT);
+	nr_high_bkt = (info->vmem_sz >> VMEM_BUCK_SHIFT);
+	nr_high_bkt_4k = (info->vmem_sz >> PAGE_SHIFT);
 
 	for (i = 0; i < nr_low_1mb_bkt; i++) {
-		if (vgt->vmem_vma_low_1mb[i] == NULL)
+		if (info->vmem_vma_low_1mb[i] == NULL)
 			continue;
 		hypervisor_unmap_mfn_range(
-			vgt->vmem_vma_low_1mb[i], 1, vgt);
+			info->vmem_vma_low_1mb[i], 1, vgt);
 	}
 
 	for (i = 1; i < nr_high_bkt; i++) {
-		if (vgt->vmem_vma[i] == NULL) {
+		if (info->vmem_vma[i] == NULL) {
 			for (j = (i << (VMEM_BUCK_SHIFT - PAGE_SHIFT));
 			     j < ((i + 1) << (VMEM_BUCK_SHIFT - PAGE_SHIFT));
 			     j++) {
-				if (vgt->vmem_vma_4k[j] == NULL)
+				if (info->vmem_vma_4k[j] == NULL)
 					continue;
 				hypervisor_unmap_mfn_range(
-					vgt->vmem_vma_4k[j], 1, vgt);
+					info->vmem_vma_4k[j], 1, vgt);
 			}
 			continue;
 		}
 		hypervisor_unmap_mfn_range(
-			vgt->vmem_vma[i], VMEM_BUCK_SIZE >> PAGE_SHIFT,
+			info->vmem_vma[i], VMEM_BUCK_SIZE >> PAGE_SHIFT,
 			vgt);
 	}
 
-	kfree(vgt->vmem_vma);
-	kfree(vgt->vmem_vma_low_1mb);
-	vfree(vgt->vmem_vma_4k);
+	kfree(info->vmem_vma);
+	kfree(info->vmem_vma_low_1mb);
+	vfree(info->vmem_vma_4k);
 }
 
 static int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
@@ -610,8 +624,9 @@ static int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 	uint64_t base = vgt_mmio_bar_base(vgt);
 	uint64_t tmp;
 	int pvinfo_page;
+	struct vgt_hvm_info *info = vgt->hvm_info;
 
-	if (vgt->vmem_vma == NULL) {
+	if (info->vmem_vma == NULL) {
 		tmp = vgt_pa_to_mmio_offset(vgt, req->addr);
 		pvinfo_page = (tmp >= VGT_PVINFO_PAGE
 				&& tmp < (VGT_PVINFO_PAGE + VGT_PVINFO_SIZE));
@@ -621,7 +636,7 @@ static int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 		 */
 		if (!pvinfo_page && vgt_hvm_vmem_init(vgt) < 0) {
 			vgt_err("can not map the memory of VM%d!!!\n", vgt->vm_id);
-			ASSERT_VM(vgt->vmem_vma != NULL, vgt);
+			ASSERT_VM(info->vmem_vma != NULL, vgt);
 			return -EINVAL;
 		}
 	}
@@ -994,22 +1009,23 @@ err:
 static void *xen_gpa_to_va(struct vgt_device *vgt, unsigned long gpa)
 {
 	unsigned long buck_index, buck_4k_index;
+	struct vgt_hvm_info *info = vgt->hvm_info;
 
 	if (!vgt->vm_id)
 		return (char*)hypervisor_mfn_to_virt(gpa>>PAGE_SHIFT) + (gpa & (PAGE_SIZE-1));
 	/*
 	 * At the beginning of _hvm_mmio_emulation(), we already initialize
-	 * vgt->vmem_vma and vgt->vmem_vma_low_1mb.
+	 * info->vmem_vma and info->vmem_vma_low_1mb.
 	 */
-	ASSERT(vgt->vmem_vma != NULL && vgt->vmem_vma_low_1mb != NULL);
+	ASSERT(info->vmem_vma != NULL && info->vmem_vma_low_1mb != NULL);
 
 	/* handle the low 1MB memory */
 	if (gpa < VMEM_1MB) {
 		buck_index = gpa >> PAGE_SHIFT;
-		if (!vgt->vmem_vma_low_1mb[buck_index])
+		if (!info->vmem_vma_low_1mb[buck_index])
 			return NULL;
 
-		return (char*)(vgt->vmem_vma_low_1mb[buck_index]->addr) +
+		return (char*)(info->vmem_vma_low_1mb[buck_index]->addr) +
 			(gpa & ~PAGE_MASK);
 
 	}
@@ -1017,19 +1033,19 @@ static void *xen_gpa_to_va(struct vgt_device *vgt, unsigned long gpa)
 	/* handle the >1MB memory */
 	buck_index = gpa >> VMEM_BUCK_SHIFT;
 
-	if (!vgt->vmem_vma[buck_index]) {
+	if (!info->vmem_vma[buck_index]) {
 		buck_4k_index = gpa >> PAGE_SHIFT;
-		if (!vgt->vmem_vma_4k[buck_4k_index]) {
+		if (!info->vmem_vma_4k[buck_4k_index]) {
 			if (buck_4k_index > vgt->low_mem_max_gpfn)
 				vgt_err("vGT failed to map gpa=0x%lx?\n", gpa);
 			return NULL;
 		}
 
-		return (char*)(vgt->vmem_vma_4k[buck_4k_index]->addr) +
+		return (char*)(info->vmem_vma_4k[buck_4k_index]->addr) +
 			(gpa & ~PAGE_MASK);
 	}
 
-	return (char*)(vgt->vmem_vma[buck_index]->addr) +
+	return (char*)(info->vmem_vma[buck_index]->addr) +
 		(gpa & (VMEM_BUCK_SIZE -1));
 }
 
