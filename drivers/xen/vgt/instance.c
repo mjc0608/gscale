@@ -318,10 +318,10 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	vgt->warn_untrack = 1;
 	return 0;
 err:
+	vgt_clean_vgtt(vgt);
 	vgt_hvm_info_deinit(vgt);
 	if ( vgt->aperture_base > 0)
 		free_vm_aperture_gm_and_fence(vgt);
-	vgt_clean_vgtt(vgt);
 	vfree(vgt->state.vReg);
 	vfree(vgt->state.sReg);
 	if (vgt->vgt_id >= 0)
@@ -389,6 +389,8 @@ void vgt_release_instance(struct vgt_device *vgt)
 	if (shadow_tail_based_qos)
 		vgt_destroy_rb_tailq(vgt);
 
+	vgt_clean_vgtt(vgt);
+
 	vgt_hvm_info_deinit(vgt);
 
 	vgt_lock_dev(pdev, cpu);
@@ -421,8 +423,6 @@ void vgt_release_instance(struct vgt_device *vgt)
 			kobject_put(&vgt->ports[i].kobj);
 		}
 	}
-
-	vgt_clean_vgtt(vgt);
 
 	/* clear the gtt entries for GM of this vgt device */
 	vgt_clear_gtt(vgt);
