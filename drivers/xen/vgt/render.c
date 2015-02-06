@@ -1665,6 +1665,107 @@ struct vgt_render_context_ops gen7_context_ops = {
 	.ring_context_switch = gen7_ring_switch,
 };
 
+static struct reg_mask_t gen8_rcs_reset_mmio[] = {
+	{0x2098, 0},
+	{0x229c, 1},
+	{0x209c, 1},
+	{0x20c0, 1},
+	{0x2050, 1},
+
+	{0xfdc, 0},
+	{0x24d0, 0},
+	{0x24d4, 0},
+	{0x24d8, 0},
+	{0x24dc, 0},
+
+	{0x9008, 0},
+	{0xe4f0, 0},
+
+	{0xe4f4, 0},
+	{0x9400, 0},
+
+	{0xe184, 0},
+	{0x7300, 0},
+	{0x7004, 1},
+	{0x7008, 1},
+
+	{0x7000, 1},
+	{0x2090, 1},
+	{0x4090, 0},
+	{0x20a0, 0},
+	{0x20e4, 1},
+
+	{0x7010, 1},
+	{0xe184, 0},
+	{0x9424, 0},
+
+	{0x9030, 0},
+
+	{0xb1f0, 0},
+	{0xb1c0, 0},
+	{0xb118, 0},
+	{0xb100, 0},
+	{0xb110, 0},
+	{0xb10c, 0},
+
+	{0x83a4, 1},
+	{0x23bc, 0},
+};
+
+static bool gen8_reset_engine(int ring_id,
+		struct vgt_device *prev, struct vgt_device *next)
+{
+	struct pgt_device *pdev = next->pdev;
+	int count = 0;
+
+	if (ring_id != RING_BUFFER_RCS)
+		return true;
+
+	for (count = 0; count < ARRAY_SIZE(gen8_rcs_reset_mmio); count++) {
+		struct reg_mask_t *r = &gen8_rcs_reset_mmio[count];
+		__vreg(prev, r->reg) = VGT_MMIO_READ(pdev, r->reg);
+	}
+
+	VGT_MMIO_WRITE(pdev, 0x20d0, (1 << 16) | (1 << 0));
+
+	for (count = 1000; count > 0; count --)
+		if (VGT_MMIO_READ(pdev, 0x20d0) & (1 << 1))
+			break;
+
+	if (!count) {
+		vgt_err("wait 0x20d0 timeout.\n");
+		return false;
+	}
+
+	VGT_MMIO_WRITE(pdev, _REG_GEN6_GDRST, _REGBIT_GEN6_GRDOM_RENDER);
+
+	for (count = 1000; count > 0; count --)
+		if (!(VGT_MMIO_READ(pdev, _REG_GEN6_GDRST) & _REGBIT_GEN6_GRDOM_RENDER))
+			break;
+
+	if (!count) {
+		vgt_err("wait gdrst timeout.\n");
+		return false;
+	}
+
+	VGT_MMIO_WRITE(pdev, _REG_RCS_IMR, __sreg(vgt_dom0, _REG_RCS_IMR));
+
+	for (count = 0; count < ARRAY_SIZE(gen8_rcs_reset_mmio); count++) {
+		struct reg_mask_t *r = &gen8_rcs_reset_mmio[count];
+		vgt_reg_t v = __vreg(next, r->reg);
+		if (r->mask)
+			v = (v << 16) | v;
+
+		VGT_MMIO_WRITE(pdev, r->reg, v);
+		VGT_POST_READ(pdev, r->reg);
+	}
+
+	pdev->el_read_ptr[ring_id] = DEFAULT_INV_SR_PTR;
+
+	return true;
+}
+
+
 static bool gen8_init_null_context(struct pgt_device *pdev, int id)
 {
 	/* disable null context right now */
@@ -1682,10 +1783,15 @@ static bool gen8_restore_hw_context(int id, struct vgt_device *vgt)
 }
 
 static bool gen8_ring_switch(struct pgt_device *pdev,
-				enum vgt_ring_id ring_id,
-				struct vgt_device *prev,
-				struct vgt_device *next)
+		enum vgt_ring_id ring_id,
+		struct vgt_device *prev,
+		struct vgt_device *next)
 {
+	if (render_engine_reset && !gen8_reset_engine(ring_id, prev, next)) {
+		vgt_err("Fail to reset engine\n");
+		return false;
+	}
+
 	return true;
 }
 
