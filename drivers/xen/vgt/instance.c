@@ -393,6 +393,12 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	vgt_hvm_info_deinit(vgt);
 
+	if (vgt->state.opregion_va) {
+		vgt_hvm_opregion_map(vgt, 0);
+		free_pages((unsigned long)vgt->state.opregion_va,
+				VGT_OPREGION_PORDER);
+	}
+
 	vgt_lock_dev(pdev, cpu);
 
 	vgt->pdev->device[vgt->vgt_id] = NULL;

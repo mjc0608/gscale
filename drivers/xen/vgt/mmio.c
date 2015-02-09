@@ -944,12 +944,6 @@ void vgt_hvm_info_deinit(struct vgt_device *vgt)
 	if (info->emulation_thread != NULL)
 		kthread_stop(info->emulation_thread);
 
-	if (vgt->state.opregion_va) {
-		vgt_hvm_opregion_map(vgt, 0);
-		free_pages((unsigned long)vgt->state.opregion_va,
-				VGT_OPREGION_PORDER);
-	}
-
 	if (!info->nr_vcpu || info->evtchn_irq == NULL)
 		goto out1;
 
