@@ -2631,11 +2631,6 @@ static inline unsigned long hypervisor_g2m_pfn(struct vgt_device *vgt,
 	return vgt_pkdm->g2m_pfn(vgt->vm_id, g_pfn);
 }
 
-static inline int hypervisor_get_max_gpfn(struct vgt_device *vgt)
-{
-	return vgt_pkdm->get_max_gpfn(vgt->vm_id);
-}
-
 static inline int hypervisor_pause_domain(struct vgt_device *vgt)
 {
 	return vgt_pkdm->pause_domain(vgt->vm_id);
@@ -2659,23 +2654,6 @@ static inline int hypervisor_set_trap_area(struct vgt_device *vgt,
 	uint64_t start, uint64_t end, bool map)
 {
 	return vgt_pkdm->set_trap_area(vgt, start, end, map);
-}
-
-static inline struct vm_struct *hypervisor_map_iopage(struct vgt_device *vgt)
-{
-	return vgt_pkdm->map_iopage(vgt);
-}
-
-static inline struct vm_struct *hypervisor_remap_mfn_range(unsigned long mfn,
-	int nr, struct vgt_device *vgt)
-{
-	return vgt_pkdm->remap_mfn_range_in_kernel(mfn, nr, vgt->vm_id);
-}
-
-static inline void hypervisor_unmap_mfn_range(struct vm_struct *area,
-	int nr, struct vgt_device *vgt)
-{
-	return vgt_pkdm->unmap_mfn_range_in_kernel(area, nr, vgt->vm_id);
 }
 
 static inline int hypervisor_set_wp_pages(struct vgt_device *vgt, guest_page_t *p)

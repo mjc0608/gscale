@@ -96,7 +96,7 @@ static unsigned long xen_g2m_pfn(int vm_id, unsigned long g_pfn)
 	return pfn_list[0];
 }
 
-int xen_get_max_gpfn(int vm_id)
+static int xen_get_max_gpfn(int vm_id)
 {
 	domid_t dom_id = vm_id;
 	int max_gpfn = HYPERVISOR_memory_op(XENMEM_maximum_gpfn, &dom_id);
@@ -381,7 +381,7 @@ static int xen_set_trap_area(struct vgt_device *vgt, uint64_t start, uint64_t en
 	return hvm_map_io_range_to_ioreq_server(vgt, 1, start, end, map);
 }
 
-struct vm_struct *xen_map_iopage(struct vgt_device *vgt)
+static struct vm_struct *xen_map_iopage(struct vgt_device *vgt)
 {
 	uint64_t ioreq_pfn;
 	int rc;
@@ -477,7 +477,7 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 
 	ASSERT(info->vmem_vma == NULL && info->vmem_vma_low_1mb == NULL);
 
-	info->vmem_sz = hypervisor_get_max_gpfn(vgt) + 1;
+	info->vmem_sz = xen_get_max_gpfn(vgt->vm_id) + 1;
 	info->vmem_sz <<= PAGE_SHIFT;
 
 	/* warn on non-1MB-aligned memory layout of HVM */
@@ -505,7 +505,7 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 	/* map the low 1MB memory */
 	for (i = 0; i < nr_low_1mb_bkt; i++) {
 		info->vmem_vma_low_1mb[i] =
-			hypervisor_remap_mfn_range(i, 1, vgt);
+			xen_remap_domain_mfn_range_in_kernel(i, 1, vgt->vm_id);
 
 		if (info->vmem_vma[i] != NULL)
 			continue;
@@ -521,8 +521,8 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 	/* map the >1MB memory */
 	for (i = 1; i < nr_high_bkt; i++) {
 		gpfn = i << (VMEM_BUCK_SHIFT - PAGE_SHIFT);
-		info->vmem_vma[i] = hypervisor_remap_mfn_range(
-				gpfn, VMEM_BUCK_SIZE >> PAGE_SHIFT, vgt);
+		info->vmem_vma[i] = xen_remap_domain_mfn_range_in_kernel(
+				gpfn, VMEM_BUCK_SIZE >> PAGE_SHIFT, vgt->vm_id);
 
 		if (info->vmem_vma[i] != NULL)
 			continue;
@@ -537,8 +537,7 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 		for (j = gpfn;
 		     j < ((i + 1) << (VMEM_BUCK_SHIFT - PAGE_SHIFT));
 		     j++) {
-			info->vmem_vma_4k[j] =
-				hypervisor_remap_mfn_range(j, 1, vgt);
+			info->vmem_vma_4k[j] = xen_remap_domain_mfn_range_in_kernel(j, 1, vgt->vm_id);
 
 			if (info->vmem_vma_4k[j]) {
 				count++;
@@ -590,8 +589,8 @@ static void vgt_vmem_destroy(struct vgt_device *vgt)
 	for (i = 0; i < nr_low_1mb_bkt; i++) {
 		if (info->vmem_vma_low_1mb[i] == NULL)
 			continue;
-		hypervisor_unmap_mfn_range(
-			info->vmem_vma_low_1mb[i], 1, vgt);
+		xen_unmap_domain_mfn_range_in_kernel(info->vmem_vma_low_1mb[i],
+				1, vgt->vm_id);
 	}
 
 	for (i = 1; i < nr_high_bkt; i++) {
@@ -601,14 +600,14 @@ static void vgt_vmem_destroy(struct vgt_device *vgt)
 			     j++) {
 				if (info->vmem_vma_4k[j] == NULL)
 					continue;
-				hypervisor_unmap_mfn_range(
-					info->vmem_vma_4k[j], 1, vgt);
+				xen_unmap_domain_mfn_range_in_kernel(
+					info->vmem_vma_4k[j], 1, vgt->vm_id);
 			}
 			continue;
 		}
-		hypervisor_unmap_mfn_range(
+		xen_unmap_domain_mfn_range_in_kernel(
 			info->vmem_vma[i], VMEM_BUCK_SIZE >> PAGE_SHIFT,
-			vgt);
+			vgt->vm_id);
 	}
 
 	kfree(info->vmem_vma);
@@ -951,7 +950,7 @@ static int xen_hvm_init(struct vgt_device *vgt)
 
 	vgt->hvm_info = info;
 
-	info->iopage_vma = hypervisor_map_iopage(vgt);
+	info->iopage_vma = xen_map_iopage(vgt);
 	if (info->iopage_vma == NULL) {
 		printk(KERN_ERR "Failed to map HVM I/O page for VM%d\n", vgt->vm_id);
 		rc = -EFAULT;
@@ -980,7 +979,7 @@ static int xen_hvm_init(struct vgt_device *vgt)
 	if (rc < 0)
 		goto err;
 
-	for( vcpu = 0; vcpu < info->nr_vcpu; vcpu++ ){
+	for (vcpu = 0; vcpu < info->nr_vcpu; vcpu++){
 		irq = bind_interdomain_evtchn_to_irqhandler( vgt->vm_id,
 				info->iopage->vcpu_ioreq[vcpu].vp_eport,
 				vgt_hvm_io_req_handler, 0,
@@ -1066,14 +1065,10 @@ static bool xen_write_va(struct vgt_device *vgt, void *va, void *val,
 
 static struct kernel_dm xen_kdm = {
 	.g2m_pfn = xen_g2m_pfn,
-	.get_max_gpfn = xen_get_max_gpfn,
 	.pause_domain = xen_pause_domain,
 	.shutdown_domain = xen_shutdown_domain,
 	.map_mfn_to_gpfn = xen_map_mfn_to_gpfn,
 	.set_trap_area = xen_set_trap_area,
-	.map_iopage = xen_map_iopage,
-	.remap_mfn_range_in_kernel = xen_remap_domain_mfn_range_in_kernel,
-	.unmap_mfn_range_in_kernel = xen_unmap_domain_mfn_range_in_kernel,
 	.set_wp_pages = xen_set_guest_page_writeprotection,
 	.unset_wp_pages = xen_clear_guest_page_writeprotection,
 	.check_host = xen_check_host,
