@@ -2617,8 +2617,6 @@ void vgt_save_gtt_and_fence(struct pgt_device *pdev);
 void vgt_restore_gtt_and_fence(struct pgt_device *pdev);
 uint64_t vgt_get_gtt_size(struct pgt_device *pdev);
 uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off);
-int vgt_hvm_vmem_init(struct vgt_device *vgt);
-void vgt_vmem_destroy(struct vgt_device *vgt);
 struct vgt_device *vmid_2_vgt_device(int vmid);
 extern void vgt_print_edid(struct vgt_edid_data_t *edid);
 extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);
