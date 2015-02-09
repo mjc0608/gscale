@@ -849,8 +849,8 @@ static int vgt_emulation_thread(void *priv)
 
 			ioreq = vgt_get_hvm_ioreq(vgt, vcpu);
 
-			ret = vgt_hvm_do_ioreq(vgt, ioreq);
-			if (unlikely(ret)) {
+			if (vgt_hvm_do_ioreq(vgt, ioreq) ||
+					!vgt_expand_shadow_page_mempool(vgt)) {
 				hypervisor_pause_domain(vgt);
 				hypervisor_shutdown_domain(vgt);
 			}

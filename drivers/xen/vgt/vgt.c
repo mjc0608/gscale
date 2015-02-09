@@ -93,6 +93,10 @@ bool irq_based_ctx_switch = true;
 module_param_named(irq_based_ctx_switch, irq_based_ctx_switch, bool, 0600);
 MODULE_PARM_DESC(irq_based_ctx_switch, "Use user interrupt based context switch (default: true)");
 
+int preallocated_shadow_pages = 8192;
+module_param_named(preallocated_shadow_pages, preallocated_shadow_pages, int, 0600);
+MODULE_PARM_DESC(preallocated_shadow_pages, "Amount of pre-allocated shadow pages");
+
 /*
  * FIXME: now video ring switch has weird issue. The cmd
  * parser may enter endless loop even when head/tail is
