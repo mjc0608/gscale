@@ -764,6 +764,16 @@ static int vgt_initialize(struct pci_dev *dev)
 	vgt_init_fb_notify();
 
 	printk("vgt_initialize succeeds.\n");
+
+	/* FIXME
+	 * always enable forcewake. It was found that forcewake
+	 * operation is one of the stability issue for running
+	 * windows guest. Before having a decent fix, we will
+	 * always enable force wake for Broadwell.
+	 */
+	if (IS_BDW(pdev))
+		vgt_force_wake_get();
+
 	return 0;
 err:
 	printk("vgt_initialize failed.\n");
