@@ -1796,6 +1796,7 @@ static inline int port_type_to_port(int port_sel)
 #define _REG_PIXCLK_GATE			0xC6020
 
 #define _REG_SCRATCH1				0xB038
+#define _REG_GEN7_L3SQCREG4			0xB034
 #define _REG_ROW_CHICKEN3			0xE49C
 
 #define _REG_FPGA_DBG				0x42300

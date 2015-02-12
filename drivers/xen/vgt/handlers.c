@@ -3198,6 +3198,21 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x12054, 4, F_DOM0, 0, D_HSW, NULL, NULL},
 {0x22054, 4, F_DOM0, 0, D_HSW, NULL, NULL},
 {0x1A054, 4, F_DOM0, 0, D_HSW, NULL, NULL},
+
+/*command accessed registers, supplement for reg audit in cmd parser*/
+{_REG_GEN7_L3SQCREG4, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{0x2178, 4, F_RDR, 0, D_ALL, NULL, NULL},
+{0x217c, 4, F_RDR, 0, D_ALL, NULL, NULL},
+{0x12178, 4, F_RDR, 0, D_HSW_PLUS, NULL, NULL},
+{0x1217c, 4, F_RDR, 0, D_HSW_PLUS, NULL, NULL},
+{0x12400, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{0x12468, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{0x124a0, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{0x124a4, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{0x124b4, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{0x124b8, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{0x124bc, 4, F_RDR, 0, D_HSW, NULL, NULL},
+{0x124d0, 4, F_RDR, 0, D_HSW, NULL, NULL},
 };
 
 bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)

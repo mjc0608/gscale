@@ -653,70 +653,127 @@ static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
 	return 0;
 }
 
+static int cmd_reg_handler(struct parser_exec_state *s,
+	unsigned int offset, unsigned int index, char *cmd)
+{
+	struct vgt_device *vgt = s->vgt;
+	struct pgt_device *pdev = vgt->pdev;
+	int rc = -1;
+
+	/*Enabled for HSW at this moment to test,  disabled for BDW*/
+	if (!IS_HSW(pdev)) {
+		rc = 0;
+		goto reg_handle;
+	}
+
+	if (!reg_is_mmio(pdev, offset + 4)){
+		rc = -1;
+		goto reg_handle;
+	}
+
+	if ( reg_is_render(pdev, offset) ||
+	     reg_passthrough(pdev, offset) ||
+	     (!vgt->vm_id && reg_is_config(pdev, offset)) ) {
+		rc = 0;
+	}
+	else if (offset == _REG_DE_RRMR || offset == _REG_MUL_FORCEWAKE){
+		rc = 0;
+	}/*TODO: for registers like rmrr or other tricky registers, continue using current
+		temporary exception before developing full solution for them.*/
+	else if ((offset == 0x138064) || (offset == 0x42008)) {
+		rc = 0;
+	}
+
+reg_handle:
+	if (!rc)
+		reg_set_cmd_access(pdev, offset);
+	else {
+		vgt_err("%s access to non-render register (%x)\n", cmd, offset);
+		ASSERT_VM(0,vgt);
+	}
+
+	return 0;
+}
 #define BIT_RANGE_MASK(a, b)	\
 	((1UL << ((a) + 1)) - (1UL << (b)))
 static int vgt_cmd_handler_lri(struct parser_exec_state *s)
 {
-	unsigned int offset;
-	struct pgt_device *pdev = s->vgt->pdev;
+	int i, rc = 0;
+	int cmd_len = cmd_length(s);
 
-	offset = cmd_val(s, 1) & BIT_RANGE_MASK(22, 2);
-	reg_set_cmd_access(pdev, offset);
+	for (i = 1; i < cmd_len; i += 2) {
+		rc |= cmd_reg_handler(s,
+			cmd_val(s, i) & BIT_RANGE_MASK(22, 2), i, "lri");
+	}
 
-	return 0;
+	return rc;
 }
 
 static int vgt_cmd_handler_lrr(struct parser_exec_state *s)
 {
-	unsigned int offset;
-	struct pgt_device *pdev = s->vgt->pdev;
+	int i, rc = 0;
+	int cmd_len = cmd_length(s);
 
-	offset = cmd_val(s, 1) & BIT_RANGE_MASK(22, 2);
-	reg_set_cmd_access(pdev, offset);
+	for (i = 1; i < cmd_len; i += 2) {
+		rc = cmd_reg_handler(s,
+			cmd_val(s, i) & BIT_RANGE_MASK(22, 2), i, "lrr-src");
+		rc |= cmd_reg_handler(s,
+			cmd_val(s, i+1) & BIT_RANGE_MASK(22, 2), i, "lrr-dst");
+	}
 
-	offset = cmd_val(s, 2) & BIT_RANGE_MASK(22, 2);
-	reg_set_cmd_access(pdev, offset);
-	return 0;
+	return rc;
 }
 
 static int vgt_cmd_handler_lrm(struct parser_exec_state *s)
 {
-	unsigned int offset;
-	struct pgt_device *pdev = s->vgt->pdev;
+	int i, rc = 0;
+	int cmd_len = cmd_length(s);
 
-	offset = cmd_val(s, 1) & BIT_RANGE_MASK(22, 2);
-	reg_set_cmd_access(pdev, offset);
+	for (i = 1; i < cmd_len;) {
+		rc |= cmd_reg_handler(s,
+			cmd_val(s, i) & BIT_RANGE_MASK(22, 2), i, "lrm");
+		i += gmadr_dw_number(s) + 1;
+	}
 
-	return 0;
+	return rc;
 }
 
 static int vgt_cmd_handler_srm(struct parser_exec_state *s)
 {
-	unsigned int offset;
-	struct pgt_device *pdev = s->vgt->pdev;
+	int i, rc = 0;
+	int cmd_len = cmd_length(s);
 
-	offset = cmd_val(s, 1) & BIT_RANGE_MASK(22, 2);
-	reg_set_cmd_access(pdev, offset);
+	for (i = 1; i < cmd_len;) {
+		rc |= cmd_reg_handler(s,
+			cmd_val(s, i) & BIT_RANGE_MASK(22, 2), i, "srm");
+		i += gmadr_dw_number(s) + 1;
+	}
 
-	return 0;
+	return rc;
 }
 
 static int vgt_cmd_handler_pipe_control(struct parser_exec_state *s)
 {
-	unsigned int offset;
-	struct pgt_device *pdev = s->vgt->pdev;
-	if (cmd_val(s, 1) & PIPE_CONTROL_POST_SYNC) {
-		offset = cmd_val(s, 2) & BIT_RANGE_MASK(22, 2);
-		reg_set_cmd_access(pdev, offset);
-	} else if (cmd_val(s, 1) & (2 << 14)) {
-		reg_set_cmd_access(pdev, 0x2350);
-	} else if (cmd_val(s, 1) & (3 << 14)) {
-		reg_set_cmd_access(pdev, _REG_RCS_TIMESTAMP);
+	int i, rc = 0;
+	int cmd_len = cmd_length(s);
+
+
+	for (i = 1; i < cmd_len;) {
+		if (cmd_val(s, i) & PIPE_CONTROL_POST_SYNC)
+			rc |= cmd_reg_handler(s,
+				cmd_val(s, i+1) & BIT_RANGE_MASK(22, 2), i, "pipe_ctrl");
+		else if (cmd_val(s, i) & (2 << 14))
+			rc |= cmd_reg_handler(s, 0x2350, i, "pipe_ctrl");
+		else if (cmd_val(s, i) & (3 << 14))
+			rc |= cmd_reg_handler(s, _REG_RCS_TIMESTAMP, i, "pipe_ctrl");
+
+		if (!rc)
+			s->cmd_issue_irq |= (cmd_val(s, i) & PIPE_CONTROL_NOTIFY) ? true : false;
+
+		i += gmadr_dw_number(s) + 3;
 	}
 
-	s->cmd_issue_irq = (cmd_val(s, 1) & PIPE_CONTROL_NOTIFY) ? true : false;
-
-	return 0;
+	return rc;
 }
 
 static int vgt_cmd_handler_mi_user_interrupt(struct parser_exec_state *s)

@@ -1171,6 +1171,8 @@ extern void do_vgt_fast_display_switch(struct pgt_device *pdev);
 #define reg_is_saved(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_SAVED)
 #define reg_is_sticky(pdev, reg)		(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_STICKY)
 #define reg_get_owner(pdev, reg)	(pdev->reg_info[REG_INDEX(reg)] & VGT_REG_OWNER)
+#define reg_is_render(pdev, reg)	(reg_get_owner(pdev, reg) == VGT_OT_RENDER)
+#define reg_is_config(pdev, reg)	(reg_get_owner(pdev, reg) == VGT_OT_CONFIG)
 #define reg_invalid(pdev, reg)		(!pdev->reg_info[REG_INDEX(reg)])
 #define reg_aux_index(pdev, reg)	\
 	((pdev->reg_info[REG_INDEX(reg)] & VGT_REG_INDEX_MASK) >> VGT_REG_INDEX_SHIFT)
