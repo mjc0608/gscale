@@ -38,6 +38,23 @@ static bool vgt_error_handler(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
+static bool vgt_not_allowed_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	vgt_err("VM(%d): MMIO reading of reg 0x%x is not allowed. "
+			"0 will be returned!\n", vgt->vm_id, offset);
+	*(vgt_reg_t *)p_data = 0;
+	return true;
+}
+
+static bool vgt_not_allowed_mmio_write(struct vgt_device *vgt,
+	unsigned int offset, void *p_data, unsigned int bytes)
+{
+	vgt_err("VM(%d): MMIO write of reg 0x%x with 0x%x (%d)bytes is not allowed. ",
+			vgt->vm_id, offset, *(vgt_reg_t *)p_data, bytes);
+	return true;
+}
+
 static bool gmbus_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
@@ -2541,17 +2558,27 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x7018, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {0xe184, 4, F_RDR, 0, D_ALL, NULL, NULL},
 
-{_REG_RCS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VCS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VECS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VCS2_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_BCS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
+{_REG_RCS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS,
+			vgt_not_allowed_mmio_read, NULL},
+{_REG_VCS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS,
+			vgt_not_allowed_mmio_read, NULL},
+{_REG_VECS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS,
+			vgt_not_allowed_mmio_read, NULL},
+{_REG_VCS2_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS,
+			vgt_not_allowed_mmio_read, NULL},
+{_REG_BCS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS,
+			vgt_not_allowed_mmio_read, NULL},
 
-{_REG_RCS_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VCS_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VECS_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VCS2_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_BCS_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
+{_REG_RCS_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL,
+					vgt_not_allowed_mmio_write},
+{_REG_VCS_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL,
+					vgt_not_allowed_mmio_write},
+{_REG_VECS_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL,
+					vgt_not_allowed_mmio_write},
+{_REG_VCS2_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL,
+					vgt_not_allowed_mmio_write},
+{_REG_BCS_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL,
+					vgt_not_allowed_mmio_write},
 
 {_REG_RCS_CTX_SR_CTL, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_VCS_CTX_SR_CTL, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
