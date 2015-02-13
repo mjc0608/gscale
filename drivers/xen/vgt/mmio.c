@@ -89,6 +89,13 @@ bool vgt_register_mmio_handler(unsigned int start, int bytes,
 	ASSERT(((end+1) & 3) == 0);
 
 	for ( i = start; i < end; i += 4 ) {
+		mht = vgt_find_mmio_entry(i);
+		if (mht) {
+			mht->read = read;
+			mht->write = write;
+			continue;
+		}
+
 		mht = kmalloc(sizeof(*mht), GFP_KERNEL);
 		if (mht == NULL) {
 			printk("Insufficient memory in %s\n", __FUNCTION__);
@@ -451,8 +458,8 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 	return true;
 err_mmio:
 	vgt_unlock_dev_flags(pdev, cpu, flags);
-	vgt_err("VM(%d): invalid MMIO offset(%08x),"
-		"bytes(%d)!\n", vgt->vm_id, offset, bytes);
+	vgt_err("VM(%d): invalid MMIO offset(0x%08x, pa:0x%016llx),"
+		"bytes(%d)!\n", vgt->vm_id, offset, pa, bytes);
 	show_debug(pdev);
 	return false;
 }
