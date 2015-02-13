@@ -289,6 +289,10 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	bitmap_zero(vgt->enabled_rings, MAX_ENGINES);
 	bitmap_zero(vgt->started_rings, MAX_ENGINES);
 
+	for (i = 0; i < MAX_ENGINES; ++ i) {
+		vgt->rb[i].csb_write_ptr = DEFAULT_INV_SR_PTR;
+	}
+
 	/* create debugfs per vgt */
 	if ((rc = vgt_create_debugfs(vgt)) < 0) {
 		vgt_err("failed to create debugfs for vgt-%d\n",
@@ -480,6 +484,7 @@ static void vgt_reset_ringbuffer(struct vgt_device *vgt, unsigned long ring_bitm
 	int bit;
 
 	for_each_set_bit(bit, &ring_bitmap, sizeof(ring_bitmap)) {
+		int i;
 		if (bit >= vgt->pdev->max_engines)
 			break;
 
@@ -490,6 +495,11 @@ static void vgt_reset_ringbuffer(struct vgt_device *vgt, unsigned long ring_bitm
 
 		rb->uhptr = 0;
 		rb->request_id = rb->uhptr_id = 0;
+
+		rb->el_slots_head = rb->el_slots_tail = 0;
+		for (i = 0; i < EL_QUEUE_SLOT_NUM; ++ i)
+			memset(&rb->execlist_slots[i], 0,
+				sizeof(struct vgt_exec_list));
 
 		memset(&rb->vring, 0, sizeof(vgt_ringbuffer_t));
 		memset(&rb->sring, 0, sizeof(vgt_ringbuffer_t));

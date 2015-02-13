@@ -330,6 +330,36 @@ void dump_el_status(struct pgt_device *pdev)
 	dump_all_el_contexts(pdev);
 }
 
+/* trace the queue ops: 0 for enqueue, 1 for dequeue, 2 for delete */
+static void inline trace_el_queue_ops(struct vgt_device *vgt, int ring_id, int el_idx, int ops)
+{
+	int i;
+	char str[128];
+	vgt_state_ring_t *ring_state = &vgt->rb[ring_id];
+	int head = ring_state->el_slots_head;
+	int tail = ring_state->el_slots_tail;
+
+	/* if it was enqueue, the queue should not be empty now */
+	if (ops == 0)
+		ASSERT(head != tail);
+
+	for (i = 0; i < 2; ++ i) {
+		struct execlist_context *ctx;
+		uint32_t lrca;
+		ctx = ring_state->execlist_slots[el_idx].el_ctxs[i];
+		if (!ctx)
+			continue;
+
+		lrca = ctx->guest_context.lrca;
+		snprintf(str, 128, "slot[%d] ctx[%d] %s "
+				"(queue head: %d; tail: %d)",
+			el_idx, i,
+			(ops == 0 ? "enqueue" : (ops == 1 ? "dequeue" : "delete")),
+			head, tail);
+		trace_ctx_lifecycle(vgt->vm_id, ring_id, lrca, str);
+	}
+}
+
 /* util functions */
 
 static enum vgt_ring_id el_mmio_to_ring_id(unsigned int reg)
@@ -396,6 +426,163 @@ static inline enum vgt_ring_id vgt_get_ringid_from_lrca(struct vgt_device *vgt,
 	ring_id = el_mmio_to_ring_id(reg_state->ctx_ctrl.addr);
 
 	return ring_id;
+}
+
+/* a queue implementation
+ *
+ * It is used to hold the submitted execlists through writing ELSP.
+ * In maximum VM can submit two execlists. The queue size
+ * is designed to be 3 to better recognize the queue full and empty. Queue
+ * tail points to the next slot to be written, whereas header points to the
+ * slot to be addressed. (header == tail) means the queue is full.
+ *
+ * The reason to use a queue is to keep the information of submission order.
+ */
+
+bool vgt_el_slots_enqueue(struct vgt_device *vgt,
+			enum vgt_ring_id ring_id,
+			struct execlist_context *ctx0,
+			struct execlist_context *ctx1)
+{
+	struct vgt_exec_list *el_slot;
+	vgt_state_ring_t *ring_state = &vgt->rb[ring_id];
+	int tail = ring_state->el_slots_tail;
+	int new_tail = tail + 1;
+	if (new_tail == EL_QUEUE_SLOT_NUM)
+		new_tail = 0;
+
+	if (new_tail == ring_state->el_slots_head) {
+		return false;
+	}
+	el_slot = &ring_state->execlist_slots[tail];
+	el_slot->el_ctxs[0] = ctx0;
+	el_slot->el_ctxs[1] = ctx1;
+	el_slot->status = EL_PENDING;
+	ring_state->el_slots_tail = new_tail;
+	trace_el_queue_ops(vgt, ring_id, tail, 0);
+	return true;
+}
+
+int vgt_el_slots_dequeue(struct vgt_device *vgt, enum vgt_ring_id ring_id)
+{
+	int new_head;
+	vgt_state_ring_t *ring_state = &vgt->rb[ring_id];
+	int head = ring_state->el_slots_head;
+
+	if (head == ring_state->el_slots_tail) {
+		// queue empty
+		return -1;
+	}
+
+	new_head = head + 1;
+	if (new_head == EL_QUEUE_SLOT_NUM)
+		new_head = 0;
+
+	ring_state->el_slots_head = new_head;
+
+	trace_el_queue_ops(vgt, ring_id, head, 1);
+
+	return head;
+}
+
+void vgt_el_slots_delete(struct vgt_device *vgt,
+			enum vgt_ring_id ring_id, int idx)
+{
+	vgt_state_ring_t *ring_state = &vgt->rb[ring_id];
+	int head = ring_state->el_slots_head;
+
+	if (idx == head) {
+		head ++;
+		if (head == EL_QUEUE_SLOT_NUM)
+			head = 0;
+		ring_state->el_slots_head = head;
+	} else {
+		int idx_next = idx + 1;
+		if (idx_next == EL_QUEUE_SLOT_NUM)
+			idx_next = 0;
+		ASSERT(idx_next == ring_state->el_slots_tail);
+		ring_state->el_slots_tail = idx;
+	}
+
+	trace_el_queue_ops(vgt, ring_id, idx, 2);
+
+	ring_state->execlist_slots[idx].status = EL_EMPTY;
+	ring_state->execlist_slots[idx].el_ctxs[0] = NULL;
+	ring_state->execlist_slots[idx].el_ctxs[1] = NULL;
+}
+
+void vgt_el_slots_find_ctx(bool forward_search, vgt_state_ring_t *ring_state,
+			uint32_t ctx_id, int *el_slot_idx, int *el_slot_ctx_idx)
+{
+	int head = ring_state->el_slots_head;
+	int tail = ring_state->el_slots_tail;
+
+	*el_slot_idx = -1;
+	*el_slot_ctx_idx = -1;
+
+	while ((head != tail) && (*el_slot_idx == -1)) {
+		int i;
+		struct vgt_exec_list *el_slot;
+
+		if (forward_search) {
+			el_slot = &ring_state->execlist_slots[head];
+		} else {
+			if (tail == 0)
+				tail = EL_QUEUE_SLOT_NUM;
+			tail --;
+			el_slot = &ring_state->execlist_slots[tail];
+		}
+
+		for (i = 0; i < 2; ++ i) {
+			struct execlist_context *p = el_slot->el_ctxs[i];
+			if (p && p->guest_context.context_id == ctx_id) {
+				*el_slot_idx = forward_search ? head : tail;
+				*el_slot_ctx_idx = i;
+				break;
+			}
+		}
+
+		if (forward_search) {
+			head ++;
+			if (head == EL_QUEUE_SLOT_NUM)
+				head = 0;
+		}
+	}
+}
+
+int vgt_el_slots_next_sched(vgt_state_ring_t *ring_state)
+{
+	int head = ring_state->el_slots_head;
+	int tail = ring_state->el_slots_tail;
+	if (head == tail) {
+		// queue empty
+		return -1;
+	} else {
+		while (ring_state->execlist_slots[head].status != EL_PENDING) {
+			head ++;
+			if (head == tail) {
+				head = -1;
+				break;
+			} else if (head == EL_QUEUE_SLOT_NUM) {
+				head = 0;
+			}
+		}
+		return head;
+	}
+}
+
+int vgt_el_slots_cardinal(vgt_state_ring_t *ring_state)
+{
+	int card;
+	int head = ring_state->el_slots_head;
+	int tail = ring_state->el_slots_tail;
+
+	if (tail >= head)
+		card = tail - head;
+	else
+		card = tail + EL_QUEUE_SLOT_NUM - head;
+
+	return card;
 }
 
 /* validation functions */

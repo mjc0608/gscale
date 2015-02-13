@@ -346,10 +346,24 @@ typedef struct {
 #define RB_DWORDS_TO_SAVE	32
 typedef	uint32_t	rb_dword;
 
+struct execlist_context;
+enum EL_SLOT_STATUS {
+	EL_EMPTY	= 0,
+	EL_PENDING,
+	EL_SUBMITTED
+};
+
+struct vgt_exec_list {
+	enum EL_SLOT_STATUS status;
+	struct execlist_context *el_ctxs[2];
+};
+
 struct vgt_elsp_store {
 	uint32_t count;
 	uint32_t element[4];
 };
+
+#define EL_QUEUE_SLOT_NUM 3
 
 struct vgt_mm;
 
@@ -380,6 +394,9 @@ typedef struct {
 
 	vgt_reg_t uhptr;
 	uint64_t uhptr_id;
+	int el_slots_head;
+	int el_slots_tail;
+	struct vgt_exec_list execlist_slots[EL_QUEUE_SLOT_NUM];
 	struct vgt_elsp_store elsp_store;
 } vgt_state_ring_t;
 
