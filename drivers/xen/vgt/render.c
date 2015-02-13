@@ -399,6 +399,15 @@ void vgt_kick_off_ringbuffers(struct vgt_device *vgt)
 	}
 }
 
+void vgt_kick_off_execution(struct vgt_device *vgt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	if (pdev->enable_execlist)
+		vgt_kick_off_execlists(vgt);
+	else
+		vgt_kick_off_ringbuffers(vgt);
+}
+
 /* FIXME: need audit all render resources carefully */
 vgt_reg_t vgt_render_regs[] = {
 	/* mode ctl regs. sync with vgt_mode_ctl_regs */
@@ -1716,7 +1725,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 		vgt_ppgtt_switch(next);
 
 	/* STEP-6: ctx switch ends, and then kicks of new tail */
-	vgt_kick_off_ringbuffers(next);
+	vgt_kick_off_execution(next);
 
 	/* NOTE: do NOT access MMIO after this PUT hypercall! */
 	vgt_force_wake_put();

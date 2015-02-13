@@ -492,7 +492,7 @@ static bool vgt_el_slots_enqueue(struct vgt_device *vgt,
 	return true;
 }
 
-int vgt_el_slots_dequeue(struct vgt_device *vgt, enum vgt_ring_id ring_id)
+static int vgt_el_slots_dequeue(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 {
 	int new_head;
 	vgt_state_ring_t *ring_state = &vgt->rb[ring_id];
@@ -1591,6 +1591,58 @@ void vgt_emulate_context_switch_event(struct pgt_device *pdev)
 
 /* scheduling */
 
+static void vgt_emulate_el_preemption(struct vgt_device *vgt, enum vgt_ring_id ring_id)
+{
+	int el_slot_idx;
+	int card;
+	struct vgt_exec_list *el_slot;
+	struct execlist_context *el_ctx;
+	vgt_state_ring_t *ring_state;
+	struct context_status_format ctx_status;
+	enum vgt_event_type ctx_event;
+
+	ring_state = &vgt->rb[ring_id];
+	card  = vgt_el_slots_cardinal(ring_state);
+	if (card <= 1)
+		return;
+
+	ASSERT(card == 2);
+	el_slot_idx = vgt_el_slots_dequeue(vgt, ring_id);
+	el_slot = &ring_state->execlist_slots[el_slot_idx];
+	ctx_event = vgt_ring_id_to_ctx_event(ring_id);
+
+	/* we do not need to care the second context in the preempted
+	 * execlist, even if it has.
+	 */
+	el_ctx = el_slot->el_ctxs[0];
+	ASSERT(el_ctx);
+
+	ctx_status.ldw = 0;
+	ctx_status.context_id = el_ctx->guest_context.context_id;
+	ctx_status.idle_to_active = 1;
+
+	vgt_add_ctx_switch_status(vgt, ring_id, &ctx_status);
+	vgt_trigger_virtual_event(vgt, ctx_event);
+
+	/* TODO
+	 * We could emulate lite restore here, but do not seem
+	 * to be a must right now.
+	 */
+	ctx_status.ldw = 0;
+	ctx_status.preempted = 1;
+
+	vgt_add_ctx_switch_status(vgt, ring_id, &ctx_status);
+	vgt_trigger_virtual_event(vgt, ctx_event);
+
+	trace_ctx_lifecycle(vgt->vm_id, ring_id,
+				el_ctx->guest_context.lrca,
+				"emulated_preemption");
+
+	el_slot->status = EL_EMPTY;
+	el_slot->el_ctxs[0] = NULL;
+	el_slot->el_ctxs[1] = NULL;
+}
+
 static inline bool vgt_hw_ELSP_write(struct vgt_device *vgt,
 				unsigned int reg,
 				struct ctx_desc_format *ctx0,
@@ -1664,6 +1716,17 @@ static void vgt_update_ring_info(struct vgt_device *vgt,
 	el_ctx->request_id = vgt->rb[ring_id].request_id;
 	el_ctx->last_scan_head = vgt->rb[ring_id].last_scan_head;
 	vgt->rb[ring_id].active_ppgtt_mm = NULL;
+}
+
+void vgt_kick_off_execlists(struct vgt_device *vgt)
+{
+	int i;
+	struct pgt_device *pdev = vgt->pdev;
+
+	for (i = 0; i < pdev->max_engines; i ++) {
+		vgt_emulate_el_preemption(vgt, i);
+		vgt_submit_execlist(vgt, i);
+	}
 }
 
 void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id)

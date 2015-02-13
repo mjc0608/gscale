@@ -1683,6 +1683,7 @@ extern bool vgt_validate_ctx_switch;
 extern bool fastpath_dpy_switch;
 extern void vgt_toggle_ctx_switch(bool enable);
 extern void vgt_kick_off_ringbuffers(struct vgt_device *vgt);
+extern void vgt_kick_off_execution(struct vgt_device *vgt);
 extern void vgt_setup_reg_info(struct pgt_device *pdev);
 extern bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev);
 extern bool vgt_initial_mmio_setup (struct pgt_device *pdev);
@@ -2833,6 +2834,7 @@ void dump_el_status(struct pgt_device *pdev);
 void vgt_clear_submitted_el_record(struct pgt_device *pdev, enum vgt_ring_id ring_id);
 void vgt_emulate_context_switch_event(struct pgt_device *pdev);
 void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id);
+void vgt_kick_off_execlists(struct vgt_device *vgt);
 
 bool vgt_g2v_execlist_context_create(struct vgt_device *vgt);
 bool vgt_g2v_execlist_context_destroy(struct vgt_device *vgt);
