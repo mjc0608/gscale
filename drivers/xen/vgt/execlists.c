@@ -579,7 +579,7 @@ static void vgt_el_slots_find_ctx(bool forward_search, vgt_state_ring_t *ring_st
 	}
 }
 
-int vgt_el_slots_next_sched(vgt_state_ring_t *ring_state)
+static int vgt_el_slots_next_sched(vgt_state_ring_t *ring_state)
 {
 	int head = ring_state->el_slots_head;
 	int tail = ring_state->el_slots_tail;
@@ -922,6 +922,13 @@ static void memcpy_reg_state_page(void *dest_page, void *src_page)
 	dest_ctx->pdp2_UDW.val = pdp_backup[5];
 	dest_ctx->pdp3_LDW.val = pdp_backup[6];
 	dest_ctx->pdp3_UDW.val = pdp_backup[7];
+}
+
+static void vgt_update_shadow_ctx_from_guest(struct vgt_device *vgt,
+			struct execlist_context *el_ctx)
+{
+	if (!vgt_require_shadow_context(vgt))
+		return;
 }
 
 static void vgt_update_guest_ctx_from_shadow(struct vgt_device *vgt,
@@ -1611,6 +1618,136 @@ static inline bool vgt_hw_ELSP_write(struct vgt_device *vgt,
 	return rc;
 }
 
+static void vgt_update_ring_info(struct vgt_device *vgt,
+			struct execlist_context *el_ctx)
+{
+	struct reg_state_ctx_header *guest_state;
+	vgt_ringbuffer_t	*vring;
+	enum vgt_ring_id ring_id = el_ctx->ring_id;
+
+	if (vgt_require_shadow_context(vgt)) {
+		guest_state = (struct reg_state_ctx_header *)
+			el_ctx->ctx_pages[1].guest_page.vaddr;
+	} else {
+		ASSERT(vgt->vm_id == 0);
+		guest_state = vgt_get_reg_state_from_lrca(vgt,
+					el_ctx->guest_context.lrca);
+	}
+
+	vring = &vgt->rb[ring_id].vring;
+
+	vring->tail = guest_state->ring_tail.val;
+	vring->head = guest_state->ring_header.val;
+	vring->start = guest_state->rb_start.val;
+	vring->ctl = guest_state->rb_ctrl.val;
+#if 0
+	if (vgt->rb[ring_id].active_ppgtt_mm) {
+		vgt_warn("vgt has ppgtt set for ring_id %d: 0x%llx\n",
+				ring_id,
+				(unsigned long long)vgt->rb[ring_id].active_ppgtt_mm);
+	}
+#endif
+	/* TODO
+	 * Will have better way to handle the per-rb value.
+	 * Right now we just leverage the cmd_scan/schedule code for ring buffer mode
+	 */
+	vgt->rb[ring_id].active_ppgtt_mm = el_ctx->ppgtt_mm;
+	vgt->rb[ring_id].has_ppgtt_mode_enabled = 1;
+	vgt->rb[ring_id].has_ppgtt_base_set = 1;
+	vgt->rb[ring_id].request_id = el_ctx->request_id;
+	vgt->rb[ring_id].last_scan_head = el_ctx->last_scan_head;
+
+	vgt_scan_vring(vgt, ring_id);
+	/* the function is used to update ring/buffer only. No real submission inside */
+	vgt_submit_commands(vgt, ring_id);
+
+	el_ctx->request_id = vgt->rb[ring_id].request_id;
+	el_ctx->last_scan_head = vgt->rb[ring_id].last_scan_head;
+	vgt->rb[ring_id].active_ppgtt_mm = NULL;
+}
+
+void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id)
+{
+	int i;
+	struct ctx_desc_format context_descs[2];
+	uint32_t elsp_reg;
+	int el_slot_idx;
+	vgt_state_ring_t *ring_state;
+	struct vgt_exec_list *execlist = NULL;
+	bool render_owner = is_current_render_owner(vgt);
+
+	if (!render_owner)
+		return;
+
+	ring_state = &vgt->rb[ring_id];
+	el_slot_idx = vgt_el_slots_next_sched(ring_state);
+	if (el_slot_idx == -1) {
+		return;
+	}
+	execlist = &ring_state->execlist_slots[el_slot_idx];
+
+	if (execlist == NULL) {
+		/* no pending EL to submit */
+		return;
+	}
+
+	ASSERT (execlist->el_ctxs[0] != NULL);
+
+	for (i = 0; i < 2; ++ i) {
+		struct execlist_context *ctx = execlist->el_ctxs[i];
+		if (ctx == NULL) {
+			memset(&context_descs[i], 0,
+				sizeof(struct ctx_desc_format));
+			continue;
+		} else {
+			memcpy(&context_descs[i], &ctx->guest_context,
+				sizeof(struct ctx_desc_format));
+		}
+
+		ASSERT_VM(ring_id == ctx->ring_id, vgt);
+		vgt_update_shadow_ctx_from_guest(vgt, ctx);
+		vgt_update_ring_info(vgt, ctx);
+
+		trace_ctx_lifecycle(vgt->vm_id, ring_id,
+			ctx->guest_context.lrca, "schedule_to_run");
+
+		if (!vgt_require_shadow_context(vgt))
+			continue;
+
+		if (shadow_execlist_context == PATCH_WITHOUT_SHADOW)
+			vgt_patch_guest_context(ctx);
+		else
+			context_descs[i].lrca = ctx->shadow_lrca;
+
+#ifdef EL_SLOW_DEBUG
+		dump_el_context_information(vgt, ctx);
+#endif
+	}
+
+	elsp_reg = vgt_ring_id_to_EL_base(ring_id) + _EL_OFFSET_SUBMITPORT;
+	/* mark it submitted even if it failed the validation */
+	execlist->status = EL_SUBMITTED;
+
+	if (vgt_validate_elsp_descs(vgt, &context_descs[0], &context_descs[1])) {
+#ifdef EL_SLOW_DEBUG
+		struct execlist_status_format status;
+		uint32_t status_reg = vgt_ring_id_to_EL_base(ring_id) + _EL_OFFSET_STATUS;
+		status.ldw = VGT_MMIO_READ(vgt->pdev, status_reg);
+		status.udw = VGT_MMIO_READ(vgt->pdev, status_reg + 4);
+		vgt_dbg(VGT_DBG_EXECLIST, "The EL status before ELSP submission!\n");
+		dump_execlist_status(&status, ring_id);
+#endif
+		vgt_hw_ELSP_write(vgt, elsp_reg, &context_descs[0],
+					&context_descs[1]);
+#ifdef EL_SLOW_DEBUG
+		status.ldw = VGT_MMIO_READ(vgt->pdev, status_reg);
+		status.udw = VGT_MMIO_READ(vgt->pdev, status_reg + 4);
+		vgt_dbg(VGT_DBG_EXECLIST, "The EL status after ELSP submission:\n");
+		dump_execlist_status(&status, ring_id);
+#endif
+	}
+}
+
 bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id)
 {
 	struct vgt_elsp_store *elsp_store = &vgt->rb[ring_id].elsp_store;
@@ -1676,6 +1813,9 @@ bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id)
 	}
 
 	vgt_emulate_submit_execlist(vgt, ring_id, el_ctxs[0], el_ctxs[1]);
+
+	if (!ctx_switch_requested(vgt->pdev) && is_current_render_owner(vgt))
+		vgt_submit_execlist(vgt, ring_id);
 
 	return true;
 }

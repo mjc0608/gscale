@@ -2832,6 +2832,7 @@ void dump_all_el_contexts(struct pgt_device *pdev);
 void dump_el_status(struct pgt_device *pdev);
 void vgt_clear_submitted_el_record(struct pgt_device *pdev, enum vgt_ring_id ring_id);
 void vgt_emulate_context_switch_event(struct pgt_device *pdev);
+void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id);
 
 bool vgt_g2v_execlist_context_create(struct vgt_device *vgt);
 bool vgt_g2v_execlist_context_destroy(struct vgt_device *vgt);
