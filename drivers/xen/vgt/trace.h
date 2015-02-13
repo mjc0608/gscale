@@ -250,6 +250,65 @@ TRACE_EVENT(guest_pt_change,
 
 		TP_printk("%s", __entry->buf)
 );
+
+TRACE_EVENT(ctx_lifecycle,
+		TP_PROTO(int vm_id, int ring_id,
+				uint32_t guest_lrca, const char *action),
+
+		TP_ARGS(vm_id, ring_id, guest_lrca, action),
+
+		TP_STRUCT__entry(
+			__array(char, buf, MAX_BUF_LEN)
+		),
+
+		TP_fast_assign(
+			snprintf(__entry->buf, MAX_BUF_LEN,
+				"VM-%d <ring-%d>: EXECLIST Context guest lrca 0x%x - %s\n",
+				vm_id, ring_id, guest_lrca, action);
+		),
+
+		TP_printk("%s", __entry->buf)
+);
+
+TRACE_EVENT(ctx_protection,
+		TP_PROTO(int vm_id, int ring_id, uint32_t guest_lrca,
+			uint32_t page_idx, uint32_t gfn, const char *operation),
+
+		TP_ARGS(vm_id, ring_id, guest_lrca, page_idx, gfn, operation),
+
+		TP_STRUCT__entry(
+			__array(char, buf, MAX_BUF_LEN)
+		),
+
+		TP_fast_assign(
+			snprintf(__entry->buf, MAX_BUF_LEN,
+				"VM-%d <ring-%d>: EXECLIST Context guest lrca[0x%x] "
+				"page[%i] gfn[0x%x] - %s\n",
+				vm_id, ring_id, guest_lrca, page_idx, gfn, operation);
+		),
+
+		TP_printk("%s", __entry->buf)
+);
+
+TRACE_EVENT(ctx_write_trap,
+		TP_PROTO(uint64_t pa, int bytes),
+
+		TP_ARGS(pa, bytes),
+
+		TP_STRUCT__entry(
+			__field(u64, pa)
+			__field(int, bytes)
+			),
+
+		TP_fast_assign(
+			__entry->pa = pa;
+			__entry->bytes = bytes;
+		),
+
+		TP_printk("EXECLIST Context Write Protection addr: <0x%llx>, bytes %i\n",
+				__entry->pa, __entry->bytes)
+);
+
 #endif /* _VGT_TRACE_H_ */
 
 /* This part must be out of protection */
