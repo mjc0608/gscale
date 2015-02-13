@@ -429,7 +429,7 @@ static void ondemand_sched_ctx(struct pgt_device *pdev)
 	if (next_vgt == cur_vgt) {
 		//FIXME: request 5 stails to be committed
 		vgt_rb_tailq_commit_num_stail(next_vgt, tails_per_ring);
-		vgt_kick_ringbuffers(next_vgt);
+		vgt_kick_off_ringbuffers(next_vgt);
 		return;
 	}
 

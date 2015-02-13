@@ -383,7 +383,7 @@ static void vgt_restore_ringbuffer(struct vgt_device *vgt, int id)
 		VGT_READ_TAIL(pdev, id));
 }
 
-void vgt_kick_ringbuffers(struct vgt_device *vgt)
+void vgt_kick_off_ringbuffers(struct vgt_device *vgt)
 {
 	int i;
 	struct pgt_device *pdev = vgt->pdev;
@@ -1716,7 +1716,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 		vgt_ppgtt_switch(next);
 
 	/* STEP-6: ctx switch ends, and then kicks of new tail */
-	vgt_kick_ringbuffers(next);
+	vgt_kick_off_ringbuffers(next);
 
 	/* NOTE: do NOT access MMIO after this PUT hypercall! */
 	vgt_force_wake_put();

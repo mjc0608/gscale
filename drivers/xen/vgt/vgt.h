@@ -1682,7 +1682,7 @@ extern int vgt_ctx_switch;
 extern bool vgt_validate_ctx_switch;
 extern bool fastpath_dpy_switch;
 extern void vgt_toggle_ctx_switch(bool enable);
-extern void vgt_kick_ringbuffers(struct vgt_device *vgt);
+extern void vgt_kick_off_ringbuffers(struct vgt_device *vgt);
 extern void vgt_setup_reg_info(struct pgt_device *pdev);
 extern bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev);
 extern bool vgt_initial_mmio_setup (struct pgt_device *pdev);
