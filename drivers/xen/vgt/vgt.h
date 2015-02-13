@@ -1330,6 +1330,16 @@ static inline void reg_set_owner(struct pgt_device *pdev,
 	pdev->reg_info[REG_INDEX(reg)] |= type & VGT_REG_OWNER;
 }
 
+static inline void reg_change_owner(struct pgt_device *pdev,
+	vgt_reg_t reg, enum vgt_owner_type type)
+{
+	ASSERT_NUM(reg_is_tracked(pdev, reg), reg);
+	pdev->reg_info[REG_INDEX(reg)] &= ~VGT_REG_OWNER;
+	pdev->reg_info[REG_INDEX(reg)] |= type & VGT_REG_OWNER;
+	if ((type != VGT_OT_NONE) && (type != VGT_OT_MAX))
+		pdev->reg_info[REG_INDEX(reg)] &= ~VGT_REG_VIRT;
+}
+
 static inline void reg_set_passthrough(struct pgt_device *pdev,
 	vgt_reg_t reg)
 {

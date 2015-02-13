@@ -3430,9 +3430,42 @@ reg_attr_t vgt_base_reg_info[] = {
 
 };
 
+static void vgt_passthrough_execlist(struct pgt_device *pdev)
+{
+       int i;
+       reg_update_handlers(pdev, _REG_RCS_CTX_STATUS_BUF, 48, NULL, NULL);
+       reg_update_handlers(pdev, _REG_VCS_CTX_STATUS_BUF, 48, NULL, NULL);
+       reg_update_handlers(pdev, _REG_VECS_CTX_STATUS_BUF, 48, NULL, NULL);
+       reg_update_handlers(pdev, _REG_VCS2_CTX_STATUS_BUF, 48, NULL, NULL);
+       reg_update_handlers(pdev, _REG_BCS_CTX_STATUS_BUF, 48, NULL, NULL);
+
+       for (i = 0; i < 48; i += 4) {
+               reg_change_owner(pdev, _REG_RCS_CTX_STATUS_BUF + i, VGT_OT_RENDER);
+               reg_change_owner(pdev, _REG_VCS_CTX_STATUS_BUF + i, VGT_OT_RENDER);
+               reg_change_owner(pdev, _REG_VECS_CTX_STATUS_BUF + i, VGT_OT_RENDER);
+               reg_change_owner(pdev, _REG_VCS2_CTX_STATUS_BUF + i, VGT_OT_RENDER);
+               reg_change_owner(pdev, _REG_BCS_CTX_STATUS_BUF + i, VGT_OT_RENDER);
+       }
+
+       reg_update_handlers(pdev, _REG_RCS_CTX_STATUS_PTR, 4, NULL, NULL);
+       reg_update_handlers(pdev, _REG_VCS_CTX_STATUS_PTR, 4, NULL, NULL);
+       reg_update_handlers(pdev, _REG_VECS_CTX_STATUS_PTR, 4, NULL, NULL);
+       reg_update_handlers(pdev, _REG_VCS2_CTX_STATUS_PTR, 4, NULL, NULL);
+       reg_update_handlers(pdev, _REG_BCS_CTX_STATUS_PTR, 4, NULL, NULL);
+
+       reg_change_owner(pdev, _REG_RCS_CTX_STATUS_PTR, F_RDR);
+       reg_change_owner(pdev, _REG_VCS_CTX_STATUS_PTR, F_RDR);
+       reg_change_owner(pdev, _REG_VECS_CTX_STATUS_PTR, F_RDR);
+       reg_change_owner(pdev, _REG_VCS2_CTX_STATUS_PTR, F_RDR);
+       reg_change_owner(pdev, _REG_BCS_CTX_STATUS_PTR, F_RDR);
+}
+
 bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 {
 	printk("post mmio hooks initialized\n");
+
+	if (hvm_render_owner)
+		vgt_passthrough_execlist(pdev);
 
 	if (!pdev->enable_ppgtt)
 		return true;
