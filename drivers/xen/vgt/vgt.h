@@ -229,6 +229,7 @@ enum transcoder {
 #define VGT_DBG_CMD		(1<<4)
 #define VGT_DBG_IRQ		(1<<5)
 #define VGT_DBG_EDID		(1<<6)
+#define VGT_DBG_EXECLIST	(1<<7)
 #define VGT_DBG_ALL		(0xffff)
 
 /*
@@ -342,6 +343,11 @@ typedef struct {
 #define RB_DWORDS_TO_SAVE	32
 typedef	uint32_t	rb_dword;
 
+struct vgt_elsp_store {
+	uint32_t count;
+	uint32_t element[4];
+};
+
 struct vgt_mm;
 
 typedef struct {
@@ -371,6 +377,7 @@ typedef struct {
 
 	vgt_reg_t uhptr;
 	uint64_t uhptr_id;
+	struct vgt_elsp_store elsp_store;
 } vgt_state_ring_t;
 
 struct vgt_device;
@@ -1763,6 +1770,15 @@ static inline bool g_gm_is_hidden(struct vgt_device *vgt, uint64_t g_addr)
 		(g_addr <= vgt_guest_hidden_gm_end(vgt));
 }
 
+static inline bool g_gm_is_reserved(struct vgt_device *vgt, uint64_t g_addr)
+{
+	uint64_t rsvd_gm_base = aperture_2_gm(vgt->pdev,
+					vgt->pdev->rsvd_aperture_base);
+
+	return ((g_addr >= rsvd_gm_base) &&
+		(g_addr < (rsvd_gm_base + vgt->pdev->rsvd_aperture_sz)));
+}
+
 static inline bool g_gm_is_valid(struct vgt_device *vgt, uint64_t g_addr)
 {
 	if (vgt->bypass_addr_check)
@@ -2131,6 +2147,32 @@ static inline void vgt_disable_ring(struct vgt_device *vgt, int ring_id)
 		} else
 			vgt_disable_render(vgt);
 	}
+}
+
+static inline uint32_t vgt_ring_id_to_EL_base(enum vgt_ring_id ring_id)
+{
+	uint32_t base = 0;
+
+	switch (ring_id) {
+	case RING_BUFFER_RCS:
+		base = _EL_BASE_RCS;
+		break;
+	case RING_BUFFER_VCS:
+		base = _EL_BASE_VCS;
+		break;
+	case RING_BUFFER_VECS:
+		base = _EL_BASE_VECS;
+		break;
+	case RING_BUFFER_VCS2:
+		base = _EL_BASE_VCS2;
+		break;
+	case RING_BUFFER_BCS:
+		base = _EL_BASE_BCS;
+		break;
+	default:
+		BUG();
+	}
+	return base;
 }
 
 static inline bool is_ring_empty(struct pgt_device *pdev, int ring_id)
@@ -2697,6 +2739,8 @@ struct dump_buffer {
 int create_dump_buffer(struct dump_buffer *buf, int buf_size);
 void destroy_dump_buffer(struct dump_buffer *buf);
 void dump_string(struct dump_buffer *buf, const char *fmt, ...);
+
+bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id);
 
 extern struct kernel_dm *vgt_pkdm;
 

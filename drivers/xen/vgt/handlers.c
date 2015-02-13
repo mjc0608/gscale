@@ -2283,6 +2283,56 @@ static bool sfuse_strap_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+static bool vgt_write_submitport(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	bool rc = true;
+	int ring_id = mmio_to_ring_id(offset);
+	struct vgt_elsp_store *elsp_store = &vgt->rb[ring_id].elsp_store;
+
+	ASSERT((bytes == 4) && ((offset & 3) == 0));
+	ASSERT(elsp_store->count >= 0 && elsp_store->count < ELSP_BUNDLE_NUM);
+
+	elsp_store->element[elsp_store->count] = *(vgt_reg_t *)p_data;
+	elsp_store->count ++;
+	vgt_dbg(VGT_DBG_EXECLIST,
+		"VM(%d): MMIO write to virtual submitPort 0x%x with 0x%x\n",
+			vgt->vm_id, offset, *(vgt_reg_t *)p_data);
+	if (elsp_store->count == ELSP_BUNDLE_NUM) {
+		rc = vgt_batch_ELSP_write(vgt, ring_id);
+	}
+
+	return rc;
+}
+
+static bool vgt_ctx_ptr_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	uint32_t mask;
+	vgt_reg_t regval;
+	vgt_reg_t data = *(vgt_reg_t *)p_data;
+
+	ASSERT((bytes == 4) && ((offset & 3) == 0));
+
+	vgt_dbg(VGT_DBG_EXECLIST, "Value given to CTX PTR reg(0x%x) write is: 0x%x\n",
+				offset, data);
+
+	mask = data >> 16;
+	if ((mask & ~_CTXBUF_READ_PTR_MASK) != 0) {
+		vgt_warn("VM(%d): Trying to write ctx_ptr mmio(0x%x) "
+			"with fields other than READ_PTR!(write value 0x%x)\n",
+			vgt->vm_id, offset, data);
+		return true;
+	}
+
+	regval = __vreg(vgt, offset);
+	regval = (regval & ~mask) | (data & mask) | (mask << 16);
+
+	vgt_dbg(VGT_DBG_EXECLIST, "Value written into CTX PTR reg is: 0x%x\n", regval);
+	__vreg(vgt, offset) = regval;
+	return true;
+}
+
 /*
  * Track policies of all captured registers
  *
@@ -2571,16 +2621,16 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x7018, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {0xe184, 4, F_RDR, 0, D_ALL, NULL, NULL},
 
-{_REG_RCS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS,
-			vgt_not_allowed_mmio_read, NULL},
-{_REG_VCS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS,
-			vgt_not_allowed_mmio_read, NULL},
-{_REG_VECS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS,
-			vgt_not_allowed_mmio_read, NULL},
-{_REG_VCS2_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS,
-			vgt_not_allowed_mmio_read, NULL},
-{_REG_BCS_EXECLIST_SUBMITPORT, 4, F_RDR, 0, D_BDW_PLUS,
-			vgt_not_allowed_mmio_read, NULL},
+{_REG_RCS_EXECLIST_SUBMITPORT, 4, F_VIRT, 0, D_BDW_PLUS,
+			vgt_not_allowed_mmio_read, vgt_write_submitport},
+{_REG_VCS_EXECLIST_SUBMITPORT, 4, F_VIRT, 0, D_BDW_PLUS,
+			vgt_not_allowed_mmio_read, vgt_write_submitport},
+{_REG_VECS_EXECLIST_SUBMITPORT, 4, F_VIRT, 0, D_BDW_PLUS,
+			vgt_not_allowed_mmio_read, vgt_write_submitport},
+{_REG_VCS2_EXECLIST_SUBMITPORT, 4, F_VIRT, 0, D_BDW_PLUS,
+			vgt_not_allowed_mmio_read, vgt_write_submitport},
+{_REG_BCS_EXECLIST_SUBMITPORT, 4, F_VIRT, 0, D_BDW_PLUS,
+			vgt_not_allowed_mmio_read, vgt_write_submitport},
 
 {_REG_RCS_EXECLIST_STATUS, 8, F_RDR, 0, D_BDW_PLUS, NULL,
 					vgt_not_allowed_mmio_write},
@@ -2599,17 +2649,27 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_VCS2_CTX_SR_CTL, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_CTX_SR_CTL, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 
-{_REG_RCS_CTX_STATUS_BUF, 48, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VCS_CTX_STATUS_BUF, 48, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VECS_CTX_STATUS_BUF, 48, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VCS2_CTX_STATUS_BUF, 48, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_BCS_CTX_STATUS_BUF, 48, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
+{_REG_RCS_CTX_STATUS_BUF, 48, F_VIRT, 0, D_BDW_PLUS, NULL,
+					vgt_not_allowed_mmio_write},
+{_REG_VCS_CTX_STATUS_BUF, 48, F_VIRT, 0, D_BDW_PLUS, NULL,
+					vgt_not_allowed_mmio_write},
+{_REG_VECS_CTX_STATUS_BUF, 48, F_VIRT, 0, D_BDW_PLUS, NULL,
+					vgt_not_allowed_mmio_write},
+{_REG_VCS2_CTX_STATUS_BUF, 48, F_VIRT, 0, D_BDW_PLUS, NULL,
+					vgt_not_allowed_mmio_write},
+{_REG_BCS_CTX_STATUS_BUF, 48, F_VIRT, 0, D_BDW_PLUS, NULL,
+					vgt_not_allowed_mmio_write},
 
-{_REG_RCS_CTX_STATUS_PTR, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VCS_CTX_STATUS_PTR, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VECS_CTX_STATUS_PTR, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VCS2_CTX_STATUS_PTR, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_BCS_CTX_STATUS_PTR, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
+{_REG_RCS_CTX_STATUS_PTR, 4, F_VIRT, 0, D_BDW_PLUS, NULL,
+					vgt_ctx_ptr_mmio_write},
+{_REG_VCS_CTX_STATUS_PTR, 4, F_VIRT, 0, D_BDW_PLUS, NULL,
+					vgt_ctx_ptr_mmio_write},
+{_REG_VECS_CTX_STATUS_PTR, 4, F_VIRT, 0, D_BDW_PLUS, NULL,
+					vgt_ctx_ptr_mmio_write},
+{_REG_VCS2_CTX_STATUS_PTR, 4, F_VIRT, 0, D_BDW_PLUS, NULL,
+					vgt_ctx_ptr_mmio_write},
+{_REG_BCS_CTX_STATUS_PTR, 4, F_VIRT, 0, D_BDW_PLUS, NULL,
+					vgt_ctx_ptr_mmio_write},
 
 	/* -------display regs---------- */
 
