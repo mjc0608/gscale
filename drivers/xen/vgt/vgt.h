@@ -2799,6 +2799,7 @@ gtt_entry_t *vgt_get_entry(void *pt, gtt_entry_t *e, unsigned long index);
 void execlist_ctx_table_destroy(struct vgt_device *vgt);
 void dump_all_el_contexts(struct pgt_device *pdev);
 void dump_el_status(struct pgt_device *pdev);
+void vgt_clear_submitted_el_record(struct pgt_device *pdev, enum vgt_ring_id ring_id);
 
 bool vgt_g2v_execlist_context_create(struct vgt_device *vgt);
 bool vgt_g2v_execlist_context_destroy(struct vgt_device *vgt);

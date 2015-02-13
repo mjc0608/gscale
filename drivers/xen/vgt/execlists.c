@@ -1098,6 +1098,96 @@ static void vgt_destroy_execlist_context(struct vgt_device *vgt,
 	kfree(el_ctx);
 }
 
+/* emulate the EXECLIST related MMIOs when vgt is not render owner,
+ * so that guest drivers treat the submission as a successful one.
+ * Currently we simply emulate the status register (234h) to reflect
+ * the active execlist, which is a must for the future other execlist
+ * submission. Others, like status buffer, keep unchanged. That gives
+ * guest driver the impression that submission has finished, but the
+ * contexts have not yet entered hardware.
+ *
+ * There is another option to emulate more here, for instance, to send
+ * virtual context switch interrupt of idle-to-active for the first
+ * execlist submission, and update virtual status buffer accordingly.
+ * But such emulation will bring complexity when the real ELSP write
+ * happens. We have to recognize the duplicated physical context switch
+ * interrupt and delete that one.
+ */
+
+static void vgt_emulate_submit_execlist(struct vgt_device *vgt, int ring_id,
+			struct execlist_context *ctx0,
+			struct execlist_context *ctx1)
+{
+	struct execlist_status_format status;
+	vgt_state_ring_t *ring_state;
+	bool render_owner = is_current_render_owner(vgt);
+	uint32_t status_reg = vgt_ring_id_to_EL_base(ring_id) + _EL_OFFSET_STATUS;
+	uint32_t el_index;
+
+	ring_state = &vgt->rb[ring_id];
+	if (!vgt_el_slots_enqueue(vgt, ring_id, ctx0, ctx1)) {
+		vgt_err("VM-%d: <ring-%d> EXECLIST slots are full while adding new contexts! "
+			"Contexts will be ignored:\n"
+			" -ctxid-0: 0x%x\n", vgt->vm_id, ring_id,
+				ctx0->guest_context.context_id);
+	}
+
+	if (render_owner)
+		return;
+
+	/* emulate status register below */
+	status.ldw = __vreg(vgt, status_reg);
+	status.udw = __vreg(vgt, status_reg + 4);
+	el_index = status.execlist_write_pointer;
+	if (status.execlist_queue_full) {
+		vgt_err("VM(%d): EXECLIST submission while the EL is full! "
+			"The submission will be ignored!\n", vgt->vm_id);
+		dump_execlist_info(vgt->pdev, ring_id);
+		return;
+	}
+
+	status.execlist_write_pointer = (el_index == 0 ? 1 : 0);
+
+	/* TODO
+	 * 1, Check whether we should set below two states. According to the observation
+	 * from dom0, when there is ELSP write, both active bit and valid bit will be
+	 * set.
+	 * 2, Consider the emulation of preemption and lite restore.
+	 * It is designed to be in context switch by adding corresponding status entries
+	 * into status buffer.
+	 */
+	if (el_index == 0) {
+		status.execlist_0_active = 1;
+		status.execlist_0_valid = 1;
+	} else {
+		status.execlist_1_active = 1;
+		status.execlist_1_valid = 1;
+	}
+
+	/* TODO emulate the status. Need double confirm
+	 *
+	 * Here non-render owner will not receive context switch interrupt
+	 * until it becomes a render owner. Meanwhile, the status register
+	 * is emulated to reflect the port submission operation.
+	 * It is noticed that the initial value of "current_execlist_pointer"
+	 * and "execlist_write_pointer" does not equal although the EXECLISTS
+	 * are all empty. It is then not appropriate to emulate "execlist_queue_full"
+	 * with the two bit value. Instead, the "execlist_queue_full" will be
+	 * set if valid bits of both "EXECLIST 0" and "EXECLIST 1" are set.
+	 * This needs the double confirm.
+	 */
+	if (status.execlist_0_valid && status.execlist_1_valid) {
+		status.execlist_queue_full = 1;
+		vgt_dbg(VGT_DBG_EXECLIST,"VM-%d: ring(%d) EXECLISTS becomes "
+			"full due to workload submission!\n",
+				vgt->vm_id, ring_id);
+		dump_execlist_status(&status, ring_id);
+	}
+
+	__vreg(vgt, status_reg) = status.ldw;
+	__vreg(vgt, status_reg + 4) = status.udw;
+}
+
 static inline bool vgt_hw_ELSP_write(struct vgt_device *vgt,
 				unsigned int reg,
 				struct ctx_desc_format *ctx0,
@@ -1189,6 +1279,8 @@ bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id)
 						el_ctx->shadow_lrca);
 	}
 
+	vgt_emulate_submit_execlist(vgt, ring_id, el_ctxs[0], el_ctxs[1]);
+
 	return true;
 }
 
@@ -1204,6 +1296,25 @@ void execlist_ctx_table_destroy(struct vgt_device *vgt)
 		vgt_destroy_execlist_context(vgt, el_ctx);
 
 	return;
+}
+
+void vgt_clear_submitted_el_record(struct pgt_device *pdev, enum vgt_ring_id ring_id)
+{
+	int i;
+	for (i = 0; i < VGT_MAX_VMS; i++) {
+		struct vgt_device *vgt = pdev->device[i];
+		vgt_state_ring_t *ring_state;
+		int idx;
+		if (!vgt)
+			continue;
+
+		ring_state = &vgt->rb[ring_id];
+
+		for (idx = 0; idx < EL_QUEUE_SLOT_NUM; ++ idx) {
+			if (ring_state->execlist_slots[idx].status == EL_SUBMITTED)
+				vgt_el_slots_delete(vgt, ring_id, idx);
+		}
+	}
 }
 
 /* pv interface */
