@@ -2783,6 +2783,9 @@ void execlist_ctx_table_destroy(struct vgt_device *vgt);
 void dump_all_el_contexts(struct pgt_device *pdev);
 void dump_el_status(struct pgt_device *pdev);
 
+bool vgt_g2v_execlist_context_create(struct vgt_device *vgt);
+bool vgt_g2v_execlist_context_destroy(struct vgt_device *vgt);
+
 bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id);
 
 extern struct kernel_dm *vgt_pkdm;

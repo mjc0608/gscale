@@ -2043,6 +2043,10 @@ static bool pvinfo_write(struct vgt_device *vgt, unsigned int offset,
 				rc = vgt_g2v_create_ppgtt_mm(vgt, 4);
 			} else if (val == VGT_G2V_PPGTT_L4_PAGE_TABLE_DESTROY) {
 				rc = vgt_g2v_destroy_ppgtt_mm(vgt, 4);
+			} else if (val == VGT_G2V_EXECLIST_CONTEXT_ELEMENT_CREATE) {
+				rc = vgt_g2v_execlist_context_create(vgt);
+			} else if (val == VGT_G2V_EXECLIST_CONTEXT_ELEMENT_DESTROY) {
+				rc = vgt_g2v_execlist_context_destroy(vgt);
 			} else {
 				vgt_warn("Invalid PV notification. %x\n", val);
 			}

@@ -610,6 +610,22 @@ static inline bool ppgtt_update_shadow_ppgtt_for_ctx(struct vgt_device *vgt,
 	return rc;
 }
 
+static void vgt_patch_guest_context(struct execlist_context *el_ctx)
+{
+	struct reg_state_ctx_header *guest_state;
+	struct reg_state_ctx_header *shadow_state;
+
+	guest_state = (struct reg_state_ctx_header *)
+			el_ctx->ctx_pages[1].guest_page.vaddr;
+	shadow_state = (struct reg_state_ctx_header *)
+			el_ctx->ctx_pages[1].shadow_page.vaddr;
+
+	ROOTP_CTX_STATE_2_CTX_STATE(guest_state, shadow_state, 0);
+	ROOTP_CTX_STATE_2_CTX_STATE(guest_state, shadow_state, 1);
+	ROOTP_CTX_STATE_2_CTX_STATE(guest_state, shadow_state, 2);
+	ROOTP_CTX_STATE_2_CTX_STATE(guest_state, shadow_state, 3);
+}
+
 /* context shadow: context creation/destroy in execlist */
 
 static struct execlist_context *vgt_allocate_el_context(struct vgt_device *vgt,
@@ -1001,4 +1017,75 @@ void execlist_ctx_table_destroy(struct vgt_device *vgt)
 		vgt_destroy_execlist_context(vgt, el_ctx);
 
 	return;
+}
+
+/* pv interface */
+
+bool vgt_g2v_execlist_context_create(struct vgt_device *vgt)
+{
+	bool rc = true;
+	struct execlist_context *el_ctx;
+	struct ctx_desc_format ctx_desc;
+
+	ctx_desc.elm_high = __vreg(vgt, vgt_info_off(
+				execlist_context_descriptor_hi));
+	ctx_desc.elm_low = __vreg(vgt, vgt_info_off(
+				execlist_context_descriptor_lo));
+
+	vgt_dbg(VGT_DBG_EXECLIST, "VM-%d: Receive the el context creation "
+		"request for lrca 0x%x\n", vgt->vm_id, ctx_desc.lrca);
+
+	el_ctx = execlist_context_find(vgt, ctx_desc.lrca);
+	if (el_ctx) {
+		vgt_warn("VM-%d: A context creation request is received "
+			" but the context is already constructed!\n"
+			"The request will be ignored.\n", vgt->vm_id);
+		dump_ctx_desc(vgt, &ctx_desc);
+		return rc;
+	}
+
+	el_ctx = vgt_create_execlist_context(vgt, &ctx_desc, MAX_ENGINES);
+	if (el_ctx == NULL) {
+		/* The guest does not have ring state ready while
+		 * sending context creation notification to us. Such
+		 * notification will be ignored. And the context is
+		 * not expected to be used in ELSP submission.
+		 */
+		vgt_warn("VM-%d: Failed to create context with lrca 0x%x! "
+			"The request will be ignored.\n",
+			vgt->vm_id, ctx_desc.lrca);
+	} else if (hvm_render_owner) {
+		if (vgt_require_shadow_context(vgt)) {
+			vgt_patch_guest_context(el_ctx);
+		}
+	}
+
+	return rc;
+}
+
+bool vgt_g2v_execlist_context_destroy(struct vgt_device *vgt)
+{
+	bool rc = true;
+	struct execlist_context *el_ctx;
+	struct ctx_desc_format ctx_desc;
+
+	ctx_desc.elm_high = __vreg(vgt, vgt_info_off(
+				execlist_context_descriptor_hi));
+	ctx_desc.elm_low = __vreg(vgt, vgt_info_off(
+				execlist_context_descriptor_lo));
+
+	vgt_dbg(VGT_DBG_EXECLIST, "VM-%d: Receive the el context destroy "
+		"request for lrca 0x%x\n", vgt->vm_id, ctx_desc.lrca);
+
+	el_ctx = execlist_context_find(vgt, ctx_desc.lrca);
+	if (el_ctx == NULL) {
+		vgt_warn("VM-%d: A context destroy request is received "
+			" but the context is not found!\n"
+			"The request will be ignored.\n", vgt->vm_id);
+		dump_ctx_desc(vgt, &ctx_desc);
+		return rc;
+	}
+
+	vgt_destroy_execlist_context(vgt, el_ctx);
+	return rc;
 }
