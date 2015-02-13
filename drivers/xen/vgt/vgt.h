@@ -84,6 +84,8 @@ extern bool render_engine_reset;
 extern bool enable_panel_fitting;
 extern bool enable_reset;
 extern bool vgt_lock_irq;
+extern int shadow_execlist_context;
+extern bool wp_submitted_ctx;
 extern bool propagate_monitor_to_guest;
 extern bool irq_based_ctx_switch;
 
