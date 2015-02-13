@@ -578,6 +578,7 @@ struct vgt_vgtt_info {
 
 	DECLARE_HASHTABLE(shadow_page_hash_table, VGT_HASH_BITS);
 	DECLARE_HASHTABLE(guest_page_hash_table, VGT_HASH_BITS);
+	DECLARE_HASHTABLE(el_ctx_hash_table, VGT_HASH_BITS);
 	atomic_t n_write_protected_guest_page;
 };
 
@@ -620,6 +621,38 @@ extern bool vgt_clear_guest_page_writeprotection(struct vgt_device *vgt,
 extern guest_page_t *vgt_find_guest_page(struct vgt_device *vgt, unsigned long gfn);
 
 extern bool gen7_ppgtt_mm_setup(struct vgt_device *vgt, int ring_id);
+
+/* shadow context */
+
+struct shadow_ctx_page {
+	guest_page_t guest_page;
+	shadow_page_t shadow_page;
+	struct vgt_device *vgt;
+};
+
+struct execlist_context {
+	struct ctx_desc_format guest_context;
+	uint32_t shadow_lrca;
+	uint32_t error_reported;
+	enum vgt_ring_id ring_id;
+	/* below are some per-ringbuffer data. Since with execlist,
+	 * each context has its own ring buffer, here we store the
+	 * data and store them into vgt->rb[ring_id] before a
+	 * context is submitted. We will have better handling later.
+	 */
+	vgt_reg_t last_scan_head;
+	uint64_t request_id;
+	//uint64_t cmd_nr;
+	//vgt_reg_t uhptr;
+	//uint64_t uhptr_id;
+
+	struct vgt_mm *ppgtt_mm;
+	struct shadow_ctx_page ctx_pages[MAX_EXECLIST_CTX_PAGES];
+	/* used for lazy context shadowing optimization */
+	gtt_entry_t shadow_entry_backup[MAX_EXECLIST_CTX_PAGES];
+
+	struct hlist_node node;
+};
 
 extern enum vgt_pipe surf_used_pipe;
 
