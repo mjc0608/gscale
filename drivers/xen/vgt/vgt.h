@@ -281,7 +281,7 @@ struct vgt_rsvd_ring {
 
 /* Maximum VMs supported by vGT. Actual number is device specific */
 #define VGT_MAX_VMS			4
-#define VGT_RSVD_APERTURE_SZ		(8*SIZE_1MB)	/* reserve 8MB for vGT itself */
+#define VGT_RSVD_APERTURE_SZ		(32*SIZE_1MB)	/* reserve 8MB for vGT itself */
 
 #define GTT_PAGE_SHIFT		12
 #define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
