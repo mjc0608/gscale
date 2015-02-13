@@ -46,6 +46,7 @@ typedef uint32_t vgt_reg_t;
 #include "edid.h"
 #include "cmd_parser.h"
 #include "hypercall.h"
+#include "execlists.h"
 
 struct pgt_device;
 struct vgt_device;
