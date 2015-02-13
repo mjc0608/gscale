@@ -398,6 +398,7 @@ typedef struct {
 	int el_slots_tail;
 	struct vgt_exec_list execlist_slots[EL_QUEUE_SLOT_NUM];
 	struct vgt_elsp_store elsp_store;
+	int csb_write_ptr;
 } vgt_state_ring_t;
 
 struct vgt_device;
@@ -1226,6 +1227,9 @@ struct pgt_device {
 	struct hotplug_work hpd_work;
 
 	bool ctx_switch_pending;
+
+	uint32_t el_cache_write_ptr[MAX_ENGINES];
+	uint32_t el_read_ptr[MAX_ENGINES];
 };
 
 /*
@@ -1458,6 +1462,7 @@ static inline void reg_update_handlers(struct pgt_device *pdev,
 #define VGT_REQUEST_DPY_SWITCH	4	/* immediate reschedule(display switch) requested */
 #define VGT_REQUEST_DEVICE_RESET 5
 #define VGT_REQUEST_SCHED	6
+#define VGT_REQUEST_CTX_EMULATION	7 /* Emulate context switch irq of Gen8 */
 
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {
@@ -2228,6 +2233,32 @@ static inline uint32_t vgt_ring_id_to_EL_base(enum vgt_ring_id ring_id)
 	return base;
 }
 
+static inline enum vgt_event_type vgt_ring_id_to_ctx_event(enum vgt_ring_id ring_id)
+{
+	enum vgt_event_type event;
+
+	switch (ring_id) {
+	case RING_BUFFER_RCS:
+		event = RCS_AS_CONTEXT_SWITCH;
+		break;
+	case RING_BUFFER_VCS:
+		event = VCS_AS_CONTEXT_SWITCH;
+		break;
+	case RING_BUFFER_VECS:
+		event = VECS_AS_CONTEXT_SWITCH;
+		break;
+	case RING_BUFFER_VCS2:
+		event = VCS2_AS_CONTEXT_SWITCH;
+		break;
+	case RING_BUFFER_BCS:
+		event = BCS_AS_CONTEXT_SWITCH;
+		break;
+	default:
+		BUG();
+	}
+	return event;
+}
+
 static inline bool is_ring_empty(struct pgt_device *pdev, int ring_id)
 {
 	vgt_reg_t head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
@@ -2800,6 +2831,7 @@ void execlist_ctx_table_destroy(struct vgt_device *vgt);
 void dump_all_el_contexts(struct pgt_device *pdev);
 void dump_el_status(struct pgt_device *pdev);
 void vgt_clear_submitted_el_record(struct pgt_device *pdev, enum vgt_ring_id ring_id);
+void vgt_emulate_context_switch_event(struct pgt_device *pdev);
 
 bool vgt_g2v_execlist_context_create(struct vgt_device *vgt);
 bool vgt_g2v_execlist_context_destroy(struct vgt_device *vgt);

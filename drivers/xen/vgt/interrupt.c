@@ -1078,6 +1078,60 @@ static void vgt_handle_port_hotplug_virt(struct vgt_irq_host_state *hstate,
 	}
 }
 
+static inline enum vgt_ring_id event_to_ring_id(enum vgt_event_type event)
+{
+	enum vgt_ring_id ring_id;
+
+	switch(event) {
+	case RCS_AS_CONTEXT_SWITCH:
+		ring_id = RING_BUFFER_RCS;
+		break;
+	case VCS_AS_CONTEXT_SWITCH:
+		ring_id = RING_BUFFER_VCS;
+		break;
+	case VCS2_AS_CONTEXT_SWITCH:
+		ring_id = RING_BUFFER_VCS2;
+		break;
+	case BCS_AS_CONTEXT_SWITCH:
+		ring_id = RING_BUFFER_BCS;
+		break;
+	case VECS_AS_CONTEXT_SWITCH:
+		ring_id = RING_BUFFER_VECS;
+		break;
+	default:
+		ring_id = MAX_ENGINES;
+		BUG();
+	}
+	return ring_id;
+}
+
+static void vgt_handle_ctx_switch_virt(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event, struct vgt_device *vgt)
+{
+	enum vgt_ring_id ring_id;
+	uint32_t el_ring_base;
+	uint32_t ctx_ptr_reg;
+	struct ctx_st_ptr_format ctx_ptr_val;
+	int v_write_ptr;
+	int s_write_ptr;
+	bool csb_has_new_updates = false;
+
+	ring_id = event_to_ring_id(event);
+	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
+	ctx_ptr_reg = el_ring_base + _EL_OFFSET_STATUS_PTR;
+	ctx_ptr_val.dw = __vreg(vgt, ctx_ptr_reg);
+	v_write_ptr = ctx_ptr_val.status_buf_write_ptr;
+	s_write_ptr = vgt->rb[ring_id].csb_write_ptr;
+
+	if (v_write_ptr != s_write_ptr)
+		csb_has_new_updates = true;
+
+	if (hvm_render_owner || csb_has_new_updates) {
+		ctx_ptr_val.status_buf_write_ptr = s_write_ptr;
+		__vreg(vgt, ctx_ptr_reg) = ctx_ptr_val.dw;
+		vgt_handle_default_event_virt(hstate, event, vgt);
+	}
+}
 
 static enum vgt_event_type translate_physical_event(struct vgt_device *vgt,
 	enum vgt_event_type event)
@@ -1257,6 +1311,26 @@ static void vgt_handle_port_hotplug_phys(struct vgt_irq_host_state *hstate,
 	vgt_set_event_val(hstate, event, hotplug_ctrl);
 	/* send out udev events when handling physical interruts */
 	vgt_raise_request(pdev, VGT_REQUEST_UEVENT);
+
+	vgt_handle_default_event_phys(hstate, event);
+}
+
+static void vgt_handle_ctx_switch_phys(struct vgt_irq_host_state *hstate,
+	enum vgt_event_type event)
+{
+	uint32_t el_ring_base;
+	uint32_t ctx_ptr_reg;
+	struct ctx_st_ptr_format ctx_st_ptr;
+	struct pgt_device *pdev = hstate->pdev;
+	enum vgt_ring_id ring_id = event_to_ring_id(event);
+
+	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
+	ctx_ptr_reg = el_ring_base + _EL_OFFSET_STATUS_PTR;
+
+	ctx_st_ptr.dw = VGT_MMIO_READ(pdev, ctx_ptr_reg);
+	pdev->el_cache_write_ptr[ring_id] = ctx_st_ptr.status_buf_write_ptr;
+
+	vgt_raise_request(pdev, VGT_REQUEST_CTX_EMULATION);
 
 	vgt_handle_default_event_phys(hstate, event);
 }
@@ -1908,12 +1982,24 @@ static void vgt_init_events(
 	SET_P_HANDLER(hstate, DP_C_HOTPLUG, vgt_handle_port_hotplug_phys);
 	SET_P_HANDLER(hstate, DP_D_HOTPLUG, vgt_handle_port_hotplug_phys);
 
+	SET_P_HANDLER(hstate, RCS_AS_CONTEXT_SWITCH, vgt_handle_ctx_switch_phys);
+	SET_P_HANDLER(hstate, VCS_AS_CONTEXT_SWITCH, vgt_handle_ctx_switch_phys);
+	SET_P_HANDLER(hstate, VCS2_AS_CONTEXT_SWITCH, vgt_handle_ctx_switch_phys);
+	SET_P_HANDLER(hstate, BCS_AS_CONTEXT_SWITCH, vgt_handle_ctx_switch_phys);
+	SET_P_HANDLER(hstate, VECS_AS_CONTEXT_SWITCH, vgt_handle_ctx_switch_phys);
+
 	SET_V_HANDLER(hstate, DPST_PHASE_IN, vgt_handle_phase_in_virt);
 	SET_V_HANDLER(hstate, DPST_HISTOGRAM, vgt_handle_histogram_virt);
 	SET_V_HANDLER(hstate, CRT_HOTPLUG, vgt_handle_crt_hotplug_virt);
 	SET_V_HANDLER(hstate, DP_B_HOTPLUG, vgt_handle_port_hotplug_virt);
 	SET_V_HANDLER(hstate, DP_C_HOTPLUG, vgt_handle_port_hotplug_virt);
 	SET_V_HANDLER(hstate, DP_D_HOTPLUG, vgt_handle_port_hotplug_virt);
+
+	SET_V_HANDLER(hstate, RCS_AS_CONTEXT_SWITCH, vgt_handle_ctx_switch_virt);
+	SET_V_HANDLER(hstate, VCS_AS_CONTEXT_SWITCH, vgt_handle_ctx_switch_virt);
+	SET_V_HANDLER(hstate, VCS2_AS_CONTEXT_SWITCH, vgt_handle_ctx_switch_virt);
+	SET_V_HANDLER(hstate, BCS_AS_CONTEXT_SWITCH, vgt_handle_ctx_switch_virt);
+	SET_V_HANDLER(hstate, VECS_AS_CONTEXT_SWITCH, vgt_handle_ctx_switch_virt);
 
 	SET_V_HANDLER(hstate, RCS_MI_USER_INTERRUPT, vgt_handle_ring_empty_notify_virt);
 	SET_V_HANDLER(hstate, VCS_MI_USER_INTERRUPT, vgt_handle_ring_empty_notify_virt);

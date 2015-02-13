@@ -54,6 +54,35 @@ do{							\
 	dst->pdp##i##_UDW.val = src->pdp##i##_UDW.val;	\
 }while(0);
 
+#define CTX_IS_SCHEDULED_OUT(ctx_status)		\
+((ctx_status)->preempted ||				\
+ (ctx_status)->element_switch ||			\
+ (ctx_status)->active_to_idle ||			\
+ (ctx_status)->context_complete ||			\
+ (ctx_status)->wait_on_sync_flip ||			\
+ (ctx_status)->wait_on_vblank ||			\
+ (ctx_status)->wait_on_semaphore ||			\
+ (ctx_status)->wait_on_scanline)
+
+#define WAIT_FOR_RING_DONE(ring_base, count)			\
+do {								\
+	int j = 0;						\
+	do {							\
+		vgt_reg_t val;					\
+		j ++;						\
+		val = VGT_MMIO_READ(vgt->pdev,			\
+			(ring_base) + 0x6c);			\
+		if ((val & 0xfffe) == 0xfffe)			\
+			break;					\
+		if (j == count) {				\
+			vgt_err("Did not get INSTDONE(0x%x)"	\
+			" done bit set! reg value: 0x%x.\n",	\
+			(ring_base) + 0x6c, val);		\
+			break;					\
+		}						\
+	} while(1);						\
+} while(0);
+
 static struct reg_state_ctx_header *
 vgt_get_reg_state_from_lrca(struct vgt_device *vgt, uint32_t lrca);
 static struct execlist_context * execlist_context_find(struct vgt_device *vgt,
@@ -439,7 +468,7 @@ static inline enum vgt_ring_id vgt_get_ringid_from_lrca(struct vgt_device *vgt,
  * The reason to use a queue is to keep the information of submission order.
  */
 
-bool vgt_el_slots_enqueue(struct vgt_device *vgt,
+static bool vgt_el_slots_enqueue(struct vgt_device *vgt,
 			enum vgt_ring_id ring_id,
 			struct execlist_context *ctx0,
 			struct execlist_context *ctx1)
@@ -485,7 +514,7 @@ int vgt_el_slots_dequeue(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 	return head;
 }
 
-void vgt_el_slots_delete(struct vgt_device *vgt,
+static void vgt_el_slots_delete(struct vgt_device *vgt,
 			enum vgt_ring_id ring_id, int idx)
 {
 	vgt_state_ring_t *ring_state = &vgt->rb[ring_id];
@@ -511,7 +540,7 @@ void vgt_el_slots_delete(struct vgt_device *vgt,
 	ring_state->execlist_slots[idx].el_ctxs[1] = NULL;
 }
 
-void vgt_el_slots_find_ctx(bool forward_search, vgt_state_ring_t *ring_state,
+static void vgt_el_slots_find_ctx(bool forward_search, vgt_state_ring_t *ring_state,
 			uint32_t ctx_id, int *el_slot_idx, int *el_slot_ctx_idx)
 {
 	int head = ring_state->el_slots_head;
@@ -571,7 +600,7 @@ int vgt_el_slots_next_sched(vgt_state_ring_t *ring_state)
 	}
 }
 
-int vgt_el_slots_cardinal(vgt_state_ring_t *ring_state)
+static int vgt_el_slots_cardinal(vgt_state_ring_t *ring_state)
 {
 	int card;
 	int head = ring_state->el_slots_head;
@@ -645,6 +674,74 @@ static bool vgt_validate_elsp_submission(struct vgt_device *vgt,
 	ctx1 = (struct ctx_desc_format *)&elsp_store->element[0];
 
 	return vgt_validate_elsp_descs(vgt, ctx0, ctx1);
+}
+
+static bool vgt_validate_status_entry(struct vgt_device *vgt,
+			enum vgt_ring_id ring_id,
+			struct context_status_format *status)
+{
+	int i;
+
+	struct vgt_device *v_try = NULL;
+	struct execlist_context *el_ctx;
+
+	/* FIXME
+	 * a hack here to treat context_id as lrca. That is the current usage
+	 * in both linux and windows gfx drivers, and it is currently the only
+	 * way to get lrca from status.
+	 * The value is used to check whether a given context status belongs to
+	 * vgt.
+	 *
+	 * When context_id does not equal to lrca some day, the check will not
+	 * be valid.
+	 */
+	uint32_t lrca = status->context_id;
+
+	if (el_lrca_is_valid(vgt, lrca))
+		return true;
+
+	el_ctx = execlist_context_find(vgt, lrca);
+	if (el_ctx == NULL) {
+		vgt_err("VM-%d sees unknown contextID/lrca (0x%x) "
+			"in status buffer!\n", vgt->vm_id, lrca);
+		return false;
+	}
+
+	/* only report error once for one context */
+	if (el_ctx->error_reported == 0)
+		el_ctx->error_reported = 1;
+	else
+		return false;
+
+	/* try to figure out which VM the lrca belongs to.
+	 * It is doable only when shadow context is not used.
+	 */
+	if (shadow_execlist_context == PATCH_WITHOUT_SHADOW) {
+		for (i = 0; i < VGT_MAX_VMS; ++ i) {
+			struct vgt_device *v = vgt->pdev->device[i];
+			if (!v)
+				continue;
+			if (el_lrca_is_valid(v, lrca)) {
+				v_try = v;
+				break;
+			}
+		}
+
+		if (v_try) {
+			vgt_err("The context(lrca: 0x%x) is given to VM-%d "
+			"But it belongs to VM-%d actually!\n",
+			lrca, vgt->vm_id, v_try->vm_id);
+		} else {
+			vgt_err("The given context(lrca: 0x%x) in status "
+			"buffer does not belong to any VM!\n", lrca);
+		}
+	}
+
+	dump_ctx_status_buf(vgt, ring_id, true);
+	dump_el_context_information(vgt, el_ctx);
+
+	vgt_err("The context(lrca: 0x%x) in status buffer will be ignored.\n", lrca);
+	return false;
 }
 
 /* context shadow: write protection handler */
@@ -795,6 +892,67 @@ static inline bool ppgtt_update_shadow_ppgtt_for_ctx(struct vgt_device *vgt,
 			break;
 	}
 	return rc;
+}
+
+/* not to copy PDP root pointers */
+static void memcpy_reg_state_page(void *dest_page, void *src_page)
+{
+	uint32_t pdp_backup[8];
+	struct reg_state_ctx_header *dest_ctx;
+	struct reg_state_ctx_header *src_ctx;
+	dest_ctx = (struct reg_state_ctx_header *)(dest_page);
+	src_ctx = (struct reg_state_ctx_header *)(src_page);
+
+	pdp_backup[0] = dest_ctx->pdp0_LDW.val;
+	pdp_backup[1] = dest_ctx->pdp0_UDW.val;
+	pdp_backup[2] = dest_ctx->pdp1_LDW.val;
+	pdp_backup[3] = dest_ctx->pdp1_UDW.val;
+	pdp_backup[4] = dest_ctx->pdp2_LDW.val;
+	pdp_backup[5] = dest_ctx->pdp2_UDW.val;
+	pdp_backup[6] = dest_ctx->pdp3_LDW.val;
+	pdp_backup[7] = dest_ctx->pdp3_UDW.val;
+
+	memcpy(dest_page, src_page, SIZE_PAGE);
+
+	dest_ctx->pdp0_LDW.val = pdp_backup[0];
+	dest_ctx->pdp0_UDW.val = pdp_backup[1];
+	dest_ctx->pdp1_LDW.val = pdp_backup[2];
+	dest_ctx->pdp1_UDW.val = pdp_backup[3];
+	dest_ctx->pdp2_LDW.val = pdp_backup[4];
+	dest_ctx->pdp2_UDW.val = pdp_backup[5];
+	dest_ctx->pdp3_LDW.val = pdp_backup[6];
+	dest_ctx->pdp3_UDW.val = pdp_backup[7];
+}
+
+static void vgt_update_guest_ctx_from_shadow(struct vgt_device *vgt,
+			enum vgt_ring_id ring_id,
+			struct execlist_context *el_ctx)
+{
+	int ctx_pages = EXECLIST_CTX_PAGES(ring_id);
+
+	if (shadow_execlist_context == PATCH_WITHOUT_SHADOW) {
+		struct reg_state_ctx_header *reg_state;
+		uint32_t *g_rootp;
+		g_rootp = (uint32_t *)el_ctx->ppgtt_mm->virtual_page_table;
+		reg_state = (struct reg_state_ctx_header *)
+			el_ctx->ctx_pages[1].guest_page.vaddr;
+		ROOT_POINTER_2_CTX_STATE(reg_state, g_rootp, 0);
+		ROOT_POINTER_2_CTX_STATE(reg_state, g_rootp, 1);
+		ROOT_POINTER_2_CTX_STATE(reg_state, g_rootp, 2);
+		ROOT_POINTER_2_CTX_STATE(reg_state, g_rootp, 3);
+	} else {
+		int i;
+		for (i = 0; i < ctx_pages; ++ i) {
+			void *dst = el_ctx->ctx_pages[i].guest_page.vaddr;
+			void *src = el_ctx->ctx_pages[i].shadow_page.vaddr;
+
+			ASSERT(dst && src);
+			if (i == 1)
+				memcpy_reg_state_page(dst, src);
+			else
+				memcpy(dst, src, SIZE_PAGE);
+		}
+	}
 }
 
 static void vgt_patch_guest_context(struct execlist_context *el_ctx)
@@ -1187,6 +1345,244 @@ static void vgt_emulate_submit_execlist(struct vgt_device *vgt, int ring_id,
 	__vreg(vgt, status_reg) = status.ldw;
 	__vreg(vgt, status_reg + 4) = status.udw;
 }
+
+/* guest context event emulation */
+
+static inline void vgt_add_ctx_switch_status(struct vgt_device *vgt, enum vgt_ring_id ring_id,
+			struct context_status_format *ctx_status)
+{
+	uint32_t el_ring_base;
+	uint32_t ctx_status_reg;
+	uint32_t write_idx;
+	uint32_t offset;
+
+	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
+	ctx_status_reg = el_ring_base + _EL_OFFSET_STATUS_BUF;
+
+	write_idx = vgt->rb[ring_id].csb_write_ptr;
+	if (write_idx == DEFAULT_INV_SR_PTR) {
+		write_idx = 0;
+	} else {
+		write_idx ++;
+		if (write_idx >= CTX_STATUS_BUF_NUM)
+			write_idx = 0;
+	}
+
+	offset = ctx_status_reg + write_idx * 8;
+	__vreg(vgt, offset) = ctx_status->ldw;
+	__vreg(vgt, offset + 4) = ctx_status->udw;
+
+	vgt->rb[ring_id].csb_write_ptr = write_idx;
+}
+
+static void vgt_emulate_context_status_change(struct vgt_device *vgt,
+				enum vgt_ring_id ring_id,
+				struct context_status_format *ctx_status)
+{
+	bool forward_search = true;
+	vgt_state_ring_t *ring_state;
+	uint32_t el_slot_ctx_idx = -1;
+	uint32_t el_slot_idx = -1;
+	struct vgt_exec_list *el_slot = NULL;
+	struct execlist_context *el_ctx = NULL;
+	uint32_t ctx_id = ctx_status->context_id;
+
+	ring_state = &vgt->rb[ring_id];
+	if (vgt_el_slots_cardinal(ring_state) > 1) {
+		if (!ctx_status->preempted) {
+			/* TODO we may give warning here.
+			 * It is not expected but still work.
+			 */
+			forward_search = false;
+		}
+	}
+
+	vgt_el_slots_find_ctx(forward_search, ring_state, ctx_id,
+				&el_slot_idx, &el_slot_ctx_idx);
+	if (el_slot_idx == -1)
+		goto err_ctx_not_found;
+
+	el_slot = &ring_state->execlist_slots[el_slot_idx];
+
+	ASSERT((el_slot_ctx_idx == 0) || (el_slot_ctx_idx == 1));
+	el_ctx = el_slot->el_ctxs[el_slot_ctx_idx];
+
+	if (CTX_IS_SCHEDULED_OUT(ctx_status)) {
+		char str[64];
+		snprintf(str, 64, "finish_running. status[0x%x]", ctx_status->ldw);
+		trace_ctx_lifecycle(vgt->vm_id, ring_id,
+			el_ctx->guest_context.lrca,
+			str);
+		if ((((el_slot_ctx_idx == 0) || (el_slot->el_ctxs[0] == NULL)) &&
+			((el_slot_ctx_idx == 1) || (el_slot->el_ctxs[1] == NULL))) ||
+			(ctx_status->preempted)) {
+			vgt_el_slots_delete(vgt, ring_id, el_slot_idx);
+		}
+		el_slot->el_ctxs[el_slot_ctx_idx] = NULL;
+	} else {
+		goto emulation_done;
+	}
+
+	if (!vgt_require_shadow_context(vgt))
+		goto emulation_done;
+
+	if (vgt_debug & VGT_DBG_EXECLIST)
+		dump_el_context_information(vgt, el_ctx);
+
+	if (ctx_status->context_complete)
+		vgt_update_guest_ctx_from_shadow(vgt, ring_id, el_ctx);
+
+emulation_done:
+	return;
+err_ctx_not_found:
+	{
+		static int warned_once = 0;
+		if ((ctx_id != 0) && !warned_once) {
+			warned_once = 1;
+			vgt_err("VM(%d) Ring(%d): Trying to emulate context status change"
+			" but did not find the shadow context in execlist!\n"
+			"\t\tContext ID: 0x%x; status: 0x%x\n", vgt->vm_id, ring_id,
+				ctx_id, ctx_status->ldw);
+		}
+	}
+	return;
+}
+
+static void vgt_emulate_csb_updates(struct vgt_device *vgt, enum vgt_ring_id ring_id)
+{
+	struct ctx_st_ptr_format ctx_ptr_val;
+	uint32_t el_ring_base;
+	uint32_t ctx_ptr_reg;
+	uint32_t ctx_status_reg;
+	uint32_t el_status_reg;
+
+	struct execlist_status_format el_status;
+	int read_idx;
+	int write_idx;
+
+	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
+	ctx_ptr_reg = el_ring_base + _EL_OFFSET_STATUS_PTR;
+	ctx_ptr_val.dw = VGT_MMIO_READ(vgt->pdev, ctx_ptr_reg);
+
+	read_idx = vgt->pdev->el_read_ptr[ring_id];
+	if (read_idx != ctx_ptr_val.status_buf_read_ptr) {
+		/* This should not happen since the read_ptr is completely
+		 * controlled by us. Some warnings can be added here but
+		 * even this happens, there is no side effect.
+		 */
+	}
+
+	write_idx = vgt->pdev->el_cache_write_ptr[ring_id];
+
+#ifdef EL_SLOW_DEBUG
+	if (vgt_debug & VGT_DBG_EXECLIST) {
+		vgt_dbg(VGT_DBG_EXECLIST, "Physical CTX Status buffer is below:\n");
+		dump_ctx_status_buf(vgt, ring_id, true);
+		vgt_dbg(VGT_DBG_EXECLIST, "Virtual CTX Status buffer before buffer "
+					"update is below:\n");
+		dump_ctx_status_buf(vgt, ring_id, false);
+	}
+#endif
+	if (write_idx == DEFAULT_INV_SR_PTR) {
+		vgt_err("No valid context switch status buffer in switch interrupts!\n");
+		return;
+	}
+
+	if (read_idx == write_idx) {
+		vgt_dbg(VGT_DBG_EXECLIST, "No status buffer update.\n");
+		return;
+	}
+
+	if (read_idx == DEFAULT_INV_SR_PTR) {
+		/* The first read of the status buffer will be from buffer entry 0 */
+		read_idx = -1;
+	}
+
+	if (read_idx > write_idx)
+		write_idx += CTX_STATUS_BUF_NUM;
+
+	ctx_status_reg = el_ring_base + _EL_OFFSET_STATUS_BUF;
+	while (read_idx < write_idx) {
+		struct context_status_format ctx_status;
+		uint32_t offset;
+		read_idx ++;
+		offset = ctx_status_reg + (read_idx % CTX_STATUS_BUF_NUM) * 8;
+		ctx_status.ldw = VGT_MMIO_READ(vgt->pdev, offset);
+		ctx_status.udw = VGT_MMIO_READ(vgt->pdev, offset + 4);
+
+		if (!vgt_validate_status_entry(vgt, ring_id, &ctx_status))
+			continue;
+
+		vgt_add_ctx_switch_status(vgt, ring_id, &ctx_status);
+		vgt_emulate_context_status_change(vgt, ring_id, &ctx_status);
+	}
+
+	read_idx = write_idx % CTX_STATUS_BUF_NUM;
+	vgt->pdev->el_read_ptr[ring_id] = read_idx;
+	ctx_ptr_val.status_buf_read_ptr = read_idx;
+	ctx_ptr_val.mask = _CTXBUF_READ_PTR_MASK;
+	VGT_MMIO_WRITE(vgt->pdev, ctx_ptr_reg, ctx_ptr_val.dw);
+
+	el_status_reg = el_ring_base + _EL_OFFSET_STATUS;
+	el_status.ldw = VGT_MMIO_READ(vgt->pdev, el_status_reg);
+	if (!el_status.execlist_0_valid && !el_status.execlist_1_valid) {
+		/* EXECLIST is empty here.
+		 */
+		if (ctx_switch_requested(vgt->pdev))
+			vgt_raise_request(vgt->pdev, VGT_REQUEST_CTX_SWITCH);
+	}
+#ifdef EL_SLOW_DEBUG
+	if (vgt_debug & VGT_DBG_EXECLIST) {
+		vgt_dbg(VGT_DBG_EXECLIST, "Virtual CTX Status buffer after buffer "
+					"update is below:\n");
+		dump_ctx_status_buf(vgt, ring_id, false);
+	}
+#endif
+}
+
+void vgt_emulate_context_switch_event(struct pgt_device *pdev)
+{
+	enum vgt_ring_id ring_id;
+	bool irq_needed = false;
+	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
+	struct vgt_device *vgt = current_render_owner(pdev);
+
+	if (!vgt) {
+		vgt_err("Receiving context switch interrupt while there is "
+			"no render owner set in system!\n");
+		BUG();
+		return;
+	}
+
+	ASSERT(spin_is_locked(&pdev->lock));
+
+	/* we cannot rely on hstate->pending_events that is set in irq handler
+	 * to tell us which ring is having context switch interrupts. The
+	 * reason is that the bit can be cleared by the previous forwarding
+	 * function. It's a race condition.
+	 */
+	for (ring_id = 0; ring_id < MAX_ENGINES; ++ ring_id) {
+		enum vgt_event_type event;
+		int cache_wptr = pdev->el_cache_write_ptr[ring_id];
+		if ((cache_wptr == DEFAULT_INV_SR_PTR) ||
+			(cache_wptr == pdev->el_read_ptr[ring_id]))
+			continue;
+		vgt_emulate_csb_updates(vgt, ring_id);
+		/* it is necessary to set pending_events again. Otherwise
+		 * the csb updates and interrupt between this handle to the
+		 * v handler invoking time could be lost, which will cause
+		 * render owner hang.
+		 */
+		event = vgt_ring_id_to_ctx_event(ring_id);
+		set_bit(event, hstate->pending_events);
+		irq_needed = true;
+	}
+
+	if (irq_needed)
+		set_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
+}
+
+/* scheduling */
 
 static inline bool vgt_hw_ELSP_write(struct vgt_device *vgt,
 				unsigned int reg,

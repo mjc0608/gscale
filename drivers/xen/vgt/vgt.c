@@ -266,6 +266,13 @@ static int vgt_thread(void *priv)
 			vgt_reset_device(pdev);
 		}
 
+		if (test_and_clear_bit(VGT_REQUEST_CTX_EMULATION,
+				(void *)&pdev->request)) {
+			vgt_lock_dev(pdev, cpu);
+			vgt_emulate_context_switch_event(pdev);
+			vgt_unlock_dev(pdev, cpu);
+		}
+
 		/* forward physical GPU events to VMs */
 		if (test_and_clear_bit(VGT_REQUEST_IRQ,
 					(void *)&pdev->request)) {
@@ -419,6 +426,11 @@ bool initial_phys_states(struct pgt_device *pdev)
 		pdev->initial_mmio_state[REG_INDEX(0xc5108)] &= ~0x8000;
 		printk("vGT: GMBUS2 init value: %x, %x\n", pdev->initial_mmio_state[REG_INDEX(0xc5108)], val);
 		VGT_MMIO_WRITE(pdev, 0xc5108, val | 0x8000);
+	}
+
+	for (i = 0; i < MAX_ENGINES; ++ i) {
+		pdev->el_read_ptr[i] = DEFAULT_INV_SR_PTR;
+		pdev->el_cache_write_ptr[i] = DEFAULT_INV_SR_PTR;
 	}
 
 	return true;
