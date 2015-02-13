@@ -34,6 +34,372 @@
 
 #define EXECLIST_CTX_PAGES(ring_id)	((ring_id) == RING_BUFFER_RCS ? 20 : 2)
 
+#define ROOT_POINTER_2_CTX_STATE(state, root, i)	\
+do{							\
+	state->pdp##i##_LDW.val = root[(i)<<1];		\
+	state->pdp##i##_UDW.val = root[((i) << 1) + 1];	\
+	vgt_dbg(VGT_DBG_EXECLIST, "New root[%d] in state is: 0x%x(high)-0x%x(low)\n",	\
+		i, root[((i) << 1) + 1], root[(i) << 1]);	\
+}while(0);
+
+#define CTX_STATE_2_ROOT_POINTER(root, state, i)	\
+do{							\
+	root[(i) << 1] = state->pdp##i##_LDW.val;	\
+	root[((i) << 1) + 1] = state->pdp##i##_UDW.val;	\
+}while(0);
+
+#define ROOTP_CTX_STATE_2_CTX_STATE(dst, src, i)	\
+do{							\
+	dst->pdp##i##_LDW.val = src->pdp##i##_LDW.val;	\
+	dst->pdp##i##_UDW.val = src->pdp##i##_UDW.val;	\
+}while(0);
+
+static struct reg_state_ctx_header *
+vgt_get_reg_state_from_lrca(struct vgt_device *vgt, uint32_t lrca);
+static struct execlist_context * execlist_context_find(struct vgt_device *vgt,
+				uint32_t guest_lrca);
+
+/* dump functions */
+
+static void dump_ctx_desc(struct vgt_device *vgt, struct ctx_desc_format *desc)
+{
+	const char *addressing_string[4] = {
+		"advanced context 64-bit no A/D",
+		"legacy context 32-bit",
+		"advanced context 64-bit A/D",
+		"legacy context 64-bit" };
+
+	printk("\nContext Descriptor ----\n");
+	printk("\t ldw = 0x%x; udw = 0x%x\n", desc->elm_low, desc->elm_high);
+	printk("\t context_id:0x%x\n", desc->context_id);
+	printk("\t valid:%d\n", desc->valid);
+	printk("\t force_pd_restore:%d\n", desc->force_pd_restore);
+	printk("\t force_restore:%d\n", desc->force_restore);
+	printk("\t addressing_mode:%d(%s)\n", desc->addressing_mode,
+			addressing_string[desc->addressing_mode]);
+	printk("\t llc_coherency:%d\n", desc->llc_coherency);
+	printk("\t fault_handling:%d\n", desc->fault_handling);
+	printk("\t privilege_access:%d\n", desc->privilege_access);
+	printk("\t lrca:0x%x\n", desc->lrca);
+}
+
+static void dump_execlist_status(struct execlist_status_format *status, enum vgt_ring_id ring_id)
+{
+	printk("-------- Current EXECLIST status of ring-%d --------\n", ring_id);
+	printk("\tCurrent Context ID: 0x%x\n", status->context_id);
+	printk("\tLDW: 0x%x\n", status->ldw);
+	printk("\tEXECLIST queue full: %d\n", status->execlist_queue_full);
+	printk("\tCurrent EXECLIST index: %d\n",
+				status->current_execlist_pointer);
+	printk("\tEXECLIST write index: %d\n", status->execlist_write_pointer);
+	printk("\t  EXECLIST 0 status: %d(1 for valid)\t %d(1 for active)\n",
+			status->execlist_0_valid, status->execlist_0_active);
+	printk("\t  EXECLIST 1 status: %d(1 for valid)\t %d(1 for active)\n",
+			status->execlist_1_valid, status->execlist_1_active);
+	printk("\tActive context information:\n");
+	printk("\t    %s is active\n", status->current_active_elm_status == 0 ?
+			"no context" : (status->current_active_elm_status == 1 ?
+						"context 0" : "context 1"));
+	printk("\tLast ctx switch reason: 0x%x\n",
+				status->last_ctx_switch_reason);
+	printk("\tArbitration is: %s\n", status->arbitration_enable ?
+						"enabled" : "disabled");
+	if (status->current_active_elm_status == 2)
+		vgt_err("EXECLIST status register has invalid active context value!\n");
+}
+
+static void dump_execlist_info(struct pgt_device *pdev, enum vgt_ring_id ring_id)
+{
+	struct execlist_status_format status;
+	uint32_t status_reg = vgt_ring_id_to_EL_base(ring_id) + _EL_OFFSET_STATUS;
+
+	status.ldw = VGT_MMIO_READ(pdev, status_reg);
+	status.udw = VGT_MMIO_READ(pdev, status_reg + 4);
+
+	dump_execlist_status(&status, ring_id);
+}
+
+static void dump_ctx_status_buf_entry(struct vgt_device *vgt,
+			enum vgt_ring_id ring_id, unsigned int buf_entry, bool hw_status)
+{
+	struct context_status_format status;
+
+	uint32_t el_ring_base;
+	uint32_t ctx_status_reg;
+
+	if (buf_entry >= CTX_STATUS_BUF_NUM)
+		return;
+
+	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
+	ctx_status_reg = el_ring_base + _EL_OFFSET_STATUS_BUF;
+	ctx_status_reg += buf_entry * 8;
+
+	if (hw_status) {
+		status.ldw = VGT_MMIO_READ(vgt->pdev, ctx_status_reg);
+		status.udw = VGT_MMIO_READ(vgt->pdev, ctx_status_reg + 4);
+	} else {
+		status.ldw = __vreg(vgt, ctx_status_reg);
+		status.udw = __vreg(vgt, ctx_status_reg + 4);
+	}
+
+	printk("-- Context Status Buffer (%d) for ring %d --\n",
+			buf_entry, ring_id);
+	printk("\t context_id:0x%x\n", status.context_id);
+	printk("\t idle_to_active: %d\n", status.idle_to_active);
+	printk("\t preempted: %d\n", status.preempted);
+	printk("\t element_switch: %d\n", status.element_switch);
+	printk("\t active_to_idle: %d\n", status.active_to_idle);
+	printk("\t context_complete: %d\n", status.context_complete);
+	printk("\t wait_on_sync_flip: %d\n", status.wait_on_sync_flip);
+	printk("\t wait_on_vblank: %d\n", status.wait_on_vblank);
+	printk("\t wait_on_semaphore: %d\n", status.wait_on_semaphore);
+	printk("\t wait_on_scanline: %d\n", status.wait_on_scanline);
+	printk("\t semaphore_wait_mode: %d\n", status.semaphore_wait_mode);
+	printk("\t display_plane: %d\n", status.display_plane);
+	printk("\t lite_restore	: %d\n", status.lite_restore);
+	printk("\n");
+}
+
+static void dump_ctx_st_ptr(struct vgt_device *vgt, struct ctx_st_ptr_format *ptr)
+{
+	printk("Context StatusBufPtr Value: 0x%x. ", ptr->dw);
+	printk("(write_ptr: %d; ", ptr->status_buf_write_ptr);
+	printk("read_ptr: %d; ", ptr->status_buf_read_ptr);
+	printk("mask: 0x%x\n", ptr->mask);
+}
+
+static void dump_ctx_status_buf(struct vgt_device *vgt,
+			enum vgt_ring_id ring_id, bool hw_status)
+{
+	uint32_t el_ring_base;
+	uint32_t ctx_ptr_reg;
+	struct ctx_st_ptr_format ctx_st_ptr;
+	unsigned read_idx;
+	unsigned write_idx;
+	int i;
+
+	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
+	ctx_ptr_reg = el_ring_base + _EL_OFFSET_STATUS_PTR;
+
+	if (hw_status)
+		ctx_st_ptr.dw = VGT_MMIO_READ(vgt->pdev, ctx_ptr_reg);
+	else
+		ctx_st_ptr.dw = __vreg(vgt, ctx_ptr_reg);
+
+	if (hw_status)
+		printk("---- Physical status Buffer of Ring %d ---- \n",
+			ring_id);
+	else
+		printk("---- Virtual status Buffer for VM-%d of Ring %d ---- \n",
+			vgt->vm_id, ring_id);
+
+	dump_ctx_st_ptr(vgt, &ctx_st_ptr);
+
+	read_idx = ctx_st_ptr.status_buf_read_ptr;
+	write_idx = ctx_st_ptr.status_buf_write_ptr;
+
+	if (read_idx == DEFAULT_INV_SR_PTR)
+		read_idx = 0;
+
+	if (write_idx == DEFAULT_INV_SR_PTR) {
+		vgt_err("No writes happened and no interesting data "
+			"in status buffer to show.\n");
+		return;
+	}
+
+	if (hw_status) {
+		/* show all contents in hw buffer */
+		read_idx = 0;
+		write_idx = CTX_STATUS_BUF_NUM - 1;
+	}
+
+	if (read_idx > write_idx)
+		write_idx += CTX_STATUS_BUF_NUM;
+
+	for (i = read_idx; i <= write_idx; ++ i)
+		dump_ctx_status_buf_entry(vgt, ring_id,
+			i % CTX_STATUS_BUF_NUM, hw_status);
+}
+
+#define DUMP_CTX_MMIO(prefix, mmio)	\
+printk("\t " #mmio ": <addr>0x%x - <val>0x%x\n", \
+	prefix->mmio.addr, prefix->mmio.val);
+
+static void dump_regstate_ctx_header (struct reg_state_ctx_header *regstate)
+{
+	printk("\tlri_command:0x%x\n", regstate->lri_cmd_1);
+	DUMP_CTX_MMIO(regstate, ctx_ctrl);
+	DUMP_CTX_MMIO(regstate, ring_header);
+	DUMP_CTX_MMIO(regstate, ring_tail);
+	DUMP_CTX_MMIO(regstate, rb_start);
+	DUMP_CTX_MMIO(regstate, rb_ctrl);
+	DUMP_CTX_MMIO(regstate, bb_cur_head_UDW);
+	DUMP_CTX_MMIO(regstate, bb_cur_head_LDW);
+	DUMP_CTX_MMIO(regstate, bb_state);
+	DUMP_CTX_MMIO(regstate, second_bb_addr_UDW);
+	DUMP_CTX_MMIO(regstate, second_bb_addr_LDW);
+	DUMP_CTX_MMIO(regstate, second_bb_state);
+	DUMP_CTX_MMIO(regstate, bb_per_ctx_ptr);
+	DUMP_CTX_MMIO(regstate, rcs_indirect_ctx);
+	DUMP_CTX_MMIO(regstate, rcs_indirect_ctx_offset);
+	printk("\tlri_command2:0x%x\n", regstate->lri_cmd_2);
+	DUMP_CTX_MMIO(regstate, ctx_timestamp);
+	DUMP_CTX_MMIO(regstate, pdp3_UDW);
+	DUMP_CTX_MMIO(regstate, pdp3_LDW);
+	DUMP_CTX_MMIO(regstate, pdp2_UDW);
+	DUMP_CTX_MMIO(regstate, pdp2_LDW);
+	DUMP_CTX_MMIO(regstate, pdp1_UDW);
+	DUMP_CTX_MMIO(regstate, pdp1_LDW);
+	DUMP_CTX_MMIO(regstate, pdp0_UDW);
+	DUMP_CTX_MMIO(regstate, pdp0_LDW);
+}
+
+static void dump_el_context_information(struct vgt_device *vgt,
+					struct execlist_context *el_ctx)
+{
+	struct reg_state_ctx_header *guest_state;
+	struct reg_state_ctx_header *shadow_state;
+	bool has_shadow;
+
+	if (el_ctx == NULL)
+		return;
+
+	has_shadow = vgt_require_shadow_context(vgt) && ! hvm_render_owner;
+
+	if (has_shadow)
+		guest_state = (struct reg_state_ctx_header *)
+				el_ctx->ctx_pages[1].guest_page.vaddr;
+	else
+		guest_state = vgt_get_reg_state_from_lrca(vgt,
+					el_ctx->guest_context.lrca);
+
+	printk("-- Context with guest ID 0x%x: --\n", el_ctx->guest_context.context_id);
+	printk("Guest(LRCA 0x%x) register state in context<0x%llx> is:\n",
+			el_ctx->guest_context.lrca,
+			(unsigned long long)guest_state);
+	dump_regstate_ctx_header(guest_state);
+
+	if (!has_shadow)
+		return;
+
+	shadow_state = (struct reg_state_ctx_header *)
+				el_ctx->ctx_pages[1].shadow_page.vaddr;
+
+	printk("Shadow(LRCA 0x%x) register state in context <0x%llx> is:\n",
+			el_ctx->shadow_lrca,
+			(unsigned long long)shadow_state);
+	dump_regstate_ctx_header(shadow_state);
+}
+
+void dump_all_el_contexts(struct pgt_device *pdev)
+{
+	struct vgt_device *vgt;
+	int i;
+	printk("-------- dump all shadow contexts --------\n");
+	for (i = 0; i < VGT_MAX_VMS; ++ i) {
+		struct hlist_node *n;
+		struct execlist_context *el_ctx;
+		int j;
+
+		vgt = pdev->device[i];
+		if (!vgt)
+			continue;
+		printk("-- VM(%d) --\n", vgt->vm_id);
+		hash_for_each_safe(vgt->gtt.el_ctx_hash_table, j, n, el_ctx, node) {
+			dump_el_context_information(vgt, el_ctx);
+			printk("^^^^^^^^\n");
+		}
+	}
+}
+
+void dump_el_status(struct pgt_device *pdev)
+{
+	enum vgt_ring_id ring_id;
+
+	for (ring_id = RING_BUFFER_RCS; ring_id < MAX_ENGINES; ++ ring_id) {
+		int i;
+		dump_execlist_info(pdev, ring_id);
+		dump_ctx_status_buf(vgt_dom0, ring_id, true);
+		for (i = 0; i < VGT_MAX_VMS; ++ i) {
+			struct vgt_device *vgt = pdev->device[i];
+			if (!vgt)
+				continue;
+			dump_ctx_status_buf(vgt, ring_id, false);
+		}
+	}
+	dump_all_el_contexts(pdev);
+}
+
+/* util functions */
+
+static enum vgt_ring_id el_mmio_to_ring_id(unsigned int reg)
+{
+	enum vgt_ring_id ring_id = MAX_ENGINES;
+	switch (reg) {
+	case _REG_RCS_CTX_SR_CTL:
+	case _REG_RCS_HEAD:
+	case _REG_RCS_TAIL:
+	case _REG_RCS_START:
+	case _REG_RCS_CTL:
+	case 0x2168:
+	case _REG_RCS_BB_ADDR:
+	case 0x2110:
+	case 0x211C:
+	case 0x2114:
+	case 0x2118:
+	case 0x21C0:
+	case 0x21C4:
+	case 0x21C8:
+		ring_id = RING_BUFFER_RCS;
+		break;
+	case _REG_VCS_CTX_SR_CTL:
+		ring_id = RING_BUFFER_VCS;
+		break;
+	case _REG_VECS_CTX_SR_CTL:
+		ring_id = RING_BUFFER_VECS;
+		break;
+	case _REG_VCS2_CTX_SR_CTL:
+		ring_id = RING_BUFFER_VCS2;
+		break;
+	case _REG_BCS_CTX_SR_CTL:
+		ring_id = RING_BUFFER_BCS;
+		break;
+	default:
+		break;
+	}
+
+	return ring_id;
+}
+
+static struct reg_state_ctx_header *
+vgt_get_reg_state_from_lrca(struct vgt_device *vgt, uint32_t lrca)
+{
+	struct reg_state_ctx_header *header;
+	uint32_t state_gma = (lrca + 1) << GTT_PAGE_SHIFT;
+
+	header = (struct reg_state_ctx_header *)
+			vgt_gma_to_va(vgt->gtt.ggtt_mm, state_gma);
+	return header;
+}
+
+static inline enum vgt_ring_id vgt_get_ringid_from_lrca(struct vgt_device *vgt,
+				unsigned int lrca)
+{
+	enum vgt_ring_id ring_id = MAX_ENGINES;
+	struct reg_state_ctx_header *reg_state;
+
+	reg_state = vgt_get_reg_state_from_lrca(vgt, lrca);
+
+	if (reg_state == NULL)
+		return ring_id;
+
+	ring_id = el_mmio_to_ring_id(reg_state->ctx_ctrl.addr);
+
+	return ring_id;
+}
+
+/* validation functions */
+
 static inline bool el_lrca_is_valid(struct vgt_device *vgt, uint32_t lrca)
 {
 	bool rc;
@@ -94,6 +460,441 @@ static bool vgt_validate_elsp_submission(struct vgt_device *vgt,
 	return vgt_validate_elsp_descs(vgt, ctx0, ctx1);
 }
 
+/* context shadow: write protection handler */
+
+static inline void vgt_set_wp_guest_ctx(struct vgt_device *vgt,
+			struct execlist_context *el_ctx, int idx)
+{
+	enum vgt_ring_id ring_id;
+
+	if (!wp_submitted_ctx &&
+		(shadow_execlist_context != NORMAL_CTX_SHADOW)) {
+		/* If option is set not to protect submitted_ctx, write
+		 * protection will be disabled, except that the shadow policy
+		 * is NORMAL_CTX_SHADOW. In normal shadowing case, the write
+		 * protection is from context creation to the context destroy.
+		 * It is needed for guest-shadow data sync-up, and cannot be
+		 * disabled.
+		 */
+		return;
+	}
+
+	ring_id = el_ctx->ring_id;
+	hypervisor_set_wp_pages(vgt,
+				&el_ctx->ctx_pages[idx].guest_page);
+	trace_ctx_protection(vgt->vm_id, ring_id, el_ctx->guest_context.lrca,
+				idx, el_ctx->ctx_pages[idx].guest_page.gfn,
+				"set_writeprotection");
+}
+
+static inline void vgt_clear_wp_guest_ctx(struct vgt_device *vgt,
+			struct execlist_context *el_ctx, int idx)
+{
+	enum vgt_ring_id ring_id;
+
+	if (!wp_submitted_ctx &&
+		(shadow_execlist_context != NORMAL_CTX_SHADOW)) {
+		return;
+	}
+
+	ring_id = el_ctx->ring_id;
+	hypervisor_unset_wp_pages(vgt,
+				&el_ctx->ctx_pages[idx].guest_page);
+	trace_ctx_protection(vgt->vm_id, ring_id, el_ctx->guest_context.lrca,
+				idx, el_ctx->ctx_pages[idx].guest_page.gfn,
+				"clear_writeprotection");
+}
+
+static bool sctx_mirror_state_wp_handler(void *gp, uint64_t pa, void *p_data, int bytes)
+{
+	guest_page_t *guest_page = (guest_page_t *)gp;
+	struct shadow_ctx_page *ctx_page = container_of(guest_page,
+					struct shadow_ctx_page, guest_page);
+	uint32_t offset = pa & (PAGE_SIZE - 1);
+
+	trace_ctx_write_trap(pa, bytes);
+	if (!guest_page->writeprotection) {
+		vgt_err("EXECLIST Ctx mirror wp handler is called without write protection! "
+			"addr <0x%llx>, bytes %i\n", pa, bytes);
+		return false;
+	}
+
+	if ((offset & (bytes -1)) != 0)
+		vgt_warn("Not aligned EXECLIST context update!");
+
+	memcpy(((unsigned char *)ctx_page->guest_page.vaddr) + offset,
+				p_data, bytes);
+	memcpy(((unsigned char *)ctx_page->shadow_page.vaddr) + offset,
+				p_data, bytes);
+
+	return true;
+}
+
+#define check_ldw_offset(offset, i, bytes)				\
+do{									\
+	int pdp_ldw;							\
+	pdp_ldw = offsetof(struct reg_state_ctx_header, pdp##i##_LDW);	\
+	if (((offset == pdp_ldw) && (bytes == 8)) ||			\
+		((offset == pdp_ldw + 4) && (bytes == 4)))		\
+		return i;						\
+}while(0);
+
+static int ctx_offset_2_rootp_idx(uint32_t offset, int bytes)
+{
+	check_ldw_offset(offset, 0, bytes);
+	check_ldw_offset(offset, 1, bytes);
+	check_ldw_offset(offset, 2, bytes);
+	check_ldw_offset(offset, 3, bytes);
+
+	return -1;
+}
+
+static bool sctx_reg_state_wp_handler(void *gp, uint64_t pa, void *p_data, int bytes)
+{
+	guest_page_t *guest_page = (guest_page_t *)gp;
+	struct execlist_context *el_ctx = (struct execlist_context *)guest_page->data;
+
+	uint32_t offset = pa & (PAGE_SIZE - 1);
+	int idx;
+	bool rc;
+
+	trace_ctx_write_trap(pa, bytes);
+	if (!guest_page->writeprotection) {
+		vgt_err("EXECLIST Ctx regstate wp handler is called without write protection! "
+			"addr <0x%llx>, bytes %i\n", pa, bytes);
+		return false;
+	}
+
+	rc = sctx_mirror_state_wp_handler(gp, pa, p_data, bytes);
+	if (!rc)
+		return rc;
+
+	if ((offset & (bytes -1)) != 0) {
+		vgt_warn("Not aligned write found in EXECLIST ctx wp handler. "
+			"addr <0x%llx>, bytes <%i>", pa, bytes);
+	}
+
+	if ((bytes != 4) && (bytes != 8)) {
+		/* FIXME Do not expect it is the chagne to root pointers.
+		 * So return directly here. Add more check in future.
+		 */
+		return true;
+	}
+
+	idx = ctx_offset_2_rootp_idx(offset, bytes);
+	if (idx != -1) {
+		vgt_dbg(VGT_DBG_EXECLIST, "wp handler: Emulate the rootp[%d] change\n", idx);
+		rc = vgt_handle_guest_write_rootp_in_context(el_ctx, idx);
+	}
+
+	return rc;
+}
+
+/* context shadow: context sync-up between guest/shadow */
+
+static inline bool ppgtt_update_shadow_ppgtt_for_ctx(struct vgt_device *vgt,
+				struct execlist_context *el_ctx)
+{
+	bool rc = true;
+	int i;
+
+	if (!vgt_require_shadow_context(vgt))
+		return rc;
+
+	for (i = 0; i < el_ctx->ppgtt_mm->page_table_entry_cnt; ++ i) {
+		vgt_dbg(VGT_DBG_EXECLIST, "Emulate the rootp[%d] change\n", i);
+		rc = vgt_handle_guest_write_rootp_in_context(el_ctx, i);
+		if (!rc)
+			break;
+	}
+	return rc;
+}
+
+/* context shadow: context creation/destroy in execlist */
+
+static struct execlist_context *vgt_allocate_el_context(struct vgt_device *vgt,
+				struct ctx_desc_format *ctx_desc)
+{
+	uint32_t guest_lrca;
+	struct execlist_context *el_ctx;
+
+	el_ctx = kzalloc(sizeof(struct execlist_context), GFP_ATOMIC);
+	if (!el_ctx) {
+		vgt_err("Failed to allocate data structure for shadow context!\n");
+		return NULL;
+	}
+
+	memcpy(&el_ctx->guest_context, ctx_desc, sizeof(struct ctx_desc_format));
+
+	guest_lrca = el_ctx->guest_context.lrca;
+	hash_add(vgt->gtt.el_ctx_hash_table, &el_ctx->node, guest_lrca);
+
+	return el_ctx;
+}
+
+static void vgt_el_create_shadow_context(struct vgt_device *vgt,
+				enum vgt_ring_id ring_id,
+				struct execlist_context *el_ctx)
+{
+	struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
+	uint32_t gfn;
+	uint32_t shadow_context_gma;
+	uint32_t guest_context_gma;
+	uint32_t sl, gl;
+	uint32_t rsvd_pages_idx;
+	uint32_t rsvd_aperture_gm;
+	int i;
+	int ctx_pages = EXECLIST_CTX_PAGES(ring_id);
+
+	guest_context_gma = el_ctx->guest_context.lrca << GTT_PAGE_SHIFT;
+
+	shadow_context_gma = aperture_2_gm(vgt->pdev,
+				rsvd_aperture_alloc(vgt->pdev,
+					(EXECLIST_CTX_PAGES(ring_id) << GTT_PAGE_SHIFT)));
+
+	ASSERT((shadow_context_gma & 0xfff) == 0);
+	el_ctx->shadow_lrca = shadow_context_gma >> GTT_PAGE_SHIFT;
+
+	rsvd_aperture_gm = aperture_2_gm(vgt->pdev, vgt->pdev->rsvd_aperture_base);
+	rsvd_pages_idx = el_ctx->shadow_lrca - (rsvd_aperture_gm >> GTT_PAGE_SHIFT);
+
+	vgt_dbg(VGT_DBG_EXECLIST, "Allocating aperture for shadow context "
+			"with idx: 0x%x and addr: 0x%x\n",
+			rsvd_pages_idx, shadow_context_gma);
+
+	/* per page copy from guest context to shadow context since its virtual
+	 * address may not be sequential.
+	 */
+	for (i = 0, sl = shadow_context_gma, gl = guest_context_gma; i < ctx_pages;
+			++ i, ++ rsvd_pages_idx, sl += SIZE_PAGE, gl += SIZE_PAGE) {
+		gtt_entry_t e;
+		e.pdev = vgt->pdev;
+		e.type = GTT_TYPE_GGTT_PTE;
+
+		ggtt_get_guest_entry(vgt->gtt.ggtt_mm, &e, gl >> GTT_PAGE_SHIFT);
+
+		gfn = ops->get_pfn(&e);
+		vgt_dbg(VGT_DBG_EXECLIST,
+			"pfn for context page %i (gma: 0x%x)is: 0x%x\n", i, gl, gfn);
+		if (i == 1) {
+			vgt_init_guest_page(vgt, &el_ctx->ctx_pages[i].guest_page,
+				gfn, sctx_reg_state_wp_handler, &el_ctx);
+		} else {
+			vgt_init_guest_page(vgt, &el_ctx->ctx_pages[i].guest_page,
+				gfn, sctx_mirror_state_wp_handler, &el_ctx);
+		}
+
+		/* backup the shadow context gtt entry */
+		el_ctx->shadow_entry_backup[i].pdev = vgt->pdev;
+		el_ctx->shadow_entry_backup[i].type = GTT_TYPE_GGTT_PTE;
+		ops->get_entry(NULL, &el_ctx->shadow_entry_backup[i],
+						sl >> GTT_PAGE_SHIFT, false, NULL);
+
+		{
+			el_ctx->ctx_pages[i].shadow_page.vaddr =
+				phys_aperture_vbase(vgt->pdev) + sl;
+			el_ctx->ctx_pages[i].shadow_page.page =
+				(*vgt->pdev->rsvd_aperture_pages)[rsvd_pages_idx];
+			ASSERT(el_ctx->ctx_pages[i].shadow_page.vaddr &&
+				el_ctx->ctx_pages[i].guest_page.vaddr);
+
+			vgt_dbg(VGT_DBG_EXECLIST, "memory copy for context page %d: dst addr: 0x%llx; "
+					"src addr: 0x%llx\n",
+				i, (u64)el_ctx->ctx_pages[i].shadow_page.vaddr,
+				(u64)el_ctx->ctx_pages[i].guest_page.vaddr);
+
+			if (shadow_execlist_context == NORMAL_CTX_SHADOW) {
+				memcpy(el_ctx->ctx_pages[i].shadow_page.vaddr,
+				el_ctx->ctx_pages[i].guest_page.vaddr, SIZE_PAGE);
+				vgt_set_wp_guest_ctx(vgt, el_ctx, i);
+			}
+		}
+		el_ctx->ctx_pages[i].vgt = vgt;
+	}
+}
+
+static struct execlist_context * execlist_context_find(struct vgt_device *vgt,
+				uint32_t guest_lrca)
+{
+	struct execlist_context *el_ctx;
+	hash_for_each_possible(vgt->gtt.el_ctx_hash_table, el_ctx, node, guest_lrca) {
+		if (el_ctx->guest_context.lrca == guest_lrca)
+			return el_ctx;
+	}
+
+	return NULL;
+}
+
+static bool vgt_el_create_shadow_ppgtt(struct vgt_device *vgt,
+				enum vgt_ring_id ring_id,
+				struct execlist_context *el_ctx)
+{
+	struct vgt_mm *mm;
+	u32 pdp[8];
+	uint32_t *s_rootp;
+
+	struct reg_state_ctx_header *reg_state;
+	struct ctx_desc_format *guest_ctx = &el_ctx->guest_context;
+	gtt_type_t root_entry_type;
+	int page_table_level;
+
+	if (guest_ctx->addressing_mode == 1) { /* legacy 32-bit */
+		page_table_level = 3;
+		root_entry_type = GTT_TYPE_PPGTT_ROOT_L3_ENTRY;
+	} else if (guest_ctx->addressing_mode == 3) { /* legacy 64 bit */
+		page_table_level = 4;
+		root_entry_type = GTT_TYPE_PPGTT_ROOT_L4_ENTRY;
+	} else {
+		page_table_level = 4;
+		root_entry_type = GTT_TYPE_PPGTT_ROOT_L4_ENTRY;
+		vgt_err("Advanced Context mode(SVM) is not supported!\n");
+	}
+
+	if (vgt_require_shadow_context(vgt)) {
+		reg_state = (struct reg_state_ctx_header *)
+				el_ctx->ctx_pages[1].guest_page.vaddr;
+	} else {
+		ASSERT(vgt->vm_id == 0);
+		reg_state = vgt_get_reg_state_from_lrca(vgt,
+				el_ctx->guest_context.lrca);
+	}
+
+	CTX_STATE_2_ROOT_POINTER(pdp, reg_state, 0);
+	if (page_table_level == 3) {
+		CTX_STATE_2_ROOT_POINTER(pdp, reg_state, 1);
+		CTX_STATE_2_ROOT_POINTER(pdp, reg_state, 2);
+		CTX_STATE_2_ROOT_POINTER(pdp, reg_state, 3);
+	}
+
+	mm = gen8_find_ppgtt_mm(vgt, page_table_level, pdp);
+	if (mm)
+		goto ppgtt_creation_done;
+
+	mm = vgt_create_mm(vgt, VGT_MM_PPGTT, root_entry_type,
+			pdp, page_table_level, 0);
+	if (!mm) {
+		vgt_err("fail to create mm object.\n");
+		return false;
+	}
+
+	vgt_warn("Given PPGTT in EL context for creation is not yet constructed! "
+		"It is not expected to happen! lrca = 0x%x\n",
+		el_ctx->guest_context.lrca);
+	dump_regstate_ctx_header(reg_state);
+
+ppgtt_creation_done:
+	el_ctx->ppgtt_mm = mm;
+
+	if (!mm->has_shadow_page_table)
+		goto finish;
+
+	/* update root pointers in context with shadow ones */
+	s_rootp = (uint32_t *)mm->shadow_page_table;
+	reg_state = (struct reg_state_ctx_header *)
+			el_ctx->ctx_pages[1].shadow_page.vaddr;
+
+	ROOT_POINTER_2_CTX_STATE(reg_state, s_rootp, 0);
+	if (page_table_level == 3) {
+		ROOT_POINTER_2_CTX_STATE(reg_state, s_rootp, 1);
+		ROOT_POINTER_2_CTX_STATE(reg_state, s_rootp, 2);
+		ROOT_POINTER_2_CTX_STATE(reg_state, s_rootp, 3);
+	}
+finish:
+	if (vgt_debug & VGT_DBG_EXECLIST) {
+		vgt_dbg(VGT_DBG_EXECLIST,
+			"VM-%d: The reg_state after shadow PPGTT creation:\n",
+			vgt->vm_id);
+		dump_el_context_information(vgt, el_ctx);
+	}
+	return true;
+}
+
+static struct execlist_context *vgt_create_execlist_context(struct vgt_device *vgt,
+				struct ctx_desc_format *ctx, enum vgt_ring_id ring_id)
+{
+	struct execlist_context *el_ctx;
+
+	vgt_dbg(VGT_DBG_EXECLIST, "creating new execlist context with desc below:\n");
+	if (vgt_debug & VGT_DBG_EXECLIST)
+		dump_ctx_desc(vgt, ctx);
+
+	ASSERT (execlist_context_find(vgt, ctx->lrca) == NULL);
+
+	if (ring_id == MAX_ENGINES) {
+		ring_id = vgt_get_ringid_from_lrca(vgt, ctx->lrca);
+		if (ring_id == MAX_ENGINES) {
+			vgt_warn("VM-%d: Invalid execlist context! "
+			"Ring info is not available in ring context.\n",
+					vgt->vm_id);
+			dump_ctx_desc(vgt, ctx);
+			return NULL;
+		}
+	}
+
+	el_ctx = vgt_allocate_el_context(vgt, ctx);
+	if (el_ctx == NULL)
+		return NULL;
+
+	el_ctx->ring_id = ring_id;
+
+	if (vgt_require_shadow_context(vgt))
+		vgt_el_create_shadow_context(vgt, ring_id, el_ctx);
+
+	vgt_el_create_shadow_ppgtt(vgt, ring_id, el_ctx);
+
+	trace_ctx_lifecycle(vgt->vm_id, ring_id,
+			el_ctx->guest_context.lrca, "create");
+	return el_ctx;
+}
+
+static void vgt_destroy_execlist_context(struct vgt_device *vgt,
+				struct execlist_context *el_ctx)
+{
+	int ctx_pages;
+	enum vgt_ring_id ring_id;
+	int i;
+
+	if (el_ctx == NULL)
+		return;
+
+	ring_id = el_ctx->ring_id;
+	if (ring_id == MAX_ENGINES) {
+		vgt_err("Invalid execlist context!\n");
+		ASSERT_VM(0, vgt);
+	}
+
+	trace_ctx_lifecycle(vgt->vm_id, ring_id,
+			el_ctx->guest_context.lrca, "destroy");
+
+	ctx_pages = EXECLIST_CTX_PAGES(ring_id);
+
+	for (i = 0; i < ctx_pages; ++ i) {
+		// remove the write protection;
+		if (shadow_execlist_context == NORMAL_CTX_SHADOW) {
+			hypervisor_unset_wp_pages(vgt,
+				&el_ctx->ctx_pages[i].guest_page);
+		}
+		vgt_clean_guest_page(vgt, &el_ctx->ctx_pages[i].guest_page);
+	}
+
+	// free the shadow context;
+	if (vgt_require_shadow_context(vgt)) {
+		unsigned long start;
+		unsigned int shadow_lrca = el_ctx->shadow_lrca;
+
+		ASSERT(hvm_render_owner || shadow_lrca);
+		if (!hvm_render_owner) {
+			start = phys_aperture_base(vgt->pdev) +
+					(shadow_lrca << GTT_PAGE_SHIFT);
+			rsvd_aperture_free(vgt->pdev, start,
+					ctx_pages << GTT_PAGE_SHIFT);
+		}
+	}
+
+	hash_del(&el_ctx->node);
+	kfree(el_ctx);
+}
+
 static inline bool vgt_hw_ELSP_write(struct vgt_device *vgt,
 				unsigned int reg,
 				struct ctx_desc_format *ctx0,
@@ -125,7 +926,9 @@ bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id)
 {
 	struct vgt_elsp_store *elsp_store = &vgt->rb[ring_id].elsp_store;
 
+	struct execlist_context *el_ctxs[2];
 	struct ctx_desc_format *ctx_descs[2];
+	int i;
 
 	ASSERT(elsp_store->count == ELSP_BUNDLE_NUM);
 	if (!vgt_validate_elsp_submission(vgt, elsp_store)) {
@@ -152,5 +955,50 @@ bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id)
 		return true;
 	}
 
+	for (i = 0; i < 2; ++ i) {
+		struct execlist_context *el_ctx;
+		if (!ctx_descs[i]->valid) {
+			vgt_dbg(VGT_DBG_EXECLIST, "ctx%d in SUBMISSION is invalid.\n", i);
+			el_ctxs[i] = NULL;
+			continue;
+		}
+
+		vgt_dbg(VGT_DBG_EXECLIST, "SUBMISSION: ctx%d guest lrca is: 0x%x\n",
+						i, ctx_descs[i]->lrca);
+		el_ctx = execlist_context_find(vgt, ctx_descs[i]->lrca);
+
+		if (el_ctx == NULL) {
+			vgt_warn("Given EXECLIST context is not yet constructed! "
+			"It is not expected to happen! lrca = 0x%x\n", ctx_descs[i]->lrca);
+			el_ctx = vgt_create_execlist_context(vgt,
+						ctx_descs[i], ring_id);
+			if (el_ctx == NULL) {
+				vgt_err("VM-%d: Failed to create execlist "
+				"context on ring %d in ELSP submission!\n",
+				vgt->vm_id, ring_id);
+				return false;
+			}
+		}
+
+		el_ctxs[i] = el_ctx;
+
+		vgt_dbg(VGT_DBG_EXECLIST, "SUBMISSION: ctx shadow lrca is: 0x%x\n",
+						el_ctx->shadow_lrca);
+	}
+
 	return true;
+}
+
+/* init interface */
+
+void execlist_ctx_table_destroy(struct vgt_device *vgt)
+{
+	struct hlist_node *n;
+	struct execlist_context *el_ctx;
+	int i;
+
+	hash_for_each_safe(vgt->gtt.el_ctx_hash_table, i, n, el_ctx, node)
+		vgt_destroy_execlist_context(vgt, el_ctx);
+
+	return;
 }

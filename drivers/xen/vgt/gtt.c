@@ -1610,6 +1610,7 @@ bool vgt_init_vgtt(struct vgt_device *vgt)
 
 	hash_init(gtt->guest_page_hash_table);
 	hash_init(gtt->shadow_page_hash_table);
+	hash_init(gtt->el_ctx_hash_table);
 
 	INIT_LIST_HEAD(&gtt->mm_list_head);
 
@@ -1637,6 +1638,8 @@ void vgt_clean_vgtt(struct vgt_device *vgt)
 		vgt->pdev->gtt.mm_free_page_table(mm);
 		kfree(mm);
 	}
+
+	execlist_ctx_table_destroy(vgt);
 
 	return;
 }
@@ -1760,4 +1763,103 @@ bool vgt_g2v_destroy_ppgtt_mm(struct vgt_device *vgt, int page_table_level)
 	vgt_destroy_mm(mm);
 
 	return true;
+}
+
+#define get_pdp_from_context(status, pdp_udw, pdp_ldw, idx)	\
+do{								\
+	switch(idx) {						\
+		case 0:						\
+			pdp_udw = &status->pdp0_UDW;		\
+			pdp_ldw = &status->pdp0_LDW;		\
+			break;					\
+		case 1:						\
+			pdp_udw = &status->pdp1_UDW;		\
+			pdp_ldw = &status->pdp1_LDW;		\
+			break;					\
+		case 2:						\
+			pdp_udw = &status->pdp2_UDW;		\
+			pdp_ldw = &status->pdp2_LDW;		\
+			break;					\
+		case 3:						\
+			pdp_udw = &status->pdp3_UDW;		\
+			pdp_ldw = &status->pdp3_LDW;		\
+			break;					\
+		default:					\
+			BUG();					\
+	}							\
+}while(0);
+
+static inline bool ppgtt_get_rootp_from_ctx(
+			struct reg_state_ctx_header *state,
+			gtt_entry_t *e, int idx)
+{
+	struct mmio_pair *pdp_udw;
+	struct mmio_pair *pdp_ldw;
+
+	get_pdp_from_context(state, pdp_udw, pdp_ldw, idx);
+
+	e->val32[0] = pdp_ldw->val;
+	e->val32[1] = pdp_udw->val;
+
+	e->type= GTT_TYPE_INVALID;
+	e->pdev = NULL;
+	return true;
+}
+
+static bool ppgtt_set_rootp_to_ctx(
+			struct reg_state_ctx_header *state,
+			gtt_entry_t *e, int idx)
+{
+	struct mmio_pair *pdp_udw;
+	struct mmio_pair *pdp_ldw;
+
+	get_pdp_from_context(state, pdp_udw, pdp_ldw, idx);
+
+	pdp_udw->val = e->val32[1];
+	pdp_ldw->val = e->val32[0];
+
+	return true;
+}
+
+bool vgt_handle_guest_write_rootp_in_context(struct execlist_context *el_ctx, int idx)
+{
+	struct reg_state_ctx_header *guest_ctx_state;
+	struct reg_state_ctx_header *shadow_ctx_state;
+	gtt_entry_t guest_rootp;
+	gtt_entry_t shadow_rootp;
+	gtt_entry_t ctx_g_rootp;
+	struct vgt_mm *mm = el_ctx->ppgtt_mm;
+	bool rc = true;
+
+	guest_ctx_state = (struct reg_state_ctx_header *)
+					el_ctx->ctx_pages[1].guest_page.vaddr;
+	shadow_ctx_state = (struct reg_state_ctx_header *)
+					el_ctx->ctx_pages[1].shadow_page.vaddr;
+
+	ppgtt_get_guest_root_entry(mm, &guest_rootp, idx);
+	ppgtt_get_rootp_from_ctx(guest_ctx_state, &ctx_g_rootp, idx);
+
+	vgt_dbg(VGT_DBG_EXECLIST, "Guest root pointer in context is: 0x%llx\n",
+					ctx_g_rootp.val64);
+	vgt_dbg(VGT_DBG_EXECLIST, "Guest root pointer in root table is: 0x%llx\n",
+					guest_rootp.val64);
+
+	if (ctx_g_rootp.val64 == guest_rootp.val64)
+		return rc;
+
+	ctx_g_rootp.type = guest_rootp.type;
+	ctx_g_rootp.pdev = guest_rootp.pdev;
+
+	rc = ppgtt_handle_guest_write_root_pointer(mm, &ctx_g_rootp, idx);
+	if (!rc)
+		return rc;
+
+	ppgtt_set_guest_root_entry(mm, &ctx_g_rootp, idx);
+
+	ppgtt_get_shadow_root_entry(mm, &shadow_rootp, idx);
+	vgt_dbg(VGT_DBG_EXECLIST, "Shadow root pointer for guest rootp is: 0x%llx\n",
+					shadow_rootp.val64);
+	ppgtt_set_rootp_to_ctx(shadow_ctx_state, &shadow_rootp, idx);
+
+	return rc;
 }

@@ -246,6 +246,7 @@ typedef struct {
 
 #define SIZE_1KB		(1024UL)
 #define SIZE_1MB		(1024UL*1024UL)
+#define SIZE_PAGE		(4 * SIZE_1KB)
 
 #define VGT_RSVD_RING_SIZE	(16 * SIZE_1KB)
 struct vgt_rsvd_ring {
@@ -2774,6 +2775,13 @@ struct dump_buffer {
 int create_dump_buffer(struct dump_buffer *buf, int buf_size);
 void destroy_dump_buffer(struct dump_buffer *buf);
 void dump_string(struct dump_buffer *buf, const char *fmt, ...);
+
+bool vgt_ppgtt_update_shadow_ppgtt_for_ctx(struct vgt_device *vgt, struct execlist_context *el_ctx);
+bool vgt_handle_guest_write_rootp_in_context(struct execlist_context *el_ctx, int idx);
+gtt_entry_t *vgt_get_entry(void *pt, gtt_entry_t *e, unsigned long index);
+void execlist_ctx_table_destroy(struct vgt_device *vgt);
+void dump_all_el_contexts(struct pgt_device *pdev);
+void dump_el_status(struct pgt_device *pdev);
 
 bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id);
 
