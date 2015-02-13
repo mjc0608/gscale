@@ -2635,13 +2635,13 @@ bool default_mmio_write(struct vgt_device *vgt, unsigned int offset, void *p_dat
 bool default_passthrough_mmio_read(struct vgt_device *vgt, unsigned int offset,
 		void *p_data, unsigned int bytes);
 
-bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
+bool ring_mmio_write_in_rb_mode(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
-bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
+bool ring_mmio_read_in_rb_mode(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
-bool ring_uhptr_write(struct vgt_device *vgt, unsigned int off,
+bool ring_uhptr_write_in_rb_mode(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes);
 
 bool set_panel_fitting(struct vgt_device *vgt, enum vgt_pipe pipe);

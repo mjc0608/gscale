@@ -2158,6 +2158,46 @@ static bool power_well_ctl_write(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+static bool ring_mmio_read(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	/* TODO
+	 * We do not support the mix usage of RB mode and EXECLIST from
+	 * different VMs. If that happens, VM with RB mode cannot have
+	 * workload being submitted/executed correctly.
+	 */
+	if (vgt->pdev->enable_execlist)
+		return default_mmio_read(vgt, offset, p_data, bytes);
+	else
+		return ring_mmio_read_in_rb_mode(vgt, offset, p_data, bytes);
+}
+
+static bool ring_mmio_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	/* TODO
+	 * We do not support the mix usage of RB mode and EXECLIST from
+	 * different VMs. If that happens, VM with RB mode cannot have
+	 * workload being submitted/executed correctly.
+	 */
+	if (vgt->pdev->enable_execlist)
+		return default_mmio_write(vgt, offset, p_data, bytes);
+	else
+		return ring_mmio_write_in_rb_mode(vgt, offset, p_data, bytes);
+}
+
+static bool ring_uhptr_write(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	/* TODO
+	 * Same as ring_mmio_read/write
+	 */
+	if (vgt->pdev->enable_execlist)
+		return default_mmio_write(vgt, offset, p_data, bytes);
+	else
+		return ring_uhptr_write_in_rb_mode(vgt, offset, p_data, bytes);
+}
+
 static bool instpm_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {

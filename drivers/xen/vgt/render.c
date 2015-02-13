@@ -1793,7 +1793,7 @@ static inline int tail_to_ring_id(struct pgt_device *pdev, unsigned int tail_off
 	return 0;
 }
 
-bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
+bool ring_mmio_read_in_rb_mode(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ring_id, rel_off;
@@ -1818,7 +1818,7 @@ bool ring_mmio_read(struct vgt_device *vgt, unsigned int off,
 	return true;
 }
 
-bool ring_mmio_write(struct vgt_device *vgt, unsigned int off,
+bool ring_mmio_write_in_rb_mode(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ring_id, rel_off;
@@ -1975,7 +1975,7 @@ void vgt_gpu_perf_sample(void)
 }
 EXPORT_SYMBOL_GPL(vgt_gpu_perf_sample);
 
-bool ring_uhptr_write(struct vgt_device *vgt, unsigned int off,
+bool ring_uhptr_write_in_rb_mode(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int ring_id;
