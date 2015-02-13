@@ -43,6 +43,8 @@ u64	ring_idle_wait = 0;
 int vgt_ctx_switch = 1;
 bool vgt_validate_ctx_switch = false;
 
+static struct vgt_render_context_ops *context_ops;
+
 void vgt_toggle_ctx_switch(bool enable)
 {
 	/*
@@ -324,8 +326,18 @@ bool vgt_vrings_empty(struct vgt_device *vgt)
 	for (id = 0; id < vgt->pdev->max_engines; id++)
 		if (test_bit(id, vgt->enabled_rings)) {
 			vring = &vgt->rb[id].vring;
-			if (!RB_HEAD_TAIL_EQUAL(vring->head, vring->tail))
-				return false;
+			if (vgt->pdev->enable_execlist) {
+				int i;
+				struct vgt_exec_list *el_slots;
+				el_slots = vgt->rb[id].execlist_slots;
+				for (i = 0; i < EL_QUEUE_SLOT_NUM; ++ i) {
+					if (el_slots[i].status != EL_EMPTY)
+						return false;
+				}
+			} else {
+				if (!RB_HEAD_TAIL_EQUAL(vring->head, vring->tail))
+					return false;
+			}
 		}
 
 	return true;
@@ -347,6 +359,9 @@ static void vgt_restore_ringbuffer(struct vgt_device *vgt, int id)
 	struct pgt_device *pdev = vgt->pdev;
 	vgt_ringbuffer_t *srb = &vgt->rb[id].sring;
 	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[id];
+
+	if (pdev->enable_execlist)
+		return;
 
 	if (!ring->need_switch)
 		return;
@@ -547,6 +562,15 @@ vgt_reg_t vgt_gen7_render_regs[] = {
 	0xb038,
 };
 
+vgt_reg_t vgt_gen8_render_regs[] = {
+	/* Hardware Status Page Address Registers. */
+	_REG_HWS_PGA,
+	0x12080,
+	0x1a080,
+	0x1c080,
+	0x22080,
+};
+
 static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *regs)
 {
 	vgt_reg_t	*sreg, *vreg;	/* shadow regs */
@@ -580,9 +604,18 @@ static void vgt_rendering_save_mmio(struct vgt_device *vgt)
 	 */
 	pdev->in_ctx_switch = 1;
 	if (IS_SNB(pdev))
-		__vgt_rendering_save(vgt, ARRAY_NUM(vgt_render_regs), &vgt_render_regs[0]);
+		__vgt_rendering_save(vgt,
+				ARRAY_NUM(vgt_render_regs),
+				&vgt_render_regs[0]);
 	else if (IS_IVB(pdev) || IS_HSW(pdev))
-		__vgt_rendering_save(vgt, ARRAY_NUM(vgt_gen7_render_regs), &vgt_gen7_render_regs[0]);
+		__vgt_rendering_save(vgt,
+				ARRAY_NUM(vgt_gen7_render_regs),
+				&vgt_gen7_render_regs[0]);
+	else if (IS_BDW(pdev))
+		__vgt_rendering_save(vgt,
+				ARRAY_NUM(vgt_gen8_render_regs),
+				&vgt_gen8_render_regs[0]);
+
 	pdev->in_ctx_switch = 0;
 }
 
@@ -634,9 +667,17 @@ static void vgt_rendering_restore_mmio(struct vgt_device *vgt)
 	struct pgt_device *pdev = vgt->pdev;
 
 	if (IS_SNB(pdev))
-		__vgt_rendering_restore(vgt, ARRAY_NUM(vgt_render_regs), &vgt_render_regs[0]);
+		__vgt_rendering_restore(vgt,
+				ARRAY_NUM(vgt_render_regs),
+				&vgt_render_regs[0]);
 	else if (IS_IVB(pdev) || IS_HSW(pdev))
-		__vgt_rendering_restore(vgt, ARRAY_NUM(vgt_gen7_render_regs), &vgt_gen7_render_regs[0]);
+		__vgt_rendering_restore(vgt,
+				ARRAY_NUM(vgt_gen7_render_regs),
+				&vgt_gen7_render_regs[0]);
+	else if (IS_BDW(pdev))
+		__vgt_rendering_restore(vgt,
+				ARRAY_NUM(vgt_gen8_render_regs),
+				&vgt_gen8_render_regs[0]);
 }
 
 /*
@@ -1554,10 +1595,105 @@ static void dump_regs_on_err(struct pgt_device *pdev)
 			VGT_MMIO_READ(pdev, regs[i]));
 }
 
+static bool gen7_ring_switch(struct pgt_device *pdev,
+		enum vgt_ring_id ring_id,
+		struct vgt_device *prev,
+		struct vgt_device *next)
+{
+	bool rc = false;
+	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[ring_id];
+
+	/* STEP-a: stop the ring */
+	if (!stop_ring(pdev, ring_id)) {
+		vgt_err("Fail to stop ring (1st)\n");
+		goto out;
+	}
+	/* STEP-b: save current ring buffer structure */
+	vgt_save_ringbuffer(prev, ring_id);
+
+	if (ring->stateless) {
+		rc = true;
+		goto out;
+	}
+
+	/* STEP-c: switch to vGT ring buffer */
+	if (!vgt_setup_rsvd_ring(ring)) {
+		vgt_err("Fail to setup rsvd ring\n");
+		goto out;
+	}
+
+	start_ring(pdev, ring_id);
+
+	/* STEP-d: save HW render context for prev */
+	if (!context_ops->save_hw_context(ring_id, prev)) {
+		vgt_err("Fail to save context\n");
+		goto out;
+	}
+
+	if (render_engine_reset && !vgt_reset_engine(pdev, ring_id)) {
+		vgt_err("Fail to reset engine\n");
+		goto out;
+	}
+
+	/* STEP-e: restore HW render context for next */
+	if (!context_ops->restore_hw_context(ring_id, next)) {
+		vgt_err("Fail to restore context\n");
+		goto out;
+	}
+
+	/* STEP-f: idle and stop ring at the end of HW switch */
+	if (!idle_render_engine(pdev, ring_id)) {
+		vgt_err("fail to idle ring-%d after ctx restore\n", ring_id);
+		goto out;
+	}
+
+	if (!stop_ring(pdev, ring_id)) {
+		vgt_err("Fail to stop ring (2nd)\n");
+		goto out;
+	}
+
+	rc = true;
+out:
+	return rc;
+}
+
+
 struct vgt_render_context_ops gen7_context_ops = {
 	.init_null_context = gen7_init_null_context,
 	.save_hw_context = gen7_save_hw_context,
 	.restore_hw_context = gen7_restore_hw_context,
+	.ring_context_switch = gen7_ring_switch,
+};
+
+static bool gen8_init_null_context(struct pgt_device *pdev, int id)
+{
+	/* disable null context right now */
+	return true;
+}
+
+static bool gen8_save_hw_context(int id, struct vgt_device *vgt)
+{
+	return true;
+}
+
+static bool gen8_restore_hw_context(int id, struct vgt_device *vgt)
+{
+	return true;
+}
+
+static bool gen8_ring_switch(struct pgt_device *pdev,
+				enum vgt_ring_id ring_id,
+				struct vgt_device *prev,
+				struct vgt_device *next)
+{
+	return true;
+}
+
+struct vgt_render_context_ops gen8_context_ops = {
+	.init_null_context = gen8_init_null_context,
+	.save_hw_context = gen8_save_hw_context,
+	.restore_hw_context = gen8_restore_hw_context,
+	.ring_context_switch = gen8_ring_switch,
 };
 
 static struct vgt_render_context_ops *context_ops;
@@ -1566,6 +1702,8 @@ bool vgt_render_init(struct pgt_device *pdev)
 {
 	if (IS_PREBDW(pdev))
 		context_ops = &gen7_context_ops;
+	else if (pdev->enable_execlist)
+		context_ops = &gen8_context_ops;
 
 	return true;
 }
@@ -1637,6 +1775,20 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 		goto err;
 	}
 
+	{
+		int ring_id;
+		for (ring_id = 0; ring_id < pdev->max_engines; ++ ring_id) {
+			if (!pdev->ring_buffer[ring_id].need_switch)
+				continue;
+			if (!vgt_idle_execlist(pdev, ring_id)) {
+				vgt_info("rendering ring is not idle. "
+					"Ignore the context switch!\n");
+				vgt_force_wake_put();
+				goto out;
+			}
+		}
+	}
+
 	vgt_dbg(VGT_DBG_RENDER, "vGT: next vgt (%d)\n", next->vgt_id);
 	
 
@@ -1657,58 +1809,10 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 
 	/* STEP-2: HW render context switch */
 	for (i=0; i < pdev->max_engines; i++) {
-		struct vgt_rsvd_ring *ring = &pdev->ring_buffer[i];
-
-		if (!ring->need_switch)
+		if (!pdev->ring_buffer[i].need_switch)
 			continue;
 
-		/* STEP-2a: stop the ring */
-		if (!stop_ring(pdev, i)) {
-			vgt_err("Fail to stop ring (1st)\n");
-			goto err;
-		}
-
-		/* STEP-2b: save current ring buffer structure */
-		vgt_save_ringbuffer(prev, i);
-
-		if (ring->stateless)
-			continue;
-
-		/* STEP-2c: switch to vGT ring buffer */
-		if (!vgt_setup_rsvd_ring(ring)) {
-			vgt_err("Fail to setup rsvd ring\n");
-			goto err;
-		}
-
-		start_ring(pdev, i);
-
-		/* STEP-2d: save HW render context for prev */
-		if (!context_ops->save_hw_context(i, prev)) {
-			vgt_err("Fail to save context\n");
-			goto err;
-		}
-
-		if (render_engine_reset && !vgt_reset_engine(pdev, i)) {
-			vgt_err("Fail to reset engine\n");
-			goto err;
-		}
-
-		/* STEP-2e: restore HW render context for next */
-		if (!context_ops->restore_hw_context(i, next)) {
-			vgt_err("Fail to restore context\n");
-			goto err;
-		}
-
-		/* STEP-2f: idle and stop ring at the end of HW switch */
-		if (!idle_render_engine(pdev, i)) {
-			vgt_err("fail to idle ring-%d after ctx restore\n", i);
-			goto err;
-		}
-
-		if (!stop_ring(pdev, i)) {
-			vgt_err("Fail to stop ring (2nd)\n");
-			goto err;
-		}
+		context_ops->ring_context_switch(pdev, i, prev, next);
 	}
 
 	/* STEP-3: manually restore render context */
@@ -1721,7 +1825,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	/* STEP-5: switch PPGTT */
 	current_render_owner(pdev) = next;
 	/* ppgtt switch must be done after render owner switch */
-	if (pdev->enable_ppgtt && next->gtt.active_ppgtt_mm_bitmap)
+	if (!pdev->enable_execlist && pdev->enable_ppgtt && next->gtt.active_ppgtt_mm_bitmap)
 		vgt_ppgtt_switch(next);
 
 	/* STEP-6: ctx switch ends, and then kicks of new tail */

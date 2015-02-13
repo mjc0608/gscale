@@ -683,6 +683,10 @@ struct vgt_render_context_ops {
 	bool (*init_null_context)(struct pgt_device *pdev, int id);
 	bool (*save_hw_context)(int id, struct vgt_device *vgt);
 	bool (*restore_hw_context)(int id, struct vgt_device *vgt);
+	bool (*ring_context_switch)(struct pgt_device *pdev,
+				enum vgt_ring_id ring_id,
+				struct vgt_device *prev,
+				struct vgt_device *next);
 };
 
 extern bool vgt_render_init(struct pgt_device *pdev);
@@ -2262,17 +2266,27 @@ static inline enum vgt_event_type vgt_ring_id_to_ctx_event(enum vgt_ring_id ring
 
 static inline bool is_ring_empty(struct pgt_device *pdev, int ring_id)
 {
-	vgt_reg_t head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
-	vgt_reg_t tail = VGT_MMIO_READ(pdev, RB_TAIL(pdev, ring_id));
+	if (pdev->enable_execlist) {
+		struct execlist_status_format status;
+		uint32_t status_reg = vgt_ring_id_to_EL_base(ring_id)
+						+ _EL_OFFSET_STATUS;
+		status.ldw = VGT_MMIO_READ(pdev, status_reg);
+		status.udw = VGT_MMIO_READ(pdev, status_reg + 4);
+		return ((status.execlist_0_active == 0) &&
+				(status.execlist_1_active == 0));
+	} else {
+		vgt_reg_t head = VGT_MMIO_READ(pdev, RB_HEAD(pdev, ring_id));
+		vgt_reg_t tail = VGT_MMIO_READ(pdev, RB_TAIL(pdev, ring_id));
 
-	head &= RB_HEAD_OFF_MASK;
-	/*
-	 * PRM said bit2-20 for head count, but bit3-20 for tail count:
-	 * this means: HW increases HEAD by 4, and SW must increase TAIL
-	 * by 8(SW must add padding of MI_NOOP if necessary).
-	 */
-	tail &= RB_TAIL_OFF_MASK;
-	return (head == tail);
+		head &= RB_HEAD_OFF_MASK;
+		/*
+		 * PRM said bit2-20 for head count, but bit3-20 for tail count:
+		 * this means: HW increases HEAD by 4, and SW must increase TAIL
+		 * by 8(SW must add padding of MI_NOOP if necessary).
+		 */
+		tail &= RB_TAIL_OFF_MASK;
+		return (head == tail);
+	}
 }
 
 #define VGT_POST_READ(pdev, reg)		\
@@ -2835,6 +2849,7 @@ void vgt_clear_submitted_el_record(struct pgt_device *pdev, enum vgt_ring_id rin
 void vgt_emulate_context_switch_event(struct pgt_device *pdev);
 void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id);
 void vgt_kick_off_execlists(struct vgt_device *vgt);
+bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id);
 
 bool vgt_g2v_execlist_context_create(struct vgt_device *vgt);
 bool vgt_g2v_execlist_context_destroy(struct vgt_device *vgt);

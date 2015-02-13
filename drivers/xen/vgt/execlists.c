@@ -1729,6 +1729,35 @@ void vgt_kick_off_execlists(struct vgt_device *vgt)
 	}
 }
 
+bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
+{
+	int i;
+	uint32_t el_ring_base;
+	uint32_t el_status_reg;
+	struct execlist_status_format el_status;
+	struct vgt_exec_list *el_slots;
+	struct vgt_device *vgt = current_render_owner(pdev);
+
+	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
+	el_status_reg = el_ring_base + _EL_OFFSET_STATUS;
+	el_status.ldw = VGT_MMIO_READ(pdev, el_status_reg);
+	if (el_status.execlist_0_valid || el_status.execlist_1_valid) {
+		vgt_info("EXECLIST still have valid items in context switch!\n");
+		return false;
+	}
+
+	el_slots = vgt->rb[ring_id].execlist_slots;
+	for (i = 0; i < EL_QUEUE_SLOT_NUM; ++ i) {
+		if (el_slots[i].status == EL_SUBMITTED) {
+			vgt_dbg(VGT_DBG_RENDER, "VM-%d: EL_SLOT[%d] is still running!\n",
+				vgt->vm_id, i);
+			return false;
+		}
+	}
+
+	return true;
+}
+
 void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 {
 	int i;
