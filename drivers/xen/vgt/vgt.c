@@ -510,7 +510,7 @@ static bool vgt_initialize_device_info(struct pgt_device *pdev)
 static bool vgt_initialize_platform(struct pgt_device *pdev)
 {
 	/* check PPGTT enabling. */
-	if (IS_IVB(pdev) || IS_HSW(pdev))
+	if (IS_IVB(pdev) || IS_HSW(pdev) || IS_BDW(pdev))
 		pdev->enable_ppgtt = 1;
 
 	pdev->max_engines = 3;
