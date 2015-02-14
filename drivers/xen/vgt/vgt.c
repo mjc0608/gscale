@@ -365,7 +365,7 @@ bool initial_phys_states(struct pgt_device *pdev)
 	pdev->gttmmio_base = bar0 & ~0xf;
 	pdev->mmio_size = VGT_MMIO_SPACE_SZ;
 	pdev->reg_num = pdev->mmio_size/REG_SIZE;
-	printk("mmio size: %x, gtt size: %x\n", pdev->mmio_size,
+	printk("mmio size: %x, gtt size: %llx\n", pdev->mmio_size,
 		pdev->gtt_size);
 	ASSERT(pdev->mmio_size + pdev->gtt_size <= pdev->bar_size[0]);
 

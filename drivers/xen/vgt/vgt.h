@@ -1065,7 +1065,7 @@ struct pgt_device {
 	uint64_t gmadr_base;	/* base of GMADR */
 	void *gmadr_va;		/* virtual base of GMADR */
 	u32 mmio_size;
-	u32 gtt_size;
+	u64 gtt_size;
 	int reg_num;
 	uint32_t *saved_gtt;
 	uint64_t saved_fences[VGT_MAX_NUM_FENCES];
