@@ -458,8 +458,10 @@ typedef struct {
 }while(0)
 
 struct vgt_gtt_pte_ops {
-	gtt_entry_t *(*get_entry)(void *pt, gtt_entry_t *e, unsigned long index);
-	gtt_entry_t *(*set_entry)(void *pt, gtt_entry_t *e, unsigned long index);
+	gtt_entry_t *(*get_entry)(void *pt, gtt_entry_t *e, unsigned long index,
+			bool hypervisor_access, struct vgt_device *vgt);
+	gtt_entry_t *(*set_entry)(void *pt, gtt_entry_t *e, unsigned long index,
+			bool hypervisor_access, struct vgt_device *vgt);
 	bool (*test_present)(gtt_entry_t *e);
 	void (*clear_present)(gtt_entry_t *e);
 	bool (*test_pse)(gtt_entry_t *e);

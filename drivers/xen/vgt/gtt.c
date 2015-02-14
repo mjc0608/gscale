@@ -127,7 +127,8 @@ static inline gtt_type_t get_pse_type(gtt_type_t type) {
  * Per-platform GTT entry routines.
  */
 static gtt_entry_t *gtt_get_entry32(void *pt, gtt_entry_t *e,
-		unsigned long index)
+		unsigned long index, bool hypervisor_access,
+		struct vgt_device *vgt)
 {
 	struct vgt_device_info *info = &e->pdev->device_info;
 
@@ -137,14 +138,20 @@ static gtt_entry_t *gtt_get_entry32(void *pt, gtt_entry_t *e,
 		e->val32[0] = vgt_read_gtt(e->pdev, index);
 		e->val32[1] = 0;
 	} else {
-		e->val32[0] = *((u32 *)pt + index);
-		e->val32[1] = 0;
+		if (!hypervisor_access) {
+			e->val32[0] = *((u32 *)pt + index);
+			e->val32[1] = 0;
+		} else {
+			hypervisor_read_va(vgt, pt, &e->val32[0], 4, 1);
+			e->val32[1] = 0;
+		}
 	}
 	return e;
 }
 
 static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
-		unsigned long index)
+		unsigned long index, bool hypervisor_access,
+		struct vgt_device *vgt)
 {
 	struct vgt_device_info *info = &e->pdev->device_info;
 
@@ -152,14 +159,18 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 
 	if (!pt)
 		vgt_write_gtt(e->pdev, index, e->val32[0]);
-	else
-		*((u32 *)pt + index) = e->val32[0];
-	/* Non-LLC machine vlv needs clflush here. */
+	else {
+		if (!hypervisor_access)
+			*((u32 *)pt + index) = e->val32[0];
+		else
+			hypervisor_write_va(vgt, pt, &e->val32[0], 4, 1);
+	}
 	return e;
 }
 
 static inline gtt_entry_t *gtt_get_entry64(void *pt, gtt_entry_t *e,
-		unsigned long index)
+		unsigned long index, bool hypervisor_access,
+		struct vgt_device *vgt)
 {
 	struct vgt_device_info *info = &e->pdev->device_info;
 
@@ -167,14 +178,18 @@ static inline gtt_entry_t *gtt_get_entry64(void *pt, gtt_entry_t *e,
 
 	if (!pt)
 		e->val64 = vgt_read_gtt64(e->pdev, index);
-	else
-		e->val64 = *((u64 *)pt + index);
-
+	else {
+		if (!hypervisor_access)
+			e->val64 = *((u64 *)pt + index);
+		else
+			hypervisor_read_va(vgt, pt, &e->val64, 8, 1);
+	}
 	return e;
 }
 
 static inline gtt_entry_t *gtt_set_entry64(void *pt, gtt_entry_t *e,
-		unsigned long index)
+		unsigned long index, bool hypervisor_access,
+		struct vgt_device *vgt)
 {
 	struct vgt_device_info *info = &e->pdev->device_info;
 
@@ -182,9 +197,12 @@ static inline gtt_entry_t *gtt_set_entry64(void *pt, gtt_entry_t *e,
 
 	if (!pt)
 		vgt_write_gtt64(e->pdev, index, e->val64);
-	else
-		*((u64 *)pt + index) = e->val64;
-	/* Non-LLC machine chv needs clflush here. */
+	else {
+		if (!hypervisor_access)
+			*((u64 *)pt + index) = e->val64;
+		else
+			hypervisor_write_va(vgt, pt, &e->val64, 8, 1);
+	}
 	return e;
 }
 
@@ -398,7 +416,7 @@ static inline gtt_entry_t *mm_get_entry(struct vgt_mm *mm,
 			index += mm->pde_base_index;
 	}
 
-	ops->get_entry(page_table, e, index);
+	ops->get_entry(page_table, e, index, false, NULL);
 	ops->test_pse(e);
 
 	return e;
@@ -423,7 +441,7 @@ static inline gtt_entry_t *mm_set_entry(struct vgt_mm *mm,
 			index += mm->pde_base_index;
 	}
 
-	return ops->set_entry(page_table, e, index);
+	return ops->set_entry(page_table, e, index, false, NULL);
 }
 
 #define ggtt_get_guest_entry(mm, e, index) \
@@ -457,7 +475,8 @@ static inline gtt_entry_t *mm_set_entry(struct vgt_mm *mm,
  */
 static inline gtt_entry_t *ppgtt_spt_get_entry(ppgtt_spt_t *spt,
 		void *page_table, gtt_type_t type,
-		gtt_entry_t *e, unsigned long index)
+		gtt_entry_t *e, unsigned long index,
+		bool guest)
 {
 	struct pgt_device *pdev = spt->vgt->pdev;
 	struct vgt_gtt_pte_ops *ops = pdev->gtt.pte_ops;
@@ -467,7 +486,7 @@ static inline gtt_entry_t *ppgtt_spt_get_entry(ppgtt_spt_t *spt,
 
 	ASSERT(gtt_type_is_entry(e->type));
 
-	ops->get_entry(page_table, e, index);
+	ops->get_entry(page_table, e, index, guest, spt->vgt);
 	ops->test_pse(e);
 
 	return e;
@@ -475,7 +494,8 @@ static inline gtt_entry_t *ppgtt_spt_get_entry(ppgtt_spt_t *spt,
 
 static inline gtt_entry_t *ppgtt_spt_set_entry(ppgtt_spt_t *spt,
 		void *page_table, gtt_type_t type,
-		gtt_entry_t *e, unsigned long index)
+		gtt_entry_t *e, unsigned long index,
+		bool guest)
 {
 	struct pgt_device *pdev = spt->vgt->pdev;
 	struct vgt_gtt_pte_ops *ops = pdev->gtt.pte_ops;
@@ -484,24 +504,24 @@ static inline gtt_entry_t *ppgtt_spt_set_entry(ppgtt_spt_t *spt,
 
 	ASSERT(gtt_type_is_entry(e->type));
 
-	return ops->set_entry(page_table, e, index);
+	return ops->set_entry(page_table, e, index, guest, spt->vgt);
 }
 
 #define ppgtt_get_guest_entry(spt, e, index) \
 	ppgtt_spt_get_entry(spt, spt->guest_page.vaddr, \
-		spt->guest_page_type, e, index)
+		spt->guest_page_type, e, index, true)
 
 #define ppgtt_set_guest_entry(spt, e, index) \
 	ppgtt_spt_set_entry(spt, spt->guest_page.vaddr, \
-		spt->guest_page_type, e, index)
+		spt->guest_page_type, e, index, true)
 
 #define ppgtt_get_shadow_entry(spt, e, index) \
 	ppgtt_spt_get_entry(spt, spt->shadow_page.vaddr, \
-		spt->shadow_page.type, e, index)
+		spt->shadow_page.type, e, index, false)
 
 #define ppgtt_set_shadow_entry(spt, e, index) \
 	ppgtt_spt_set_entry(spt, spt->shadow_page.vaddr, \
-		spt->shadow_page.type, e, index)
+		spt->shadow_page.type, e, index, false)
 
 
 bool vgt_init_guest_page(struct vgt_device *vgt, guest_page_t *guest_page,
@@ -1255,7 +1275,7 @@ static inline bool ppgtt_get_next_level_entry(struct vgt_mm *mm,
 			ppgtt_get_guest_entry(s, e, index);
 	} else {
 		pt = hypervisor_mfn_to_virt(ops->get_pfn(e));
-		ops->get_entry(pt, e, index);
+		ops->get_entry(pt, e, index, false, NULL);
 		e->type = get_entry_type(get_next_pt_type(e->type));
 	}
 	return true;
