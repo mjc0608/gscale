@@ -516,6 +516,40 @@ struct vgt_mm {
 	struct vgt_device *vgt;
 };
 
+extern gtt_entry_t *vgt_mm_get_entry(struct vgt_mm *mm,
+                void *page_table, gtt_entry_t *e,
+                unsigned long index);
+
+extern gtt_entry_t *vgt_mm_set_entry(struct vgt_mm *mm,
+                void *page_table, gtt_entry_t *e,
+                unsigned long index);
+
+#define ggtt_get_guest_entry(mm, e, index) \
+	(mm->vgt->vm_id == 0) ? \
+	vgt_mm_get_entry(mm, NULL, e, index) : \
+	vgt_mm_get_entry(mm, mm->virtual_page_table, e, index)
+
+#define ggtt_set_guest_entry(mm, e, index) \
+	vgt_mm_set_entry(mm, mm->virtual_page_table, e, index)
+
+#define ggtt_get_shadow_entry(mm, e, index) \
+	vgt_mm_get_entry(mm, mm->shadow_page_table, e, index)
+
+#define ggtt_set_shadow_entry(mm, e, index) \
+	vgt_mm_set_entry(mm, mm->shadow_page_table, e, index)
+
+#define ppgtt_get_guest_root_entry(mm, e, index) \
+	vgt_mm_get_entry(mm, mm->virtual_page_table, e, index)
+
+#define ppgtt_set_guest_root_entry(mm, e, index) \
+	vgt_mm_set_entry(mm, mm->virtual_page_table, e, index)
+
+#define ppgtt_get_shadow_root_entry(mm, e, index) \
+	vgt_mm_get_entry(mm, mm->shadow_page_table, e, index)
+
+#define ppgtt_set_shadow_root_entry(mm, e, index) \
+	vgt_mm_set_entry(mm, mm->shadow_page_table, e, index)
+
 extern struct vgt_mm *vgt_create_mm(struct vgt_device *vgt,
 		vgt_mm_type_t mm_type, gtt_type_t page_table_entry_type,
 		void *virtual_page_table, int page_table_level,

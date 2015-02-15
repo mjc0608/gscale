@@ -396,7 +396,7 @@ static bool gtt_entry_p2m(struct vgt_device *vgt, gtt_entry_t *p, gtt_entry_t *m
 /*
  * MM helpers.
  */
-static inline gtt_entry_t *mm_get_entry(struct vgt_mm *mm,
+gtt_entry_t *vgt_mm_get_entry(struct vgt_mm *mm,
 		void *page_table, gtt_entry_t *e,
 		unsigned long index)
 {
@@ -422,7 +422,7 @@ static inline gtt_entry_t *mm_get_entry(struct vgt_mm *mm,
 	return e;
 }
 
-static inline gtt_entry_t *mm_set_entry(struct vgt_mm *mm,
+gtt_entry_t *vgt_mm_set_entry(struct vgt_mm *mm,
 		void *page_table, gtt_entry_t *e,
 		unsigned long index)
 {
@@ -443,32 +443,6 @@ static inline gtt_entry_t *mm_set_entry(struct vgt_mm *mm,
 
 	return ops->set_entry(page_table, e, index, false, NULL);
 }
-
-#define ggtt_get_guest_entry(mm, e, index) \
-	(mm->vgt->vm_id == 0) ? \
-	mm_get_entry(mm, NULL, e, index) : \
-	mm_get_entry(mm, mm->virtual_page_table, e, index)
-
-#define ggtt_set_guest_entry(mm, e, index) \
-	mm_set_entry(mm, mm->virtual_page_table, e, index)
-
-#define ggtt_get_shadow_entry(mm, e, index) \
-	mm_get_entry(mm, mm->shadow_page_table, e, index)
-
-#define ggtt_set_shadow_entry(mm, e, index) \
-	mm_set_entry(mm, mm->shadow_page_table, e, index)
-
-#define ppgtt_get_guest_root_entry(mm, e, index) \
-	mm_get_entry(mm, mm->virtual_page_table, e, index)
-
-#define ppgtt_set_guest_root_entry(mm, e, index) \
-	mm_set_entry(mm, mm->virtual_page_table, e, index)
-
-#define ppgtt_get_shadow_root_entry(mm, e, index) \
-	mm_get_entry(mm, mm->shadow_page_table, e, index)
-
-#define ppgtt_set_shadow_root_entry(mm, e, index) \
-	mm_set_entry(mm, mm->shadow_page_table, e, index)
 
 /*
  * PPGTT shadow page table helpers.
