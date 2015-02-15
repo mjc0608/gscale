@@ -143,7 +143,7 @@ module_param_named(vgt_lock_irq, vgt_lock_irq, bool, 0400);
 bool vgt_preliminary_hw_support = false;
 module_param_named(vgt_preliminary_hw_support, vgt_preliminary_hw_support, bool, 0400);
 
-int shadow_execlist_context = 1;
+int shadow_execlist_context = 0;
 module_param_named(shadow_execlist_context, shadow_execlist_context, int, 0400);
 
 /* Very frequent set/clear write protection can see wrong write trap even if
