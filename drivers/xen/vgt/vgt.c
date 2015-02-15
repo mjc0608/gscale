@@ -140,7 +140,7 @@ module_param_named(enable_reset, enable_reset, bool, 0600);
 bool vgt_lock_irq = false;
 module_param_named(vgt_lock_irq, vgt_lock_irq, bool, 0400);
 
-bool vgt_preliminary_hw_support = false;
+bool vgt_preliminary_hw_support = true;
 module_param_named(vgt_preliminary_hw_support, vgt_preliminary_hw_support, bool, 0400);
 
 int shadow_execlist_context = 0;
