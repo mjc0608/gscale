@@ -127,7 +127,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	atomic_set(&vgt->crashing, 0);
 
 	if ((rc = vgt->vgt_id = allocate_vgt_id()) < 0 )
-		goto err;
+		goto err2;
 
 	vgt->vm_id = vp.vm_id;
 	vgt->pdev = pdev;
@@ -137,7 +137,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	INIT_LIST_HEAD(&vgt->list);
 
 	if ((rc = create_state_instance(vgt)) < 0)
-		goto err;
+		goto err2;
 
 	for (i = 0; i < I915_MAX_PORTS; i++) {
 		vgt->ports[i].type = VGT_PORT_MAX;
@@ -156,7 +156,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	/* init aperture/gm ranges allocated to this vgt */
 	if ((rc = allocate_vm_aperture_gm_and_fence(vgt, vp)) < 0) {
 		printk("vGT: %s: no enough available aperture/gm/fence!\n", __func__);
-		goto err;
+		goto err2;
 	}
 
 	vgt->aperture_offset = aperture_2_gm(pdev, vgt->aperture_base);
@@ -262,7 +262,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	if (!vgt_init_vgtt(vgt)) {
 		vgt_err("fail to initialize vgt vgtt.\n");
-		goto err;
+		goto err2;
 	}
 
 	if (vgt->vm_id != 0){
@@ -321,6 +321,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	return 0;
 err:
 	vgt_clean_vgtt(vgt);
+err2:
 	hypervisor_hvm_exit(vgt);
 	if (vgt->aperture_base > 0)
 		free_vm_aperture_gm_and_fence(vgt);
