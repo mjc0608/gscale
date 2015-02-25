@@ -142,7 +142,7 @@ static gtt_entry_t *gtt_get_entry32(void *pt, gtt_entry_t *e,
 			e->val32[0] = *((u32 *)pt + index);
 			e->val32[1] = 0;
 		} else {
-			hypervisor_read_va(vgt, pt, &e->val32[0], 4, 1);
+			hypervisor_read_va(vgt, (u32 *)pt + index, &e->val32[0], 4, 1);
 			e->val32[1] = 0;
 		}
 	}
@@ -163,7 +163,7 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 		if (!hypervisor_access)
 			*((u32 *)pt + index) = e->val32[0];
 		else
-			hypervisor_write_va(vgt, pt, &e->val32[0], 4, 1);
+			hypervisor_write_va(vgt, (u32 *)pt + index, &e->val32[0], 4, 1);
 	}
 	return e;
 }
@@ -182,7 +182,7 @@ static inline gtt_entry_t *gtt_get_entry64(void *pt, gtt_entry_t *e,
 		if (!hypervisor_access)
 			e->val64 = *((u64 *)pt + index);
 		else
-			hypervisor_read_va(vgt, pt, &e->val64, 8, 1);
+			hypervisor_read_va(vgt, (u64 *)pt + index, &e->val64, 8, 1);
 	}
 	return e;
 }
@@ -201,7 +201,7 @@ static inline gtt_entry_t *gtt_set_entry64(void *pt, gtt_entry_t *e,
 		if (!hypervisor_access)
 			*((u64 *)pt + index) = e->val64;
 		else
-			hypervisor_write_va(vgt, pt, &e->val64, 8, 1);
+			hypervisor_write_va(vgt, (u64 *)pt + index, &e->val64, 8, 1);
 	}
 	return e;
 }
