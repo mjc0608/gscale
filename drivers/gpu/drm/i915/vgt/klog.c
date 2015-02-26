@@ -100,9 +100,6 @@ void vgt_klog_cleanup(void)
 		debugfs_remove(dir);
 }
 
-MODULE_LICENSE("GPL");
-
-
 /* Boilerplate code below here */
 
 /**

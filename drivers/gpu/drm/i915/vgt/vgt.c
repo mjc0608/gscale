@@ -31,7 +31,7 @@
 
 
 MODULE_AUTHOR("Intel Corporation");
-MODULE_DESCRIPTION("vGT mediated graphics passthrough driver");
+MODULE_DESCRIPTION("Virtual GPU device model for Intel Processor Graphics");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 

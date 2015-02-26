@@ -49,6 +49,11 @@
 
 #include "vgt.h"
 
+MODULE_AUTHOR("Intel Corporation");
+MODULE_DESCRIPTION("XenGT mediated passthrough driver");
+MODULE_LICENSE("GPL");
+MODULE_VERSION("0.1");
+
 #define MAX_HVM_VCPUS_SUPPORTED 128
 struct vgt_hvm_info {
 	/* iopage_vma->addr is just iopage. We need iopage_vma on VM destroy */
