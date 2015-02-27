@@ -1640,6 +1640,19 @@ static inline enum vgt_pipe vgt_get_pipe_from_port(struct vgt_device *vgt,
 	return pipe;
 }
 
+static inline int tail_to_ring_id(struct pgt_device *pdev, unsigned int tail_off)
+{
+	int i;
+
+	for (i = 0; i < pdev->max_engines; i++) {
+		if ( pdev->ring_mmio_base[i] == tail_off )
+			return i;
+	}
+	printk("Wrong tail register %s\n", __FUNCTION__);
+	ASSERT(0);
+	return 0;
+}
+
 /*
  * Below are some wrappers for commonly used policy flags.
  * Add on demand to feed your requirement

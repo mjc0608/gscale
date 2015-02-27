@@ -2177,15 +2177,18 @@ static bool ring_mmio_read(struct vgt_device *vgt, unsigned int offset,
 static bool ring_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	/* TODO
-	 * We do not support the mix usage of RB mode and EXECLIST from
-	 * different VMs. If that happens, VM with RB mode cannot have
-	 * workload being submitted/executed correctly.
-	 */
-	if (vgt->pdev->enable_execlist)
+	if (vgt->pdev->enable_execlist) {
+		int ring_id = tail_to_ring_id(vgt->pdev, _tail_reg_(offset));
+		if (!vgt->rb[ring_id].has_execlist_enabled) {
+			vgt_err("VM(%d): Workload submission with ringbuffer "
+			"mode is not allowed since system is in execlist mode. "
+			"VM will be killed!\n", vgt->vm_id);
+			ASSERT_VM(0, vgt);
+		}
 		return default_mmio_write(vgt, offset, p_data, bytes);
-	else
+	} else {
 		return ring_mmio_write_in_rb_mode(vgt, offset, p_data, bytes);
+	}
 }
 
 static bool ring_uhptr_write(struct vgt_device *vgt, unsigned int offset,
