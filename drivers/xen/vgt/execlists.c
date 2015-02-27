@@ -24,8 +24,6 @@
  */
 
 #include "trace.h"
-#include <linux/kthread.h>
-#include <xen/interface/vcpu.h>
 #include "vgt.h"
 
 //#define EL_SLOW_DEBUG
