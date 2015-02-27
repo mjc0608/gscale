@@ -845,8 +845,8 @@ void vgt_save_gtt_and_fence(struct pgt_device *pdev)
 		*(entry + i) = vgt_read_gtt(pdev, i);
 
 	for (i = 0; i < VGT_MAX_NUM_FENCES; i++)
-		pdev->saved_fences[i] = VGT_MMIO_READ_BYTES(pdev,
-			_REG_FENCE_0_LOW + 8 * i, 8);
+		pdev->saved_fences[i] =
+			VGT_MMIO_READ64(pdev, _REG_FENCE_0_LOW + 8 * i);
 }
 
 void vgt_restore_gtt_and_fence(struct pgt_device *pdev)
@@ -998,4 +998,278 @@ int vgt_hvm_set_trap_area(struct vgt_device *vgt, int map)
 	bar_e = bar_s + vgt->state.bar_size[0] - 1;
 
 	return hypervisor_set_trap_area(vgt, bar_s, bar_e, 1);
+}
+
+/* EXECLIST dump functions */
+
+void dump_ctx_desc(struct vgt_device *vgt, struct ctx_desc_format *desc)
+{
+	const char *addressing_string[4] = {
+		"advanced context 64-bit no A/D",
+		"legacy context 32-bit",
+		"advanced context 64-bit A/D",
+		"legacy context 64-bit" };
+
+	printk("\nContext Descriptor ----\n");
+	printk("\t ldw = 0x%x; udw = 0x%x\n", desc->elm_low, desc->elm_high);
+	printk("\t context_id:0x%x\n", desc->context_id);
+	printk("\t valid:%d\n", desc->valid);
+	printk("\t force_pd_restore:%d\n", desc->force_pd_restore);
+	printk("\t force_restore:%d\n", desc->force_restore);
+	printk("\t addressing_mode:%d(%s)\n", desc->addressing_mode,
+			addressing_string[desc->addressing_mode]);
+	printk("\t llc_coherency:%d\n", desc->llc_coherency);
+	printk("\t fault_handling:%d\n", desc->fault_handling);
+	printk("\t privilege_access:%d\n", desc->privilege_access);
+	printk("\t lrca:0x%x\n", desc->lrca);
+}
+
+void dump_execlist_status(struct execlist_status_format *status, enum vgt_ring_id ring_id)
+{
+	printk("-------- Current EXECLIST status of ring-%d --------\n", ring_id);
+	printk("\tCurrent Context ID: 0x%x\n", status->context_id);
+	printk("\tLDW: 0x%x\n", status->ldw);
+	printk("\tEXECLIST queue full: %d\n", status->execlist_queue_full);
+	printk("\tCurrent EXECLIST index: %d\n",
+				status->current_execlist_pointer);
+	printk("\tEXECLIST write index: %d\n", status->execlist_write_pointer);
+	printk("\t  EXECLIST 0 status: %d(1 for valid)\t %d(1 for active)\n",
+			status->execlist_0_valid, status->execlist_0_active);
+	printk("\t  EXECLIST 1 status: %d(1 for valid)\t %d(1 for active)\n",
+			status->execlist_1_valid, status->execlist_1_active);
+	printk("\tActive context information:\n");
+	printk("\t    %s is active\n", status->current_active_elm_status == 0 ?
+			"no context" : (status->current_active_elm_status == 1 ?
+						"context 0" : "context 1"));
+	printk("\tLast ctx switch reason: 0x%x\n",
+				status->last_ctx_switch_reason);
+	printk("\tArbitration is: %s\n", status->arbitration_enable ?
+						"enabled" : "disabled");
+	if (status->current_active_elm_status == 2)
+		vgt_err("EXECLIST status register has invalid active context value!\n");
+}
+
+void dump_execlist_info(struct pgt_device *pdev, enum vgt_ring_id ring_id)
+{
+	uint32_t status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
+	struct execlist_status_format status;
+
+	READ_STATUS_MMIO(pdev, status_reg, status);
+	dump_execlist_status(&status, ring_id);
+}
+
+static void dump_ctx_status_buf_entry(struct vgt_device *vgt,
+			enum vgt_ring_id ring_id, unsigned int buf_entry, bool hw_status)
+{
+	struct context_status_format status;
+	uint32_t ctx_status_reg;
+
+	if (buf_entry >= CTX_STATUS_BUF_NUM)
+		return;
+
+	ctx_status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_BUF);
+	ctx_status_reg += buf_entry * 8;
+
+	if (hw_status) {
+		READ_STATUS_MMIO(vgt->pdev, ctx_status_reg, status);
+	} else {
+		status.ldw = __vreg(vgt, ctx_status_reg);
+		status.udw = __vreg(vgt, ctx_status_reg + 4);
+	}
+
+	printk("-- Context Status Buffer (%d) for ring %d --\n",
+			buf_entry, ring_id);
+	printk("\t context_id:0x%x\n", status.context_id);
+	printk("\t idle_to_active: %d\n", status.idle_to_active);
+	printk("\t preempted: %d\n", status.preempted);
+	printk("\t element_switch: %d\n", status.element_switch);
+	printk("\t active_to_idle: %d\n", status.active_to_idle);
+	printk("\t context_complete: %d\n", status.context_complete);
+	printk("\t wait_on_sync_flip: %d\n", status.wait_on_sync_flip);
+	printk("\t wait_on_vblank: %d\n", status.wait_on_vblank);
+	printk("\t wait_on_semaphore: %d\n", status.wait_on_semaphore);
+	printk("\t wait_on_scanline: %d\n", status.wait_on_scanline);
+	printk("\t semaphore_wait_mode: %d\n", status.semaphore_wait_mode);
+	printk("\t display_plane: %d\n", status.display_plane);
+	printk("\t lite_restore	: %d\n", status.lite_restore);
+	printk("\n");
+}
+
+static void dump_ctx_st_ptr(struct vgt_device *vgt, struct ctx_st_ptr_format *ptr)
+{
+	printk("Context StatusBufPtr Value: 0x%x. ", ptr->dw);
+	printk("(write_ptr: %d; ", ptr->status_buf_write_ptr);
+	printk("read_ptr: %d; ", ptr->status_buf_read_ptr);
+	printk("mask: 0x%x\n", ptr->mask);
+}
+
+void dump_ctx_status_buf(struct vgt_device *vgt,
+			enum vgt_ring_id ring_id, bool hw_status)
+{
+	uint32_t ctx_ptr_reg;
+	struct ctx_st_ptr_format ctx_st_ptr;
+	unsigned read_idx;
+	unsigned write_idx;
+	int i;
+
+	ctx_ptr_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_PTR);
+
+	if (hw_status)
+		ctx_st_ptr.dw = VGT_MMIO_READ(vgt->pdev, ctx_ptr_reg);
+	else
+		ctx_st_ptr.dw = __vreg(vgt, ctx_ptr_reg);
+
+	if (hw_status)
+		printk("---- Physical status Buffer of Ring %d ---- \n",
+			ring_id);
+	else
+		printk("---- Virtual status Buffer for VM-%d of Ring %d ---- \n",
+			vgt->vm_id, ring_id);
+
+	dump_ctx_st_ptr(vgt, &ctx_st_ptr);
+
+	read_idx = ctx_st_ptr.status_buf_read_ptr;
+	write_idx = ctx_st_ptr.status_buf_write_ptr;
+
+	if (read_idx == DEFAULT_INV_SR_PTR)
+		read_idx = 0;
+
+	if (write_idx == DEFAULT_INV_SR_PTR) {
+		vgt_err("No writes happened and no interesting data "
+			"in status buffer to show.\n");
+		return;
+	}
+
+	if (hw_status) {
+		/* show all contents in hw buffer */
+		read_idx = 0;
+		write_idx = CTX_STATUS_BUF_NUM - 1;
+	}
+
+	if (read_idx > write_idx)
+		write_idx += CTX_STATUS_BUF_NUM;
+
+	for (i = read_idx; i <= write_idx; ++ i)
+		dump_ctx_status_buf_entry(vgt, ring_id,
+			i % CTX_STATUS_BUF_NUM, hw_status);
+}
+
+#define DUMP_CTX_MMIO(prefix, mmio)	\
+printk("\t " #mmio ": <addr>0x%x - <val>0x%x\n", \
+	prefix->mmio.addr, prefix->mmio.val);
+
+void dump_regstate_ctx_header (struct reg_state_ctx_header *regstate)
+{
+	printk("\tlri_command:0x%x\n", regstate->lri_cmd_1);
+	DUMP_CTX_MMIO(regstate, ctx_ctrl);
+	DUMP_CTX_MMIO(regstate, ring_header);
+	DUMP_CTX_MMIO(regstate, ring_tail);
+	DUMP_CTX_MMIO(regstate, rb_start);
+	DUMP_CTX_MMIO(regstate, rb_ctrl);
+	DUMP_CTX_MMIO(regstate, bb_cur_head_UDW);
+	DUMP_CTX_MMIO(regstate, bb_cur_head_LDW);
+	DUMP_CTX_MMIO(regstate, bb_state);
+	DUMP_CTX_MMIO(regstate, second_bb_addr_UDW);
+	DUMP_CTX_MMIO(regstate, second_bb_addr_LDW);
+	DUMP_CTX_MMIO(regstate, second_bb_state);
+	DUMP_CTX_MMIO(regstate, bb_per_ctx_ptr);
+	DUMP_CTX_MMIO(regstate, rcs_indirect_ctx);
+	DUMP_CTX_MMIO(regstate, rcs_indirect_ctx_offset);
+	printk("\tlri_command2:0x%x\n", regstate->lri_cmd_2);
+	DUMP_CTX_MMIO(regstate, ctx_timestamp);
+	DUMP_CTX_MMIO(regstate, pdp3_UDW);
+	DUMP_CTX_MMIO(regstate, pdp3_LDW);
+	DUMP_CTX_MMIO(regstate, pdp2_UDW);
+	DUMP_CTX_MMIO(regstate, pdp2_LDW);
+	DUMP_CTX_MMIO(regstate, pdp1_UDW);
+	DUMP_CTX_MMIO(regstate, pdp1_LDW);
+	DUMP_CTX_MMIO(regstate, pdp0_UDW);
+	DUMP_CTX_MMIO(regstate, pdp0_LDW);
+}
+
+static inline struct reg_state_ctx_header *
+vgt_get_reg_state_from_lrca(struct vgt_device *vgt, uint32_t lrca)
+{
+	struct reg_state_ctx_header *header;
+	uint32_t state_gma = (lrca + 1) << GTT_PAGE_SHIFT;
+
+	header = (struct reg_state_ctx_header *)
+			vgt_gma_to_va(vgt->gtt.ggtt_mm, state_gma);
+	return header;
+}
+
+void dump_el_context_information(struct vgt_device *vgt,
+					struct execlist_context *el_ctx)
+{
+	struct reg_state_ctx_header *guest_state;
+	struct reg_state_ctx_header *shadow_state;
+	bool has_shadow;
+
+	if (el_ctx == NULL)
+		return;
+
+	has_shadow = vgt_require_shadow_context(vgt) && ! hvm_render_owner;
+
+	if (has_shadow)
+		guest_state = (struct reg_state_ctx_header *)
+				el_ctx->ctx_pages[1].guest_page.vaddr;
+	else
+		guest_state = vgt_get_reg_state_from_lrca(vgt,
+					el_ctx->guest_context.lrca);
+
+	printk("-- Context with guest ID 0x%x: --\n", el_ctx->guest_context.context_id);
+	printk("Guest(LRCA 0x%x) register state in context<0x%llx> is:\n",
+			el_ctx->guest_context.lrca,
+			(unsigned long long)guest_state);
+	dump_regstate_ctx_header(guest_state);
+
+	if (!has_shadow)
+		return;
+
+	shadow_state = (struct reg_state_ctx_header *)
+				el_ctx->ctx_pages[1].shadow_page.vaddr;
+
+	printk("Shadow(LRCA 0x%x) register state in context <0x%llx> is:\n",
+			el_ctx->shadow_lrca,
+			(unsigned long long)shadow_state);
+	dump_regstate_ctx_header(shadow_state);
+}
+
+void dump_all_el_contexts(struct pgt_device *pdev)
+{
+	struct vgt_device *vgt;
+	int i;
+	printk("-------- dump all shadow contexts --------\n");
+	for (i = 0; i < VGT_MAX_VMS; ++ i) {
+		struct hlist_node *n;
+		struct execlist_context *el_ctx;
+		int j;
+
+		vgt = pdev->device[i];
+		if (!vgt)
+			continue;
+		printk("-- VM(%d) --\n", vgt->vm_id);
+		hash_for_each_safe(vgt->gtt.el_ctx_hash_table, j, n, el_ctx, node) {
+			dump_el_context_information(vgt, el_ctx);
+			printk("^^^^^^^^\n");
+		}
+	}
+}
+
+void dump_el_status(struct pgt_device *pdev)
+{
+	enum vgt_ring_id ring_id;
+
+	for (ring_id = RING_BUFFER_RCS; ring_id < MAX_ENGINES; ++ ring_id) {
+		int i;
+		dump_execlist_info(pdev, ring_id);
+		dump_ctx_status_buf(vgt_dom0, ring_id, true);
+		for (i = 0; i < VGT_MAX_VMS; ++ i) {
+			struct vgt_device *vgt = pdev->device[i];
+			if (!vgt)
+				continue;
+			dump_ctx_status_buf(vgt, ring_id, false);
+		}
+	}
+	dump_all_el_contexts(pdev);
 }

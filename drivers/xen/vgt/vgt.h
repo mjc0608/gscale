@@ -2864,13 +2864,22 @@ bool vgt_ppgtt_update_shadow_ppgtt_for_ctx(struct vgt_device *vgt, struct execli
 bool vgt_handle_guest_write_rootp_in_context(struct execlist_context *el_ctx, int idx);
 gtt_entry_t *vgt_get_entry(void *pt, gtt_entry_t *e, unsigned long index);
 void execlist_ctx_table_destroy(struct vgt_device *vgt);
+
+void dump_ctx_desc(struct vgt_device *vgt, struct ctx_desc_format *desc);
+void dump_execlist_status(struct execlist_status_format *status, enum vgt_ring_id ring_id);
+void dump_execlist_info(struct pgt_device *pdev, enum vgt_ring_id ring_id);
+void dump_ctx_status_buf(struct vgt_device *vgt, enum vgt_ring_id ring_id, bool hw_status);
+void dump_regstate_ctx_header (struct reg_state_ctx_header *regstate);
+void dump_el_context_information(struct vgt_device *vgt, struct execlist_context *el_ctx);
 void dump_all_el_contexts(struct pgt_device *pdev);
 void dump_el_status(struct pgt_device *pdev);
+
 void vgt_clear_submitted_el_record(struct pgt_device *pdev, enum vgt_ring_id ring_id);
 void vgt_emulate_context_switch_event(struct pgt_device *pdev);
 void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id);
 void vgt_kick_off_execlists(struct vgt_device *vgt);
 bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id);
+struct execlist_context * execlist_context_find(struct vgt_device *vgt, uint32_t guest_lrca);
 
 bool vgt_g2v_execlist_context_create(struct vgt_device *vgt);
 bool vgt_g2v_execlist_context_destroy(struct vgt_device *vgt);

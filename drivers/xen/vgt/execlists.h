@@ -26,6 +26,8 @@
 #ifndef _VGT_EXECLISTS_H_
 #define _VGT_EXECLISTS_H_
 
+#define vgt_require_shadow_context(vgt)	(!((vgt) && (vgt->vgt_id == 0)))
+
 #define MAX_EXECLIST_CTX_PAGES	20
 #define ELSP_BUNDLE_NUM		4
 #define EXECLIST_CTX_SIZE (SIZE_PAGE * MAX_EXECLIST_CTX_PAGES)
@@ -168,5 +170,14 @@ struct ctx_st_ptr_format {
 		};
 	};
 };
+
+/* read execlist status or ctx status which are 64-bit MMIO
+ * status can be different types but all with ldw/udw defined.
+ */
+#define READ_STATUS_MMIO(pdev, offset, status)		\
+do {							\
+	status.ldw = VGT_MMIO_READ(pdev, offset);	\
+	status.udw = VGT_MMIO_READ(pdev, offset + 4);	\
+} while(0);
 
 #endif /* _VGT_EXECLISTS_H_ */
