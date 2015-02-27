@@ -1318,6 +1318,9 @@ extern void do_vgt_fast_display_switch(struct pgt_device *pdev);
 #define reg_aux_addr_size(pdev, reg)	\
 	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].addr_fix.size)
 
+#define el_read_ptr(pdev, ring_id) ((pdev)->el_read_ptr[ring_id])
+#define el_write_ptr(pdev, ring_id) ((pdev)->el_cache_write_ptr[ring_id])
+
 /*
  * Kernel BUG() doesn't work, because bust_spinlocks try to unblank screen
  * which may call into i915 and thus cause undesired more errors on the
@@ -2255,6 +2258,9 @@ static inline uint32_t vgt_ring_id_to_EL_base(enum vgt_ring_id ring_id)
 	return base;
 }
 
+#define el_ring_mmio(ring_id, offset_to_base) \
+(vgt_ring_id_to_EL_base((ring_id)) + (offset_to_base))
+
 static inline enum vgt_event_type vgt_ring_id_to_ctx_event(enum vgt_ring_id ring_id)
 {
 	enum vgt_event_type event;
@@ -2285,10 +2291,8 @@ static inline bool is_ring_empty(struct pgt_device *pdev, int ring_id)
 {
 	if (pdev->enable_execlist) {
 		struct execlist_status_format status;
-		uint32_t status_reg = vgt_ring_id_to_EL_base(ring_id)
-						+ _EL_OFFSET_STATUS;
+		uint32_t status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
 		status.ldw = VGT_MMIO_READ(pdev, status_reg);
-		status.udw = VGT_MMIO_READ(pdev, status_reg + 4);
 		return ((status.execlist_0_active == 0) &&
 				(status.execlist_1_active == 0));
 	} else {

@@ -1770,6 +1770,10 @@ static bool gen8_reset_engine(int ring_id,
 	pdev->el_read_ptr[ring_id] = DEFAULT_INV_SR_PTR;
 	pdev->el_cache_write_ptr[ring_id] = DEFAULT_INV_SR_PTR;
 	vgt_clear_submitted_el_record(pdev, ring_id);
+	/* reset read ptr in MMIO as well */
+	VGT_MMIO_WRITE(pdev, el_ring_mmio(ring_id, _EL_OFFSET_STATUS_PTR),
+			((_CTXBUF_READ_PTR_MASK << 16) |
+			(DEFAULT_INV_SR_PTR << _CTXBUF_READ_PTR_SHIFT)));
 
 	return true;
 }

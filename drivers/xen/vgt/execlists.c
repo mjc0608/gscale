@@ -28,7 +28,7 @@
 
 //#define EL_SLOW_DEBUG
 
-#define vgt_require_shadow_context(vgt)	(!((vgt) && (vgt->vm_id == 0)))
+#define vgt_require_shadow_context(vgt)	(!((vgt) && (vgt->vgt_id == 0)))
 
 #define EXECLIST_CTX_PAGES(ring_id)	((ring_id) == RING_BUFFER_RCS ? 20 : 2)
 
@@ -79,6 +79,15 @@ do {								\
 			break;					\
 		}						\
 	} while(1);						\
+} while(0);
+
+/* read execlist status or ctx status which are 64-bit MMIO
+ * status can be different types but all with ldw/udw defined.
+ */
+#define READ_STATUS_MMIO(pdev, offset, status)		\
+do {							\
+	status.ldw = VGT_MMIO_READ(pdev, offset);	\
+	status.udw = VGT_MMIO_READ(pdev, offset + 4);	\
 } while(0);
 
 static struct reg_state_ctx_header *
@@ -137,12 +146,10 @@ static void dump_execlist_status(struct execlist_status_format *status, enum vgt
 
 static void dump_execlist_info(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 {
+	uint32_t status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
 	struct execlist_status_format status;
-	uint32_t status_reg = vgt_ring_id_to_EL_base(ring_id) + _EL_OFFSET_STATUS;
 
-	status.ldw = VGT_MMIO_READ(pdev, status_reg);
-	status.udw = VGT_MMIO_READ(pdev, status_reg + 4);
-
+	READ_STATUS_MMIO(pdev, status_reg, status);
 	dump_execlist_status(&status, ring_id);
 }
 
@@ -150,20 +157,16 @@ static void dump_ctx_status_buf_entry(struct vgt_device *vgt,
 			enum vgt_ring_id ring_id, unsigned int buf_entry, bool hw_status)
 {
 	struct context_status_format status;
-
-	uint32_t el_ring_base;
 	uint32_t ctx_status_reg;
 
 	if (buf_entry >= CTX_STATUS_BUF_NUM)
 		return;
 
-	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
-	ctx_status_reg = el_ring_base + _EL_OFFSET_STATUS_BUF;
+	ctx_status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_BUF);
 	ctx_status_reg += buf_entry * 8;
 
 	if (hw_status) {
-		status.ldw = VGT_MMIO_READ(vgt->pdev, ctx_status_reg);
-		status.udw = VGT_MMIO_READ(vgt->pdev, ctx_status_reg + 4);
+		READ_STATUS_MMIO(vgt->pdev, ctx_status_reg, status);
 	} else {
 		status.ldw = __vreg(vgt, ctx_status_reg);
 		status.udw = __vreg(vgt, ctx_status_reg + 4);
@@ -198,15 +201,13 @@ static void dump_ctx_st_ptr(struct vgt_device *vgt, struct ctx_st_ptr_format *pt
 static void dump_ctx_status_buf(struct vgt_device *vgt,
 			enum vgt_ring_id ring_id, bool hw_status)
 {
-	uint32_t el_ring_base;
 	uint32_t ctx_ptr_reg;
 	struct ctx_st_ptr_format ctx_st_ptr;
 	unsigned read_idx;
 	unsigned write_idx;
 	int i;
 
-	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
-	ctx_ptr_reg = el_ring_base + _EL_OFFSET_STATUS_PTR;
+	ctx_ptr_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_PTR);
 
 	if (hw_status)
 		ctx_st_ptr.dw = VGT_MMIO_READ(vgt->pdev, ctx_ptr_reg);
@@ -619,14 +620,6 @@ static inline bool el_lrca_is_valid(struct vgt_device *vgt, uint32_t lrca)
 	bool rc;
 	uint32_t gma;
 
-	if (lrca == 0) {
-		/* Always return true for lrca as 0. Context status buffer
-		 * contains valid entry with lrca/ctx_id as 0, especially
-		 * for the idle_to_active events.
-		 */
-		return true;
-	}
-
 	gma = lrca << GTT_PAGE_SHIFT;
 	rc = g_gm_is_valid(vgt, gma);
 	if (!rc) {
@@ -695,6 +688,13 @@ static bool vgt_validate_status_entry(struct vgt_device *vgt,
 	 */
 	uint32_t lrca = status->context_id;
 
+	if (lrca == 0) {
+		/* Always return true for lrca as 0. Context status buffer
+		 * contains valid entry with lrca/ctx_id as 0, especially
+		 * for the idle_to_active events.
+		 */
+		return true;
+	}
 	if (el_lrca_is_valid(vgt, lrca))
 		return true;
 
@@ -1284,7 +1284,7 @@ static void vgt_emulate_submit_execlist(struct vgt_device *vgt, int ring_id,
 	struct execlist_status_format status;
 	vgt_state_ring_t *ring_state;
 	bool render_owner = is_current_render_owner(vgt);
-	uint32_t status_reg = vgt_ring_id_to_EL_base(ring_id) + _EL_OFFSET_STATUS;
+	uint32_t status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
 	uint32_t el_index;
 
 	ring_state = &vgt->rb[ring_id];
@@ -1356,13 +1356,11 @@ static void vgt_emulate_submit_execlist(struct vgt_device *vgt, int ring_id,
 static inline void vgt_add_ctx_switch_status(struct vgt_device *vgt, enum vgt_ring_id ring_id,
 			struct context_status_format *ctx_status)
 {
-	uint32_t el_ring_base;
 	uint32_t ctx_status_reg;
 	uint32_t write_idx;
 	uint32_t offset;
 
-	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
-	ctx_status_reg = el_ring_base + _EL_OFFSET_STATUS_BUF;
+	ctx_status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_BUF);
 
 	write_idx = vgt->rb[ring_id].csb_write_ptr;
 	if (write_idx == DEFAULT_INV_SR_PTR) {
@@ -1456,7 +1454,6 @@ err_ctx_not_found:
 static void vgt_emulate_csb_updates(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 {
 	struct ctx_st_ptr_format ctx_ptr_val;
-	uint32_t el_ring_base;
 	uint32_t ctx_ptr_reg;
 	uint32_t ctx_status_reg;
 	uint32_t el_status_reg;
@@ -1465,19 +1462,13 @@ static void vgt_emulate_csb_updates(struct vgt_device *vgt, enum vgt_ring_id rin
 	int read_idx;
 	int write_idx;
 
-	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
-	ctx_ptr_reg = el_ring_base + _EL_OFFSET_STATUS_PTR;
+	ctx_ptr_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_PTR);
 	ctx_ptr_val.dw = VGT_MMIO_READ(vgt->pdev, ctx_ptr_reg);
 
-	read_idx = vgt->pdev->el_read_ptr[ring_id];
-	if (read_idx != ctx_ptr_val.status_buf_read_ptr) {
-		/* This should not happen since the read_ptr is completely
-		 * controlled by us. Some warnings can be added here but
-		 * even this happens, there is no side effect.
-		 */
-	}
+	read_idx = el_read_ptr(vgt->pdev, ring_id);
+	ASSERT(read_idx == ctx_ptr_val.status_buf_read_ptr);
 
-	write_idx = vgt->pdev->el_cache_write_ptr[ring_id];
+	write_idx = el_write_ptr(vgt->pdev, ring_id);
 
 #ifdef EL_SLOW_DEBUG
 	if (vgt_debug & VGT_DBG_EXECLIST) {
@@ -1506,29 +1497,28 @@ static void vgt_emulate_csb_updates(struct vgt_device *vgt, enum vgt_ring_id rin
 	if (read_idx > write_idx)
 		write_idx += CTX_STATUS_BUF_NUM;
 
-	ctx_status_reg = el_ring_base + _EL_OFFSET_STATUS_BUF;
+	ctx_status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_BUF);
 	while (read_idx < write_idx) {
 		struct context_status_format ctx_status;
 		uint32_t offset;
 		read_idx ++;
 		offset = ctx_status_reg + (read_idx % CTX_STATUS_BUF_NUM) * 8;
-		ctx_status.ldw = VGT_MMIO_READ(vgt->pdev, offset);
-		ctx_status.udw = VGT_MMIO_READ(vgt->pdev, offset + 4);
+		READ_STATUS_MMIO(vgt->pdev, offset, ctx_status);
 
 		if (!vgt_validate_status_entry(vgt, ring_id, &ctx_status))
 			continue;
 
-		vgt_add_ctx_switch_status(vgt, ring_id, &ctx_status);
 		vgt_emulate_context_status_change(vgt, ring_id, &ctx_status);
+		vgt_add_ctx_switch_status(vgt, ring_id, &ctx_status);
 	}
 
 	read_idx = write_idx % CTX_STATUS_BUF_NUM;
-	vgt->pdev->el_read_ptr[ring_id] = read_idx;
+	el_read_ptr(vgt->pdev, ring_id) = read_idx;
 	ctx_ptr_val.status_buf_read_ptr = read_idx;
 	ctx_ptr_val.mask = _CTXBUF_READ_PTR_MASK;
 	VGT_MMIO_WRITE(vgt->pdev, ctx_ptr_reg, ctx_ptr_val.dw);
 
-	el_status_reg = el_ring_base + _EL_OFFSET_STATUS;
+	el_status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
 	el_status.ldw = VGT_MMIO_READ(vgt->pdev, el_status_reg);
 	if (!el_status.execlist_0_valid && !el_status.execlist_1_valid) {
 		/* EXECLIST is empty here.
@@ -1568,9 +1558,9 @@ void vgt_emulate_context_switch_event(struct pgt_device *pdev)
 	 */
 	for (ring_id = 0; ring_id < MAX_ENGINES; ++ ring_id) {
 		enum vgt_event_type event;
-		int cache_wptr = pdev->el_cache_write_ptr[ring_id];
+		int cache_wptr = el_write_ptr(pdev, ring_id);
 		if ((cache_wptr == DEFAULT_INV_SR_PTR) ||
-			(cache_wptr == pdev->el_read_ptr[ring_id]))
+			(cache_wptr == el_read_ptr(pdev, ring_id)))
 			continue;
 		vgt_emulate_csb_updates(vgt, ring_id);
 		/* it is necessary to set pending_events again. Otherwise
@@ -1735,14 +1725,12 @@ void vgt_kick_off_execlists(struct vgt_device *vgt)
 bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 {
 	int i;
-	uint32_t el_ring_base;
 	uint32_t el_status_reg;
 	struct execlist_status_format el_status;
 	struct vgt_exec_list *el_slots;
 	struct vgt_device *vgt = current_render_owner(pdev);
 
-	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
-	el_status_reg = el_ring_base + _EL_OFFSET_STATUS;
+	el_status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
 	el_status.ldw = VGT_MMIO_READ(pdev, el_status_reg);
 	if (el_status.execlist_0_valid || el_status.execlist_1_valid) {
 		vgt_info("EXECLIST still have valid items in context switch!\n");
@@ -1819,26 +1807,26 @@ void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 #endif
 	}
 
-	elsp_reg = vgt_ring_id_to_EL_base(ring_id) + _EL_OFFSET_SUBMITPORT;
+	elsp_reg = el_ring_mmio(ring_id, _EL_OFFSET_SUBMITPORT);
 	/* mark it submitted even if it failed the validation */
 	execlist->status = EL_SUBMITTED;
 
 	if (vgt_validate_elsp_descs(vgt, &context_descs[0], &context_descs[1])) {
 #ifdef EL_SLOW_DEBUG
 		struct execlist_status_format status;
-		uint32_t status_reg = vgt_ring_id_to_EL_base(ring_id) + _EL_OFFSET_STATUS;
-		status.ldw = VGT_MMIO_READ(vgt->pdev, status_reg);
-		status.udw = VGT_MMIO_READ(vgt->pdev, status_reg + 4);
+		uint32_t status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
+		READ_STATUS_MMIO(vgt->pdev, status_reg, status);
 		vgt_dbg(VGT_DBG_EXECLIST, "The EL status before ELSP submission!\n");
-		dump_execlist_status(&status, ring_id);
+		dump_execlist_status((struct execlist_status_format *)&status,
+					ring_id);
 #endif
 		vgt_hw_ELSP_write(vgt, elsp_reg, &context_descs[0],
 					&context_descs[1]);
 #ifdef EL_SLOW_DEBUG
-		status.ldw = VGT_MMIO_READ(vgt->pdev, status_reg);
-		status.udw = VGT_MMIO_READ(vgt->pdev, status_reg + 4);
+		READ_STATUS_MMIO(vgt->pdev, status_reg, status);
 		vgt_dbg(VGT_DBG_EXECLIST, "The EL status after ELSP submission:\n");
-		dump_execlist_status(&status, ring_id);
+		dump_execlist_status((struct execlist_status_format *)&status,
+					ring_id);
 #endif
 	}
 }
@@ -1865,8 +1853,8 @@ bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id)
 	vgt_enable_ring(vgt, ring_id);
 
 	if (hvm_render_owner) {
-		uint32_t elsp_reg = vgt_ring_id_to_EL_base(ring_id) +
-						_EL_OFFSET_SUBMITPORT;
+		uint32_t elsp_reg;
+		elsp_reg = el_ring_mmio(ring_id, _EL_OFFSET_SUBMITPORT);
 		if (!is_current_render_owner(vgt)) {
 			vgt_warn("VM-%d: ELSP submission but VM is not "
 			"render owner! But it will still be submitted.\n",
