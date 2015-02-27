@@ -403,6 +403,15 @@ typedef struct {
 	int csb_write_ptr;
 } vgt_state_ring_t;
 
+#define vgt_el_queue_head(vgt, ring_id) \
+	((vgt)->rb[ring_id].el_slots_head)
+#define vgt_el_queue_tail(vgt, ring_id) \
+	((vgt)->rb[ring_id].el_slots_tail)
+#define vgt_el_queue_slot(vgt, ring_id, slot_idx) \
+	((vgt)->rb[ring_id].execlist_slots[slot_idx])
+#define vgt_el_queue_ctx(vgt, ring_id, slot_idx, ctx_idx) \
+	((vgt)->rb[ring_id].execlist_slots[slot_idx].el_ctxs[ctx_idx])
+
 struct vgt_device;
 typedef bool (*vgt_mmio_read)(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes);

@@ -1256,6 +1256,29 @@ void dump_all_el_contexts(struct pgt_device *pdev)
 	}
 }
 
+static void dump_el_queue(struct vgt_device *vgt, int ring_id)
+{
+	int i;
+	printk("---- VM(%d): ring-%d EL queue ---", vgt->vm_id, ring_id);
+	printk("\thead: %d; tail: %d;\n", vgt_el_queue_head(vgt, ring_id),
+			vgt_el_queue_tail(vgt, ring_id));
+	for (i = 0; i < EL_QUEUE_SLOT_NUM; ++ i) {
+		int j;
+		struct vgt_exec_list *el_slot;
+		el_slot = &vgt_el_queue_slot(vgt, ring_id, i);
+		printk("[%d]: status: %d\n", i, el_slot->status);
+		for (j = 0; j < 2; ++ j) {
+			struct execlist_context *el_ctx;
+			el_ctx = vgt_el_queue_ctx(vgt, ring_id, i, j);
+			printk("|-ctx[%d]: ", j);
+			if (el_ctx == NULL)
+				printk("NULL\n");
+			else
+				printk("guest lrca:0x%x\n", el_ctx->guest_context.lrca);
+		}
+	}
+}
+
 void dump_el_status(struct pgt_device *pdev)
 {
 	enum vgt_ring_id ring_id;
@@ -1269,6 +1292,7 @@ void dump_el_status(struct pgt_device *pdev)
 			if (!vgt)
 				continue;
 			dump_ctx_status_buf(vgt, ring_id, false);
+			dump_el_queue(vgt, ring_id);
 		}
 	}
 	dump_all_el_contexts(pdev);

@@ -84,9 +84,8 @@ static void inline trace_el_queue_ops(struct vgt_device *vgt, int ring_id, int e
 {
 	int i;
 	char str[128];
-	vgt_state_ring_t *ring_state = &vgt->rb[ring_id];
-	int head = ring_state->el_slots_head;
-	int tail = ring_state->el_slots_tail;
+	int head = vgt_el_queue_head(vgt, ring_id);
+	int tail = vgt_el_queue_tail(vgt, ring_id);
 
 	/* if it was enqueue, the queue should not be empty now */
 	if (ops == 0)
@@ -95,7 +94,7 @@ static void inline trace_el_queue_ops(struct vgt_device *vgt, int ring_id, int e
 	for (i = 0; i < 2; ++ i) {
 		struct execlist_context *ctx;
 		uint32_t lrca;
-		ctx = ring_state->execlist_slots[el_idx].el_ctxs[i];
+		ctx = vgt_el_queue_ctx(vgt, ring_id, el_idx, i);
 		if (!ctx)
 			continue;
 
@@ -194,20 +193,19 @@ static bool vgt_el_slots_enqueue(struct vgt_device *vgt,
 			struct execlist_context *ctx1)
 {
 	struct vgt_exec_list *el_slot;
-	vgt_state_ring_t *ring_state = &vgt->rb[ring_id];
-	int tail = ring_state->el_slots_tail;
+	int tail = vgt_el_queue_tail(vgt, ring_id);
 	int new_tail = tail + 1;
 	if (new_tail == EL_QUEUE_SLOT_NUM)
 		new_tail = 0;
 
-	if (new_tail == ring_state->el_slots_head) {
+	if (new_tail == vgt_el_queue_head(vgt, ring_id)) {
 		return false;
 	}
-	el_slot = &ring_state->execlist_slots[tail];
+	el_slot = &vgt_el_queue_slot(vgt, ring_id, tail);
 	el_slot->el_ctxs[0] = ctx0;
 	el_slot->el_ctxs[1] = ctx1;
 	el_slot->status = EL_PENDING;
-	ring_state->el_slots_tail = new_tail;
+	vgt_el_queue_tail(vgt, ring_id) = new_tail;
 	trace_el_queue_ops(vgt, ring_id, tail, 0);
 	return true;
 }
@@ -215,10 +213,9 @@ static bool vgt_el_slots_enqueue(struct vgt_device *vgt,
 static int vgt_el_slots_dequeue(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 {
 	int new_head;
-	vgt_state_ring_t *ring_state = &vgt->rb[ring_id];
-	int head = ring_state->el_slots_head;
+	int head = vgt_el_queue_head(vgt, ring_id);
 
-	if (head == ring_state->el_slots_tail) {
+	if (head == vgt_el_queue_tail(vgt, ring_id)) {
 		// queue empty
 		return -1;
 	}
@@ -227,7 +224,7 @@ static int vgt_el_slots_dequeue(struct vgt_device *vgt, enum vgt_ring_id ring_id
 	if (new_head == EL_QUEUE_SLOT_NUM)
 		new_head = 0;
 
-	ring_state->el_slots_head = new_head;
+	vgt_el_queue_head(vgt, ring_id) = new_head;
 
 	trace_el_queue_ops(vgt, ring_id, head, 1);
 
@@ -237,27 +234,28 @@ static int vgt_el_slots_dequeue(struct vgt_device *vgt, enum vgt_ring_id ring_id
 static void vgt_el_slots_delete(struct vgt_device *vgt,
 			enum vgt_ring_id ring_id, int idx)
 {
-	vgt_state_ring_t *ring_state = &vgt->rb[ring_id];
-	int head = ring_state->el_slots_head;
+	struct vgt_exec_list *el_slot;
+	int head = vgt_el_queue_head(vgt, ring_id);
 
 	if (idx == head) {
 		head ++;
 		if (head == EL_QUEUE_SLOT_NUM)
 			head = 0;
-		ring_state->el_slots_head = head;
+		vgt_el_queue_head(vgt, ring_id) = head;
 	} else {
 		int idx_next = idx + 1;
 		if (idx_next == EL_QUEUE_SLOT_NUM)
 			idx_next = 0;
-		ASSERT(idx_next == ring_state->el_slots_tail);
-		ring_state->el_slots_tail = idx;
+		ASSERT(idx_next == vgt_el_queue_tail(vgt, ring_id));
+		vgt_el_queue_tail(vgt, ring_id) = idx;
 	}
 
 	trace_el_queue_ops(vgt, ring_id, idx, 2);
 
-	ring_state->execlist_slots[idx].status = EL_EMPTY;
-	ring_state->execlist_slots[idx].el_ctxs[0] = NULL;
-	ring_state->execlist_slots[idx].el_ctxs[1] = NULL;
+	el_slot = &vgt_el_queue_slot(vgt, ring_id, idx);
+	el_slot->status = EL_EMPTY;
+	el_slot->el_ctxs[0] = NULL;
+	el_slot->el_ctxs[1] = NULL;
 }
 
 static void vgt_el_slots_find_ctx(bool forward_search, vgt_state_ring_t *ring_state,
@@ -991,12 +989,10 @@ static void vgt_emulate_submit_execlist(struct vgt_device *vgt, int ring_id,
 			struct execlist_context *ctx1)
 {
 	struct execlist_status_format status;
-	vgt_state_ring_t *ring_state;
 	bool render_owner = is_current_render_owner(vgt);
 	uint32_t status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
 	uint32_t el_index;
 
-	ring_state = &vgt->rb[ring_id];
 	if (!vgt_el_slots_enqueue(vgt, ring_id, ctx0, ctx1)) {
 		vgt_err("VM-%d: <ring-%d> EXECLIST slots are full while adding new contexts! "
 			"Contexts will be ignored:\n"
@@ -1126,7 +1122,7 @@ static void vgt_emulate_context_status_change(struct vgt_device *vgt,
 	if (el_slot_idx == -1)
 		goto err_ctx_not_found;
 
-	el_slot = &ring_state->execlist_slots[el_slot_idx];
+	el_slot = &vgt_el_queue_slot(vgt, ring_id, el_slot_idx);
 
 	ASSERT((el_slot_ctx_idx == 0) || (el_slot_ctx_idx == 1));
 	el_ctx = el_slot->el_ctxs[el_slot_ctx_idx];
@@ -1299,7 +1295,7 @@ static void vgt_emulate_el_preemption(struct vgt_device *vgt, enum vgt_ring_id r
 
 	ASSERT(card == 2);
 	el_slot_idx = vgt_el_slots_dequeue(vgt, ring_id);
-	el_slot = &ring_state->execlist_slots[el_slot_idx];
+	el_slot = &vgt_el_queue_slot(vgt, ring_id, el_slot_idx);
 	ctx_event = vgt_ring_id_to_ctx_event(ring_id);
 
 	/* we do not need to care the second context in the preempted
@@ -1431,7 +1427,6 @@ bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 	uint32_t el_ring_base;
 	uint32_t el_status_reg;
 	struct execlist_status_format el_status;
-	struct vgt_exec_list *el_slots;
 	struct vgt_device *vgt = current_render_owner(pdev);
 
 	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
@@ -1442,9 +1437,9 @@ bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 		return false;
 	}
 
-	el_slots = vgt->rb[ring_id].execlist_slots;
 	for (i = 0; i < EL_QUEUE_SLOT_NUM; ++ i) {
-		if (el_slots[i].status == EL_SUBMITTED) {
+		struct vgt_exec_list *el_slot = &vgt_el_queue_slot(vgt, ring_id, i);
+		if (el_slot->status == EL_SUBMITTED) {
 			vgt_dbg(VGT_DBG_RENDER, "VM-%d: EL_SLOT[%d] is still running!\n",
 				vgt->vm_id, i);
 			return false;
@@ -1472,7 +1467,7 @@ void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 	if (el_slot_idx == -1) {
 		return;
 	}
-	execlist = &ring_state->execlist_slots[el_slot_idx];
+	execlist = &vgt_el_queue_slot(vgt, ring_id, el_slot_idx);
 
 	if (execlist == NULL) {
 		/* no pending EL to submit */
@@ -1627,15 +1622,14 @@ void vgt_clear_submitted_el_record(struct pgt_device *pdev, enum vgt_ring_id rin
 	int i;
 	for (i = 0; i < VGT_MAX_VMS; i++) {
 		struct vgt_device *vgt = pdev->device[i];
-		vgt_state_ring_t *ring_state;
 		int idx;
 		if (!vgt)
 			continue;
 
-		ring_state = &vgt->rb[ring_id];
-
 		for (idx = 0; idx < EL_QUEUE_SLOT_NUM; ++ idx) {
-			if (ring_state->execlist_slots[idx].status == EL_SUBMITTED)
+			struct vgt_exec_list *execlist;
+			execlist = &vgt_el_queue_slot(vgt, ring_id, idx);
+			if (execlist->status == EL_SUBMITTED)
 				vgt_el_slots_delete(vgt, ring_id, idx);
 		}
 	}
