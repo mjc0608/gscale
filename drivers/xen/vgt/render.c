@@ -1894,7 +1894,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 		goto err;
 	}
 
-	{
+	if (pdev->enable_execlist) {
 		int ring_id;
 		for (ring_id = 0; ring_id < pdev->max_engines; ++ ring_id) {
 			if (!pdev->ring_buffer[ring_id].need_switch)

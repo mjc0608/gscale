@@ -1177,9 +1177,7 @@ static void vgt_emulate_csb_updates(struct vgt_device *vgt, enum vgt_ring_id rin
 	struct ctx_st_ptr_format ctx_ptr_val;
 	uint32_t ctx_ptr_reg;
 	uint32_t ctx_status_reg;
-	uint32_t el_status_reg;
 
-	struct execlist_status_format el_status;
 	int read_idx;
 	int write_idx;
 
@@ -1239,14 +1237,6 @@ static void vgt_emulate_csb_updates(struct vgt_device *vgt, enum vgt_ring_id rin
 	ctx_ptr_val.mask = _CTXBUF_READ_PTR_MASK;
 	VGT_MMIO_WRITE(vgt->pdev, ctx_ptr_reg, ctx_ptr_val.dw);
 
-	el_status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
-	el_status.ldw = VGT_MMIO_READ(vgt->pdev, el_status_reg);
-	if (!el_status.execlist_0_valid && !el_status.execlist_1_valid) {
-		/* EXECLIST is empty here.
-		 */
-		if (ctx_switch_requested(vgt->pdev))
-			vgt_raise_request(vgt->pdev, VGT_REQUEST_CTX_SWITCH);
-	}
 #ifdef EL_SLOW_DEBUG
 	if (vgt_debug & VGT_DBG_EXECLIST) {
 		vgt_dbg(VGT_DBG_EXECLIST, "Virtual CTX Status buffer after buffer "
@@ -1256,10 +1246,11 @@ static void vgt_emulate_csb_updates(struct vgt_device *vgt, enum vgt_ring_id rin
 #endif
 }
 
-void vgt_emulate_context_switch_event(struct pgt_device *pdev)
+void vgt_emulate_context_switch_event(struct pgt_device *pdev,
+				enum vgt_ring_id ring_id)
 {
-	enum vgt_ring_id ring_id;
-	bool irq_needed = false;
+	enum vgt_event_type event;
+	int cache_wptr;
 	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
 	struct vgt_device *vgt = current_render_owner(pdev);
 
@@ -1272,30 +1263,21 @@ void vgt_emulate_context_switch_event(struct pgt_device *pdev)
 
 	ASSERT(spin_is_locked(&pdev->lock));
 
+	cache_wptr = el_write_ptr(pdev, ring_id);
+	if ((cache_wptr == DEFAULT_INV_SR_PTR) ||
+			(cache_wptr == el_read_ptr(pdev, ring_id)))
+		return;
+
 	/* we cannot rely on hstate->pending_events that is set in irq handler
 	 * to tell us which ring is having context switch interrupts. The
-	 * reason is that the bit can be cleared by the previous forwarding
+	 * reason is that irq physical handler could happen in parallel with this
+	 * function, and the bit can be cleared by the previous forwarding
 	 * function. It's a race condition.
 	 */
-	for (ring_id = 0; ring_id < MAX_ENGINES; ++ ring_id) {
-		enum vgt_event_type event;
-		int cache_wptr = el_write_ptr(pdev, ring_id);
-		if ((cache_wptr == DEFAULT_INV_SR_PTR) ||
-			(cache_wptr == el_read_ptr(pdev, ring_id)))
-			continue;
-		vgt_emulate_csb_updates(vgt, ring_id);
-		/* it is necessary to set pending_events again. Otherwise
-		 * the csb updates and interrupt between this handle to the
-		 * v handler invoking time could be lost, which will cause
-		 * render owner hang.
-		 */
-		event = vgt_ring_id_to_ctx_event(ring_id);
-		set_bit(event, hstate->pending_events);
-		irq_needed = true;
-	}
-
-	if (irq_needed)
-		set_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
+	vgt_emulate_csb_updates(vgt, ring_id);
+	event = vgt_ring_id_to_ctx_event(ring_id);
+	set_bit(event, hstate->pending_events);
+	set_bit(VGT_REQUEST_IRQ, (void *)&pdev->request);
 }
 
 /* scheduling */
@@ -1446,12 +1428,14 @@ void vgt_kick_off_execlists(struct vgt_device *vgt)
 bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 {
 	int i;
+	uint32_t el_ring_base;
 	uint32_t el_status_reg;
 	struct execlist_status_format el_status;
 	struct vgt_exec_list *el_slots;
 	struct vgt_device *vgt = current_render_owner(pdev);
 
-	el_status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
+	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
+	el_status_reg = el_ring_base + _EL_OFFSET_STATUS;
 	el_status.ldw = VGT_MMIO_READ(pdev, el_status_reg);
 	if (el_status.execlist_0_valid || el_status.execlist_1_valid) {
 		vgt_info("EXECLIST still have valid items in context switch!\n");

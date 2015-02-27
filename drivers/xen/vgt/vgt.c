@@ -242,6 +242,8 @@ static int vgt_thread(void *priv)
 
 	set_freezable();
 	while (!kthread_should_stop()) {
+		enum vgt_ring_id ring_id;
+		bool ctx_irq_received = false;
 		ret = wait_event_interruptible(pdev->event_wq,
 			pdev->request || freezing(current));
 
@@ -270,11 +272,27 @@ static int vgt_thread(void *priv)
 			vgt_reset_device(pdev);
 		}
 
-		if (test_and_clear_bit(VGT_REQUEST_CTX_EMULATION,
+		for (ring_id = 0; ring_id < MAX_ENGINES; ++ ring_id) {
+			if (test_and_clear_bit(
+				VGT_REQUEST_CTX_EMULATION_RCS + ring_id,
 				(void *)&pdev->request)) {
-			vgt_lock_dev(pdev, cpu);
-			vgt_emulate_context_switch_event(pdev);
-			vgt_unlock_dev(pdev, cpu);
+				vgt_lock_dev(pdev, cpu);
+				vgt_emulate_context_switch_event(pdev, ring_id);
+				vgt_unlock_dev(pdev, cpu);
+				ctx_irq_received = true;
+			}
+		}
+
+		if (ctx_irq_received && ctx_switch_requested(pdev)) {
+			bool all_rings_empty = true;
+			for (ring_id = 0; ring_id < MAX_ENGINES; ++ ring_id) {
+				if(!vgt_idle_execlist(pdev, ring_id)) {
+					all_rings_empty = false;
+					break;
+				}
+			}
+			if (all_rings_empty)
+				vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
 		}
 
 		/* forward physical GPU events to VMs */

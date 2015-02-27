@@ -1473,7 +1473,11 @@ static inline void reg_update_handlers(struct pgt_device *pdev,
 #define VGT_REQUEST_DPY_SWITCH	4	/* immediate reschedule(display switch) requested */
 #define VGT_REQUEST_DEVICE_RESET 5
 #define VGT_REQUEST_SCHED	6
-#define VGT_REQUEST_CTX_EMULATION	7 /* Emulate context switch irq of Gen8 */
+#define VGT_REQUEST_CTX_EMULATION_RCS	7 /* Emulate context switch irq of Gen8 */
+#define VGT_REQUEST_CTX_EMULATION_VCS	8 /* Emulate context switch irq of Gen8 */
+#define VGT_REQUEST_CTX_EMULATION_BCS	9 /* Emulate context switch irq of Gen8 */
+#define VGT_REQUEST_CTX_EMULATION_VECS	10 /* Emulate context switch irq of Gen8 */
+#define VGT_REQUEST_CTX_EMULATION_VCS2	11 /* Emulate context switch irq of Gen8 */
 
 static inline void vgt_raise_request(struct pgt_device *pdev, uint32_t flag)
 {
@@ -2291,8 +2295,10 @@ static inline bool is_ring_empty(struct pgt_device *pdev, int ring_id)
 {
 	if (pdev->enable_execlist) {
 		struct execlist_status_format status;
-		uint32_t status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
+		uint32_t status_reg = vgt_ring_id_to_EL_base(ring_id)
+						+ _EL_OFFSET_STATUS;
 		status.ldw = VGT_MMIO_READ(pdev, status_reg);
+		status.udw = VGT_MMIO_READ(pdev, status_reg + 4);
 		return ((status.execlist_0_active == 0) &&
 				(status.execlist_1_active == 0));
 	} else {
@@ -2875,7 +2881,7 @@ void dump_all_el_contexts(struct pgt_device *pdev);
 void dump_el_status(struct pgt_device *pdev);
 
 void vgt_clear_submitted_el_record(struct pgt_device *pdev, enum vgt_ring_id ring_id);
-void vgt_emulate_context_switch_event(struct pgt_device *pdev);
+void vgt_emulate_context_switch_event(struct pgt_device *pdev, enum vgt_ring_id ring_id);
 void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id);
 void vgt_kick_off_execlists(struct vgt_device *vgt);
 bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id);

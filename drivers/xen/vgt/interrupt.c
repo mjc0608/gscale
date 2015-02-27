@@ -1327,7 +1327,7 @@ static void vgt_handle_ctx_switch_phys(struct vgt_irq_host_state *hstate,
 	ctx_st_ptr.dw = VGT_MMIO_READ(pdev, ctx_ptr_reg);
 	el_write_ptr(pdev, ring_id) = ctx_st_ptr.status_buf_write_ptr;
 
-	vgt_raise_request(pdev, VGT_REQUEST_CTX_EMULATION);
+	vgt_raise_request(pdev, VGT_REQUEST_CTX_EMULATION_RCS + ring_id);
 
 	vgt_handle_default_event_phys(hstate, event);
 }
