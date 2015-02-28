@@ -2046,7 +2046,7 @@ static inline unsigned long __REG_READ(struct pgt_device *pdev,
 #define VGT_MMIO_WRITE64(pdev, mmio_offset, val)	\
 		__REG_WRITE(pdev, mmio_offset, val, 8)
 
-#define VGT_MMIO_READ64(pdev, mmio_offset, val)		\
+#define VGT_MMIO_READ64(pdev, mmio_offset)		\
 		__REG_READ(pdev, mmio_offset, 8)
 
 #define VGT_REG_IS_ALIGNED(reg, bytes) (!((reg)&((bytes)-1)))
