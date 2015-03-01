@@ -572,6 +572,13 @@ vgt_reg_t vgt_gen8_render_regs[] = {
 
 	_REG_GEN8_PRIVATE_PAT,
 	_REG_GEN8_PRIVATE_PAT + 4,
+
+        /* Execlist Status Registers */
+        _REG_RCS_EXECLIST_STATUS,
+        _REG_VCS_EXECLIST_STATUS,
+        _REG_VECS_EXECLIST_STATUS,
+        _REG_VCS2_EXECLIST_STATUS,
+        _REG_BCS_EXECLIST_STATUS,
 };
 
 static void __vgt_rendering_save(struct vgt_device *vgt, int num, vgt_reg_t *regs)
@@ -1764,6 +1771,8 @@ static bool gen8_reset_engine(int ring_id,
 	}
 
 	pdev->el_read_ptr[ring_id] = DEFAULT_INV_SR_PTR;
+	pdev->el_cache_write_ptr[ring_id] = DEFAULT_INV_SR_PTR;
+	vgt_clear_submitted_el_record(pdev, ring_id);
 
 	return true;
 }
