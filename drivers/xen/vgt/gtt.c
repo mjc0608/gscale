@@ -1186,10 +1186,11 @@ struct vgt_mm *vgt_create_mm(struct vgt_device *vgt,
 
 	mm->initialized = true;
 
+	if (virtual_page_table)
+		memcpy(mm->virtual_page_table, virtual_page_table,
+				mm->page_table_entry_size);
+
 	if (mm->has_shadow_page_table) {
-		if (virtual_page_table)
-			memcpy(mm->virtual_page_table, virtual_page_table,
-					mm->page_table_entry_size);
 		for (i = 0; i < mm->page_table_entry_cnt; i++) {
 			ppgtt_get_guest_root_entry(mm, &ge, i);
 			if (!ops->test_present(&ge))
