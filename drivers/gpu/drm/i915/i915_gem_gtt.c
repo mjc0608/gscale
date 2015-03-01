@@ -664,7 +664,7 @@ static int gen8_ppgtt_notify_vgt(struct i915_hw_ppgtt *ppgtt, int msg)
 		unsigned int off = vgt_info_off(pdp0_lo) + i * 8;
 
 		I915_WRITE(off, addr & 0xffffffff);
-		I915_WRITE(off + 4, addr << 32);
+		I915_WRITE(off + 4, addr >> 32);
 	}
 
 	I915_WRITE(vgt_info_off(g2v_notify), msg);
