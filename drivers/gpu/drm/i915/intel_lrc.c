@@ -231,8 +231,6 @@ int intel_sanitize_enable_execlists(struct drm_device *dev, int enable_execlists
 	    i915.use_mmio_flip >= 0)
 		return 1;
 
-	WARN_ON(USES_VGT(dev));
-
 	return 0;
 }
 
