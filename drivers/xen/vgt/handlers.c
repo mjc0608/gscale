@@ -2656,7 +2656,6 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_BCS_TIMESTAMP, 8, F_PT, 0, D_ALL, NULL, NULL},
 {0xb008, 4, F_VIRT, 0, D_HSW, NULL, NULL},
 {0xb208, 4, F_VIRT, 0, D_HSW, NULL, NULL},
-{0x2350, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {0x2420, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {0x2430, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {0x2434, 4, F_RDR, 0, D_ALL, NULL, NULL},
