@@ -1899,7 +1899,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 			if (!pdev->ring_buffer[ring_id].need_switch)
 				continue;
 			if (!vgt_idle_execlist(pdev, ring_id)) {
-				vgt_info("rendering ring is not idle. "
+				vgt_dbg(VGT_DBG_EXECLIST, "rendering ring is not idle. "
 					"Ignore the context switch!\n");
 				vgt_force_wake_put();
 				goto out;
