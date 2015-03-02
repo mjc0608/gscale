@@ -701,7 +701,7 @@ reg_handle:
 		reg_set_cmd_access(pdev, offset);
 	else {
 		vgt_err("%s access to non-render register (%x)\n", cmd, offset);
-		ASSERT_VM(0,vgt);
+		//ASSERT_VM(0,vgt);
 	}
 
 	return 0;
