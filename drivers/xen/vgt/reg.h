@@ -54,6 +54,24 @@ static inline uint32_t __RING_REG(int32_t ring_id, uint32_t rcs_reg)
 #define _MASKED_BIT_ENABLE(a) (((a) << 16) | (a))
 #define _MASKED_BIT_DISABLE(a) ((a) << 16)
 
+/*
+ * Registers used only by the command parser
+ */
+#define _REG_BCS_SWCTRL 0x22200
+
+#define _REG_HS_INVOCATION_COUNT 0x2300
+#define _REG_DS_INVOCATION_COUNT 0x2308
+#define _REG_IA_VERTICES_COUNT   0x2310
+#define _REG_IA_PRIMITIVES_COUNT 0x2318
+#define _REG_VS_INVOCATION_COUNT 0x2320
+#define _REG_GS_INVOCATION_COUNT 0x2328
+#define _REG_GS_PRIMITIVES_COUNT 0x2330
+#define _REG_CL_INVOCATION_COUNT 0x2338
+#define _REG_CL_PRIMITIVES_COUNT 0x2340
+#define _REG_PS_INVOCATION_COUNT 0x2348
+#define _REG_PS_DEPTH_COUNT      0x2350
+
+
 /* PRB0, RCS */
 #define _REG_RCS_TAIL		0x02030
 #define _REG_RCS_HEAD		0x02034
