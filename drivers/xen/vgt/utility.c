@@ -304,9 +304,9 @@ void common_show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes,
 	printk("\n");
 
 	if (IS_PREBDW(pdev))
-		off = WRAP_OFF(p_head - 8, ring_len);
+		off = WRAP_OFF(((int32_t)p_head) - 8, ring_len);
 	else
-		off = WRAP_OFF(p_head - 12, ring_len);
+		off = WRAP_OFF(((int32_t)p_head) - 12, ring_len);
 
 	cur = (u32*)(p_contents + off);
 	if ((*cur & 0xfff00000) == 0x18800000 && vgt) {
