@@ -224,12 +224,14 @@ int intel_sanitize_enable_execlists(struct drm_device *dev, int enable_execlists
 	if (INTEL_INFO(dev)->gen >= 9)
 		return 1;
 
-	if (enable_execlists == 0)
+	if (enable_execlists == 0 && !USES_VGT(dev))
 		return 0;
 
 	if (HAS_LOGICAL_RING_CONTEXTS(dev) && USES_PPGTT(dev) &&
 	    i915.use_mmio_flip >= 0)
 		return 1;
+
+	WARN_ON(USES_VGT(dev));
 
 	return 0;
 }
