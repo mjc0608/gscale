@@ -1756,7 +1756,6 @@ populate_lr_context(struct intel_context *ctx, struct drm_i915_gem_object *ctx_o
 		}
 		intel_lr_context_notify_vgt(ctx_obj, ring->dev,
 				VGT_G2V_EXECLIST_CONTEXT_ELEMENT_CREATE);
-		i915_gem_object_ggtt_unpin(ctx_obj);
 	}
 
 	kunmap_atomic(reg_state);
@@ -1788,9 +1787,11 @@ void intel_lr_context_free(struct intel_context *ctx)
 					ctx->engine[i].ringbuf;
 			struct intel_engine_cs *ring = ringbuf->ring;
 
-			if (USES_VGT(ringbuf->ring->dev))
+			if (USES_VGT(ringbuf->ring->dev)) {
 				intel_lr_context_notify_vgt(ctx_obj, ringbuf->ring->dev,
 						VGT_G2V_EXECLIST_CONTEXT_ELEMENT_DESTROY);
+				i915_gem_object_ggtt_unpin(ctx_obj);
+			}
 
 			if (ctx == ring->default_context) {
 				intel_unpin_ringbuffer_obj(ringbuf);
