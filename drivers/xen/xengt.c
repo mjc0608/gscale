@@ -39,11 +39,15 @@
 #include <asm/xen/hypercall.h>
 #include <asm/xen/page.h>
 #include <xen/xen-ops.h>
-#include <xen/interface/memory.h>
+#include <xen/events.h>
 #include <xen/interface/hvm/params.h>
+#include <xen/interface/hvm/ioreq.h>
+#include <xen/interface/hvm/hvm_op.h>
+#include <xen/interface/memory.h>
+#include <xen/interface/platform.h>
+#include <xen/interface/vcpu.h>
 
 #include "vgt.h"
-#include "xengt.h"
 
 #define MAX_HVM_VCPUS_SUPPORTED 128
 struct vgt_hvm_info {

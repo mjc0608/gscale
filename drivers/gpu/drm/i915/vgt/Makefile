@@ -3,7 +3,6 @@ VGT_SOURCE := vgt.o render.o mmio.o handlers.o interrupt.o  \
 	klog.o dev.o cmd_parser.o sched.o instance.o cfg_space.o \
 	fb_decoder.o vbios.o host.o execlists.o
 
-ccflags-y				+= -I$(src) -Wall -Werror -Idrivers/gpu/drm/i915
+ccflags-y				+= -I$(src) -I$(src)/.. -Wall -Werror
 xen_vgt-y				:= $(VGT_SOURCE)
-xen_vgt-$(CONFIG_XENGT)			+= xengt.o
 obj-$(CONFIG_I915_VGT)			+= xen_vgt.o
