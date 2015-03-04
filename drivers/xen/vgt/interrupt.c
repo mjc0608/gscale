@@ -132,8 +132,10 @@ char *vgt_irq_name[EVENT_MAX] = {
 	[GTT_FAULT] = "GTT fault",
 	[PRIMARY_A_FLIP_DONE] = "Primary Plane A flip done",
 	[PRIMARY_B_FLIP_DONE] = "Primary Plane B flip done",
+	[PRIMARY_C_FLIP_DONE] = "Primary Plane C flip done",
 	[SPRITE_A_FLIP_DONE] = "Sprite Plane A flip done",
 	[SPRITE_B_FLIP_DONE] = "Sprite Plane B flip done",
+	[SPRITE_C_FLIP_DONE] = "Sprite Plane C flip done",
 
 	// PM
 	[GV_DOWN_INTERVAL] = "Render geyserville Down evaluation interval interrupt",
