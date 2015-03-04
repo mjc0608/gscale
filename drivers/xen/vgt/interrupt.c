@@ -1002,8 +1002,8 @@ static void vgt_handle_default_event_virt(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event, struct vgt_device *vgt)
 {
 	if (!vgt_irq_warn_once[vgt->vgt_id][event]) {
-		vgt_info("IRQ: VM(%d) receive event (%s)\n",
-			vgt->vm_id, vgt_irq_name[event]);
+		vgt_info("IRQ: VM(%d) receive event %d (%s)\n",
+			vgt->vm_id, event, vgt_irq_name[event]);
 		vgt_irq_warn_once[vgt->vgt_id][event] = 1;
 	}
 	vgt_propagate_event(hstate, event, vgt);
