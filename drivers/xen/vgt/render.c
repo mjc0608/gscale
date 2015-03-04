@@ -1764,7 +1764,7 @@ static bool gen8_reset_engine(int ring_id,
 		struct reg_mask_t *r = &gen8_rcs_reset_mmio[count];
 		vgt_reg_t v = __vreg(next, r->reg);
 		if (r->mask)
-			v = (v << 16) | v;
+			v |= 0xffff0000;
 
 		VGT_MMIO_WRITE(pdev, r->reg, v);
 		VGT_POST_READ(pdev, r->reg);
