@@ -585,6 +585,8 @@ static int mmio_to_ring_id(unsigned int reg)
 		break;
 	case _REG_VCS2_PP_DIR_BASE:
 	case _REG_VCS2_MFX_MODE_BDW:
+	case _REG_VCS2_EXECLIST_SUBMITPORT:
+	case _REG_VCS2_EXECLIST_STATUS:
 		ring_id = RING_BUFFER_VCS2;
 		break;
 	default:
@@ -2498,6 +2500,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_VCS_HWSTAM, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_VCS2_HWSTAM, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_HWSTAM, 4, F_RDR, 0, D_ALL, NULL, NULL},
+{_REG_VECS_HWSTAM, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_RCS_HWS_PGA, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_VCS_HWS_PGA, 4, F_RDR_ADRFIX, 0xFFFFF000, D_ALL, NULL, NULL},
 {_REG_BCS_HWS_PGA, 4, F_RDR_ADRFIX, 0xFFFFF000, D_SNB, NULL, NULL},
@@ -3438,6 +3441,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x22054, 4, F_DOM0, 0, D_HSW_PLUS, NULL, NULL},
 {0x1A054, 4, F_DOM0, 0, D_HSW_PLUS, NULL, NULL},
 
+{0x44070, 4, F_DOM0, 0, D_HSW_PLUS, NULL, NULL},
+
 /*command accessed registers, supplement for reg audit in cmd parser*/
 {_REG_GEN7_L3SQCREG4, 4, F_RDR, 0, D_HSW, NULL, NULL},
 {0x2178, 4, F_RDR, 0, D_ALL, NULL, NULL},
@@ -3547,9 +3552,6 @@ reg_attr_t vgt_base_reg_info[] = {
 
 {0x45260, 4, F_DPY, 0, D_BDW, NULL, NULL},
 {0x6f800, 4, F_DPY, 0, D_BDW, NULL, NULL},
-
-/* TODO policy not cleared yet */
-{0x1a098, 4, F_DOM0, 0x0, D_ALL, NULL, NULL},
 
 {0x66c00, 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
 {0x66c04, 4, F_VIRT, 0, D_BDW, NULL, NULL},
