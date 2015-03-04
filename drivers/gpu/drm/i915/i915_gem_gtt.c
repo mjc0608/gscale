@@ -2509,6 +2509,9 @@ int i915_gem_gtt_init(struct drm_device *dev)
 	if (ret)
 		return ret;
 
+	if (USES_VGT(dev))
+		gtt->stolen_size = 0;
+
 	gtt->base.dev = dev;
 
 	/* GMADR is the PCI mmio aperture into the global GTT. */
