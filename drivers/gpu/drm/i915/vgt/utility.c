@@ -1077,22 +1077,33 @@ static void dump_ctx_status_buf_entry(struct vgt_device *vgt,
 		status.udw = __vreg(vgt, ctx_status_reg + 4);
 	}
 
-	printk("-- Context Status Buffer (%d) for ring %d --\n",
-			buf_entry, ring_id);
-	printk("\t context_id:0x%x\n", status.context_id);
-	printk("\t idle_to_active: %d\n", status.idle_to_active);
-	printk("\t preempted: %d\n", status.preempted);
-	printk("\t element_switch: %d\n", status.element_switch);
-	printk("\t active_to_idle: %d\n", status.active_to_idle);
-	printk("\t context_complete: %d\n", status.context_complete);
-	printk("\t wait_on_sync_flip: %d\n", status.wait_on_sync_flip);
-	printk("\t wait_on_vblank: %d\n", status.wait_on_vblank);
-	printk("\t wait_on_semaphore: %d\n", status.wait_on_semaphore);
-	printk("\t wait_on_scanline: %d\n", status.wait_on_scanline);
-	printk("\t semaphore_wait_mode: %d\n", status.semaphore_wait_mode);
-	printk("\t display_plane: %d\n", status.display_plane);
-	printk("\t lite_restore	: %d\n", status.lite_restore);
-	printk("\n");
+	printk("    ring-%d CSB[%d]: ctx(0x%08x) val(0x%08x) <set bits: ",
+			ring_id, buf_entry, status.context_id, status.ldw);
+	if (status.idle_to_active)
+		printk("idle_to_active; ");
+	if (status.preempted)
+		printk("preemptedn; ");
+	if (status.element_switch)
+		printk("element_switch; ");
+	if (status.active_to_idle)
+		printk("active_to_idle; ");
+	if (status.context_complete)
+		printk("context_complete; ");
+	if (status.wait_on_sync_flip)
+		printk("wait_on_sync_flip; ");
+	if (status.wait_on_vblank)
+		printk("wait_on_vblank; ");
+	if (status.wait_on_semaphore)
+		printk("wait_on_semaphore; ");
+	if (status.wait_on_scanline)
+		printk("wait_on_scanline; ");
+	if (status.semaphore_wait_mode)
+		printk("semaphore_wait_mode; ");
+	if (status.display_plane)
+		printk("display_plane; ");
+	if (status.lite_restore)
+		printk("lite_restore; ");
+	printk(">\n");
 }
 
 static void dump_ctx_st_ptr(struct vgt_device *vgt, struct ctx_st_ptr_format *ptr)
@@ -1295,5 +1306,4 @@ void dump_el_status(struct pgt_device *pdev)
 			dump_el_queue(vgt, ring_id);
 		}
 	}
-	dump_all_el_contexts(pdev);
 }

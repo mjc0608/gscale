@@ -884,6 +884,32 @@ static const struct file_operations vgt_el_status_fops = {
 	.release = single_release,
 };
 
+static int vgt_el_context_show(struct seq_file *m, void *data)
+{
+	struct pgt_device *pdev = (struct pgt_device *)m->private;
+	unsigned long flags;
+
+	spin_lock_irqsave(&pdev->lock, flags);
+	dump_all_el_contexts(pdev);
+	spin_unlock_irqrestore(&pdev->lock, flags);
+
+	seq_printf(m, "\n");
+
+	return 0;
+}
+
+static int vgt_el_context_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vgt_el_context_show, inode->i_private);
+}
+
+static const struct file_operations vgt_el_context_fops = {
+	.open = vgt_el_context_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 /* initialize vGT debufs top directory */
 struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 {
@@ -911,6 +937,11 @@ struct dentry *vgt_init_debugfs(struct pgt_device *pdev)
 
 	temp_d = debugfs_create_file("show_el_status", 0444, d_vgt_debug,
 		pdev, &vgt_el_status_fops);
+	if (!temp_d)
+		return NULL;
+
+	temp_d = debugfs_create_file("show_el_context", 0444, d_vgt_debug,
+		pdev, &vgt_el_context_fops);
 	if (!temp_d)
 		return NULL;
 
