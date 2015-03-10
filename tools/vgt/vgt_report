@@ -25,8 +25,8 @@ parser.add_option("-i", "--info", dest="reginfo", action="store_true",
 parser.add_option("-r", "--regname", dest="regname", action="store_true",
 		   help="show the list of register names")
 parser.add_option("-f", "--file", dest="filename", metavar="FILE",
-		   default="drivers/xen/vgt/reg.h",
-		   help="the location of vgt/reg.h (default drivers/xen/vgt/reg.h)")
+		   default="drivers/gpu/drm/i915/vgt/reg.h",
+		   help="the location of vgt/reg.h (default drivers/gpu/drm/i915/vgt/reg.h)")
 parser.add_option("-u", "--untracked", dest="untrack", action="store_true",
 		   help="show the list of untracked registers")
 parser.add_option("-U", "--unused", dest="unuse", action="store_true",
