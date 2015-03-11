@@ -318,18 +318,18 @@ static int vgt_el_slots_next_sched(vgt_state_ring_t *ring_state)
 	}
 }
 
-static int vgt_el_slots_cardinal(vgt_state_ring_t *ring_state)
+static int vgt_el_slots_number(vgt_state_ring_t *ring_state)
 {
-	int card;
+	int num;
 	int head = ring_state->el_slots_head;
 	int tail = ring_state->el_slots_tail;
 
 	if (tail >= head)
-		card = tail - head;
+		num = tail - head;
 	else
-		card = tail + EL_QUEUE_SLOT_NUM - head;
+		num = tail + EL_QUEUE_SLOT_NUM - head;
 
-	return card;
+	return num;
 }
 
 /* validation functions */
@@ -1108,7 +1108,7 @@ static void vgt_emulate_context_status_change(struct vgt_device *vgt,
 	uint32_t ctx_id = ctx_status->context_id;
 
 	ring_state = &vgt->rb[ring_id];
-	if (vgt_el_slots_cardinal(ring_state) > 1) {
+	if (vgt_el_slots_number(ring_state) > 1) {
 		if (!ctx_status->preempted) {
 			/* TODO we may give warning here.
 			 * It is not expected but still work.
@@ -1281,7 +1281,7 @@ void vgt_emulate_context_switch_event(struct pgt_device *pdev,
 static void vgt_emulate_el_preemption(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 {
 	int el_slot_idx;
-	int card;
+	int num;
 	struct vgt_exec_list *el_slot;
 	struct execlist_context *el_ctx;
 	vgt_state_ring_t *ring_state;
@@ -1289,11 +1289,11 @@ static void vgt_emulate_el_preemption(struct vgt_device *vgt, enum vgt_ring_id r
 	enum vgt_event_type ctx_event;
 
 	ring_state = &vgt->rb[ring_id];
-	card  = vgt_el_slots_cardinal(ring_state);
-	if (card <= 1)
+	num = vgt_el_slots_number(ring_state);
+	if (num <= 1)
 		return;
 
-	ASSERT(card == 2);
+	ASSERT(num == 2);
 	el_slot_idx = vgt_el_slots_dequeue(vgt, ring_id);
 	el_slot = &vgt_el_queue_slot(vgt, ring_id, el_slot_idx);
 	ctx_event = vgt_ring_id_to_ctx_event(ring_id);
