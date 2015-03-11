@@ -209,7 +209,7 @@ static bool vgt_el_slots_enqueue(struct vgt_device *vgt,
 	trace_el_queue_ops(vgt, ring_id, tail, 0);
 	return true;
 }
-
+#if 0
 static int vgt_el_slots_dequeue(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 {
 	int new_head;
@@ -230,7 +230,7 @@ static int vgt_el_slots_dequeue(struct vgt_device *vgt, enum vgt_ring_id ring_id
 
 	return head;
 }
-
+#endif
 static void vgt_el_slots_delete(struct vgt_device *vgt,
 			enum vgt_ring_id ring_id, int idx)
 {
@@ -1277,7 +1277,7 @@ void vgt_emulate_context_switch_event(struct pgt_device *pdev,
 }
 
 /* scheduling */
-
+#if 0
 static void vgt_emulate_el_preemption(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 {
 	int el_slot_idx;
@@ -1329,7 +1329,7 @@ static void vgt_emulate_el_preemption(struct vgt_device *vgt, enum vgt_ring_id r
 	el_slot->el_ctxs[0] = NULL;
 	el_slot->el_ctxs[1] = NULL;
 }
-
+#endif
 static inline bool vgt_hw_ELSP_write(struct vgt_device *vgt,
 				unsigned int reg,
 				struct ctx_desc_format *ctx0,
@@ -1416,8 +1416,14 @@ void vgt_kick_off_execlists(struct vgt_device *vgt)
 	struct pgt_device *pdev = vgt->pdev;
 
 	for (i = 0; i < pdev->max_engines; i ++) {
-		vgt_emulate_el_preemption(vgt, i);
-		vgt_submit_execlist(vgt, i);
+		int j;
+		int num = vgt_el_slots_number(&vgt->rb[i]);
+		if (num == 2)
+			vgt_dbg(VGT_DBG_EXECLIST,
+				"VM(%d) Ring-%d: Preemption is met while "
+				"kicking off execlists.\n", vgt->vm_id, i);
+		for (j = 0; j < num; ++ j)
+			vgt_submit_execlist(vgt, i);
 	}
 }
 
