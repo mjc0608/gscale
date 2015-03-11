@@ -573,6 +573,12 @@ vgt_reg_t vgt_gen8_render_regs[] = {
 	_REG_GEN8_PRIVATE_PAT,
 	_REG_GEN8_PRIVATE_PAT + 4,
 
+	_REG_BCS_MI_MODE,
+	_REG_BCS_BLT_MODE_IVB,
+	_REG_BCS_INSTPM,
+	_REG_BCS_HWSTAM,
+	_REG_BCS_EXCC,
+
         /* Execlist Status Registers */
         _REG_RCS_EXECLIST_STATUS,
         _REG_VCS_EXECLIST_STATUS,
