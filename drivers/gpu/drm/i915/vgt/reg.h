@@ -257,8 +257,6 @@ static inline uint32_t __RING_REG(int32_t ring_id, uint32_t rcs_reg)
 #define _REG_BCS_PP_DCLV		0x22220
 #define _REG_VCS_PP_DIR_BASE		0x12228
 #define _REG_VCS_PP_DCLV		0x12220
-#define _REG_VCS2_PP_DIR_BASE		0x1c228
-#define _REG_VCS2_PP_DCLV		0x1c220
 #define _REG_VECS_PP_DIR_BASE		0x1A228
 #define _REG_VECS_PP_DCLV		0x1A220
 

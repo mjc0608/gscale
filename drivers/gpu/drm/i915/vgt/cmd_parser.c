@@ -1970,7 +1970,7 @@ static struct cmd_info cmd_info[] = {
 		0, 8, NULL},
 
 	{"3DSTATE_RAST_MULTISAMPLE", OP_3DSTATE_RAST_MULTISAMPLE, F_LEN_VAR, R_RCS,
-		D_GEN75PLUS, 0, 8, NULL},
+		D_HSW, 0, 8, NULL},
 
 	{"3DSTATE_STENCIL_BUFFER", OP_SNB_3DSTATE_STENCIL_BUFFER, F_LEN_VAR, R_RCS,
 		D_SNB, ADDR_FIX_1(2), 8, NULL},
@@ -2239,6 +2239,8 @@ static struct cmd_info cmd_info[] = {
 	{"VEBOX_SURFACE_STATE", OP_VEB_SURFACE_STATE, F_LEN_VAR, R_VECS, D_HSW_PLUS, 0, 12, NULL},
 
 	{"VEB_DI_IECP", OP_VEB_DNDI_IECP_STATE, F_LEN_VAR, R_VECS, D_HSW, 0, 12, NULL},
+
+	{"VEB_DI_IECP", OP_VEB_DNDI_IECP_STATE, F_LEN_VAR, R_VECS, D_BDW_PLUS, 0, 20, NULL},
 };
 
 static int cmd_hash_init(struct pgt_device *pdev)

@@ -583,7 +583,6 @@ static int mmio_to_ring_id(unsigned int reg)
 	case _REG_VECS_EXECLIST_STATUS:
 		ring_id = RING_BUFFER_VECS;
 		break;
-	case _REG_VCS2_PP_DIR_BASE:
 	case _REG_VCS2_MFX_MODE_BDW:
 	case _REG_VCS2_EXECLIST_SUBMITPORT:
 	case _REG_VCS2_EXECLIST_STATUS:
@@ -2574,12 +2573,10 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_RCS_PP_DIR_BASE_READ, 4, F_RDR_ADRFIX, 0xFFFFF000, D_SNB, NULL, NULL},
 {_REG_RCS_PP_DIR_BASE_IVB, 4, F_RDR_ADRFIX, 0xFFFFF000, D_PRE_BDW, NULL, NULL},
 {_REG_VCS_PP_DIR_BASE, 4, F_RDR_ADRFIX, 0xFFFFF000, D_PRE_BDW, NULL, NULL},
-{_REG_VCS2_PP_DIR_BASE, 4, F_RDR_ADRFIX, 0xFFFFF000, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_PP_DIR_BASE, 4, F_RDR_ADRFIX, 0xFFFFF000, D_PRE_BDW, NULL, NULL},
 {_REG_VECS_PP_DIR_BASE, 4, F_RDR_ADRFIX, 0xFFFFF000, D_HSW, NULL, NULL},
 {_REG_RCS_PP_DCLV, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_VCS_PP_DCLV, 4, F_RDR, 0, D_ALL, NULL, NULL},
-{_REG_VCS2_PP_DCLV, 4, F_RDR, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_BCS_PP_DCLV, 4, F_RDR, 0, D_ALL, NULL, NULL},
 {_REG_VECS_PP_DCLV, 4, F_RDR, 0, D_HSW, NULL, NULL},
 {_REG_RBSYNC, 4, F_RDR, 0, D_ALL, NULL, NULL},
@@ -3642,10 +3639,6 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 				ring_pp_mode_write);
 
 	if (IS_BDWGT3(pdev)) {
-		reg_update_handlers(pdev, _REG_VCS2_PP_DIR_BASE, 4,
-				pp_dir_base_read, pp_dir_base_write);
-		reg_update_handlers(pdev, _REG_VCS2_PP_DCLV, 4,
-				pp_dclv_read, pp_dclv_write);
 		reg_update_handlers(pdev, _REG_VCS2_MFX_MODE_BDW, 4,
 				ring_pp_mode_read,
 				ring_pp_mode_write);
