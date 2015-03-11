@@ -401,6 +401,7 @@ typedef struct {
 	struct vgt_exec_list execlist_slots[EL_QUEUE_SLOT_NUM];
 	struct vgt_elsp_store elsp_store;
 	int csb_write_ptr;
+	bool check_uninitialized_context;
 } vgt_state_ring_t;
 
 #define vgt_el_queue_head(vgt, ring_id) \
