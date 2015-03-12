@@ -989,6 +989,12 @@ int vgt_resume(struct pci_dev *pdev)
 	recalculate_and_update_ier(pgt, _REG_PMIER);
 	recalculate_and_update_ier(pgt, _REG_SDEIER);
 
+	if (pgt->enable_execlist) {
+		enum vgt_ring_id ring_id;
+		for (ring_id = 0; ring_id < MAX_ENGINES; ++ ring_id)
+			reset_el_structure(pgt, ring_id);
+	}
+
 	spin_unlock(&pgt->lock);
 
 	return 0;

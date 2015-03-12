@@ -2901,6 +2901,19 @@ bool vgt_g2v_execlist_context_destroy(struct vgt_device *vgt);
 
 bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id);
 
+static inline void reset_el_structure(struct pgt_device *pdev,
+				enum vgt_ring_id ring_id)
+{
+	el_read_ptr(pdev, ring_id) = DEFAULT_INV_SR_PTR;
+	el_write_ptr(pdev, ring_id) = DEFAULT_INV_SR_PTR;
+	vgt_clear_submitted_el_record(pdev, ring_id);
+	/* reset read ptr in MMIO as well */
+	VGT_MMIO_WRITE(pdev, el_ring_mmio(ring_id, _EL_OFFSET_STATUS_PTR),
+			((_CTXBUF_READ_PTR_MASK << 16) |
+			(DEFAULT_INV_SR_PTR << _CTXBUF_READ_PTR_SHIFT)));
+
+}
+
 extern struct kernel_dm *vgt_pkdm;
 
 static inline unsigned long hypervisor_g2m_pfn(struct vgt_device *vgt,
