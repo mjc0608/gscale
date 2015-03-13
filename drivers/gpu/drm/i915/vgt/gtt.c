@@ -1293,6 +1293,8 @@ static inline unsigned long vgt_gma_to_gpa(struct vgt_mm *mm, unsigned long gma)
 			gma_index[0] = gma_ops->gma_to_pte_index(gma);
 			index = 1;
 			break;
+		default:
+			BUG();
 	}
 	/* walk into the last level shadow page table and get gpa from guest entry */
 	for (i = 0; i < index; i++)

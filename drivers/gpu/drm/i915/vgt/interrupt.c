@@ -751,6 +751,8 @@ static void update_upstream_irq(struct vgt_device *vgt,
 			clear_bits |= (1 << bit);
 	}
 
+	ASSERT(up_irq_info);
+
 	if (up_irq_info->group == IRQ_INFO_MASTER) {
 		u32 isr = up_irq_info->reg_base;
 		__vreg(vgt, isr) &= ~clear_bits;

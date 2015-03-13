@@ -2339,7 +2339,7 @@ static bool vgt_write_submitport(struct vgt_device *vgt, unsigned int offset,
 	struct vgt_elsp_store *elsp_store = &vgt->rb[ring_id].elsp_store;
 
 	ASSERT((bytes == 4) && ((offset & 3) == 0));
-	ASSERT(elsp_store->count >= 0 && elsp_store->count < ELSP_BUNDLE_NUM);
+	ASSERT(elsp_store->count < ELSP_BUNDLE_NUM);
 
 	elsp_store->element[elsp_store->count] = *(vgt_reg_t *)p_data;
 	elsp_store->count ++;
