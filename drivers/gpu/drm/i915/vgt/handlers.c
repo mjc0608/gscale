@@ -3530,7 +3530,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x913c, 4, F_VIRT, 0, D_BDW, NULL, NULL},
 
 /* WA */
-{0xfdc, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0xfdc, 4, F_VIRT, 0, D_BDW, NULL, NULL},
 {0xe4f0, 4, F_RDR, 0, D_BDW, NULL, NULL},
 {0xe4f4, 4, F_RDR, 0, D_BDW, NULL, NULL},
 {0x9430, 4, F_RDR, 0, D_BDW, NULL, NULL},
@@ -3642,6 +3642,9 @@ bool vgt_post_setup_mmio_hooks(struct pgt_device *pdev)
 		reg_update_handlers(pdev, _REG_VCS2_MFX_MODE_BDW, 4,
 				ring_pp_mode_read,
 				ring_pp_mode_write);
+
+		VGT_MMIO_WRITE(pdev, 0xfdc,
+				(1 << 28) | (1 << 24) | (1 << 25) | (1 << 26));
 	}
 
 	return true;

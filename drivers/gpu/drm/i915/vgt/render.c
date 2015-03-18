@@ -1684,21 +1684,15 @@ struct vgt_render_context_ops gen7_context_ops = {
 static struct reg_mask_t gen8_rcs_reset_mmio[] = {
 	{0x2098, 0},
 	{0x229c, 1},
-//	{0x209c, 1},
 	{0x20c0, 1},
-//	{0x2050, 1},
 
-	{0xfdc, 0},
 	{0x24d0, 0},
 	{0x24d4, 0},
 	{0x24d8, 0},
 	{0x24dc, 0},
 
-//	{0x9008, 0},
 	{0xe4f0, 0},
-
 	{0xe4f4, 0},
-//	{0x9400, 0},
 
 	{0xe184, 0},
 	{0x7300, 0},
@@ -1706,15 +1700,9 @@ static struct reg_mask_t gen8_rcs_reset_mmio[] = {
 	{0x7008, 1},
 
 	{0x7000, 1},
-//	{0x2090, 1},
-//	{0x4090, 0},
-	{0x20a0, 0},
 	{0x20e4, 1},
 
 	{0x7010, 1},
-//	{0x9424, 0},
-
-	{0x9030, 0},
 
 	{0xb118, 0},
 	{0xb100, 0},
@@ -1722,7 +1710,6 @@ static struct reg_mask_t gen8_rcs_reset_mmio[] = {
 	{0xb10c, 0},
 
 	{0x83a4, 1},
-	{0x23bc, 0},
 };
 
 static bool gen8_reset_engine(int ring_id,
