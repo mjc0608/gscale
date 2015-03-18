@@ -997,7 +997,7 @@ int vgt_hvm_set_trap_area(struct vgt_device *vgt, int map)
 	bar_s &= ~0xF; /* clear the LSB 4 bits */
 	bar_e = bar_s + vgt->state.bar_size[0] - 1;
 
-	return hypervisor_set_trap_area(vgt, bar_s, bar_e, 1);
+	return hypervisor_set_trap_area(vgt, bar_s, bar_e, map);
 }
 
 /* EXECLIST dump functions */
