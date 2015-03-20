@@ -9247,7 +9247,10 @@ void intel_prepare_page_flip(struct drm_device *dev, int plane)
 	 * is also accompanied by a spurious intel_prepare_page_flip().
 	 */
 	spin_lock_irqsave(&dev->event_lock, flags);
-	if (intel_crtc->unpin_work && page_flip_finished(intel_crtc))
+	/* There is case that flip interrupts come early before intel_crtc
+	 * is initalized. Add a sanity check before use it.
+	 */
+	if (intel_crtc && intel_crtc->unpin_work && page_flip_finished(intel_crtc))
 		atomic_inc_not_zero(&intel_crtc->unpin_work->pending);
 	spin_unlock_irqrestore(&dev->event_lock, flags);
 }
