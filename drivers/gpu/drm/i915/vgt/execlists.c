@@ -1431,7 +1431,7 @@ static void vgt_update_ring_info(struct vgt_device *vgt,
 	vgt->rb[ring_id].has_ppgtt_mode_enabled = 1;
 	vgt->rb[ring_id].has_ppgtt_base_set = 1;
 	vgt->rb[ring_id].request_id = el_ctx->request_id;
-	vgt->rb[ring_id].last_scan_head = vring->head & RB_HEAD_OFF_MASK;
+	vgt->rb[ring_id].last_scan_head = el_ctx->last_scan_head;
 
 	vgt_scan_vring(vgt, ring_id);
 	/* the function is used to update ring/buffer only. No real submission inside */
