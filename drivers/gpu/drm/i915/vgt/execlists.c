@@ -1433,12 +1433,7 @@ static void vgt_update_ring_info(struct vgt_device *vgt,
 	vgt->rb[ring_id].request_id = el_ctx->request_id;
 	vgt->rb[ring_id].last_scan_head = vring->head & RB_HEAD_OFF_MASK;
 
-	if (!guest_state->bb_cur_head_UDW.val &&
-			!guest_state->bb_cur_head_LDW.val &&
-			!guest_state->second_bb_addr_UDW.val &&
-			!guest_state->second_bb_addr_LDW.val)
-		vgt_scan_vring(vgt, ring_id);
-
+	vgt_scan_vring(vgt, ring_id);
 	/* the function is used to update ring/buffer only. No real submission inside */
 	vgt_submit_commands(vgt, ring_id);
 
