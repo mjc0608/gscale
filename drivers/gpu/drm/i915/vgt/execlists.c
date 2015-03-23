@@ -1394,6 +1394,17 @@ static inline bool vgt_hw_ELSP_write(struct vgt_device *vgt,
 	return rc;
 }
 
+/* Below format is considered to be the buffer resubmission from preemption.
+ * <head> - <tail> - <last_tail>
+ */
+#define IS_PREEMPTION_RESUBMISSION(head, tail, last_tail)	\
+((((head) < (last_tail)) &&					\
+	((tail) < (last_tail)) &&				\
+	((tail) > (head))) ||					\
+ (((head) > (last_tail)) &&					\
+	!(((tail) >= (last_tail)) &&				\
+	  ((tail) <= (head)))))
+
 static void vgt_update_ring_info(struct vgt_device *vgt,
 			struct execlist_context *el_ctx)
 {
@@ -1412,8 +1423,8 @@ static void vgt_update_ring_info(struct vgt_device *vgt,
 
 	vring = &vgt->rb[ring_id].vring;
 
-	vring->tail = guest_state->ring_tail.val;
-	vring->head = guest_state->ring_header.val;
+	vring->tail = guest_state->ring_tail.val & RB_TAIL_OFF_MASK;
+	vring->head = guest_state->ring_header.val & RB_HEAD_OFF_MASK;
 	vring->start = guest_state->rb_start.val;
 	vring->ctl = guest_state->rb_ctrl.val;
 #if 0
@@ -1432,13 +1443,16 @@ static void vgt_update_ring_info(struct vgt_device *vgt,
 	vgt->rb[ring_id].has_ppgtt_base_set = 1;
 	vgt->rb[ring_id].request_id = el_ctx->request_id;
 	vgt->rb[ring_id].last_scan_head = el_ctx->last_scan_head;
+	if (!IS_PREEMPTION_RESUBMISSION(vring->head, vring->tail, el_ctx->last_scan_head)) {
+		vgt->rb[ring_id].last_scan_head = el_ctx->last_scan_head;
+		vgt_scan_vring(vgt, ring_id);
+	}
 
-	vgt_scan_vring(vgt, ring_id);
 	/* the function is used to update ring/buffer only. No real submission inside */
 	vgt_submit_commands(vgt, ring_id);
 
 	el_ctx->request_id = vgt->rb[ring_id].request_id;
-	el_ctx->last_scan_head = vgt->rb[ring_id].last_scan_head;
+	el_ctx->last_scan_head = vring->tail;
 	vgt->rb[ring_id].active_ppgtt_mm = NULL;
 }
 
