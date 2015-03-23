@@ -2445,7 +2445,9 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		if (s.buf_type == RING_BUFFER_INSTRUCTION){
 			ASSERT((s.ip_gma >= base) && (s.ip_gma < gma_bottom));
 			if (gma_out_of_range(s.ip_gma, gma_head, gma_tail)) {
-				vgt_err("ERROR: ip_gma %lx out of range\n", s.ip_gma);
+				vgt_err("ERROR: ip_gma %lx out of range."
+					"(base:0x%x, head: 0x%x, tail: 0x%x)\n",
+					s.ip_gma, base, head, tail);
 				break;
 			}
 		}
@@ -2501,7 +2503,7 @@ int vgt_scan_vring(struct vgt_device *vgt, int ring_id)
 
 	if (!(vring->ctl & _RING_CTL_ENABLE)) {
 		/* Ring is enabled */
-		vgt_dbg(VGT_DBG_CMD, "VGT-Parser.c vring head %x tail %x ctl %x\n",
+		vgt_dbg(VGT_DBG_CMD, "VGT-Parser.c vring is disabled. head %x tail %x ctl %x\n",
 			vring->head, vring->tail, vring->ctl);
 		return 0;
 	}
