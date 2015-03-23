@@ -3114,7 +3114,10 @@ void i915_queue_hangcheck(struct drm_device *dev)
 		return;
 
 	/* Don't continually defer the hangcheck, but make sure it is active */
-	if (timer_pending(timer))
+	/* Disable the timer pending check temporary in vgt as it hasn't complete
+	 * QoS support, if context switch takes too long will trigger the Dom0
+	 * gfx reset */
+	if (!i915.enable_vgt && timer_pending(timer))
 		return;
 	mod_timer(timer,
 		  round_jiffies_up(jiffies + DRM_I915_HANGCHECK_JIFFIES));
