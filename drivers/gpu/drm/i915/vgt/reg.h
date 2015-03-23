@@ -113,12 +113,12 @@ static inline uint32_t __RING_REG(int32_t ring_id, uint32_t rcs_reg)
 #define RB_START(pdev, id)	(pdev->ring_mmio_base[id] + RB_OFFSET_START)
 #define RB_CTL(pdev, id)	(pdev->ring_mmio_base[id] + RB_OFFSET_CTL)
 
-#define RB_HEAD_OFF_MASK	((1UL << 21) - (1UL << 2))	/* bit 2 to 20 */
+#define RB_HEAD_OFF_MASK	((1U << 21) - (1U << 2))	/* bit 2 to 20 */
 #define RB_HEAD_OFF_SHIFT	2
-#define RB_TAIL_OFF_MASK	((1UL << 21) - (1UL << 3))	/* bit 2 to 20 */
+#define RB_TAIL_OFF_MASK	((1U << 21) - (1U << 3))	/* bit 3 to 20 */
 #define RB_TAIL_OFF_SHIFT	3
 
-#define RB_TAIL_SIZE_MASK	((1UL << 21) - (1UL << 12))	/* bit 12 to 20 */
+#define RB_TAIL_SIZE_MASK	((1U << 21) - (1U << 12))	/* bit 12 to 20 */
 #define _RING_CTL_BUF_SIZE(ctl)	(((ctl) & RB_TAIL_SIZE_MASK) + GTT_PAGE_SIZE)
 #define _RING_CTL_ENABLE	0x1	/* bit 0 */
 #define _RING_CTL_RB_WAIT	(1 << 11)
