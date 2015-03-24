@@ -298,8 +298,11 @@ static int vgt_thread(void *priv)
 		/* forward physical GPU events to VMs */
 		if (test_and_clear_bit(VGT_REQUEST_IRQ,
 					(void *)&pdev->request)) {
+			unsigned long flags;
 			vgt_lock_dev(pdev, cpu);
+			vgt_get_irq_lock(pdev, flags);
 			vgt_forward_events(pdev);
+			vgt_put_irq_lock(pdev, flags);
 			vgt_unlock_dev(pdev, cpu);
 		}
 
