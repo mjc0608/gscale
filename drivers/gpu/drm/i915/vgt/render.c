@@ -1891,6 +1891,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 				vgt_force_wake_put();
 				goto out;
 			}
+			vgt_clear_submitted_el_record(pdev, ring_id);
 		}
 	}
 

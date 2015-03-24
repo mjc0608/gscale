@@ -1481,11 +1481,11 @@ void vgt_kick_off_execlists(struct vgt_device *vgt)
 
 bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 {
-	int i;
 	uint32_t el_ring_base;
 	uint32_t el_status_reg;
 	struct execlist_status_format el_status;
-	struct vgt_device *vgt = current_render_owner(pdev);
+	uint32_t ctx_ptr_reg;
+	struct ctx_st_ptr_format ctx_st_ptr;
 
 	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
 	el_status_reg = el_ring_base + _EL_OFFSET_STATUS;
@@ -1495,14 +1495,15 @@ bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 		return false;
 	}
 
-	for (i = 0; i < EL_QUEUE_SLOT_NUM; ++ i) {
-		struct vgt_exec_list *el_slot = &vgt_el_queue_slot(vgt, ring_id, i);
-		if (el_slot->status == EL_SUBMITTED) {
-			vgt_dbg(VGT_DBG_RENDER, "VM-%d: EL_SLOT[%d] is still running!\n",
-				vgt->vm_id, i);
-			return false;
-		}
-	}
+	ctx_ptr_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_PTR);
+	ctx_st_ptr.dw = VGT_MMIO_READ(pdev, ctx_ptr_reg);
+
+	if (ctx_st_ptr.status_buf_write_ptr == DEFAULT_INV_SR_PTR
+			|| ctx_st_ptr.status_buf_read_ptr == DEFAULT_INV_SR_PTR)
+		return true;
+
+	if (ctx_st_ptr.status_buf_read_ptr != ctx_st_ptr.status_buf_write_ptr)
+		return false;
 
 	return true;
 }
