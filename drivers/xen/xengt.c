@@ -516,7 +516,7 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 		info->vmem_vma_low_1mb[i] =
 			xen_remap_domain_mfn_range_in_kernel(i, 1, vgt->vm_id);
 
-		if (info->vmem_vma[i] != NULL)
+		if (info->vmem_vma_low_1mb[i] != NULL)
 			continue;
 
 		/* Don't warn on [0xa0000, 0x100000): a known non-RAM hole */
