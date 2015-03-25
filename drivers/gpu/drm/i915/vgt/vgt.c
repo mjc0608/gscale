@@ -1041,6 +1041,9 @@ static void do_device_reset(struct pgt_device *pdev)
 
 		vgt_info("RING %d: H: %x T: %x S: %x C: %x.\n",
 				i, head, tail, start, ctl);
+
+		if (pdev->enable_execlist)
+			reset_el_structure(pdev, i);
 	}
 
 	ier = VGT_MMIO_READ(pdev, _REG_DEIER);
