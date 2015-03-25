@@ -258,7 +258,7 @@ static void vgt_el_slots_delete(struct vgt_device *vgt,
 	el_slot->el_ctxs[1] = NULL;
 }
 
-static void vgt_el_slots_find_ctx(bool forward_search, vgt_state_ring_t *ring_state,
+static void vgt_el_slots_find_submitted_ctx(bool forward_search, vgt_state_ring_t *ring_state,
 			uint32_t ctx_id, int *el_slot_idx, int *el_slot_ctx_idx)
 {
 	int head = ring_state->el_slots_head;
@@ -279,6 +279,9 @@ static void vgt_el_slots_find_ctx(bool forward_search, vgt_state_ring_t *ring_st
 			tail --;
 			el_slot = &ring_state->execlist_slots[tail];
 		}
+
+		if (el_slot->status != EL_SUBMITTED)
+			continue;
 
 		for (i = 0; i < 2; ++ i) {
 			struct execlist_context *p = el_slot->el_ctxs[i];
@@ -1151,7 +1154,7 @@ static void vgt_emulate_context_status_change(struct vgt_device *vgt,
 		}
 	}
 
-	vgt_el_slots_find_ctx(forward_search, ring_state, ctx_id,
+	vgt_el_slots_find_submitted_ctx(forward_search, ring_state, ctx_id,
 				&el_slot_idx, &el_slot_ctx_idx);
 	if (el_slot_idx == -1)
 		goto err_ctx_not_found;
