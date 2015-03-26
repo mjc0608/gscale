@@ -942,8 +942,8 @@ static void xen_hvm_exit(struct vgt_device *vgt)
 	kfree(info->evtchn_irq);
 
 out1:
-	kfree(info);
 	vgt_vmem_destroy(vgt);
+	kfree(info);
 }
 
 static int xen_hvm_init(struct vgt_device *vgt)
