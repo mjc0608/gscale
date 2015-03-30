@@ -354,7 +354,7 @@ static bool gen6_gdrst_mmio_read(struct vgt_device *vgt, unsigned int offset,
 	return true;
 }
 
-static bool rrmr_mmio_write(struct vgt_device *vgt, unsigned int offset,
+bool vgt_rrmr_mmio_write(struct vgt_device *vgt, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
 	uint32_t old_rrmr, new_rrmr, new_physical_rrmr;
@@ -370,7 +370,7 @@ static bool rrmr_mmio_write(struct vgt_device *vgt, unsigned int offset,
 		VGT_MMIO_WRITE(pdev, offset, new_physical_rrmr);
 	}
 
-	vgt_info("RRMR: VM%d: old (%x), new (%x), new_physical (%x)\n",
+	vgt_dbg(VGT_DBG_DPY, "RRMR: VM%d: old (%x), new (%x), new_physical (%x)\n",
 		vgt->vm_id, old_rrmr, new_rrmr, new_physical_rrmr);
 	return true;
 }
@@ -2704,7 +2704,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x42080, 4, F_DOM0, 0, D_HSW_PLUS, NULL, NULL},
 {0xc4040, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 
-{_REG_DE_RRMR, 4, F_VIRT, 0, D_ALL, NULL, rrmr_mmio_write},
+{_REG_DE_RRMR, 4, F_VIRT, 0, D_ALL, NULL, vgt_rrmr_mmio_write},
 
 {_REG_PIPEADSL, 4, F_DPY, 0, D_ALL, pipe_dsl_mmio_read, NULL},
 {_REG_PIPEACONF, 4, F_DPY, 0, D_ALL, NULL, pipe_conf_mmio_write},

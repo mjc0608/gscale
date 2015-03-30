@@ -2636,6 +2636,9 @@ void vgt_irq_exit(struct pgt_device *pgt);
 
 void vgt_inject_flip_done(struct vgt_device *vgt, enum vgt_pipe pipe);
 
+bool vgt_rrmr_mmio_write(struct vgt_device *vgt, unsigned int offset,
+        void *p_data, unsigned int bytes);
+
 void vgt_trigger_virtual_event(struct vgt_device *vgt,
 	enum vgt_event_type event);
 

@@ -665,6 +665,57 @@ static int vgt_cmd_handler_mi_set_context(struct parser_exec_state* s)
 	return 0;
 }
 
+/*
+ * Actually, we don't like to emulate register behavior in LRI handlers,
+ * But DE_RRMR is an exception, even we can modify i915 to access
+ * DE_RRMR via MMIO, the 2D driver will also access it via submitted
+ * batch buffer.
+ *
+ * So we have no choice and have to handle it here, as windows is
+ * using deferred filp from gen8+, MI_DISPLAY_FLIP and MI_WAIT_FOR_EVENT
+ * will not be in the same submission. If a i915 submission modify
+ * DE_RRMR after the filp submission, the wait submission of windows
+ * will hang as the needed events are disabled by i915. Only modify i915
+ * will not work, as 2D driver(xf86-video-intel) also modify it directly.
+ * */
+
+#define BIT_RANGE_MASK(a, b)	\
+	((1UL << ((a) + 1)) - (1UL << (b)))
+
+static int vgt_cmd_handler_lri_de_rrmr(struct parser_exec_state *s)
+{
+	int i;
+	int cmd_len = cmd_length(s);
+	unsigned long offset;
+	unsigned long val;
+
+	for (i = 1; i < cmd_len; i += 2) {
+		offset = cmd_val(s, i) & BIT_RANGE_MASK(22, 2);
+		val = cmd_val(s, i + 1);
+
+		if (offset == _REG_DE_RRMR)
+			break;
+	}
+
+	if (i == cmd_len) {
+		vgt_err("No DE_RRMR in LRI?");
+		return -EINVAL;
+	}
+
+	if (!vgt_rrmr_mmio_write(s->vgt, _REG_DE_RRMR, &val, 4)) {
+		vgt_err("fail to emulate register DE_RRMR!\n");
+		return -EINVAL;
+	}
+
+	if (add_patch_entry(s, cmd_ptr(s, i + 1),
+				VGT_MMIO_READ(s->vgt->pdev, _REG_DE_RRMR))) {
+		vgt_err("fail to patch DE_RRMR LRI.\n");
+		return -ENOSPC;
+	}
+
+	return 0;
+}
+
 static int cmd_reg_handler(struct parser_exec_state *s,
 	unsigned int offset, unsigned int index, char *cmd)
 {
@@ -706,16 +757,24 @@ reg_handle:
 
 	return 0;
 }
-#define BIT_RANGE_MASK(a, b)	\
-	((1UL << ((a) + 1)) - (1UL << (b)))
+
 static int vgt_cmd_handler_lri(struct parser_exec_state *s)
 {
+	unsigned long offset;
 	int i, rc = 0;
 	int cmd_len = cmd_length(s);
 
 	for (i = 1; i < cmd_len; i += 2) {
-		rc |= cmd_reg_handler(s,
-			cmd_val(s, i) & BIT_RANGE_MASK(22, 2), i, "lri");
+		offset = cmd_val(s, i) & BIT_RANGE_MASK(22, 2);
+		rc |= cmd_reg_handler(s, offset, i, "lri");
+
+		if (IS_BDW(s->vgt->pdev) && offset == _REG_DE_RRMR) {
+			rc = add_post_handle_entry(s, vgt_cmd_handler_lri_de_rrmr);
+			if (rc) {
+				vgt_err("fail to allocate post handle");
+				break;
+			}
+		}
 	}
 
 	return rc;
