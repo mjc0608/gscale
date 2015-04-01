@@ -6741,6 +6741,11 @@ static void haswell_init_clock_gating(struct drm_device *dev)
 	/* WaGttCachingOffByDefault:bdw */
 	I915_WRITE(GEN8_GTT_CACHE_EN, GEN8_GTT_CACHE_DEFAULT);
 
+	/* WaDisableMidThreadPreempt:bdw */
+	I915_WRITE(GEN8_FF_SLICE_CS_CHICKEN2,
+		   I915_READ(GEN8_FF_SLICE_CS_CHICKEN2) |
+		   GEN8_THREAD_GROUP_PREEMPTION);
+
 	lpt_init_clock_gating(dev);
 }
 
