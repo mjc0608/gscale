@@ -137,6 +137,9 @@
 #define GEN8_RING_PDP_UDW(ring, n)	((ring)->mmio_base+0x270 + ((n) * 8 + 4))
 #define GEN8_RING_PDP_LDW(ring, n)	((ring)->mmio_base+0x270 + (n) * 8)
 
+#define GEN8_GTT_CACHE_EN		0x4024
+#define   GEN8_GTT_CACHE_DEFAULT	0xf0007fff
+
 #define GAM_ECOCHK			0x4090
 #define   ECOCHK_SNB_BIT		(1<<10)
 #define   HSW_ECOCHK_ARB_PRIO_SOL	(1<<6)

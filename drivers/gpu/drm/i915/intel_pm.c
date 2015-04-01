@@ -6738,6 +6738,9 @@ static void haswell_init_clock_gating(struct drm_device *dev)
 	I915_WRITE(GEN8_L3SQCREG4, I915_READ(GEN8_L3SQCREG4) |
 		   GEN8_PIPELINE_FLUSH_COHERENT_LINES);
 
+	/* WaGttCachingOffByDefault:bdw */
+	I915_WRITE(GEN8_GTT_CACHE_EN, GEN8_GTT_CACHE_DEFAULT);
+
 	lpt_init_clock_gating(dev);
 }
 
