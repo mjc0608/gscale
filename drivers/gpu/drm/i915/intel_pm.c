@@ -6646,9 +6646,7 @@ static void broadwell_init_clock_gating(struct drm_device *dev)
 	I915_WRITE(WM2_LP_ILK, 0);
 	I915_WRITE(WM1_LP_ILK, 0);
 
-	/* WaSwitchSolVfFArbitrationPriority:bdw */
-	I915_WRITE(GAM_ECOCHK, I915_READ(GAM_ECOCHK) | HSW_ECOCHK_ARB_PRIO_SOL |
-		   ECOCHK_PPGTT_WB_HSW);
+	I915_WRITE(GAM_ECOCHK, I915_READ(GAM_ECOCHK) | ECOCHK_PPGTT_WB_HSW);
 
 	/* WaPsrDPAMaskVBlankInSRD:bdw */
 	I915_WRITE(CHICKEN_PAR1_1,
