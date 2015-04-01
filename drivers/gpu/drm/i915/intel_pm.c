@@ -6734,6 +6734,10 @@ static void haswell_init_clock_gating(struct drm_device *dev)
 	I915_WRITE(CHICKEN_PAR1_1,
 		   I915_READ(CHICKEN_PAR1_1) | FORCE_ARB_IDLE_PLANES);
 
+	/* WaOCLCoherentLineFlush:bdw */
+	I915_WRITE(GEN8_L3SQCREG4, I915_READ(GEN8_L3SQCREG4) |
+		   GEN8_PIPELINE_FLUSH_COHERENT_LINES);
+
 	lpt_init_clock_gating(dev);
 }
 

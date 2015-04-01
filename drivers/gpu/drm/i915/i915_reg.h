@@ -5176,6 +5176,9 @@ enum punit_power_well {
 #define GEN7_L3SQCREG4				0xb034
 #define  L3SQ_URB_READ_CAM_MATCH_DISABLE	(1<<27)
 
+#define GEN8_L3SQCREG4				0xb118
+#define  GEN8_PIPELINE_FLUSH_COHERENT_LINES	(1<<21)
+
 /* GEN8 chicken */
 #define HDC_CHICKEN0				0x7300
 #define  HDC_FORCE_NON_COHERENT			(1<<4)
