@@ -608,7 +608,6 @@ struct vgt_vgtt_info {
 	struct vgt_mm *ggtt_mm;
 	unsigned long active_ppgtt_mm_bitmap;
 	struct list_head mm_list_head;
-	mempool_t *mempool;
 	DECLARE_HASHTABLE(shadow_page_hash_table, VGT_HASH_BITS);
 	DECLARE_HASHTABLE(guest_page_hash_table, VGT_HASH_BITS);
 	DECLARE_HASHTABLE(el_ctx_hash_table, VGT_HASH_BITS);
@@ -621,7 +620,7 @@ extern void vgt_clean_vgtt(struct vgt_device *vgt);
 extern bool vgt_gtt_init(struct pgt_device *pdev);
 extern void vgt_gtt_clean(struct pgt_device *pdev);
 
-extern bool vgt_expand_shadow_page_mempool(struct vgt_device *vgt);
+extern bool vgt_expand_shadow_page_mempool(struct pgt_device *pdev);
 
 extern bool vgt_g2v_create_ppgtt_mm(struct vgt_device *vgt, int page_table_level);
 extern bool vgt_g2v_destroy_ppgtt_mm(struct vgt_device *vgt, int page_table_level);
@@ -1137,6 +1136,8 @@ struct vgt_gtt_info {
 	struct vgt_gtt_gma_ops *gma_ops;
 	bool (*mm_alloc_page_table)(struct vgt_mm *mm);
 	void (*mm_free_page_table)(struct vgt_mm *mm);
+	mempool_t *mempool;
+	struct mutex mempool_lock;
 };
 
 /* per-device structure */

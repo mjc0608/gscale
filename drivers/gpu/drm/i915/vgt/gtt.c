@@ -586,7 +586,7 @@ static void ppgtt_free_shadow_page(ppgtt_spt_t *spt)
 	vgt_clean_shadow_page(&spt->shadow_page);
 	vgt_clean_guest_page(spt->vgt, &spt->guest_page);
 
-	mempool_free(spt, spt->vgt->gtt.mempool);
+	mempool_free(spt, spt->vgt->pdev->gtt.mempool);
 }
 
 static void ppgtt_free_all_shadow_page(struct vgt_device *vgt)
@@ -642,12 +642,13 @@ static ppgtt_spt_t *ppgtt_alloc_shadow_page(struct vgt_device *vgt,
 {
 	ppgtt_spt_t *spt = NULL;
 
-	spt = mempool_alloc(vgt->gtt.mempool, GFP_ATOMIC);
+	spt = mempool_alloc(vgt->pdev->gtt.mempool, GFP_ATOMIC);
 	if (!spt) {
 		vgt_err("fail to allocate ppgtt shadow page.\n");
 		return NULL;
 	}
 
+	spt->vgt = vgt;
 	spt->guest_page_type = type;
 	atomic_set(&spt->refcount, 1);
 
@@ -1596,13 +1597,16 @@ void vgt_ppgtt_switch(struct vgt_device *vgt)
 	}
 }
 
-bool vgt_expand_shadow_page_mempool(struct vgt_device *vgt)
+bool vgt_expand_shadow_page_mempool(struct pgt_device *pdev)
 {
-	mempool_t *mempool = vgt->gtt.mempool;
+	mempool_t *mempool = pdev->gtt.mempool;
+	bool rc = true;
 	int new_min_nr;
 
+	mutex_lock(&pdev->gtt.mempool_lock);
+
 	if (mempool->curr_nr >= preallocated_shadow_pages / 3)
-		return true;
+		goto out;
 
 	/*
 	 * Have to do this to let the pool expand directly.
@@ -1610,21 +1614,24 @@ bool vgt_expand_shadow_page_mempool(struct vgt_device *vgt)
 	new_min_nr = preallocated_shadow_pages - 1;
 	if (mempool_resize(mempool, new_min_nr, GFP_KERNEL)) {
 		vgt_err("fail to resize the mempool.\n");
-		return false;
+		rc = false;
+		goto out;
 	}
 
 	new_min_nr = preallocated_shadow_pages;
 	if (mempool_resize(mempool, new_min_nr, GFP_KERNEL)) {
 		vgt_err("fail to resize the mempool.\n");
-		return false;
+		rc = false;
+		goto out;
 	}
 
-	return true;
+out:
+	mutex_unlock(&pdev->gtt.mempool_lock);
+	return rc;
 }
 
 static void *mempool_alloc_spt(gfp_t gfp_mask, void *pool_data)
 {
-	struct vgt_device *vgt = pool_data;
 	ppgtt_spt_t *spt;
 
 	spt = kzalloc(sizeof(*spt), gfp_mask);
@@ -1636,7 +1643,6 @@ static void *mempool_alloc_spt(gfp_t gfp_mask, void *pool_data)
 		kfree(spt);
 		return NULL;
 	}
-	spt->vgt = vgt;
 	return spt;
 }
 
@@ -1659,6 +1665,11 @@ bool vgt_init_vgtt(struct vgt_device *vgt)
 
 	INIT_LIST_HEAD(&gtt->mm_list_head);
 
+	if (!vgt_expand_shadow_page_mempool(vgt->pdev)) {
+		vgt_err("fail to expand the shadow page mempool.");
+		return false;
+	}
+
 	ggtt_mm = vgt_create_mm(vgt, VGT_MM_GGTT,
 			GTT_TYPE_GGTT_PTE, NULL, 1, 0);
 	if (!ggtt_mm) {
@@ -1667,17 +1678,6 @@ bool vgt_init_vgtt(struct vgt_device *vgt)
 	}
 
 	gtt->ggtt_mm = ggtt_mm;
-
-	if (!vgt->vm_id)
-		return true;
-
-	gtt->mempool = mempool_create(preallocated_shadow_pages,
-		mempool_alloc_spt, mempool_free_spt, vgt);
-	if (!gtt->mempool) {
-		vgt_err("fail to create mempool.\n");
-		return false;
-	}
-
 	return true;
 }
 
@@ -1687,9 +1687,6 @@ void vgt_clean_vgtt(struct vgt_device *vgt)
 	struct vgt_mm *mm;
 
 	ppgtt_free_all_shadow_page(vgt);
-
-	if (vgt->gtt.mempool)
-		mempool_destroy(vgt->gtt.mempool);
 
 	list_for_each_safe(pos, n, &vgt->gtt.mm_list_head) {
 		mm = container_of(pos, struct vgt_mm, list);
@@ -1725,11 +1722,21 @@ bool vgt_gtt_init(struct pgt_device *pdev)
 		return false;
 	}
 
+	mutex_init(&pdev->gtt.mempool_lock);
+
+	pdev->gtt.mempool = mempool_create(preallocated_shadow_pages,
+		mempool_alloc_spt, mempool_free_spt, pdev);
+	if (!pdev->gtt.mempool) {
+		vgt_err("fail to create mempool.\n");
+		return false;
+	}
+
 	return true;
 }
 
 void vgt_gtt_clean(struct pgt_device *pdev)
 {
+	mempool_destroy(pdev->gtt.mempool);
 }
 
 int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
