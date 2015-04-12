@@ -618,6 +618,9 @@ struct vgt_vgtt_info {
 extern bool vgt_init_vgtt(struct vgt_device *vgt);
 extern void vgt_clean_vgtt(struct vgt_device *vgt);
 
+extern bool vgt_gtt_init(struct pgt_device *pdev);
+extern void vgt_gtt_clean(struct pgt_device *pdev);
+
 extern bool vgt_expand_shadow_page_mempool(struct vgt_device *vgt);
 
 extern bool vgt_g2v_create_ppgtt_mm(struct vgt_device *vgt, int page_table_level);

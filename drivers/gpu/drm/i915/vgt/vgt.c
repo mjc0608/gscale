@@ -585,11 +585,6 @@ static bool vgt_initialize_platform(struct pgt_device *pdev)
 	/* this check is broken on SNB */
 	pdev->ring_xxx_valid = 0;
 
-	pdev->gtt.pte_ops = &gen7_gtt_pte_ops;
-	pdev->gtt.gma_ops = &gen7_gtt_gma_ops;
-	pdev->gtt.mm_alloc_page_table = gen7_mm_alloc_page_table;
-	pdev->gtt.mm_free_page_table = gen7_mm_free_page_table;
-
 	if (IS_HSW(pdev)) {
 		pdev->max_engines = 4;
 		pdev->ring_mmio_base[RING_BUFFER_VECS] = _REG_VECS_TAIL;
@@ -603,9 +598,6 @@ static bool vgt_initialize_platform(struct pgt_device *pdev)
 		pdev->ring_xxx_bit[RING_BUFFER_BCS] = 2;
 		pdev->ring_xxx_bit[RING_BUFFER_VECS] = 10;
 		pdev->ring_xxx_valid = 1;
-
-		if (preallocated_shadow_pages == -1)
-			preallocated_shadow_pages = 512;
 	} else if (IS_BDW(pdev)) {
 		pdev->max_engines = 4;
 		pdev->ring_mmio_base[RING_BUFFER_VECS] = _REG_VECS_TAIL;
@@ -622,14 +614,6 @@ static bool vgt_initialize_platform(struct pgt_device *pdev)
 			pdev->ring_xxx[RING_BUFFER_VCS2] = 0x8008;
 			pdev->ring_xxx_bit[RING_BUFFER_VCS2] = 0;
 		}
-
-		pdev->gtt.pte_ops = &gen8_gtt_pte_ops;
-		pdev->gtt.gma_ops = &gen8_gtt_gma_ops;
-		pdev->gtt.mm_alloc_page_table = gen8_mm_alloc_page_table;
-		pdev->gtt.mm_free_page_table = gen8_mm_free_page_table;
-
-		if (preallocated_shadow_pages == -1)
-			preallocated_shadow_pages = 8192;
 	} else {
 		vgt_err("Unsupported platform.\n");
 		return false;
@@ -686,6 +670,11 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	vgt_post_setup_mmio_hooks(pdev);
 	if (vgt_irq_init(pdev) != 0) {
 		printk("vGT: failed to initialize irq\n");
+		return false;
+	}
+
+	if (!vgt_gtt_init(pdev)) {
+		vgt_err("failed to initialize gtt\n");
 		return false;
 	}
 

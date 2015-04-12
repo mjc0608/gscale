@@ -1702,6 +1702,36 @@ void vgt_clean_vgtt(struct vgt_device *vgt)
 	return;
 }
 
+bool vgt_gtt_init(struct pgt_device *pdev)
+{
+	if (IS_PREBDW(pdev)) {
+		pdev->gtt.pte_ops = &gen7_gtt_pte_ops;
+		pdev->gtt.gma_ops = &gen7_gtt_gma_ops;
+		pdev->gtt.mm_alloc_page_table = gen7_mm_alloc_page_table;
+		pdev->gtt.mm_free_page_table = gen7_mm_free_page_table;
+
+		if (preallocated_shadow_pages == -1)
+			preallocated_shadow_pages = 512;
+	} else if (IS_BDW(pdev)) {
+		pdev->gtt.pte_ops = &gen8_gtt_pte_ops;
+		pdev->gtt.gma_ops = &gen8_gtt_gma_ops;
+		pdev->gtt.mm_alloc_page_table = gen8_mm_alloc_page_table;
+		pdev->gtt.mm_free_page_table = gen8_mm_free_page_table;
+
+		if (preallocated_shadow_pages == -1)
+			preallocated_shadow_pages = 8192;
+	} else {
+		vgt_err("Unsupported platform.\n");
+		return false;
+	}
+
+	return true;
+}
+
+void vgt_gtt_clean(struct pgt_device *pdev)
+{
+}
+
 int ring_ppgtt_mode(struct vgt_device *vgt, int ring_id, u32 off, u32 mode)
 {
 	vgt_state_ring_t *rb = &vgt->rb[ring_id];
