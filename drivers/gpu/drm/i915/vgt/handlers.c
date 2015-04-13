@@ -3356,7 +3356,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_PCH_GMBUS5, 4, F_DPY, 0, D_ALL, NULL, NULL},
 
 {_REG_SUPER_QUEUE_CONFIG, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_MISC_CLOCK_GATING, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_MISC_CLOCK_GATING, 4, F_VIRT, 0, D_PRE_BDW, NULL, NULL},
+{_REG_MISC_CLOCK_GATING, 4, F_PT, 0, D_BDW_PLUS, NULL, NULL},
 {0xec008, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0xec00c, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0xec008+0x18, 4, F_VIRT, 0, D_ALL, NULL, NULL},
@@ -3553,6 +3554,7 @@ reg_attr_t vgt_base_reg_info[] = {
 
 /* UCG */
 {0x8430, 4, F_PT, 0, D_BDW, NULL, NULL},
+{0x900c, 4, F_PT, 0, D_BDW, NULL, NULL},
 
 {0x110000, 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
 };
