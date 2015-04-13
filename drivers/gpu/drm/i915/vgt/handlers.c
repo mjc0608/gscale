@@ -3334,7 +3334,8 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x7180, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0x7408, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0x7c00, 4, F_VIRT, 0, D_ALL, NULL, NULL},
-{_REG_SNPCR, 4, F_VIRT, 0, D_ALL, NULL, NULL},
+{_REG_SNPCR, 4, F_VIRT, 0, D_PRE_BDW, NULL, NULL},
+{_REG_SNPCR, 4, F_PT, 0, D_BDW_PLUS, NULL, NULL},
 {_REG_MBCTL, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0x911c, 4, F_VIRT, 0, D_ALL, NULL, NULL},
 {0x9120, 4, F_VIRT, 0, D_ALL, NULL, NULL},
@@ -3554,7 +3555,6 @@ reg_attr_t vgt_base_reg_info[] = {
 
 /* UCG */
 {0x8430, 4, F_PT, 0, D_BDW, NULL, NULL},
-{0x900c, 4, F_PT, 0, D_BDW, NULL, NULL},
 
 {0x110000, 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
 };
