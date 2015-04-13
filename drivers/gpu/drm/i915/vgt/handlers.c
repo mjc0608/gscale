@@ -3523,7 +3523,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x66c00, 4, F_VIRT, 0, D_BDW_PLUS, NULL, NULL},
 {0x66c04, 4, F_VIRT, 0, D_BDW, NULL, NULL},
 
-{0x4024, 4, F_VIRT, 0, D_BDW, NULL, NULL},
+{0x4024, 4, F_DOM0, 0, D_BDW, NULL, NULL},
 
 {0x9134, 4, F_VIRT, 0, D_BDW, NULL, NULL},
 {0x9138, 4, F_VIRT, 0, D_BDW, NULL, NULL},

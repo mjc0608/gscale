@@ -1699,12 +1699,9 @@ static struct reg_mask_t gen8_rcs_reset_mmio[] = {
 	{0x7008, 1},
 
 	{0x7000, 1},
-	{0x20e4, 1},
 
 	{0x7010, 1},
 
-	{0xb118, 0},
-	{0xb100, 0},
 	{0xb110, 0},
 	{0xb10c, 0},
 
