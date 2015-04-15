@@ -866,7 +866,7 @@ static bool ppgtt_handle_guest_entry_removal(guest_page_t *gpt,
 	struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
 	gtt_entry_t e;
 
-	trace_guest_pt_change(spt->vgt->vm_id, "remove", spt, sp->type, we->val64, index);
+	trace_gpt_change(spt->vgt->vm_id, "remove", spt, sp->type, we->val64, index);
 
 	if (gtt_type_is_pt(get_next_pt_type(we->type))) {
 		guest_page_t *g = vgt_find_guest_page(vgt, ops->get_pfn(we));
@@ -896,7 +896,7 @@ static bool ppgtt_handle_guest_entry_add(guest_page_t *gpt,
 	gtt_entry_t m;
 	ppgtt_spt_t *s;
 
-	trace_guest_pt_change(spt->vgt->vm_id, "add", spt, sp->type, we->val64, index);
+	trace_gpt_change(spt->vgt->vm_id, "add", spt, sp->type, we->val64, index);
 
 	if (gtt_type_is_pt(get_next_pt_type(we->type))) {
 		s = ppgtt_populate_shadow_page_by_guest_entry(vgt, we);
@@ -967,7 +967,7 @@ bool ppgtt_handle_guest_write_root_pointer(struct vgt_mm *mm,
 	if (mm->type != VGT_MM_PPGTT || !mm->shadowed)
 		return false;
 
-	trace_guest_pt_change(vgt->vm_id, __func__, NULL,
+	trace_gpt_change(vgt->vm_id, __func__, NULL,
 			we->type, we->val64, index);
 
 	ppgtt_get_guest_root_entry(mm, &e, index);
@@ -975,7 +975,7 @@ bool ppgtt_handle_guest_write_root_pointer(struct vgt_mm *mm,
 	if (ops->test_present(&e)) {
 		ppgtt_get_shadow_root_entry(mm, &e, index);
 
-		trace_guest_pt_change(vgt->vm_id, "destroy old root pointer",
+		trace_gpt_change(vgt->vm_id, "destroy old root pointer",
 				spt, e.type, e.val64, index);
 
 		if (gtt_type_is_pt(get_next_pt_type(e.type))) {
@@ -1002,7 +1002,7 @@ bool ppgtt_handle_guest_write_root_pointer(struct vgt_mm *mm,
 			vgt_err("VGT doesn't support pse bit now.\n");
 			goto fail;
 		}
-		trace_guest_pt_change(vgt->vm_id, "populate root pointer",
+		trace_gpt_change(vgt->vm_id, "populate root pointer",
 				spt, e.type, e.val64, index);
 	}
 	return true;
@@ -1140,7 +1140,7 @@ void vgt_destroy_mm(struct vgt_mm *mm)
 			se.val64 = 0;
 			ppgtt_set_shadow_root_entry(mm, &se, i);
 
-			trace_guest_pt_change(vgt->vm_id, "destroy root pointer",
+			trace_gpt_change(vgt->vm_id, "destroy root pointer",
 					NULL, se.type, se.val64, i);
 		}
 	}
@@ -1197,7 +1197,7 @@ struct vgt_mm *vgt_create_mm(struct vgt_device *vgt,
 			if (!ops->test_present(&ge))
 				continue;
 
-			trace_guest_pt_change(vgt->vm_id, __func__, NULL,
+			trace_gpt_change(vgt->vm_id, __func__, NULL,
 					ge.type, ge.val64, i);
 
 			spt = ppgtt_populate_shadow_page_by_guest_entry(vgt, &ge);
@@ -1208,7 +1208,7 @@ struct vgt_mm *vgt_create_mm(struct vgt_device *vgt,
 			ppgtt_generate_shadow_entry(&se, spt, &ge);
 			ppgtt_set_shadow_root_entry(mm, &se, i);
 
-			trace_guest_pt_change(vgt->vm_id, "populate root pointer",
+			trace_gpt_change(vgt->vm_id, "populate root pointer",
 					NULL, se.type, se.val64, i);
 		}
 		mm->shadowed = true;

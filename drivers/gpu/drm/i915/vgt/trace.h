@@ -234,7 +234,7 @@ TRACE_EVENT(spt_change,
 		TP_printk("%s", __entry->buf)
 );
 
-TRACE_EVENT(guest_pt_change,
+TRACE_EVENT(gpt_change,
 		TP_PROTO(int vm_id, const char *tag, void *spt, int type, u64 v, unsigned long index),
 
 		TP_ARGS(vm_id, tag, spt, type, v, index),
