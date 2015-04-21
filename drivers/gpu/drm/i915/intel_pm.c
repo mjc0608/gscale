@@ -6672,6 +6672,18 @@ static void broadwell_init_clock_gating(struct drm_device *dev)
 	I915_WRITE(GEN8_UCGCTL6, I915_READ(GEN8_UCGCTL6) |
 		   GEN8_SDEUNIT_CLOCK_GATE_DISABLE);
 
+	/* WaOCLCoherentLineFlush:bdw */
+	I915_WRITE(GEN8_L3SQCREG4, I915_READ(GEN8_L3SQCREG4) |
+		   GEN8_PIPELINE_FLUSH_COHERENT_LINES);
+
+	/* WaGttCachingOffByDefault:bdw */
+	I915_WRITE(GEN8_GTT_CACHE_EN, GEN8_GTT_CACHE_DEFAULT);
+
+	/* WaDisableMidThreadPreempt:bdw */
+	I915_WRITE(GEN8_FF_SLICE_CS_CHICKEN2,
+		   I915_READ(GEN8_FF_SLICE_CS_CHICKEN2) |
+		   _MASKED_BIT_ENABLE(GEN8_THREAD_GROUP_PREEMPTION));
+
 	I915_WRITE(0xb10c, (I915_READ(0xb10c) & ~(0xf << 20)) | (0x8 << 20));
 
 	lpt_init_clock_gating(dev);
@@ -6725,18 +6737,6 @@ static void haswell_init_clock_gating(struct drm_device *dev)
 	/* WaRsPkgCStateDisplayPMReq:hsw */
 	I915_WRITE(CHICKEN_PAR1_1,
 		   I915_READ(CHICKEN_PAR1_1) | FORCE_ARB_IDLE_PLANES);
-
-	/* WaOCLCoherentLineFlush:bdw */
-	I915_WRITE(GEN8_L3SQCREG4, I915_READ(GEN8_L3SQCREG4) |
-		   GEN8_PIPELINE_FLUSH_COHERENT_LINES);
-
-	/* WaGttCachingOffByDefault:bdw */
-	I915_WRITE(GEN8_GTT_CACHE_EN, GEN8_GTT_CACHE_DEFAULT);
-
-	/* WaDisableMidThreadPreempt:bdw */
-	I915_WRITE(GEN8_FF_SLICE_CS_CHICKEN2,
-		   I915_READ(GEN8_FF_SLICE_CS_CHICKEN2) |
-		   _MASKED_BIT_ENABLE(GEN8_THREAD_GROUP_PREEMPTION));
 
 	lpt_init_clock_gating(dev);
 }
