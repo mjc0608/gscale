@@ -6736,7 +6736,7 @@ static void haswell_init_clock_gating(struct drm_device *dev)
 	/* WaDisableMidThreadPreempt:bdw */
 	I915_WRITE(GEN8_FF_SLICE_CS_CHICKEN2,
 		   I915_READ(GEN8_FF_SLICE_CS_CHICKEN2) |
-		   GEN8_THREAD_GROUP_PREEMPTION);
+		   _MASKED_BIT_ENABLE(GEN8_THREAD_GROUP_PREEMPTION));
 
 	lpt_init_clock_gating(dev);
 }
