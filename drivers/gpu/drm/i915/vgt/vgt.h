@@ -282,7 +282,8 @@ struct vgt_rsvd_ring {
 #define VGT_VBLANK_TIMEOUT	50	/* in ms */
 
 /* Maximum VMs supported by vGT. Actual number is device specific */
-#define VGT_MAX_VMS			4
+#define VGT_MAX_VMS_HSW 		4
+#define VGT_MAX_VMS			8
 #define VGT_RSVD_APERTURE_SZ		(32*SIZE_1MB)	/* reserve 8MB for vGT itself */
 
 #define GTT_PAGE_SHIFT		12

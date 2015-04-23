@@ -45,14 +45,14 @@ struct vgt_device *vmid_2_vgt_device(int vmid)
 	return NULL;
 }
 
-static int allocate_vgt_id(void)
+static int allocate_vgt_id(struct pgt_device *pdev)
 {
 	unsigned long bit_index;
 
 	ASSERT(vgt_id_alloc_bitmap != ~0UL)
 	do {
 		bit_index = ffz (vgt_id_alloc_bitmap);
-		if (bit_index >= VGT_MAX_VMS) {
+		if (bit_index >= (IS_BDW(pdev) ? VGT_MAX_VMS : VGT_MAX_VMS_HSW)) {
 			vgt_err("vGT: allocate_vgt_id() failed\n");
 			return -ENOSPC;
 		}
@@ -126,7 +126,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 
 	atomic_set(&vgt->crashing, 0);
 
-	if ((rc = vgt->vgt_id = allocate_vgt_id()) < 0 )
+	if ((rc = vgt->vgt_id = allocate_vgt_id(pdev)) < 0 )
 		goto err2;
 
 	vgt->vm_id = vp.vm_id;
@@ -190,6 +190,9 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 		cfg_space[VGT_REG_CFG_COMMAND] &= ~(_REGBIT_CFG_COMMAND_IO |
 						_REGBIT_CFG_COMMAND_MEMORY |
 						_REGBIT_CFG_COMMAND_MASTER);
+		/* Clear the bar upper 32bit and let hvmloader to assign the new value */
+		memset (&vgt->state.cfg_space[VGT_REG_CFG_SPACE_BAR0 + 4], 0, 4);
+		memset (&vgt->state.cfg_space[VGT_REG_CFG_SPACE_BAR1 + 4], 0, 4);
 	}
 
 	vgt_info("aperture: [0x%llx, 0x%llx] guest [0x%llx, 0x%llx] "
