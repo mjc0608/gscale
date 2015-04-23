@@ -3552,6 +3552,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0x24dc, 4, F_RDR, 0, D_BDW, NULL, NULL},
 
 {0x83a4, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0x4dd4, 4, F_RDR, 0, D_BDW, NULL, NULL},
 
 /* UCG */
 {0x8430, 4, F_PT, 0, D_BDW, NULL, NULL},
