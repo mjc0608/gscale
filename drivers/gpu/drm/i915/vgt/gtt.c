@@ -607,6 +607,10 @@ static bool ppgtt_handle_guest_write_page_table_bytes(void *gp,
 static bool ppgtt_write_protection_handler(void *gp, uint64_t pa, void *p_data, int bytes)
 {
 	guest_page_t *gpt = (guest_page_t *)gp;
+	ppgtt_spt_t *spt = guest_page_to_ppgtt_spt(gpt);
+	struct vgt_device *vgt = spt->vgt;
+	struct vgt_statistics *stat = &vgt->stat;
+	cycles_t t0, t1;
 
 	if (bytes != 4 && bytes != 8)
 		return false;
@@ -614,8 +618,17 @@ static bool ppgtt_write_protection_handler(void *gp, uint64_t pa, void *p_data, 
 	if (!gpt->writeprotection)
 		return false;
 
-	return ppgtt_handle_guest_write_page_table_bytes(gp,
-		pa, p_data, bytes);
+	t0 = get_cycles();
+
+	if (!ppgtt_handle_guest_write_page_table_bytes(gp,
+		pa, p_data, bytes))
+		return false;
+
+	t1 = get_cycles();
+	stat->ppgtt_wp_cnt++;
+	stat->ppgtt_wp_cycles += t1 - t0;
+
+	return true;
 }
 
 static ppgtt_spt_t *ppgtt_alloc_shadow_page(struct vgt_device *vgt,
