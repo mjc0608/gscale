@@ -1319,6 +1319,7 @@ static struct reg_mask_t rcs_reset_mmio[] = {
 	{0x2044, 0},
 
 	{0x20a0, 0},
+	{0x20e4, 1},
 	{0x7004, 1},
 	{0x20dc, 1},
 
