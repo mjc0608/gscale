@@ -759,6 +759,8 @@ struct vgt_statistics {
 	u64	ring_tail_mmio_wcycles;
 	u64	vring_scan_cnt;
 	u64	vring_scan_cycles;
+	u64	wp_cnt;
+	u64	wp_cycles;
 	u64	ppgtt_wp_cnt;
 	u64	ppgtt_wp_cycles;
 	u64	skip_bb_cnt;

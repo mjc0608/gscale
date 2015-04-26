@@ -172,7 +172,12 @@ state_nodes = {
 		"count" : 1,
 		"cycles": 1,
 	},
-	"PPGTT writes" : {
+	"WP writes" : {
+		"node"	: "wp_",
+		"count" : 1,
+		"cycles": 1,
+	},
+	"PPGTT WP writes" : {
 		"node"	: "ppgtt_wp_",
 		"count" : 1,
 		"cycles": 1,
@@ -377,7 +382,8 @@ def show_result(e, s, r, time):
 		print_param2(e, vs, "MMIO writes", bias)
 		print_param2(e, vs, "GTT reads", bias)
 		print_param2(e, vs, "GTT writes", bias)
-		print_param2(e, vs, "PPGTT writes", bias)
+		print_param2(e, vs, "WP writes", bias)
+		print_param2(e, vs, "PPGTT WP writes", bias)
 		#print_param2(e, vs, "PM accesses", bias)
 		#print_param2(e, vs, "IRQ accesses", bias)
 		#print_param2(vs, "Emulations", freq, bias)

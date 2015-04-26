@@ -381,6 +381,9 @@ bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa,
 		guest_page = vgt_find_guest_page(vgt, pa >> PAGE_SHIFT);
 		if (guest_page) {
 			rc = guest_page->handler(guest_page, pa, p_data, bytes);
+			t1 = get_cycles();
+			stat->wp_cycles += t1 - t0;
+			stat->wp_cnt++;
 			vgt_unlock_dev_flags(pdev, cpu, flags);
 			return rc;
 		}
