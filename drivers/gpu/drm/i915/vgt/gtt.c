@@ -564,11 +564,23 @@ static inline shadow_page_t *vgt_find_shadow_page(struct vgt_device *vgt,
 		unsigned long mfn)
 {
 	shadow_page_t *shadow_page;
+	struct vgt_statistics *stat = &vgt->stat;
+	cycles_t t0, t1;
+
+	t0 = get_cycles();
 
 	hash_for_each_possible(vgt->gtt.shadow_page_hash_table, shadow_page, node, mfn) {
-		if (shadow_page->mfn == mfn)
+		if (shadow_page->mfn == mfn) {
+			t1 = get_cycles();
+			stat->spt_find_hit_cnt++;
+			stat->spt_find_hit_cycles += t1 - t0;
 			return shadow_page;
+		}
 	}
+
+	t1 = get_cycles();
+	stat->spt_find_miss_cnt++;
+	stat->spt_find_miss_cycles += t1 - t0;
 
 	return NULL;
 }

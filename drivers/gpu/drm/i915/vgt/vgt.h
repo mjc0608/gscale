@@ -763,6 +763,10 @@ struct vgt_statistics {
 	u64	wp_cycles;
 	u64	ppgtt_wp_cnt;
 	u64	ppgtt_wp_cycles;
+	u64	spt_find_hit_cnt;
+	u64	spt_find_hit_cycles;
+	u64	spt_find_miss_cnt;
+	u64	spt_find_miss_cycles;
 	u64	skip_bb_cnt;
 };
 
