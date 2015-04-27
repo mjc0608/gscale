@@ -207,11 +207,6 @@ state_nodes = {
 		"count" : 1,
 		"cycles": 1,
 	},
-	"GP faults" : {
-		"node"	: "vgt_gp_",
-		"count" : 1,
-		"cycles": 1,
-	},
 	"Skipped batch buffers" : {
 		"node"	: "skip_bb_",
 		"count"	: 1,
@@ -386,8 +381,6 @@ def show_result(e, s, r, time):
 		#print_param2(e, vs, "PM accesses", bias)
 		#print_param2(e, vs, "IRQ accesses", bias)
 		#print_param2(vs, "Emulations", freq, bias)
-		if id == 0:
-			print_param2(e, vs, "GP faults", 0)
 
 		print "----"
 		print_param2(e, vs, "Ring tail writes", bias)
