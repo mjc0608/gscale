@@ -32,6 +32,7 @@ struct drm_i915_private;
 #ifdef CONFIG_I915_VGT
 
 bool i915_start_vgt(struct pci_dev *);
+void i915_stop_vgt(void);
 void i915_vgt_record_priv(struct drm_i915_private *priv);
 bool vgt_host_read(u32, void *, int, bool, bool);
 bool vgt_host_write(u32, void *, int, bool, bool);

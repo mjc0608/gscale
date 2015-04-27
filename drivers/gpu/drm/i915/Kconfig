@@ -71,7 +71,7 @@ config DRM_I915_PRELIMINARY_HW_SUPPORT
 	  If in doubt, say "N".
 
 config I915_VGT
-	tristate "iGVT-g vGT driver of i915"
+	bool "iGVT-g vGT driver of i915"
 	depends on DRM_I915
 	select IRQ_WORK
 	default y

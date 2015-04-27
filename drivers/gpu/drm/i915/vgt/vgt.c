@@ -1191,19 +1191,6 @@ bool vgt_check_host(void)
 	return true;
 }
 
-bool i915_start_vgt(struct pci_dev *pdev)
-{
-	if (!vgt_check_host())
-		return false;
-
-	if (vgt_xops.initialized) {
-		vgt_info("VGT has been intialized?\n");
-		return false;
-	}
-
-	return vgt_initialize(pdev) == 0;
-}
-
 static void vgt_param_check(void)
 {
 	/* TODO: hvm_display/render_owner are broken */
@@ -1233,20 +1220,25 @@ static void vgt_param_check(void)
 		dom0_fence_sz = VGT_MAX_NUM_FENCES;
 }
 
-static int __init vgt_init_module(void)
+bool i915_start_vgt(struct pci_dev *pdev)
 {
-	if (!hypervisor_check_host())
-		return 0;
+	if (!vgt_check_host())
+		return false;
+
+	if (vgt_xops.initialized) {
+		vgt_info("VGT has been intialized?\n");
+		return false;
+	}
 
 	vgt_param_check();
 
 	vgt_klog_init();
 
-	return 0;
+	return vgt_initialize(pdev) == 0;
 }
-module_init(vgt_init_module);
 
-static void __exit vgt_exit_module(void)
+
+void i915_stop_vgt(void)
 {
 	if (!hypervisor_check_host())
 		return;
@@ -1256,4 +1248,3 @@ static void __exit vgt_exit_module(void)
 	vgt_klog_cleanup();
 	return;
 }
-module_exit(vgt_exit_module);
