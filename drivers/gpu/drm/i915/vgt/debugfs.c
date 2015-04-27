@@ -1124,6 +1124,10 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		debugfs_create_u64_node ("spt_find_hit_cycles", 0444, perf_dir_entry, &(vgt->stat.spt_find_hit_cycles));
 		debugfs_create_u64_node ("spt_find_miss_cnt", 0444, perf_dir_entry, &(vgt->stat.spt_find_miss_cnt));
 		debugfs_create_u64_node ("spt_find_miss_cycles", 0444, perf_dir_entry, &(vgt->stat.spt_find_miss_cycles));
+		debugfs_create_u64_node ("gpt_find_hit_cnt", 0444, perf_dir_entry, &(vgt->stat.gpt_find_hit_cnt));
+		debugfs_create_u64_node ("gpt_find_hit_cycles", 0444, perf_dir_entry, &(vgt->stat.gpt_find_hit_cycles));
+		debugfs_create_u64_node ("gpt_find_miss_cnt", 0444, perf_dir_entry, &(vgt->stat.gpt_find_miss_cnt));
+		debugfs_create_u64_node ("gpt_find_miss_cycles", 0444, perf_dir_entry, &(vgt->stat.gpt_find_miss_cycles));
 		debugfs_create_u64_node ("skip_bb_cnt", 0444, perf_dir_entry, &(vgt->stat.skip_bb_cnt));
 
 		/* cmd statistics for ring/batch buffers */

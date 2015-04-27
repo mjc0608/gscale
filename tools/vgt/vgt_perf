@@ -182,6 +182,16 @@ state_nodes = {
 		"count" : 1,
 		"cycles": 1,
 	},
+	"PPGTT guest page find hit" : {
+		"node"	: "gpt_find_hit_",
+		"count" : 1,
+		"cycles": 1,
+	},
+	"PPGTT guest page find miss" : {
+		"node"	: "gpt_find_miss_",
+		"count" : 1,
+		"cycles": 1,
+	},
 	"PPGTT shadow page find hit" : {
 		"node"	: "spt_find_hit_",
 		"count" : 1,
@@ -394,6 +404,8 @@ def show_result(e, s, r, time):
 		print_param2(e, vs, "GTT writes", bias)
 		print_param2(e, vs, "WP writes", bias)
 		print_param2(e, vs, "PPGTT WP writes", bias)
+		print_param2(e, vs, "PPGTT guest page find hit", bias)
+		print_param2(e, vs, "PPGTT guest page find miss", bias)
 		print_param2(e, vs, "PPGTT shadow page find hit", bias)
 		print_param2(e, vs, "PPGTT shadow page find miss", bias)
 		#print_param2(e, vs, "PM accesses", bias)

@@ -529,10 +529,23 @@ void vgt_clean_guest_page(struct vgt_device *vgt, guest_page_t *guest_page)
 guest_page_t *vgt_find_guest_page(struct vgt_device *vgt, unsigned long gfn)
 {
 	guest_page_t *guest_page;
+	struct vgt_statistics *stat = &vgt->stat;
+	cycles_t t0, t1;
 
-	hash_for_each_possible(vgt->gtt.guest_page_hash_table, guest_page, node, gfn)
-		if (guest_page->gfn == gfn)
+	t0 = get_cycles();
+
+	hash_for_each_possible(vgt->gtt.guest_page_hash_table, guest_page, node, gfn) {
+		if (guest_page->gfn == gfn) {
+			t1 = get_cycles();
+			stat->gpt_find_hit_cnt++;
+			stat->gpt_find_hit_cycles += t1 - t0;
 			return guest_page;
+		}
+	}
+
+	t1 = get_cycles();
+	stat->gpt_find_miss_cnt++;
+	stat->gpt_find_miss_cycles += t1 - t0;
 
 	return NULL;
 }
