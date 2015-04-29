@@ -429,7 +429,7 @@ struct vgt_mmio_entry {
 	vgt_mmio_write	write;
 };
 
-#define	VGT_HASH_BITS	6
+#define	VGT_HASH_BITS	8
 
 /*
  * Ring ID definition.
