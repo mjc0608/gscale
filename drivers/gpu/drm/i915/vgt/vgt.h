@@ -90,6 +90,8 @@ extern bool wp_submitted_ctx;
 extern bool propagate_monitor_to_guest;
 extern bool irq_based_ctx_switch;
 extern int preallocated_shadow_pages;
+extern int preallocated_oos_pages;
+extern bool spt_out_of_sync;
 
 enum vgt_event_type {
 	// GT
@@ -612,6 +614,7 @@ struct vgt_vgtt_info {
 	DECLARE_HASHTABLE(guest_page_hash_table, VGT_HASH_BITS);
 	DECLARE_HASHTABLE(el_ctx_hash_table, VGT_HASH_BITS);
 	atomic_t n_write_protected_guest_page;
+	struct list_head oos_page_list_head;
 };
 
 extern bool vgt_init_vgtt(struct vgt_device *vgt);
@@ -630,6 +633,8 @@ extern struct vgt_mm *gen8_find_ppgtt_mm(struct vgt_device *vgt,
 
 typedef bool guest_page_handler_t(void *gp, uint64_t pa, void *p_data, int bytes);
 
+struct oos_page;
+
 struct guest_page {
 	struct hlist_node node;
 	int writeprotection;
@@ -637,8 +642,20 @@ struct guest_page {
 	void *vaddr;
 	guest_page_handler_t *handler;
 	void *data;
+	unsigned long write_cnt;
+	struct oos_page *oos_page;
 };
+
 typedef struct guest_page guest_page_t;
+
+struct oos_page {
+	guest_page_t *guest_page;
+	struct list_head list;
+	struct list_head vm_list;
+	int id;
+	unsigned char mem[GTT_PAGE_SIZE];
+};
+typedef struct oos_page oos_page_t;
 
 typedef struct {
 	shadow_page_t shadow_page;
@@ -658,6 +675,7 @@ extern bool vgt_clear_guest_page_writeprotection(struct vgt_device *vgt,
 extern guest_page_t *vgt_find_guest_page(struct vgt_device *vgt, unsigned long gfn);
 
 extern bool gen7_ppgtt_mm_setup(struct vgt_device *vgt, int ring_id);
+bool ppgtt_sync_oos_pages(struct vgt_device *vgt);
 
 /* shadow context */
 
@@ -1148,6 +1166,8 @@ struct vgt_gtt_info {
 	void (*mm_free_page_table)(struct vgt_mm *mm);
 	mempool_t *mempool;
 	struct mutex mempool_lock;
+	struct list_head oos_page_use_list_head;
+	struct list_head oos_page_free_list_head;
 };
 
 /* per-device structure */

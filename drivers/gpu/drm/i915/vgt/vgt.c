@@ -97,6 +97,14 @@ int preallocated_shadow_pages = -1;
 module_param_named(preallocated_shadow_pages, preallocated_shadow_pages, int, 0600);
 MODULE_PARM_DESC(preallocated_shadow_pages, "Amount of pre-allocated shadow pages");
 
+int preallocated_oos_pages = -1;
+module_param_named(preallocated_oos_pages, preallocated_oos_pages, int, 0600);
+MODULE_PARM_DESC(preallocated_oos_pages, "Amount of pre-allocated oos pages");
+
+bool spt_out_of_sync = true;
+module_param_named(spt_out_of_sync, spt_out_of_sync, bool, 0600);
+MODULE_PARM_DESC(spt_out_of_sync, "Enable SPT out of sync");
+
 /*
  * FIXME: now video ring switch has weird issue. The cmd
  * parser may enter endless loop even when head/tail is

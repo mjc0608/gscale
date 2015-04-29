@@ -251,6 +251,40 @@ TRACE_EVENT(gpt_change,
 		TP_printk("%s", __entry->buf)
 );
 
+TRACE_EVENT(oos_change,
+		TP_PROTO(int vm_id, const char *tag, int page_id, void *gpt, int type),
+
+		TP_ARGS(vm_id, tag, page_id, gpt, type),
+
+		TP_STRUCT__entry(
+			__array(char, buf, MAX_BUF_LEN)
+		),
+
+		TP_fast_assign(
+			snprintf(__entry->buf, MAX_BUF_LEN, "VM%d [oos %s] page id %d gpt %p type %d\n",
+					vm_id, tag, page_id, gpt, type);
+		),
+
+		TP_printk("%s", __entry->buf)
+);
+
+TRACE_EVENT(oos_sync,
+		TP_PROTO(int vm_id, int page_id, void *gpt, int type, u64 v, unsigned long index),
+
+		TP_ARGS(vm_id, page_id, gpt, type, v, index),
+
+		TP_STRUCT__entry(
+			__array(char, buf, MAX_BUF_LEN)
+		),
+
+		TP_fast_assign(
+			snprintf(__entry->buf, MAX_BUF_LEN, "VM%d [oos sync] page id %d gpt %p type %d entry 0x%llx index 0x%lx\n",
+					vm_id, page_id, gpt, type, v, index);
+		),
+
+		TP_printk("%s", __entry->buf)
+);
+
 TRACE_EVENT(ctx_lifecycle,
 		TP_PROTO(int vm_id, int ring_id,
 				uint32_t guest_lrca, const char *action),

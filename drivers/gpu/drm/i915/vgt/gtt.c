@@ -511,16 +511,23 @@ bool vgt_init_guest_page(struct vgt_device *vgt, guest_page_t *guest_page,
 	guest_page->gfn = gfn;
 	guest_page->handler = handler;
 	guest_page->data = data;
+	guest_page->oos_page = NULL;
+	guest_page->write_cnt = 0;
 
 	hash_add(vgt->gtt.guest_page_hash_table, &guest_page->node, guest_page->gfn);
 
 	return true;
 }
 
+static bool vgt_detach_oos_page(struct vgt_device *vgt, oos_page_t *oos_page, bool sync);
+
 void vgt_clean_guest_page(struct vgt_device *vgt, guest_page_t *guest_page)
 {
 	if(!hlist_unhashed(&guest_page->node))
 		hash_del(&guest_page->node);
+
+	if (guest_page->oos_page)
+		vgt_detach_oos_page(vgt, guest_page->oos_page, false);
 
 	if (guest_page->writeprotection)
 		hypervisor_unset_wp_pages(vgt, guest_page);
@@ -940,6 +947,120 @@ fail:
 	return false;
 }
 
+static bool vgt_detach_oos_page(struct vgt_device *vgt, oos_page_t *oos_page, bool sync)
+{
+	struct vgt_device_info *info = &vgt->pdev->device_info;
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_gtt_pte_ops *ops = pdev->gtt.pte_ops;
+	ppgtt_spt_t *spt = guest_page_to_ppgtt_spt(oos_page->guest_page);
+	gtt_entry_t old, new, m;
+	int index;
+
+	trace_oos_change(vgt->vm_id, "detach", oos_page->id,
+			oos_page->guest_page, spt->guest_page_type);
+
+	if (!sync)
+		goto out;
+
+	old.type = new.type = get_entry_type(spt->guest_page_type);
+	old.pdev = new.pdev = pdev;
+	old.val64 = new.val64 = 0;
+
+	for (index = 0; index < (GTT_PAGE_SIZE >> info->gtt_entry_size_shift); index++) {
+		ops->get_entry(oos_page->mem, &old, index, false, NULL);
+		ops->get_entry(oos_page->guest_page->vaddr, &new, index, true, vgt);
+
+		if (old.val64 == new.val64)
+			continue;
+
+		trace_oos_sync(vgt->vm_id, oos_page->id,
+				oos_page->guest_page, spt->guest_page_type,
+				new.val64, index);
+
+		if (!gtt_entry_p2m(vgt, &new, &m))
+			return false;
+
+		ppgtt_set_shadow_entry(spt, &m, index);
+	}
+out:
+	oos_page->guest_page->write_cnt = 0;
+	oos_page->guest_page->oos_page = NULL;
+	oos_page->guest_page = NULL;
+
+	list_del_init(&oos_page->vm_list);
+	list_move_tail(&oos_page->list, &pdev->gtt.oos_page_free_list_head);
+
+	return true;
+}
+
+static oos_page_t *vgt_attach_oos_page(struct vgt_device *vgt, guest_page_t *gpt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_gtt_info *gtt = &pdev->gtt;
+	oos_page_t *oos_page;
+
+	if (list_empty(&gtt->oos_page_free_list_head)) {
+		oos_page = container_of(gtt->oos_page_use_list_head.next, oos_page_t, list);
+		if (!vgt_detach_oos_page(vgt, oos_page, true))
+			return NULL;
+		ASSERT(!list_empty(&gtt->oos_page_free_list_head));
+	} else
+		oos_page = container_of(gtt->oos_page_free_list_head.next, oos_page_t, list);
+
+	if (!hypervisor_read_va(vgt, gpt->vaddr, oos_page->mem, GTT_PAGE_SIZE, 1))
+		return NULL;
+
+	oos_page->guest_page = gpt;
+	gpt->oos_page = oos_page;
+
+	list_move_tail(&oos_page->list, &pdev->gtt.oos_page_use_list_head);
+	list_add_tail(&oos_page->vm_list, &vgt->gtt.oos_page_list_head);
+
+	trace_oos_change(vgt->vm_id, "attach", gpt->oos_page->id,
+			gpt, guest_page_to_ppgtt_spt(gpt)->guest_page_type);
+
+	return oos_page;
+}
+
+static bool ppgtt_set_guest_page_oos(struct vgt_device *vgt, guest_page_t *gpt)
+{
+	if (!vgt_attach_oos_page(vgt, gpt))
+		return false;
+
+	trace_oos_change(vgt->vm_id, "set page out of sync", gpt->oos_page->id,
+			gpt, guest_page_to_ppgtt_spt(gpt)->guest_page_type);
+
+	return hypervisor_unset_wp_pages(vgt, gpt);
+}
+
+static bool ppgtt_set_guest_page_sync(struct vgt_device *vgt, guest_page_t *gpt)
+{
+	if (!hypervisor_set_wp_pages(vgt, gpt))
+		return false;
+
+	trace_oos_change(vgt->vm_id, "set page sync", gpt->oos_page->id,
+			gpt, guest_page_to_ppgtt_spt(gpt)->guest_page_type);
+
+	return vgt_detach_oos_page(vgt, gpt->oos_page, true);
+}
+
+bool ppgtt_sync_oos_pages(struct vgt_device *vgt)
+{
+	struct list_head *pos, *n;
+	oos_page_t *oos_page;
+
+	if (!spt_out_of_sync)
+		return true;
+
+	list_for_each_safe(pos, n, &vgt->gtt.oos_page_list_head) {
+		oos_page = container_of(pos, oos_page_t, vm_list);
+		if (!ppgtt_set_guest_page_sync(vgt, oos_page->guest_page))
+			return false;
+	}
+
+	return true;
+}
+
 /*
  * The heart of PPGTT shadow page table.
  */
@@ -976,6 +1097,13 @@ fail:
 	vgt_err("fail: shadow page %p guest entry 0x%llx type %d.\n",
 			spt, we->val64, we->type);
 	return false;
+}
+
+static inline bool can_do_out_of_sync(guest_page_t *gpt)
+{
+	return spt_out_of_sync
+		&& gtt_type_is_pte_pt(guest_page_to_ppgtt_spt(gpt)->guest_page_type)
+		&& gpt->write_cnt >= 2;
 }
 
 static bool ppgtt_handle_guest_write_page_table_bytes(void *gp,
@@ -1022,7 +1150,15 @@ static bool ppgtt_handle_guest_write_page_table_bytes(void *gp,
 
 	ops->test_pse(&we);
 
-	return ppgtt_handle_guest_write_page_table(gpt, &we, index);
+	gpt->write_cnt++;
+
+	if (!ppgtt_handle_guest_write_page_table(gpt, &we, index))
+		return false;
+
+	if (can_do_out_of_sync(gpt) && !ppgtt_set_guest_page_oos(vgt, gpt))
+		return false;
+
+	return true;
 }
 
 bool ppgtt_handle_guest_write_root_pointer(struct vgt_mm *mm,
@@ -1730,6 +1866,7 @@ bool vgt_init_vgtt(struct vgt_device *vgt)
 	hash_init(gtt->el_ctx_hash_table);
 
 	INIT_LIST_HEAD(&gtt->mm_list_head);
+	INIT_LIST_HEAD(&gtt->oos_page_list_head);
 
 	if (!vgt_expand_shadow_page_mempool(vgt->pdev)) {
 		vgt_err("fail to expand the shadow page mempool.");
@@ -1765,6 +1902,51 @@ void vgt_clean_vgtt(struct vgt_device *vgt)
 	return;
 }
 
+static void vgt_clean_spt_oos(struct pgt_device *pdev)
+{
+	struct vgt_gtt_info *gtt = &pdev->gtt;
+	struct list_head *pos, *n;
+	oos_page_t *oos_page;
+
+	ASSERT(list_empty(&gtt->oos_page_use_list_head));
+
+	list_for_each_safe(pos, n, &gtt->oos_page_free_list_head) {
+		oos_page = container_of(pos, oos_page_t, list);
+		list_del(&oos_page->list);
+		kfree(oos_page);
+	}
+}
+
+static bool vgt_setup_spt_oos(struct pgt_device *pdev)
+{
+	struct vgt_gtt_info *gtt = &pdev->gtt;
+	oos_page_t *oos_page;
+	int i;
+
+	INIT_LIST_HEAD(&gtt->oos_page_free_list_head);
+	INIT_LIST_HEAD(&gtt->oos_page_use_list_head);
+
+	for (i = 0; i < preallocated_oos_pages; i++) {
+		oos_page = kzalloc(sizeof(*oos_page), GFP_KERNEL);
+		if (!oos_page) {
+			vgt_err("fail to pre-allocate oos page.\n");
+			goto fail;
+		}
+
+		INIT_LIST_HEAD(&oos_page->list);
+		INIT_LIST_HEAD(&oos_page->vm_list);
+		oos_page->id = i;
+		list_add_tail(&oos_page->list, &gtt->oos_page_free_list_head);
+	}
+
+	vgt_info("%d oos pages preallocated\n", preallocated_oos_pages);
+
+	return true;
+fail:
+	vgt_clean_spt_oos(pdev);
+	return false;
+}
+
 bool vgt_gtt_init(struct pgt_device *pdev)
 {
 	if (IS_PREBDW(pdev)) {
@@ -1775,6 +1957,8 @@ bool vgt_gtt_init(struct pgt_device *pdev)
 
 		if (preallocated_shadow_pages == -1)
 			preallocated_shadow_pages = 512;
+		if (spt_out_of_sync)
+			spt_out_of_sync = false;
 	} else if (IS_BDW(pdev)) {
 		pdev->gtt.pte_ops = &gen8_gtt_pte_ops;
 		pdev->gtt.gma_ops = &gen8_gtt_gma_ops;
@@ -1783,9 +1967,18 @@ bool vgt_gtt_init(struct pgt_device *pdev)
 
 		if (preallocated_shadow_pages == -1)
 			preallocated_shadow_pages = 8192;
+		if (preallocated_oos_pages == -1)
+			preallocated_oos_pages = 1024;
 	} else {
 		vgt_err("Unsupported platform.\n");
 		return false;
+	}
+
+	if (spt_out_of_sync) {
+		if (!vgt_setup_spt_oos(pdev)) {
+			vgt_err("fail to initialize SPT oos.\n");
+			return false;
+		}
 	}
 
 	mutex_init(&pdev->gtt.mempool_lock);
@@ -1794,6 +1987,7 @@ bool vgt_gtt_init(struct pgt_device *pdev)
 		mempool_alloc_spt, mempool_free_spt, pdev);
 	if (!pdev->gtt.mempool) {
 		vgt_err("fail to create mempool.\n");
+		vgt_clean_spt_oos(pdev);
 		return false;
 	}
 
@@ -1802,6 +1996,9 @@ bool vgt_gtt_init(struct pgt_device *pdev)
 
 void vgt_gtt_clean(struct pgt_device *pdev)
 {
+	if (spt_out_of_sync)
+		vgt_clean_spt_oos(pdev);
+
 	mempool_destroy(pdev->gtt.mempool);
 }
 
