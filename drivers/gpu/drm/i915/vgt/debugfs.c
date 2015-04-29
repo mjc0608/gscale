@@ -102,6 +102,7 @@ enum vgt_debugfs_entry_t
 	VGT_DEBUGFS_FB_FORMAT,
 	VGT_DEBUGFS_DPY_INFO,
 	VGT_DEBUGFS_VIRTUAL_GTT,
+	VGT_DEBUGFS_HLIST_INFO,
 	VGT_DEBUGFS_ENTRY_MAX
 };
 
@@ -727,6 +728,51 @@ static const struct file_operations virt_dpyinfo_fops = {
 	.release = single_release,
 };
 
+static void show_hlist_status(struct seq_file *m, struct hlist_head *head, int n_bucket)
+{
+	unsigned long count;
+	struct hlist_node *pos;
+	int i;
+
+	for (i = 0; i < n_bucket; i++) {
+		count = 0;
+		hlist_for_each(pos, head + i)
+			count++;
+		seq_printf(m, "[bucket %d] %lu elements\n", i, count);
+	}
+}
+
+static int show_hlist_info(struct seq_file *m, void *data)
+{
+	struct vgt_device *vgt = (struct vgt_device *)m->private;
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_vgtt_info *gtt = &vgt->gtt;
+	int cpu;
+
+	vgt_lock_dev(pdev, cpu);
+
+	seq_printf(m, "------- guest page hash table -------\n");
+	show_hlist_status(m, gtt->guest_page_hash_table, 1 << VGT_HASH_BITS);
+	seq_printf(m, "------- shadow page hash table -------\n");
+	show_hlist_status(m, gtt->shadow_page_hash_table, 1 << VGT_HASH_BITS);
+
+	vgt_unlock_dev(pdev, cpu);
+
+	return 0;
+}
+
+static int hlist_info_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, show_hlist_info, inode->i_private);
+}
+
+static const struct file_operations hlist_info_fops = {
+	.open = hlist_info_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 static int vgt_device_reset_show(struct seq_file *m, void *data)
 {
 	struct pgt_device *pdev = (struct pgt_device *)m->private;
@@ -1075,6 +1121,14 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 	else
 		printk("vGT(%d): create debugfs node: virtual_mmio_space\n", vgt_id);
 	/* end of virtual gtt space dump */
+
+	d_debugfs_entry[vgt_id][VGT_DEBUGFS_HLIST_INFO] = debugfs_create_file("hlistinfo",
+			0444, d_per_vgt[vgt_id], vgt, &hlist_info_fops);
+
+	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_HLIST_INFO])
+		printk(KERN_ERR "vGT(%d): failed to create debugfs node: hlistinfo\n", vgt_id);
+	else
+		printk("vGT(%d): create debugfs node: hlistinfo\n", vgt_id);
 
 	d_debugfs_entry[vgt_id][VGT_DEBUGFS_FB_FORMAT] = debugfs_create_file("frame_buffer_format",
 			0444, d_per_vgt[vgt_id], vgt, &fbinfo_fops);
