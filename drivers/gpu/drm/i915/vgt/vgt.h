@@ -1127,6 +1127,11 @@ struct pgt_statistics {
 	u64	virq_cycles;
 	u64	irq_delay_cycles;
 	u64	events[EVENT_MAX];
+	u64	oos_page_cur_avail_cnt;
+	u64	oos_page_min_avail_cnt;
+	u64	oos_page_steal_cnt;
+	u64	oos_page_attach_cnt;
+	u64	oos_page_detach_cnt;
 };
 
 #define PCI_BDF2(b,df)  ((((b) & 0xff) << 8) | ((df) & 0xff))

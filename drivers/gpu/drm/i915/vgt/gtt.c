@@ -1001,6 +1001,9 @@ static bool vgt_detach_oos_page(struct vgt_device *vgt, oos_page_t *oos_page)
 	list_del_init(&oos_page->vm_list);
 	list_move_tail(&oos_page->list, &pdev->gtt.oos_page_free_list_head);
 
+	pdev->stat.oos_page_cur_avail_cnt++;
+	pdev->stat.oos_page_detach_cnt++;
+
 	return true;
 }
 
@@ -1018,8 +1021,13 @@ static oos_page_t *vgt_attach_oos_page(struct vgt_device *vgt,
 	list_move_tail(&oos_page->list, &pdev->gtt.oos_page_use_list_head);
 	list_add_tail(&oos_page->vm_list, &vgt->gtt.oos_page_list_head);
 
+	if (--pdev->stat.oos_page_cur_avail_cnt < pdev->stat.oos_page_min_avail_cnt)
+		pdev->stat.oos_page_min_avail_cnt = pdev->stat.oos_page_cur_avail_cnt;
+
 	trace_oos_change(vgt->vm_id, "attach", gpt->oos_page->id,
 			gpt, guest_page_to_ppgtt_spt(gpt)->guest_page_type);
+
+	pdev->stat.oos_page_attach_cnt++;
 
 	return oos_page;
 }
@@ -1050,6 +1058,7 @@ static bool ppgtt_set_guest_page_oos(struct vgt_device *vgt, guest_page_t *gpt)
 			|| !vgt_detach_oos_page(vgt, oos_page))
 			return false;
 		ASSERT(!list_empty(&gtt->oos_page_free_list_head));
+		pdev->stat.oos_page_steal_cnt++;
 	} else
 		oos_page = container_of(gtt->oos_page_free_list_head.next, oos_page_t, list);
 
@@ -1956,6 +1965,12 @@ static bool vgt_setup_spt_oos(struct pgt_device *pdev)
 		oos_page->id = i;
 		list_add_tail(&oos_page->list, &gtt->oos_page_free_list_head);
 	}
+
+	pdev->stat.oos_page_cur_avail_cnt = preallocated_oos_pages;
+	pdev->stat.oos_page_min_avail_cnt = preallocated_oos_pages;
+	pdev->stat.oos_page_steal_cnt = 0;
+	pdev->stat.oos_page_attach_cnt = 0;
+	pdev->stat.oos_page_detach_cnt = 0;
 
 	vgt_info("%d oos pages preallocated\n", preallocated_oos_pages);
 
