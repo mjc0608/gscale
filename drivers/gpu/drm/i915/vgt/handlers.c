@@ -1929,6 +1929,8 @@ static bool pvinfo_read(struct vgt_device *vgt, unsigned int offset,
 			 *   *((unsigned int *)p_data)) = VGT_V2G_SET_SW_CURSOR;
 			 */
 			break;
+		case vgt_info_off(vgt_caps):
+			break;
 		default:
 			invalid_read = true;
 			break;
