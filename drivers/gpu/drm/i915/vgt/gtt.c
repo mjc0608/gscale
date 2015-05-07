@@ -519,7 +519,7 @@ bool vgt_init_guest_page(struct vgt_device *vgt, guest_page_t *guest_page,
 	return true;
 }
 
-static bool vgt_detach_oos_page(struct vgt_device *vgt, oos_page_t *oos_page, bool sync);
+static bool vgt_detach_oos_page(struct vgt_device *vgt, oos_page_t *oos_page);
 
 void vgt_clean_guest_page(struct vgt_device *vgt, guest_page_t *guest_page)
 {
@@ -527,7 +527,7 @@ void vgt_clean_guest_page(struct vgt_device *vgt, guest_page_t *guest_page)
 		hash_del(&guest_page->node);
 
 	if (guest_page->oos_page)
-		vgt_detach_oos_page(vgt, guest_page->oos_page, false);
+		vgt_detach_oos_page(vgt, guest_page->oos_page);
 
 	if (guest_page->writeprotection)
 		hypervisor_unset_wp_pages(vgt, guest_page);
@@ -947,7 +947,7 @@ fail:
 	return false;
 }
 
-static bool vgt_detach_oos_page(struct vgt_device *vgt, oos_page_t *oos_page, bool sync)
+static bool vgt_sync_oos_page(struct vgt_device *vgt, oos_page_t *oos_page)
 {
 	struct vgt_device_info *info = &vgt->pdev->device_info;
 	struct pgt_device *pdev = vgt->pdev;
@@ -956,11 +956,8 @@ static bool vgt_detach_oos_page(struct vgt_device *vgt, oos_page_t *oos_page, bo
 	gtt_entry_t old, new, m;
 	int index;
 
-	trace_oos_change(vgt->vm_id, "detach", oos_page->id,
+	trace_oos_change(vgt->vm_id, "sync", oos_page->id,
 			oos_page->guest_page, spt->guest_page_type);
-
-	if (!sync)
-		goto out;
 
 	old.type = new.type = get_entry_type(spt->guest_page_type);
 	old.pdev = new.pdev = pdev;
@@ -980,9 +977,23 @@ static bool vgt_detach_oos_page(struct vgt_device *vgt, oos_page_t *oos_page, bo
 		if (!gtt_entry_p2m(vgt, &new, &m))
 			return false;
 
+		ops->set_entry(oos_page->mem, &new, index, false, NULL);
 		ppgtt_set_shadow_entry(spt, &m, index);
 	}
-out:
+
+	oos_page->guest_page->write_cnt = 0;
+
+	return true;
+}
+
+static bool vgt_detach_oos_page(struct vgt_device *vgt, oos_page_t *oos_page)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	ppgtt_spt_t *spt = guest_page_to_ppgtt_spt(oos_page->guest_page);
+
+	trace_oos_change(vgt->vm_id, "detach", oos_page->id,
+			oos_page->guest_page, spt->guest_page_type);
+
 	oos_page->guest_page->write_cnt = 0;
 	oos_page->guest_page->oos_page = NULL;
 	oos_page->guest_page = NULL;
@@ -993,19 +1004,10 @@ out:
 	return true;
 }
 
-static oos_page_t *vgt_attach_oos_page(struct vgt_device *vgt, guest_page_t *gpt)
+static oos_page_t *vgt_attach_oos_page(struct vgt_device *vgt,
+		oos_page_t *oos_page, guest_page_t *gpt)
 {
 	struct pgt_device *pdev = vgt->pdev;
-	struct vgt_gtt_info *gtt = &pdev->gtt;
-	oos_page_t *oos_page;
-
-	if (list_empty(&gtt->oos_page_free_list_head)) {
-		oos_page = container_of(gtt->oos_page_use_list_head.next, oos_page_t, list);
-		if (!vgt_detach_oos_page(vgt, oos_page, true))
-			return NULL;
-		ASSERT(!list_empty(&gtt->oos_page_free_list_head));
-	} else
-		oos_page = container_of(gtt->oos_page_free_list_head.next, oos_page_t, list);
 
 	if (!hypervisor_read_va(vgt, gpt->vaddr, oos_page->mem, GTT_PAGE_SIZE, 1))
 		return NULL;
@@ -1022,17 +1024,6 @@ static oos_page_t *vgt_attach_oos_page(struct vgt_device *vgt, guest_page_t *gpt
 	return oos_page;
 }
 
-static bool ppgtt_set_guest_page_oos(struct vgt_device *vgt, guest_page_t *gpt)
-{
-	if (!vgt_attach_oos_page(vgt, gpt))
-		return false;
-
-	trace_oos_change(vgt->vm_id, "set page out of sync", gpt->oos_page->id,
-			gpt, guest_page_to_ppgtt_spt(gpt)->guest_page_type);
-
-	return hypervisor_unset_wp_pages(vgt, gpt);
-}
-
 static bool ppgtt_set_guest_page_sync(struct vgt_device *vgt, guest_page_t *gpt)
 {
 	if (!hypervisor_set_wp_pages(vgt, gpt))
@@ -1041,7 +1032,34 @@ static bool ppgtt_set_guest_page_sync(struct vgt_device *vgt, guest_page_t *gpt)
 	trace_oos_change(vgt->vm_id, "set page sync", gpt->oos_page->id,
 			gpt, guest_page_to_ppgtt_spt(gpt)->guest_page_type);
 
-	return vgt_detach_oos_page(vgt, gpt->oos_page, true);
+	return vgt_sync_oos_page(vgt, gpt->oos_page);
+}
+
+static bool ppgtt_set_guest_page_oos(struct vgt_device *vgt, guest_page_t *gpt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	struct vgt_gtt_info *gtt = &pdev->gtt;
+	oos_page_t *oos_page = gpt->oos_page;
+
+	if (oos_page)
+		goto out;
+
+	if (list_empty(&gtt->oos_page_free_list_head)) {
+		oos_page = container_of(gtt->oos_page_use_list_head.next, oos_page_t, list);
+		if (!ppgtt_set_guest_page_sync(vgt, oos_page->guest_page)
+			|| !vgt_detach_oos_page(vgt, oos_page))
+			return false;
+		ASSERT(!list_empty(&gtt->oos_page_free_list_head));
+	} else
+		oos_page = container_of(gtt->oos_page_free_list_head.next, oos_page_t, list);
+
+	if (!vgt_attach_oos_page(vgt, oos_page, gpt))
+		return false;
+out:
+	trace_oos_change(vgt->vm_id, "set page out of sync", gpt->oos_page->id,
+			gpt, guest_page_to_ppgtt_spt(gpt)->guest_page_type);
+
+	return hypervisor_unset_wp_pages(vgt, gpt);
 }
 
 bool ppgtt_sync_oos_pages(struct vgt_device *vgt)
