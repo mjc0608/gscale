@@ -2001,7 +2001,7 @@ bool vgt_gtt_init(struct pgt_device *pdev)
 		if (preallocated_shadow_pages == -1)
 			preallocated_shadow_pages = 8192;
 		if (preallocated_oos_pages == -1)
-			preallocated_oos_pages = 1024;
+			preallocated_oos_pages = 4096;
 	} else {
 		vgt_err("Unsupported platform.\n");
 		return false;
