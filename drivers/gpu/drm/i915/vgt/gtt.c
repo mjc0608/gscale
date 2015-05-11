@@ -1182,8 +1182,13 @@ static bool ppgtt_handle_guest_write_page_table_bytes(void *gp,
 	if (!ppgtt_handle_guest_write_page_table(gpt, &we, index))
 		return false;
 
-	if (can_do_out_of_sync(gpt) && !ppgtt_set_guest_page_oos(vgt, gpt))
-		return false;
+	if (spt_out_of_sync) {
+		if (gpt->oos_page)
+			ops->set_entry(gpt->oos_page->mem, &we, index, false, NULL);
+
+		if (can_do_out_of_sync(gpt) && !ppgtt_set_guest_page_oos(vgt, gpt))
+			return false;
+	}
 
 	return true;
 }
