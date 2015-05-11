@@ -32,8 +32,6 @@
 
 #define GEN6_PPGTT_PD_ENTRIES 512
 #define I915_PPGTT_PT_ENTRIES (PAGE_SIZE / sizeof(gen6_gtt_pte_t))
-typedef uint64_t gen8_gtt_pte_t;
-typedef gen8_gtt_pte_t gen8_ppgtt_pde_t;
 
 /* PPGTT stuff */
 #define GEN6_GTT_ADDR_ENCODE(addr)	((addr) | (((addr) >> 28) & 0xff0))
