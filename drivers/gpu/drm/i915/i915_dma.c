@@ -706,6 +706,14 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 		i915_host_mediate = true;
 	printk("i915_start_vgt: %s\n", i915_host_mediate ? "success" : "fail");
 
+	if (i915_host_mediate) {
+		extern bool (*tmp_vgt_can_process_timer)(void *timer);
+		extern void (*tmp_vgt_new_delay_event_timer)(void *timer);
+
+		tmp_vgt_new_delay_event_timer = vgt_new_delay_event_timer;
+		tmp_vgt_can_process_timer = vgt_can_process_timer;
+	}
+
 	i915_check_vgt(dev_priv);
 	if (USES_VGT(dev)){
 		i915.enable_fbc = 0;

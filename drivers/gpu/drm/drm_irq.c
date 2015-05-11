@@ -43,10 +43,10 @@
 #include <linux/export.h>
 
 #ifdef CONFIG_I915_VGT
-extern bool i915_host_mediate __read_mostly;
-extern bool vgt_can_process_irq(void);
-extern bool vgt_can_process_timer(void *timer);
-extern void vgt_new_delay_event_timer(void *timer);
+bool (*tmp_vgt_can_process_timer)(void *timer) = NULL;
+void (*tmp_vgt_new_delay_event_timer)(void *timer) = NULL;
+EXPORT_SYMBOL(tmp_vgt_can_process_timer);
+EXPORT_SYMBOL(tmp_vgt_new_delay_event_timer);
 #endif
 
 /* Access macro for slots in vblank timestamp ringbuffer. */
@@ -260,9 +260,9 @@ static void vblank_disable_fn(unsigned long arg)
 		return;
 
 #ifdef CONFIG_I915_VGT
-	if (i915_host_mediate)
-		if (!vgt_can_process_timer(&vblank->disable_timer))
-			return;
+	if (tmp_vgt_new_delay_event_timer &&
+			!tmp_vgt_can_process_timer(&vblank->disable_timer))
+		return;
 #endif
 
 	spin_lock_irqsave(&dev->vbl_lock, irqflags);
@@ -336,8 +336,8 @@ int drm_vblank_init(struct drm_device *dev, int num_crtcs)
 		setup_timer(&vblank->disable_timer, vblank_disable_fn,
 			    (unsigned long)vblank);
 #ifdef CONFIG_I915_VGT
-		if (i915_host_mediate)
-			vgt_new_delay_event_timer(&vblank->disable_timer);
+		if (tmp_vgt_new_delay_event_timer)
+			tmp_vgt_new_delay_event_timer(&vblank->disable_timer);
 #endif
 	}
 
