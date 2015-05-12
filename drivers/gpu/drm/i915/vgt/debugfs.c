@@ -785,27 +785,29 @@ static int mmio_accounting_show(struct seq_file *m, void *data)
 	if (!vgt->stat.mmio_accounting_reg_stats)
 		goto out;
 
-	seq_printf(m, "MMIO read statistics\n");
-	seq_printf(m, "----------------------\n");
+	seq_printf(m, "* MMIO read statistics *\n");
+	seq_printf(m, "------------------------\n");
 
 	for (count = 0; count < (2 * 1024 * 1024 / 4); count++) {
 		stat = &vgt->stat.mmio_accounting_reg_stats[count];
 		if (!stat->r_count)
 			continue;
 
-		seq_printf(m, "[0x%lx] [read] count %llu cycles %llu\n", count * 4,
+		seq_printf(m, "[ 0x%lx ]\t[ read ] count [ %llu ]\tcycles [ %llu ]\n", count * 4,
 			stat->r_count, stat->r_cycles);
 	}
 
-	seq_printf(m, "MMIO write statistics\n");
-	seq_printf(m, "----------------------\n");
+	seq_printf(m, "\n");
+
+	seq_printf(m, "* MMIO write statistics *\n");
+	seq_printf(m, "-------------------------\n");
 
 	for (count = 0; count < (2 * 1024 * 1024 / 4); count++) {
 		stat = &vgt->stat.mmio_accounting_reg_stats[count];
 		if (!stat->w_count)
 			continue;
 
-		seq_printf(m, "[0x%lx] [write] count %llu cycles %llu\n", count * 4,
+		seq_printf(m, "[ 0x%lx ]\t[ write ] count [ %llu ]\tcycles [ %llu ]\n", count * 4,
 			stat->w_count, stat->w_cycles);
 	}
 out:
