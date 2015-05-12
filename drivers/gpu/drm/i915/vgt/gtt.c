@@ -1019,7 +1019,6 @@ static oos_page_t *vgt_attach_oos_page(struct vgt_device *vgt,
 	gpt->oos_page = oos_page;
 
 	list_move_tail(&oos_page->list, &pdev->gtt.oos_page_use_list_head);
-	list_add_tail(&oos_page->vm_list, &vgt->gtt.oos_page_list_head);
 
 	if (--pdev->stat.oos_page_cur_avail_cnt < pdev->stat.oos_page_min_avail_cnt)
 		pdev->stat.oos_page_min_avail_cnt = pdev->stat.oos_page_cur_avail_cnt;
@@ -1040,17 +1039,18 @@ static bool ppgtt_set_guest_page_sync(struct vgt_device *vgt, guest_page_t *gpt)
 	trace_oos_change(vgt->vm_id, "set page sync", gpt->oos_page->id,
 			gpt, guest_page_to_ppgtt_spt(gpt)->guest_page_type);
 
+	list_del_init(&gpt->oos_page->vm_list);
 	return vgt_sync_oos_page(vgt, gpt->oos_page);
 }
 
-static bool ppgtt_set_guest_page_oos(struct vgt_device *vgt, guest_page_t *gpt)
+static bool ppgtt_allocate_oos_page(struct vgt_device *vgt, guest_page_t *gpt)
 {
 	struct pgt_device *pdev = vgt->pdev;
 	struct vgt_gtt_info *gtt = &pdev->gtt;
 	oos_page_t *oos_page = gpt->oos_page;
 
-	if (oos_page)
-		goto out;
+	/* oos_page should be NULL at this point */
+	ASSERT(!oos_page);
 
 	if (list_empty(&gtt->oos_page_free_list_head)) {
 		oos_page = container_of(gtt->oos_page_use_list_head.next, oos_page_t, list);
@@ -1062,12 +1062,19 @@ static bool ppgtt_set_guest_page_oos(struct vgt_device *vgt, guest_page_t *gpt)
 	} else
 		oos_page = container_of(gtt->oos_page_free_list_head.next, oos_page_t, list);
 
-	if (!vgt_attach_oos_page(vgt, oos_page, gpt))
-		return false;
-out:
+	return vgt_attach_oos_page(vgt, oos_page, gpt);
+}
+
+static bool ppgtt_set_guest_page_oos(struct vgt_device *vgt, guest_page_t *gpt)
+{
+	oos_page_t *oos_page = gpt->oos_page;
+
+	ASSERT(oos_page);
+
 	trace_oos_change(vgt->vm_id, "set page out of sync", gpt->oos_page->id,
 			gpt, guest_page_to_ppgtt_spt(gpt)->guest_page_type);
 
+	list_add_tail(&oos_page->vm_list, &vgt->gtt.oos_page_list_head);
 	return hypervisor_unset_wp_pages(vgt, gpt);
 }
 
@@ -1183,11 +1190,23 @@ static bool ppgtt_handle_guest_write_page_table_bytes(void *gp,
 		return false;
 
 	if (spt_out_of_sync) {
-		if (gpt->oos_page)
+		if (gpt->oos_page) {
+			/* 1. only GTT_PTE type has oos_page assocaited
+			 * 2. update oos_page according to wp guest page change
+			 */
 			ops->set_entry(gpt->oos_page->mem, &we, index, false, NULL);
+		}
 
-		if (can_do_out_of_sync(gpt) && !ppgtt_set_guest_page_oos(vgt, gpt))
-			return false;
+		if (can_do_out_of_sync(gpt)) {
+			if (!gpt->oos_page)
+				ppgtt_allocate_oos_page(vgt, gpt);
+
+			if (!ppgtt_set_guest_page_oos(vgt, gpt)) {
+				/* should not return false since we can handle it*/
+				ppgtt_set_guest_page_sync(vgt, gpt);
+			}
+		}
+
 	}
 
 	return true;
