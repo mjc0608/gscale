@@ -357,9 +357,8 @@ static void execlists_elsp_write(struct intel_engine_cs *ring,
 				dev_priv->uncore.funcs.force_wake_put(dev_priv,
 						FORCEWAKE_ALL);
 		}
+		spin_unlock_irqrestore(&dev_priv->uncore.lock, flags);
 	}
-
-	spin_unlock_irqrestore(&dev_priv->uncore.lock, flags);
 }
 
 static int execlists_update_context(struct drm_i915_gem_object *ctx_obj,
