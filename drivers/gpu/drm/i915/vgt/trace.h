@@ -23,6 +23,7 @@
 #include <linux/types.h>
 #include <linux/stringify.h>
 #include <linux/tracepoint.h>
+#include <asm/tsc.h>
 
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM vgt
@@ -62,9 +63,9 @@ TRACE_EVENT(vgt_mmio_rw,
 
 #define MAX_CMD_STR_LEN	200
 TRACE_EVENT(vgt_command,
-		TP_PROTO(u8 vm_id, u8 ring_id, u32 ip_gma, u32 *cmd_va, u32 cmd_len, bool ring_buffer_cmd),
+		TP_PROTO(u8 vm_id, u8 ring_id, u32 ip_gma, u32 *cmd_va, u32 cmd_len, bool ring_buffer_cmd, cycles_t cost_pre_cmd_handler, cycles_t cost_cmd_handler),
 
-		TP_ARGS(vm_id, ring_id, ip_gma, cmd_va, cmd_len, ring_buffer_cmd),
+		TP_ARGS(vm_id, ring_id, ip_gma, cmd_va, cmd_len, ring_buffer_cmd, cost_pre_cmd_handler, cost_cmd_handler),
 
 		TP_STRUCT__entry(
 			__field(u8, vm_id)
@@ -78,7 +79,7 @@ TRACE_EVENT(vgt_command,
 			__entry->vm_id = vm_id;
 			__entry->ring_id = ring_id;
 			__entry->cmd_str[0] = '\0';
-			snprintf(__entry->tmp_buf, MAX_CMD_STR_LEN, "VM(%d) Ring(%d): %s ip(%08x) ", vm_id, ring_id, ring_buffer_cmd ? "RB":"BB", ip_gma);
+			snprintf(__entry->tmp_buf, MAX_CMD_STR_LEN, "VM(%d) Ring(%d): %s ip(%08x) pre handler cost (%llu), handler cost (%llu) ", vm_id, ring_id, ring_buffer_cmd ? "RB":"BB", ip_gma, cost_pre_cmd_handler, cost_cmd_handler);
 			strcat(__entry->cmd_str, __entry->tmp_buf);
 			entry->i = 0;
 			while (cmd_len > 0) {

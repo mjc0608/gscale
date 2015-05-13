@@ -2341,7 +2341,7 @@ static int cmd_hash_init(struct pgt_device *pdev)
 	return 0;
 }
 
-static void trace_cs_command(struct parser_exec_state *s)
+static void trace_cs_command(struct parser_exec_state *s, cycles_t cost_pre_cmd_handler, cycles_t cost_cmd_handler)
 {
 	/* This buffer is used by ftrace to store all commands copied from guest gma
 	* space. Sometimes commands can cross pages, this should not be handled in
@@ -2368,7 +2368,7 @@ static void trace_cs_command(struct parser_exec_state *s)
 		cmd_trace_buf[i] = cmd_val(s, i);
 
 	trace_vgt_command(s->vgt->vm_id, s->ring_id, s->ip_gma, cmd_trace_buf,
-			cmd_len, s->buf_type == RING_BUFFER_INSTRUCTION);
+			cmd_len, s->buf_type == RING_BUFFER_INSTRUCTION, cost_pre_cmd_handler, cost_cmd_handler);
 
 }
 
@@ -2378,6 +2378,9 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 	struct cmd_info *info;
 	uint32_t cmd;
 	int rc = 0;
+	cycles_t t0, t1, t2;
+
+	t0 = get_cycles();
 
 	hypervisor_read_va(s->vgt, s->ip_va, &cmd, sizeof(cmd), 1);
 
@@ -2410,7 +2413,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 	}
 	klog_printk("\n");
 #endif
-	trace_cs_command(s);
+	t1 = get_cycles();
 
 	if (info->handler) {
 		int post_handle = 0;
@@ -2437,6 +2440,10 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 			return rc;
 		}
 	}
+
+	t2 = get_cycles();
+
+	trace_cs_command(s, t1 - t0, t2 -t1);
 
 	if (!(info->flag & F_IP_ADVANCE_CUSTOM)) {
 		rc = vgt_cmd_advance_default(s);
