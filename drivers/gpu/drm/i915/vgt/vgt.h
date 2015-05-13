@@ -746,6 +746,13 @@ extern void vgt_check_pending_context_switch(struct vgt_device *vgt);
 
 struct vgt_irq_virt_state;
 
+struct vgt_mmio_accounting_reg_stat {
+	u64 r_count;
+	u64 r_cycles;
+	u64 w_count;
+	u64 w_cycles;
+};
+
 struct vgt_statistics {
 	u64	schedule_in_time;	/* TSC time when it is last scheduled in */
 	u64	allocated_cycles;
@@ -790,6 +797,10 @@ struct vgt_statistics {
 	u64	gpt_find_miss_cnt;
 	u64	gpt_find_miss_cycles;
 	u64	skip_bb_cnt;
+
+	struct vgt_mmio_accounting_reg_stat *mmio_accounting_reg_stats;
+	bool mmio_accounting;
+	struct mutex mmio_accounting_lock;
 };
 
 /* per-VM structure */

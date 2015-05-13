@@ -320,6 +320,9 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	if (shadow_tail_based_qos)
 		vgt_init_rb_tailq(vgt);
 
+	mutex_init(&vgt->stat.mmio_accounting_lock);
+	vgt->stat.mmio_accounting = false;
+
 	vgt->warn_untrack = 1;
 	return 0;
 err:

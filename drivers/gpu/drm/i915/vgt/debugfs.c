@@ -103,6 +103,7 @@ enum vgt_debugfs_entry_t
 	VGT_DEBUGFS_DPY_INFO,
 	VGT_DEBUGFS_VIRTUAL_GTT,
 	VGT_DEBUGFS_HLIST_INFO,
+	VGT_DEBUGFS_MMIO_ACCOUNTING,
 	VGT_DEBUGFS_ENTRY_MAX
 };
 
@@ -773,6 +774,119 @@ static const struct file_operations hlist_info_fops = {
 	.release = single_release,
 };
 
+static int mmio_accounting_show(struct seq_file *m, void *data)
+{
+	struct vgt_device *vgt = (struct vgt_device *)m->private;
+	struct vgt_mmio_accounting_reg_stat *stat;
+	unsigned long count;
+
+	mutex_lock(&vgt->stat.mmio_accounting_lock);
+
+	if (!vgt->stat.mmio_accounting_reg_stats)
+		goto out;
+
+	seq_printf(m, "MMIO read statistics\n");
+	seq_printf(m, "----------------------\n");
+
+	for (count = 0; count < (2 * 1024 * 1024 / 4); count++) {
+		stat = &vgt->stat.mmio_accounting_reg_stats[count];
+		if (!stat->r_count)
+			continue;
+
+		seq_printf(m, "[0x%lx] [read] count %llu cycles %llu\n", count * 4,
+			stat->r_count, stat->r_cycles);
+	}
+
+	seq_printf(m, "MMIO write statistics\n");
+	seq_printf(m, "----------------------\n");
+
+	for (count = 0; count < (2 * 1024 * 1024 / 4); count++) {
+		stat = &vgt->stat.mmio_accounting_reg_stats[count];
+		if (!stat->w_count)
+			continue;
+
+		seq_printf(m, "[0x%lx] [write] count %llu cycles %llu\n", count * 4,
+			stat->w_count, stat->w_cycles);
+	}
+out:
+	mutex_unlock(&vgt->stat.mmio_accounting_lock);
+
+	return 0;
+}
+
+static int mmio_accounting_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, mmio_accounting_show, inode->i_private);
+}
+
+static ssize_t mmio_accounting_write(struct file *file,
+		const char __user *ubuf, size_t count, loff_t *ppos)
+{
+	struct seq_file *s = file->private_data;
+	struct vgt_device *vgt = (struct vgt_device *)s->private;
+	struct pgt_device *pdev = vgt->pdev;
+	unsigned long flags;
+	char buf[32];
+
+	if (*ppos && count > sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, ubuf, count))
+		return -EFAULT;
+
+	mutex_lock(&vgt->stat.mmio_accounting_lock);
+
+	if (!strncmp(buf, "start", 5)) {
+		if (vgt->stat.mmio_accounting) {
+			vgt_err("mmio accounting has already started.\n");
+			goto out;
+		}
+
+		if (!vgt->stat.mmio_accounting_reg_stats) {
+			vgt->stat.mmio_accounting_reg_stats =
+				vzalloc(sizeof(struct vgt_mmio_accounting_reg_stat) * (2 * 1024 * 1024 / 4));
+			if (!vgt->stat.mmio_accounting_reg_stats) {
+				vgt_err("fail to allocate memory for mmio accounting.\n");
+				goto out;
+			}
+		}
+
+		spin_lock_irqsave(&pdev->lock, flags);
+		vgt->stat.mmio_accounting = true;
+		spin_unlock_irqrestore(&pdev->lock, flags);
+
+		vgt_info("VM %d start mmio accounting.\n", vgt->vm_id);
+	} else if (!strncmp(buf, "stop", 4)) {
+		spin_lock_irqsave(&pdev->lock, flags);
+		vgt->stat.mmio_accounting = false;
+		spin_unlock_irqrestore(&pdev->lock, flags);
+
+		vgt_info("VM %d stop mmio accounting.\n", vgt->vm_id);
+	} else if (!strncmp(buf, "clean", 5)) {
+		spin_lock_irqsave(&pdev->lock, flags);
+		vgt->stat.mmio_accounting = false;
+		spin_unlock_irqrestore(&pdev->lock, flags);
+
+		if (vgt->stat.mmio_accounting_reg_stats) {
+			vfree(vgt->stat.mmio_accounting_reg_stats);
+			vgt->stat.mmio_accounting_reg_stats = NULL;
+		}
+
+		vgt_info("VM %d stop and clean mmio accounting statistics.\n", vgt->vm_id);
+	}
+out:
+	mutex_unlock(&vgt->stat.mmio_accounting_lock);
+	return count;
+}
+
+static const struct file_operations mmio_accounting_fops = {
+	.open = mmio_accounting_open,
+	.write = mmio_accounting_write,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 static int vgt_device_reset_show(struct seq_file *m, void *data)
 {
 	struct pgt_device *pdev = (struct pgt_device *)m->private;
@@ -1171,6 +1285,14 @@ int vgt_create_debugfs(struct vgt_device *vgt)
 		printk(KERN_ERR "vGT(%d): failed to create debugfs node: hlistinfo\n", vgt_id);
 	else
 		printk("vGT(%d): create debugfs node: hlistinfo\n", vgt_id);
+
+	d_debugfs_entry[vgt_id][VGT_DEBUGFS_MMIO_ACCOUNTING] = debugfs_create_file("mmio_accounting",
+			0444, d_per_vgt[vgt_id], vgt, &mmio_accounting_fops);
+
+	if (!d_debugfs_entry[vgt_id][VGT_DEBUGFS_MMIO_ACCOUNTING])
+		printk(KERN_ERR "vGT(%d): failed to create debugfs node: mmio_accounting\n", vgt_id);
+	else
+		printk("vGT(%d): create debugfs node: mmio_accounting\n", vgt_id);
 
 	d_debugfs_entry[vgt_id][VGT_DEBUGFS_FB_FORMAT] = debugfs_create_file("frame_buffer_format",
 			0444, d_per_vgt[vgt_id], vgt, &fbinfo_fops);
