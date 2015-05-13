@@ -83,6 +83,23 @@ struct vgt_hvm_info {
 	struct vm_struct **vmem_vma_4k;
 };
 
+static int xen_pause_domain(int vm_id);
+static int xen_shutdown_domain(int vm_id);
+static void *xen_gpa_to_va(struct vgt_device *vgt, unsigned long gpa);
+
+#define XEN_ASSERT_VM(x, vgt)						\
+	do {								\
+		if (!(x)) {						\
+			printk("Assert at %s line %d\n",		\
+				__FILE__, __LINE__);			\
+			if (atomic_cmpxchg(&(vgt)->crashing, 0, 1))	\
+				break;					\
+			vgt_warn("Killing VM%d\n", (vgt)->vm_id);	\
+			if (!xen_pause_domain((vgt->vm_id)))		\
+				xen_shutdown_domain((vgt->vm_id));	\
+		}							\
+	} while (0)
+
 /* Translate from VM's guest pfn to machine pfn */
 static unsigned long xen_g2m_pfn(int vm_id, unsigned long g_pfn)
 {
@@ -521,7 +538,7 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 
 		/* Don't warn on [0xa0000, 0x100000): a known non-RAM hole */
 		if (i < (0xa0000 >> PAGE_SHIFT))
-			vgt_dbg(VGT_DBG_GENERIC, "vGT: VM%d: can't map GPFN %ld!\n",
+			printk(KERN_ERR "vGT: VM%d: can't map GPFN %ld!\n",
 				vgt->vm_id, i);
 	}
 
@@ -550,7 +567,7 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 
 			if (info->vmem_vma_4k[j]) {
 				count++;
-				vgt_dbg(VGT_DBG_GENERIC, "map 4k gpa (%lx)\n", j << PAGE_SHIFT);
+				printk(KERN_ERR "map 4k gpa (%lx)\n", j << PAGE_SHIFT);
 			}
 		}
 
@@ -559,7 +576,7 @@ static int vgt_hvm_vmem_init(struct vgt_device *vgt)
 		 * message if it's at every 64MB boundary or >4GB memory.
 		 */
 		if ((i % 64 == 0) || (i >= (1ULL << (32 - VMEM_BUCK_SHIFT))))
-			vgt_dbg(VGT_DBG_GENERIC, "vGT: VM%d: can't map %ldKB\n",
+			printk(KERN_ERR "vGT: VM%d: can't map %ldKB\n",
 				vgt->vm_id, i);
 	}
 	printk("end vmem_map (%ld 4k mappings)\n", count);
@@ -635,7 +652,7 @@ static int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 	struct vgt_hvm_info *info = vgt->hvm_info;
 
 	if (info->vmem_vma == NULL) {
-		tmp = vgt_pa_to_mmio_offset(vgt, req->addr);
+		tmp = vgt_ops->pa_to_mmio_offset(vgt, req->addr);
 		pvinfo_page = (tmp >= VGT_PVINFO_PAGE
 				&& tmp < (VGT_PVINFO_PAGE + VGT_PVINFO_SIZE));
 		/*
@@ -644,7 +661,7 @@ static int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 		 */
 		if (!pvinfo_page && vgt_hvm_vmem_init(vgt) < 0) {
 			vgt_err("can not map the memory of VM%d!!!\n", vgt->vm_id);
-			ASSERT_VM(info->vmem_vma != NULL, vgt);
+			XEN_ASSERT_VM(info->vmem_vma != NULL, vgt);
 			return -EINVAL;
 		}
 	}
@@ -659,7 +676,7 @@ static int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 
 			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_read: target register (%lx).\n",
 			//	(unsigned long)req->addr);
-			if (!vgt_emulate_read(vgt, req->addr, &req->data, req->size))
+			if (!vgt_ops->emulate_read(vgt, req->addr, &req->data, req->size))
 				return -EINVAL;
 		}
 		else {
@@ -671,11 +688,14 @@ static int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 			//	req->count, (unsigned long)req->addr);
 
 			for (i = 0; i < req->count; i++) {
-				if (!vgt_emulate_read(vgt, req->addr + sign * i * req->size,
+				if (!vgt_ops->emulate_read(vgt, req->addr + sign * i * req->size,
 					&tmp, req->size))
 					return -EINVAL;
 				gpa = req->data + sign * i * req->size;
-				gva = hypervisor_gpa_to_va(vgt, gpa);
+				if(!vgt->vm_id)
+					gva = (char *)xen_mfn_to_virt(gpa >> PAGE_SHIFT) + offset_in_page(gpa);
+				else
+					gva = xen_gpa_to_va(vgt, gpa);
 				if (gva) {
 					if (!IS_SNB(vgt->pdev))
 						memcpy(gva, &tmp, req->size);
@@ -694,7 +714,7 @@ static int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 			if (req->count != 1)
 				goto err_ioreq_count;
 			//vgt_dbg(VGT_DBG_GENERIC,"HVM_MMIO_write: target register (%lx).\n", (unsigned long)req->addr);
-			if (!vgt_emulate_write(vgt, req->addr, &req->data, req->size))
+			if (!vgt_ops->emulate_write(vgt, req->addr, &req->data, req->size))
 				return -EINVAL;
 		}
 		else {
@@ -707,14 +727,18 @@ static int _hvm_mmio_emulation(struct vgt_device *vgt, struct ioreq *req)
 
 			for (i = 0; i < req->count; i++) {
 				gpa = req->data + sign * i * req->size;
-				gva = hypervisor_gpa_to_va(vgt, gpa);
+				if(!vgt->vm_id)
+					gva = (char *)xen_mfn_to_virt(gpa >> PAGE_SHIFT) + offset_in_page(gpa);
+				else
+					gva = xen_gpa_to_va(vgt, gpa);
+
 				if (gva != NULL)
 					memcpy(&tmp, gva, req->size);
 				else {
 					tmp = 0;
-					vgt_dbg(VGT_DBG_GENERIC, "vGT: can not read gpa = 0x%lx!!!\n", gpa);
+					printk(KERN_ERR "vGT: can not read gpa = 0x%lx!!!\n", gpa);
 				}
-				if (!vgt_emulate_write(vgt, req->addr + sign * i * req->size, &tmp, req->size))
+				if (!vgt_ops->emulate_write(vgt, req->addr + sign * i * req->size, &tmp, req->size))
 					return -EINVAL;
 			}
 		}
@@ -744,7 +768,6 @@ static bool vgt_hvm_write_cfg_space(struct vgt_device *vgt,
 	ASSERT(((bytes == 4) && ((port & 3) == 0)) ||
 		((bytes == 2) && ((port & 1) == 0)) || (bytes == 1));
 	vgt_ops->emulate_cfg_write(vgt, port, &val, bytes);
-
 	return true;
 }
 
@@ -777,7 +800,7 @@ static int _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 				(unsigned long*)&ioreq->data))
 				return -EINVAL;
 		} else {
-			vgt_dbg(VGT_DBG_GENERIC,"VGT: _hvm_pio_emulation read data_ptr %lx\n",
+			printk(KERN_ERR "VGT: _hvm_pio_emulation read data_ptr %lx\n",
 			(long)ioreq->data);
 			goto err_data_ptr;
 		}
@@ -790,7 +813,7 @@ static int _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 				(unsigned long)ioreq->data))
 				return -EINVAL;
 		} else {
-			vgt_dbg(VGT_DBG_GENERIC,"VGT: _hvm_pio_emulation write data_ptr %lx\n",
+			printk(KERN_ERR "VGT: _hvm_pio_emulation write data_ptr %lx\n",
 			(long)ioreq->data);
 			goto err_data_ptr;
 		}
@@ -886,9 +909,9 @@ static int vgt_emulation_thread(void *priv)
 			ioreq = vgt_get_hvm_ioreq(vgt, vcpu);
 
 			if (vgt_hvm_do_ioreq(vgt, ioreq) ||
-					!vgt_expand_shadow_page_mempool(vgt->pdev)) {
-				hypervisor_pause_domain(vgt);
-				hypervisor_shutdown_domain(vgt);
+					!vgt_ops->expand_shadow_page_mempool(vgt->pdev)) {
+				xen_pause_domain(vgt->vm_id);
+				xen_shutdown_domain(vgt->vm_id);
 			}
 
 			if (vgt->force_removal)
@@ -1047,7 +1070,7 @@ static void *xen_gpa_to_va(struct vgt_device *vgt, unsigned long gpa)
 	struct vgt_hvm_info *info = vgt->hvm_info;
 
 	if (!vgt->vm_id)
-		return (char*)hypervisor_mfn_to_virt(gpa>>PAGE_SHIFT) + (gpa & (PAGE_SIZE-1));
+		return (char*)xen_mfn_to_virt(gpa>>PAGE_SHIFT) + (gpa & (PAGE_SIZE-1));
 	/*
 	 * At the beginning of _hvm_mmio_emulation(), we already initialize
 	 * info->vmem_vma and info->vmem_vma_low_1mb.
@@ -1099,7 +1122,7 @@ static bool xen_write_va(struct vgt_device *vgt, void *va, void *val,
 	return true;
 }
 
-static struct kernel_dm xen_kdm = {
+static struct kernel_dm xengt_kdm = {
 	.g2m_pfn = xen_g2m_pfn,
 	.pause_domain = xen_pause_domain,
 	.shutdown_domain = xen_shutdown_domain,
@@ -1117,5 +1140,20 @@ static struct kernel_dm xen_kdm = {
 	.read_va = xen_read_va,
 	.write_va = xen_write_va,
 };
+EXPORT_SYMBOL(xengt_kdm);
 
-struct kernel_dm *vgt_pkdm = &xen_kdm;
+static int __init xengt_init(void)
+{
+       if (!xen_initial_domain())
+               return -EINVAL;
+       printk(KERN_INFO "xengt: loaded\n");
+       return 0;
+}
+
+static void __exit xengt_exit(void)
+{
+	printk(KERN_INFO "xengt: unloaded\n");
+}
+
+module_init(xengt_init);
+module_exit(xengt_exit);

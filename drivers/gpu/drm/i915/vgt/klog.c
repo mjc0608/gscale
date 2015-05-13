@@ -695,8 +695,6 @@ void klog_printk(const char *fmt, ...)
 	local_irq_restore(flags);
 }
 
-EXPORT_SYMBOL_GPL(klog_printk);
-
 /*
  * 'consumed' file operations - r/w, binary
  *

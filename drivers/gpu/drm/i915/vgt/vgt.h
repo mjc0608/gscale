@@ -61,6 +61,7 @@ extern void show_ring_debug(struct pgt_device *pdev, int ring_id);
 extern void show_debug(struct pgt_device *pdev);
 void show_virtual_interrupt_regs(struct vgt_device *vgt, struct seq_file *seq);
 extern void show_interrupt_regs(struct pgt_device *pdev, struct seq_file *seq);
+void vgt_panic(void);
 
 extern bool ignore_hvm_forcewake_req;
 extern bool hvm_render_owner;
@@ -740,7 +741,6 @@ extern bool idle_rendering_engines(struct pgt_device *pdev, int *id);
 extern bool idle_render_engine(struct pgt_device *pdev, int id);
 extern bool vgt_do_render_context_switch(struct pgt_device *pdev);
 extern bool vgt_do_render_sched(struct pgt_device *pdev);
-extern void vgt_destroy(void);
 extern void vgt_destroy_debugfs(struct vgt_device *vgt);
 extern void vgt_release_debugfs(void);
 extern bool vgt_register_mmio_handler(unsigned int start, int bytes,
@@ -1395,27 +1395,12 @@ extern void do_vgt_fast_display_switch(struct pgt_device *pdev);
 #define el_read_ptr(pdev, ring_id) ((pdev)->el_read_ptr[ring_id])
 #define el_write_ptr(pdev, ring_id) ((pdev)->el_cache_write_ptr[ring_id])
 
-/*
- * Kernel BUG() doesn't work, because bust_spinlocks try to unblank screen
- * which may call into i915 and thus cause undesired more errors on the
- * screen
- */
-static inline void vgt_panic(void)
-{
-	struct pgt_device *pdev = &default_device;
-
-	show_debug(pdev);
-
-	dump_stack();
-	printk("________end of stack dump_________\n");
-	panic("FATAL VGT ERROR\n");
-}
 #define ASSERT(x)							\
 	do {								\
 		if (!(x)) {						\
 			printk("Assert at %s line %d\n",		\
 				__FILE__, __LINE__);			\
-			vgt_panic();					\
+			vgt_ops->panic();				\
 		}							\
 	} while (0);
 #define ASSERT_NUM(x, y)						\
@@ -1423,7 +1408,7 @@ static inline void vgt_panic(void)
 		if (!(x)) {						\
 			printk("Assert at %s line %d para 0x%llx\n",	\
 				__FILE__, __LINE__, (u64)y);		\
-			vgt_panic();					\
+			vgt_ops->panic();				\
 		}							\
 	} while (0);
 

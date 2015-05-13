@@ -35,6 +35,9 @@ MODULE_DESCRIPTION("Virtual GPU device model for Intel Processor Graphics");
 MODULE_LICENSE("GPL and additional rights");
 MODULE_VERSION("0.1");
 
+extern struct kernel_dm xengt_kdm;
+struct kernel_dm *vgt_pkdm = NULL;
+
 bool hvm_render_owner = false;
 module_param_named(hvm_render_owner, hvm_render_owner, bool, 0600);
 MODULE_PARM_DESC(hvm_render_owner, "Make HVM to be render owner after create (default: false)");
@@ -174,16 +177,15 @@ module_param_named(shadow_execlist_context, shadow_execlist_context, int, 0400);
 bool wp_submitted_ctx = false;
 module_param_named(wp_submitted_ctx, wp_submitted_ctx, bool, 0400);
 
-struct kernel_dm *vgt_pkdm __weak = NULL;
-
-static vgt_ops_t vgt_xops = {
-	.mem_read = vgt_emulate_read,
-	.mem_write = vgt_emulate_write,
-	.cfg_read = vgt_emulate_cfg_read,
-	.cfg_write = vgt_emulate_cfg_write,
-	.initialized = false,
+static struct vgt_ops __vgt_ops = {
+	.emulate_read = vgt_emulate_read,
+	.emulate_write = vgt_emulate_write,
+	.emulate_cfg_read = vgt_emulate_cfg_read,
+	.emulate_cfg_write = vgt_emulate_cfg_write,
+	.panic = vgt_panic,
+	.pa_to_mmio_offset = vgt_pa_to_mmio_offset,
+	.expand_shadow_page_mempool = vgt_expand_shadow_page_mempool,
 };
-vgt_ops_t *vgt_ops = NULL;
 
 LIST_HEAD(pgt_devices);
 struct pgt_device default_device = {
@@ -819,9 +821,6 @@ static int vgt_initialize(struct pci_dev *dev)
 	if (setup_gtt(pdev))
 		goto err;
 
-	vgt_ops = &vgt_xops;
-	vgt_ops->initialized = true;
-
 	if (!hvm_render_owner)
 		current_render_owner(pdev) = vgt_dom0;
 	else
@@ -991,6 +990,22 @@ int vgt_resume(struct pci_dev *pdev)
 	spin_unlock(&pgt->lock);
 
 	return 0;
+}
+
+/*
+ * Kernel BUG() doesn't work, because bust_spinlocks try to unblank screen
+ * which may call into i915 and thus cause undesired more errors on the
+ * screen
+ */
+void vgt_panic(void)
+{
+        struct pgt_device *pdev = &default_device;
+
+        show_debug(pdev);
+
+        dump_stack();
+        printk("________end of stack dump_________\n");
+        panic("FATAL VGT ERROR\n");
 }
 
 static void do_device_reset(struct pgt_device *pdev)
@@ -1217,24 +1232,25 @@ bool vgt_check_host(void)
 
 void i915_stop_vgt(void)
 {
-	if (!hypervisor_check_host())
-		return;
-
-	// fill other exit works here
 	vgt_destroy();
 	vgt_klog_cleanup();
-	return;
+	symbol_put(xengt_kdm);
+	vgt_pkdm = NULL;
+	vgt_ops = NULL;
 }
 
 bool i915_start_vgt(struct pci_dev *pdev)
 {
+	vgt_ops = &__vgt_ops;
+
+	vgt_pkdm = try_then_request_module(symbol_get(xengt_kdm), "xengt");
+	if (vgt_pkdm == NULL) {
+		printk("vgt: Could not load xengt MPT service\n");
+		return false;
+	} //TODO: request kvmgt here!
+
 	if (!vgt_check_host())
 		return false;
-
-	if (vgt_xops.initialized) {
-		vgt_info("VGT has been intialized?\n");
-		return false;
-	}
 
 	vgt_param_check();
 

@@ -35,17 +35,8 @@
 
 struct pgt_device;
 struct vgt_device;
-struct vgt_ops;
-typedef struct {
-    bool (*mem_read)(struct vgt_device *vgt, uint64_t pa, void *p_data, int bytes);
-    bool (*mem_write)(struct vgt_device *vgt, uint64_t pa, void *p_data, int bytes);
-    bool (*cfg_read)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
-    bool (*cfg_write)(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
-    bool initialized;	/* whether vgt_ops can be referenced */
-} vgt_ops_t;
 extern struct pgt_device *pdev_default;
 extern struct vgt_device *vgt_dom0;
-extern vgt_ops_t *vgt_ops;
 
 bool vgt_native_mmio_read(u32 reg, void *val, int len, bool trace);
 bool vgt_native_mmio_write(u32 reg, void *val, int len, bool trace);

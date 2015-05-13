@@ -180,10 +180,24 @@ struct vgt_if {
 
 
 struct vgt_device;
+struct pgt_device;
+struct kernel_dm;
 bool vgt_emulate_write(struct vgt_device *vgt, uint64_t pa, void *p_data, int bytes);
 bool vgt_emulate_read(struct vgt_device *vgt, uint64_t pa, void *p_data, int bytes);
 bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
 bool vgt_emulate_cfg_read(struct vgt_device *vgt, unsigned int off, void *p_data, int bytes);
+
+struct vgt_ops {
+	bool (*emulate_read)(struct vgt_device *, uint64_t, void *, int);
+	bool (*emulate_write)(struct vgt_device *, uint64_t, void *, int);
+	bool (*emulate_cfg_read)(struct vgt_device *, unsigned int, void *, int);
+	bool (*emulate_cfg_write)(struct vgt_device *, unsigned int, void *, int);
+	/* misc symbols needed by MPT module */
+	void (*panic)(void);
+	unsigned int (*pa_to_mmio_offset)(struct vgt_device *, uint64_t);
+	bool (*expand_shadow_page_mempool)(struct pgt_device *);
+};
+extern struct vgt_ops *vgt_ops;
 
 /* save the fixed/translated guest address
  * restore the address after the command is executed

@@ -51,6 +51,8 @@ static inline bool i915_start_vgt(struct pci_dev *pdev)
 	return false;
 }
 
+static inline void i915_stop_vgt(void) {};
+
 static inline void i915_vgt_record_priv(struct drm_i915_private *priv)
 {
 }
