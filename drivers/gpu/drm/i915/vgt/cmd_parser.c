@@ -300,6 +300,7 @@ void apply_tail_list(struct vgt_device *vgt, int ring_id,
 				rs->uhptr &= ~_REGBIT_UHPTR_VALID;
 				VGT_MMIO_WRITE(pdev, VGT_UHPTR(ring_id), rs->uhptr);
 			}
+			ppgtt_sync_oos_pages(vgt);
 			VGT_WRITE_TAIL(pdev, ring_id, entry->tail);
 		}
 		list->head = next;

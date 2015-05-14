@@ -2014,8 +2014,8 @@ bool vgt_gtt_init(struct pgt_device *pdev)
 
 		if (preallocated_shadow_pages == -1)
 			preallocated_shadow_pages = 512;
-		if (spt_out_of_sync)
-			spt_out_of_sync = false;
+		if (preallocated_oos_pages == -1)
+			preallocated_oos_pages = 2048;
 	} else if (IS_BDW(pdev)) {
 		pdev->gtt.pte_ops = &gen8_gtt_pte_ops;
 		pdev->gtt.gma_ops = &gen8_gtt_gma_ops;
