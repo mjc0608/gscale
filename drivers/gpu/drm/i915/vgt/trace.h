@@ -61,7 +61,7 @@ TRACE_EVENT(vgt_mmio_rw,
 				__entry->bytes)
 );
 
-#define MAX_CMD_STR_LEN	200
+#define MAX_CMD_STR_LEN	256
 TRACE_EVENT(vgt_command,
 		TP_PROTO(u8 vm_id, u8 ring_id, u32 ip_gma, u32 *cmd_va, u32 cmd_len, bool ring_buffer_cmd, cycles_t cost_pre_cmd_handler, cycles_t cost_cmd_handler),
 
