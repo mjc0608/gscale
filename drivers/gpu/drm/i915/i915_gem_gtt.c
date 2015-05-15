@@ -562,6 +562,51 @@ static void gen8_ppgtt_clear_range(struct i915_address_space *vm,
 	}
 }
 
+static void gen8_ppgtt_insert_vmfb_entries(struct i915_address_space *vm,
+					   uint32_t num_pages,
+					   uint64_t start)
+{
+	struct i915_hw_ppgtt *ppgtt =
+		container_of(vm, struct i915_hw_ppgtt, base);
+	gen8_gtt_pte_t *pt_vaddr;
+	unsigned pdpe = start >> GEN8_PDPE_SHIFT & GEN8_PDPE_MASK;
+	unsigned pde = start >> GEN8_PDE_SHIFT & GEN8_PDE_MASK;
+	unsigned pte = start >> GEN8_PTE_SHIFT & GEN8_PTE_MASK;
+	unsigned first_entry = start >> PAGE_SHIFT;
+
+	pt_vaddr = NULL;
+
+	struct drm_i915_private *dev_priv = ppgtt->base.dev->dev_private;
+	uint64_t __iomem *vmfb_start = dev_priv->gtt.gsm;
+	vmfb_start += first_entry;
+
+	int i;
+	for (i = 0; i < num_pages; i++) {
+		if (pt_vaddr == NULL)
+			pt_vaddr = kmap_atomic(ppgtt->gen8_pt_pages[pdpe][pde]);
+
+		pt_vaddr[pte] = GTT_READ64(vmfb_start);
+		vmfb_start++;
+
+		if (++pte == GEN8_PTES_PER_PAGE) {
+			if (!HAS_LLC(ppgtt->base.dev))
+				drm_clflush_virt_range(pt_vaddr, PAGE_SIZE);
+			kunmap_atomic(pt_vaddr);
+			pt_vaddr = NULL;
+			if (++pde == GEN8_PDES_PER_PAGE) {
+				pdpe++;
+				pde = 0;
+			}
+			pte = 0;
+		}
+	}
+	if (pt_vaddr) {
+		if (!HAS_LLC(ppgtt->base.dev))
+			drm_clflush_virt_range(pt_vaddr, PAGE_SIZE);
+		kunmap_atomic(pt_vaddr);
+	}
+}
+
 static void gen8_ppgtt_insert_entries(struct i915_address_space *vm,
 				      struct sg_table *pages,
 				      uint64_t start,
@@ -2550,6 +2595,8 @@ static struct i915_vma *__i915_gem_vma_create(struct drm_i915_gem_object *obj,
 	switch (INTEL_INFO(vm->dev)->gen) {
 	case 9:
 	case 8:
+		if (vma->obj->has_vmfb_mapping && !insert_vmfb_entries)
+			insert_vmfb_entries = gen8_ppgtt_insert_vmfb_entries;
 	case 7:
 	case 6:
 		if (vma->obj->has_vmfb_mapping && !insert_vmfb_entries)
