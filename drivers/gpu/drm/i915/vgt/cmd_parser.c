@@ -51,7 +51,7 @@ static void vgt_add_cmd_entry(struct vgt_cmd_entry *e)
 	hash_add(vgt_cmd_table, &e->hlist, e->info->opcode);
 }
 
-static struct cmd_info* vgt_find_cmd_entry(unsigned int opcode, int ring_id)
+static inline struct cmd_info* vgt_find_cmd_entry(unsigned int opcode, int ring_id)
 {
 	struct vgt_cmd_entry *e;
 
@@ -117,7 +117,7 @@ static int get_next_entry(struct cmd_general_info *list)
 }
 
 /* TODO: support incremental patching */
-static int add_patch_entry(struct parser_exec_state *s,
+static inline int add_patch_entry(struct parser_exec_state *s,
 	void *addr, uint32_t val)
 {
 	vgt_state_ring_t *rs = &s->vgt->rb[s->ring_id];
@@ -139,8 +139,10 @@ static int add_patch_entry(struct parser_exec_state *s,
 	patch->addr = addr;
 	patch->new_val = val;
 
+#if 0
 	hypervisor_read_va(s->vgt, addr, &patch->old_val,
-				sizeof(patch->old_val), 1);
+			sizeof(patch->old_val), 1);
+#endif
 
 	patch->request_id = s->request_id;
 
@@ -148,7 +150,7 @@ static int add_patch_entry(struct parser_exec_state *s,
 	return 0;
 }
 
-static int add_post_handle_entry(struct parser_exec_state *s,
+static inline int add_post_handle_entry(struct parser_exec_state *s,
 	parser_cmd_handler handler)
 {
 	vgt_state_ring_t* rs = &s->vgt->rb[s->ring_id];
@@ -1263,7 +1265,7 @@ static unsigned long get_gma_bb_from_cmd(struct parser_exec_state *s, int index)
 	return addr;
 }
 
-static bool address_audit(struct parser_exec_state *s, int index)
+static inline bool address_audit(struct parser_exec_state *s, int index)
 {
 	int gmadr_bytes = s->vgt->pdev->device_info.gmadr_bytes_in_cmd;
 
@@ -1275,12 +1277,15 @@ static bool address_audit(struct parser_exec_state *s, int index)
 	return true;
 }
 
-static bool vgt_cmd_addr_audit_with_bitmap(struct parser_exec_state *s,
+static inline bool vgt_cmd_addr_audit_with_bitmap(struct parser_exec_state *s,
 			unsigned long addr_bitmap)
 {
 	unsigned int bit;
 	unsigned int delta = 0;
 	int cmd_len = cmd_length(s);
+
+	if (!addr_bitmap)
+		return true;
 
 	for_each_set_bit(bit, &addr_bitmap, sizeof(addr_bitmap)*8) {
 		if (bit + delta >= cmd_len)
