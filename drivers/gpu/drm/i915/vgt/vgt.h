@@ -92,6 +92,7 @@ extern bool irq_based_ctx_switch;
 extern int preallocated_shadow_pages;
 extern int preallocated_oos_pages;
 extern bool spt_out_of_sync;
+extern bool cmd_parser_ip_buf;
 
 enum vgt_event_type {
 	// GT

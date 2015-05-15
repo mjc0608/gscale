@@ -143,6 +143,9 @@ module_param_named(bypass_scan, bypass_scan_mask, int, 0600);
 bool bypass_dom0_addr_check = false;
 module_param_named(bypass_dom0_addr_check, bypass_dom0_addr_check, bool, 0600);
 
+bool cmd_parser_ip_buf = true;
+module_param_named(cmd_parser_ip_buf, cmd_parser_ip_buf, bool, 0600);
+
 bool enable_panel_fitting = true;
 module_param_named(enable_panel_fitting, enable_panel_fitting, bool, 0600);
 

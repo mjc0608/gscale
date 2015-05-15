@@ -526,12 +526,24 @@ static inline uint32_t *cmd_ptr(struct parser_exec_state *s, int index)
 		return s->ip_va_next_page + (index - s->ip_buf_len);
 }
 
+static inline uint32_t *cmd_buf_ptr(struct parser_exec_state *s, int index)
+{
+	ASSERT(s->ip_buf_va);
+
+	return s->ip_buf_va + index;
+}
+
 static inline uint32_t cmd_val(struct parser_exec_state *s, int index)
 {
-	uint32_t *addr = cmd_ptr(s, index);
+	uint32_t *addr;
 	uint32_t ret = 0;
 
-	hypervisor_read_va(s->vgt, addr, &ret, sizeof(ret), 1);
+	if (s->ip_buf) {
+		ret = *cmd_buf_ptr(s, index);
+	} else {
+		addr = cmd_ptr(s, index);
+		hypervisor_read_va(s->vgt, addr, &ret, sizeof(ret), 1);
+	}
 
 	return ret;
 }
@@ -604,6 +616,14 @@ static int ip_gma_set(struct parser_exec_state *s, unsigned long ip_gma)
 		return -EFAULT;
 	}
 
+	if (s->ip_buf) {
+		hypervisor_read_va(s->vgt, s->ip_va, s->ip_buf,
+				s->ip_buf_len * sizeof(uint32_t), 1);
+		hypervisor_read_va(s->vgt, s->ip_va_next_page, s->ip_buf + s->ip_buf_len * sizeof(uint32_t),
+				PAGE_SIZE, 1);
+		s->ip_buf_va = s->ip_buf;
+	}
+
 	return 0;
 }
 
@@ -614,6 +634,8 @@ static inline int ip_gma_advance(struct parser_exec_state *s, unsigned int len)
 		/* not cross page, advance ip inside page */
 		s->ip_gma += len*sizeof(uint32_t);
 		s->ip_va += len;
+		if (s->ip_buf)
+			s->ip_buf_va += len;
 		s->ip_buf_len -= len;
 	} else {
 		/* cross page, reset ip_va */
@@ -2388,7 +2410,7 @@ static int vgt_cmd_parser_exec(struct parser_exec_state *s)
 
 	t0 = get_cycles();
 
-	hypervisor_read_va(s->vgt, s->ip_va, &cmd, sizeof(cmd), 1);
+	cmd = cmd_val(s, 0);
 
 	info = vgt_get_cmd_info(cmd, s->ring_id);
 	if (info == NULL) {
@@ -2506,9 +2528,18 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 		return 0;
 	}
 
+	if (cmd_parser_ip_buf) {
+		s.ip_buf = kmalloc(PAGE_SIZE * 2, GFP_ATOMIC);
+		if (!s.ip_buf) {
+			vgt_err("fail to allocate buffer page.\n");
+			return -ENOMEM;
+		}
+	} else
+		s.ip_buf = s.ip_buf_va = NULL;
+
 	rc = ip_gma_set(&s, base + head);
 	if (rc < 0)
-		return rc;
+		goto out;
 
 	klog_printk("ring buffer scan start on ring %d\n", ring_id);
 	vgt_dbg(VGT_DBG_CMD, "scan_start: start=%lx end=%lx\n", gma_head, gma_tail);
@@ -2555,6 +2586,9 @@ static int __vgt_scan_vring(struct vgt_device *vgt, int ring_id, vgt_reg_t head,
 
 	klog_printk("ring buffer scan end on ring %d\n", ring_id);
 	vgt_dbg(VGT_DBG_CMD, "scan_end\n");
+out:
+	if (s.ip_buf)
+		kfree(s.ip_buf);
 	return rc;
 }
 
