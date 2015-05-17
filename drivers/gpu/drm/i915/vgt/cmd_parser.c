@@ -165,6 +165,12 @@ static inline int add_post_handle_entry(struct parser_exec_state *s,
 	}
 
 	entry = &list->handler[next];
+	/*
+	 * Do not use ip buf in post handle entry,
+	 * as ip buf has been freed at that time.
+	 * Switch back to guest memory write/read method
+	 */
+	entry->exec_state.ip_buf = entry->exec_state.ip_buf_va = NULL;
 	/* two pages mapping are always valid */
 	memcpy(&entry->exec_state, s, sizeof(struct parser_exec_state));
 	entry->handler = handler;
