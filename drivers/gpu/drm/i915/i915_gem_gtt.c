@@ -2174,6 +2174,8 @@ void i915_global_gtt_cleanup(struct drm_device *dev)
 	}
 
 	if (drm_mm_initialized(&vm->mm)) {
+		if (USES_VGT(dev))
+			i915_deballoon(dev_priv);
 		drm_mm_takedown(&vm->mm);
 		list_del(&vm->global_link);
 	}

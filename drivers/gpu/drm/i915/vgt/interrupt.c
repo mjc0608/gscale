@@ -2120,12 +2120,7 @@ int vgt_irq_init(struct pgt_device *pdev)
 
 void vgt_irq_exit(struct pgt_device *pdev)
 {
-	free_irq(pdev->irq_hstate->pirq, pdev);
 	hrtimer_cancel(&pdev->irq_hstate->dpy_timer.timer);
-
-	/* TODO: recover i915 handler? */
-	//unbind_from_irq(vgt_i915_irq(pdev));
-
 	kfree(pdev->irq_hstate);
 }
 

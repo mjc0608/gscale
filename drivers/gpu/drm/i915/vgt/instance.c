@@ -342,7 +342,6 @@ void vgt_release_instance(struct vgt_device *vgt)
 {
 	int i;
 	struct pgt_device *pdev = vgt->pdev;
-	struct list_head *pos;
 	struct vgt_device *v = NULL;
 	int cpu;
 
@@ -356,8 +355,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	vgt_lock_dev(pdev, cpu);
 
 	printk("check render ownership...\n");
-	list_for_each (pos, &pdev->rendering_runq_head) {
-		v = list_entry (pos, struct vgt_device, list);
+	list_for_each_entry(v, &pdev->rendering_runq_head, list) {
 		if (v == vgt)
 			break;
 	}
@@ -389,7 +387,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 	vgt_unlock_dev(pdev, cpu);
 	if (vgt->force_removal)
 		/* wait for removal completion */
-		wait_event(pdev->destroy_wq, !vgt->force_removal);
+		wait_event_killable(pdev->destroy_wq, !vgt->force_removal);
 
 	printk("release display/render ownership... done\n");
 
@@ -398,7 +396,6 @@ void vgt_release_instance(struct vgt_device *vgt)
 		vgt_destroy_rb_tailq(vgt);
 
 	vgt_clean_vgtt(vgt);
-	hypervisor_hvm_exit(vgt);
 
 	if (vgt->state.opregion_va) {
 		vgt_hvm_opregion_map(vgt, 0);
@@ -406,6 +403,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 				VGT_OPREGION_PORDER);
 	}
 
+	hypervisor_hvm_exit(vgt);
 	vgt_lock_dev(pdev, cpu);
 
 	vgt->pdev->device[vgt->vgt_id] = NULL;

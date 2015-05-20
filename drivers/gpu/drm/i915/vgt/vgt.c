@@ -195,7 +195,6 @@ struct pgt_device default_device = {
 
 struct vgt_device *vgt_dom0;
 struct pgt_device *pdev_default = &default_device;
-struct drm_i915_private *dev_priv = NULL;
 DEFINE_PER_CPU(u8, in_vgt);
 
 uint64_t vgt_gttmmio_va(struct pgt_device *pdev, off_t reg)
@@ -261,11 +260,14 @@ static int vgt_thread(void *priv)
 	while (!kthread_should_stop()) {
 		enum vgt_ring_id ring_id;
 		bool ctx_irq_received = false;
-		ret = wait_event_interruptible(pdev->event_wq,
-			pdev->request || freezing(current));
+		ret = wait_event_interruptible(pdev->event_wq, kthread_should_stop() ||
+					pdev->request || freezing(current));
 
 		if (ret)
 			vgt_warn("Main thread waken up by unexpected signal!\n");
+
+		if (kthread_should_stop())
+			break;
 
 		if (!pdev->request && !freezing(current)) {
 			vgt_warn("Main thread waken up by unknown reasons!\n");
@@ -706,10 +708,10 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 
 void vgt_destroy(void)
 {
-	struct list_head *pos, *next;
-	struct vgt_device *vgt;
+	struct vgt_device *vgt, *tmp;
 	struct pgt_device *pdev = &default_device;
 	int i;
+	unsigned long flags;
 
 	vgt_cleanup_mmio_dev(pdev);
 
@@ -718,18 +720,18 @@ void vgt_destroy(void)
 
 	vgt_cleanup_ctx_scheduler(pdev);
 
+	cancel_work_sync(&pdev->hpd_work.work);
+
 	/* do we need the thread actually stopped? */
 	kthread_stop(pdev->p_thread);
 
 	vgt_irq_exit(pdev);
 
 	/* Deactive all VGTs */
-	while ( !list_empty(&pdev->rendering_runq_head) ) {
-		list_for_each (pos, &pdev->rendering_runq_head) {
-			vgt = list_entry (pos, struct vgt_device, list);
-			vgt_disable_render(vgt);
-		}
-	};
+	spin_lock_irqsave(&pdev->lock, flags);
+
+	list_for_each_entry_safe(vgt, tmp, &pdev->rendering_runq_head, list)
+		vgt_disable_render(vgt);
 
 	/* Destruct all vgt_debugfs */
 	vgt_release_debugfs();
@@ -739,20 +741,18 @@ void vgt_destroy(void)
 	if (pdev->saved_gtt)
 		vfree(pdev->saved_gtt);
 	free_gtt(pdev);
+	vgt_gtt_clean(pdev);
 
 	if (pdev->gmadr_va)
 		iounmap(pdev->gmadr_va);
 	if (pdev->opregion_va)
 		iounmap(pdev->opregion_va);
 
-	while ( !list_empty(&pdev->rendering_idleq_head)) {
-		for (pos = pdev->rendering_idleq_head.next;
-			pos != &pdev->rendering_idleq_head; pos = next) {
-			next = pos->next;
-			vgt = list_entry (pos, struct vgt_device, list);
-			vgt_release_instance(vgt);
-		}
-	}
+	spin_unlock_irqrestore(&pdev->lock, flags);
+
+	list_for_each_entry_safe(vgt, tmp, &pdev->rendering_idleq_head, list)
+		vgt_release_instance(vgt);
+
 	vgt_clear_mmio_table();
 	vfree(pdev->reg_info);
 	vfree(pdev->initial_mmio_state);

@@ -895,12 +895,13 @@ static int vgt_emulation_thread(void *priv)
 		ret = wait_event_freezable(info->io_event_wq,
 			kthread_should_stop() ||
 			bitmap_weight(info->ioreq_pending, nr_vcpus));
-		if (ret)
-			vgt_warn("Emulation thread(%d) waken up"
-				 "by unexpected signal!\n", vgt->vm_id);
 
 		if (kthread_should_stop())
 			return 0;
+
+		if (ret)
+			vgt_warn("Emulation thread(%d) waken up"
+				 "by unexpected signal!\n", vgt->vm_id);
 
 		for (vcpu = 0; vcpu < nr_vcpus; vcpu++) {
 			if (!test_and_clear_bit(vcpu, info->ioreq_pending))
@@ -914,8 +915,14 @@ static int vgt_emulation_thread(void *priv)
 				xen_shutdown_domain(vgt->vm_id);
 			}
 
-			if (vgt->force_removal)
-				wait_event(vgt->pdev->destroy_wq, !vgt->force_removal);
+			if (vgt->force_removal) {
+				wait_event(vgt->pdev->destroy_wq,
+						kthread_should_stop() ||
+						!vgt->force_removal);
+				if (kthread_should_stop())
+					return 0;
+			}
+
 
 			ioreq->state = STATE_IORESP_READY;
 
@@ -972,14 +979,14 @@ static void xen_hvm_exit(struct vgt_device *vgt)
 	if (info == NULL)
 		return;
 
-	if (info->iosrv_id != 0)
-		hvm_destroy_iorequest_server(vgt);
-
 	if (info->emulation_thread != NULL)
 		kthread_stop(info->emulation_thread);
 
 	if (!info->nr_vcpu || info->evtchn_irq == NULL)
 		goto out1;
+
+	if (info->iosrv_id != 0)
+		hvm_destroy_iorequest_server(vgt);
 
 	for (vcpu = 0; vcpu < info->nr_vcpu; vcpu++){
 		if(info->evtchn_irq[vcpu] >= 0)

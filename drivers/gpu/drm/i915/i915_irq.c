@@ -4397,6 +4397,7 @@ static void vgt_irq_uninstall(struct drm_device *dev)
 	irq_work_sync(&dev_priv->irq_work);
 
 	dev_priv->irq_ops.irq_uninstall(dev);
+
 	vgt_fini_irq(dev->pdev);
 }
 #endif

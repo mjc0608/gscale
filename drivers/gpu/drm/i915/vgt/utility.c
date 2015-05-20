@@ -835,9 +835,8 @@ err_out:
 
 void free_gtt(struct pgt_device *pdev)
 {
-	intel_gtt_clear_range(0,
-		(phys_aperture_sz(pdev) - GTT_PAGE_SIZE)/PAGE_SIZE);
-
+	/* TODO: move this to host i915, when it is GVT-g aware */
+	tmp_vgt_clear_gtt(pdev->gtt_size);
 	vgt_free_gtt_pages(pdev);
 }
 

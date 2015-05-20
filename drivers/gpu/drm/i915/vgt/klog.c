@@ -35,7 +35,7 @@ static char klog_buf[NR_CPUS][KLOG_TMPBUF_SIZE];
 /* This app's channel/control files will appear in /debug/klog */
 #define APP_DIR		"klog"
 
-static struct rchan *	chan;
+static struct rchan *chan = NULL;
 
 /* app data */
 static struct dentry *	dir;
