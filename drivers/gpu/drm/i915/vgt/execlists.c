@@ -1475,8 +1475,7 @@ bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 	ctx_ptr_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_PTR);
 	ctx_st_ptr.dw = VGT_MMIO_READ(pdev, ctx_ptr_reg);
 
-	if (ctx_st_ptr.status_buf_write_ptr == DEFAULT_INV_SR_PTR
-			|| ctx_st_ptr.status_buf_read_ptr == DEFAULT_INV_SR_PTR)
+	if (ctx_st_ptr.status_buf_write_ptr == DEFAULT_INV_SR_PTR)
 		return true;
 
 	if (ctx_st_ptr.status_buf_read_ptr != ctx_st_ptr.status_buf_write_ptr)
