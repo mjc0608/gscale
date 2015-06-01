@@ -872,6 +872,6 @@ void vgt_request_force_removal(struct vgt_device *vgt)
 {
 	vgt->force_removal = 1;
 	vgt->pdev->next_sched_vgt = vgt_dom0;
-	vgt_raise_request(vgt->pdev, VGT_REQUEST_SCHED);
+	vgt_raise_request(vgt->pdev, VGT_REQUEST_CTX_SWITCH);
 	wmb();
 }
