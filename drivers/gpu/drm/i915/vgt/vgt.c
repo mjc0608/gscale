@@ -1022,28 +1022,32 @@ static void do_device_reset(struct pgt_device *pdev)
 		ASSERT(0);
 	}
 
-	vgt_info("GPU ring status:\n");
+	if (IS_PREBDW(pdev)) {
+		vgt_info("GPU ring status:\n");
 
-	for (i = 0; i < pdev->max_engines; i++) {
-		head = VGT_READ_HEAD(pdev, i);
-		tail = VGT_READ_TAIL(pdev, i);
-		start = VGT_READ_START(pdev, i);
-		ctl = VGT_READ_CTL(pdev, i);
+		for (i = 0; i < pdev->max_engines; i++) {
+			head = VGT_READ_HEAD(pdev, i);
+			tail = VGT_READ_TAIL(pdev, i);
+			start = VGT_READ_START(pdev, i);
+			ctl = VGT_READ_CTL(pdev, i);
 
-		vgt_info("RING %d: H: %x T: %x S: %x C: %x.\n",
-				i, head, tail, start, ctl);
+			vgt_info("RING %d: H: %x T: %x S: %x C: %x.\n",
+					i, head, tail, start, ctl);
+		}
 
-		if (pdev->enable_execlist)
-			reset_el_structure(pdev, i);
+		ier = VGT_MMIO_READ(pdev, _REG_DEIER);
+		iir = VGT_MMIO_READ(pdev, _REG_DEIIR);
+		imr = VGT_MMIO_READ(pdev, _REG_DEIMR);
+		isr = VGT_MMIO_READ(pdev, _REG_DEISR);
+
+		vgt_info("DE: ier: %x iir: %x imr: %x isr: %x.\n",
+				ier, iir, imr, isr);
+	} else {
+		for (i = 0; i < pdev->max_engines; i++) {
+			if (pdev->enable_execlist)
+				reset_el_structure(pdev, i);
+		}
 	}
-
-	ier = VGT_MMIO_READ(pdev, _REG_DEIER);
-	iir = VGT_MMIO_READ(pdev, _REG_DEIIR);
-	imr = VGT_MMIO_READ(pdev, _REG_DEIMR);
-	isr = VGT_MMIO_READ(pdev, _REG_DEISR);
-
-	vgt_info("DE: ier: %x iir: %x imr: %x isr: %x.\n",
-			ier, iir, imr, isr);
 
 	vgt_info("Finish.\n");
 
@@ -1086,9 +1090,11 @@ bool vgt_handle_dom0_device_reset(void)
 
 int vgt_reset_device(struct pgt_device *pdev)
 {
+	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
 	struct vgt_device *vgt;
 	struct list_head *pos, *n;
-	unsigned long ier;
+	unsigned long ier_reg = IS_PREBDW(pdev) ? _REG_DEIER : _REG_MASTER_IRQ;
+	unsigned long ier_value;
 	unsigned long flags;
 	int i;
 
@@ -1137,8 +1143,7 @@ int vgt_reset_device(struct pgt_device *pdev)
 
 	vgt_get_irq_lock(pdev, flags);
 
-	VGT_MMIO_WRITE(pdev, _REG_DEIER,
-			VGT_MMIO_READ(pdev, _REG_DEIER) & ~_REGBIT_MASTER_INTERRUPT);
+	hstate->ops->disable_irq(hstate);
 
 	vgt_put_irq_lock(pdev, flags);
 
@@ -1155,14 +1160,15 @@ int vgt_reset_device(struct pgt_device *pdev)
 
 	reset_cached_interrupt_registers(pdev);
 
-	ier = vgt_recalculate_ier(pdev, _REG_DEIER);
-	VGT_MMIO_WRITE(pdev, _REG_DEIER, ier);
+	ier_value = vgt_recalculate_ier(pdev, ier_reg);
+	VGT_MMIO_WRITE(pdev, ier_reg, ier_value);
 
 	vgt_put_irq_lock(pdev, flags);
 
 	spin_unlock_irqrestore(&pdev->lock, flags);
 
-	vgt_info("Enable master interrupt, DEIER: %lx\n", ier);
+	vgt_info("Enable master interrupt, master ier register %lx value %lx\n",
+			ier_reg, ier_value);
 
 	return 0;
 }
