@@ -1726,3 +1726,30 @@ bool vgt_g2v_execlist_context_destroy(struct vgt_device *vgt)
 	vgt_destroy_execlist_context(vgt, el_ctx);
 	return rc;
 }
+
+void vgt_reset_execlist(struct vgt_device *vgt, unsigned long ring_bitmap)
+{
+	vgt_state_ring_t *rb;
+	int bit, i;
+
+	for_each_set_bit(bit, &ring_bitmap, sizeof(ring_bitmap)) {
+		if (bit >= vgt->pdev->max_engines)
+			break;
+
+		rb = &vgt->rb[bit];
+
+		memset(&rb->vring, 0, sizeof(vgt_ringbuffer_t));
+		memset(&rb->sring, 0, sizeof(vgt_ringbuffer_t));
+
+		vgt_disable_ring(vgt, bit);
+
+		memset(&rb->elsp_store, 0, sizeof(rb->elsp_store));
+
+		rb->el_slots_head = rb->el_slots_tail = 0;
+		for (i = 0; i < EL_QUEUE_SLOT_NUM; ++ i)
+			memset(&rb->execlist_slots[i], 0,
+					sizeof(struct vgt_exec_list));
+
+		rb->csb_write_ptr = DEFAULT_INV_SR_PTR;
+	}
+}

@@ -2674,6 +2674,7 @@ static inline void vgt_set_all_vreg_bit(struct pgt_device *pdev, unsigned int va
 
 void vgt_reset_virtual_states(struct vgt_device *vgt, unsigned long ring_bitmap);
 void vgt_reset_ppgtt(struct vgt_device *vgt, unsigned long ring_bitmap);
+void vgt_reset_execlist(struct vgt_device *vgt, unsigned long ring_bitmap);
 
 enum vgt_pipe get_edp_input(uint32_t wr_data);
 void vgt_forward_events(struct pgt_device *pdev);

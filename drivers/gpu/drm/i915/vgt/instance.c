@@ -485,7 +485,6 @@ static void vgt_reset_ringbuffer(struct vgt_device *vgt, unsigned long ring_bitm
 	int bit;
 
 	for_each_set_bit(bit, &ring_bitmap, sizeof(ring_bitmap)) {
-		int i;
 		if (bit >= vgt->pdev->max_engines)
 			break;
 
@@ -497,14 +496,8 @@ static void vgt_reset_ringbuffer(struct vgt_device *vgt, unsigned long ring_bitm
 		rb->uhptr = 0;
 		rb->request_id = rb->uhptr_id = 0;
 
-		rb->el_slots_head = rb->el_slots_tail = 0;
-		for (i = 0; i < EL_QUEUE_SLOT_NUM; ++ i)
-			memset(&rb->execlist_slots[i], 0,
-				sizeof(struct vgt_exec_list));
-
 		memset(&rb->vring, 0, sizeof(vgt_ringbuffer_t));
 		memset(&rb->sring, 0, sizeof(vgt_ringbuffer_t));
-		rb->csb_write_ptr = DEFAULT_INV_SR_PTR;
 
 		vgt_disable_ring(vgt, bit);
 
@@ -527,7 +520,10 @@ void vgt_reset_virtual_states(struct vgt_device *vgt, unsigned long ring_bitmap)
 {
 	ASSERT(spin_is_locked(&vgt->pdev->lock));
 
-	vgt_reset_ringbuffer(vgt, ring_bitmap);
+	if (!vgt->pdev->enable_execlist)
+		vgt_reset_ringbuffer(vgt, ring_bitmap);
+	else
+		vgt_reset_execlist(vgt, ring_bitmap);
 
 	vgt_reset_ppgtt(vgt, ring_bitmap);
 
