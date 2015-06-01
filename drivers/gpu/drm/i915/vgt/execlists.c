@@ -1571,7 +1571,6 @@ bool vgt_batch_ELSP_write(struct vgt_device *vgt, int ring_id)
 	ctx_descs[1] = (struct ctx_desc_format *)&elsp_store->element[0];
 
 	elsp_store->count = 0;
-	vgt_enable_ring(vgt, ring_id);
 
 	if (hvm_render_owner) {
 		uint32_t elsp_reg;
