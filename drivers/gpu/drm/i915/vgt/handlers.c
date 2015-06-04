@@ -3548,7 +3548,7 @@ reg_attr_t vgt_base_reg_info[] = {
 {0xb118, 4, F_RDR, 0, D_BDW, NULL, NULL},
 {0xb100, 4, F_RDR, 0, D_BDW, NULL, NULL},
 {0xb10c, 4, F_RDR, 0, D_BDW, NULL, NULL},
-{0xb110, 4, F_RDR, 0, D_BDW, NULL, NULL},
+{0xb110, 4, F_PT, 0, D_BDW, NULL, NULL},
 
 /* NON-PRIV */
 {0x24d0, 4, F_RDR, 0, D_BDW, NULL, NULL},
