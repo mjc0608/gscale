@@ -531,6 +531,9 @@ void vgt_clean_guest_page(struct vgt_device *vgt, guest_page_t *guest_page)
 
 	if (guest_page->writeprotection)
 		hypervisor_unset_wp_pages(vgt, guest_page);
+
+	if (guest_page == vgt->gtt.last_partial_access_gpt)
+		vgt->gtt.last_partial_access_index = -1;
 }
 
 guest_page_t *vgt_find_guest_page(struct vgt_device *vgt, unsigned long gfn)
@@ -1140,6 +1143,25 @@ static inline bool can_do_out_of_sync(guest_page_t *gpt)
 		&& gpt->write_cnt >= 2;
 }
 
+bool ppgtt_check_partial_access(struct vgt_device *vgt)
+{
+	struct vgt_vgtt_info *gtt = &vgt->gtt;
+
+	if (gtt->last_partial_access_index == -1)
+		return true;
+
+	vgt_err("Incomplete page table access sequence.\n");
+
+	if (!ppgtt_handle_guest_write_page_table(
+			gtt->last_partial_access_gpt,
+			&gtt->last_partial_access_entry,
+			gtt->last_partial_access_index))
+		return false;
+
+	gtt->last_partial_access_index = -1;
+	return true;
+}
+
 static bool ppgtt_handle_guest_write_page_table_bytes(void *gp,
 		uint64_t pa, void *p_data, int bytes)
 {
@@ -1148,6 +1170,7 @@ static bool ppgtt_handle_guest_write_page_table_bytes(void *gp,
 	struct vgt_device *vgt = spt->vgt;
 	struct vgt_gtt_pte_ops *ops = vgt->pdev->gtt.pte_ops;
 	struct vgt_device_info *info = &vgt->pdev->device_info;
+	struct vgt_vgtt_info *gtt = &vgt->gtt;
 	gtt_entry_t we, se;
 	unsigned long index;
 
@@ -1163,6 +1186,8 @@ static bool ppgtt_handle_guest_write_page_table_bytes(void *gp,
 		trace_gpt_change(vgt->vm_id, "partial access - LOW",
 				NULL, we.type, *(u32 *)(p_data), index);
 
+		ppgtt_check_partial_access(vgt);
+
 		ppgtt_set_guest_entry(spt, &we, index);
 		ppgtt_get_shadow_entry(spt, &se, index);
 
@@ -1175,8 +1200,14 @@ static bool ppgtt_handle_guest_write_page_table_bytes(void *gp,
 
 		se.val64 = 0;
 		ppgtt_set_shadow_entry(spt, &se, index);
+
+		gtt->last_partial_access_index = index;
+		gtt->last_partial_access_gpt = gpt;
+		gtt->last_partial_access_entry = we;
+
 		return true;
-	}
+	} else
+		gtt->last_partial_access_index = -1;
 
 	if (hi)
 		trace_gpt_change(vgt->vm_id, "partial access - HIGH",
@@ -1918,6 +1949,8 @@ bool vgt_init_vgtt(struct vgt_device *vgt)
 
 	INIT_LIST_HEAD(&gtt->mm_list_head);
 	INIT_LIST_HEAD(&gtt->oos_page_list_head);
+
+	gtt->last_partial_access_index = -1;
 
 	if (!vgt_expand_shadow_page_mempool(vgt->pdev)) {
 		vgt_err("fail to expand the shadow page mempool.");

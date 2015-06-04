@@ -1342,6 +1342,7 @@ static inline bool vgt_hw_ELSP_write(struct vgt_device *vgt,
 
 	ASSERT(ctx0 && ctx1);
 
+	ppgtt_check_partial_access(vgt);
 	ppgtt_sync_oos_pages(vgt);
 
 	vgt_dbg(VGT_DBG_EXECLIST, "EXECLIST is submitted into hardware! "

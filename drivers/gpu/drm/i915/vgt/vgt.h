@@ -607,6 +607,8 @@ extern void gen7_mm_free_page_table(struct vgt_mm *mm);
 extern bool gen8_mm_alloc_page_table(struct vgt_mm *mm);
 extern void gen8_mm_free_page_table(struct vgt_mm *mm);
 
+struct guest_page;
+
 struct vgt_vgtt_info {
 	struct vgt_mm *ggtt_mm;
 	unsigned long active_ppgtt_mm_bitmap;
@@ -616,6 +618,9 @@ struct vgt_vgtt_info {
 	DECLARE_HASHTABLE(el_ctx_hash_table, VGT_HASH_BITS);
 	atomic_t n_write_protected_guest_page;
 	struct list_head oos_page_list_head;
+	int last_partial_access_index;
+	gtt_entry_t last_partial_access_entry;
+	struct guest_page *last_partial_access_gpt;
 };
 
 extern bool vgt_init_vgtt(struct vgt_device *vgt);
@@ -631,6 +636,8 @@ extern bool vgt_g2v_destroy_ppgtt_mm(struct vgt_device *vgt, int page_table_leve
 
 extern struct vgt_mm *gen8_find_ppgtt_mm(struct vgt_device *vgt,
                 int page_table_level, void *root_entry);
+
+extern bool ppgtt_check_partial_access(struct vgt_device *vgt);
 
 typedef bool guest_page_handler_t(void *gp, uint64_t pa, void *p_data, int bytes);
 
