@@ -1276,7 +1276,7 @@ static int vgt_handle_mi_wait_for_event(struct parser_exec_state *s)
 static unsigned long get_gma_bb_from_cmd(struct parser_exec_state *s, int index)
 {
 	unsigned long addr;
-	int32_t gma_high, gma_low;
+	unsigned long gma_high, gma_low;
 	int gmadr_bytes = s->vgt->pdev->device_info.gmadr_bytes_in_cmd;
 
 	ASSERT(gmadr_bytes == 4 || gmadr_bytes == 8);
