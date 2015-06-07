@@ -618,9 +618,10 @@ struct vgt_vgtt_info {
 	DECLARE_HASHTABLE(el_ctx_hash_table, VGT_HASH_BITS);
 	atomic_t n_write_protected_guest_page;
 	struct list_head oos_page_list_head;
-	int last_partial_access_index;
-	gtt_entry_t last_partial_access_entry;
-	struct guest_page *last_partial_access_gpt;
+	int last_partial_ppgtt_access_index;
+	gtt_entry_t last_partial_ppgtt_access_entry;
+	struct guest_page *last_partial_ppgtt_access_gpt;
+	bool warn_partial_ppgtt_access_once;
 };
 
 extern bool vgt_init_vgtt(struct vgt_device *vgt);
