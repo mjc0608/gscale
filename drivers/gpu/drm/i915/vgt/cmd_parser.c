@@ -567,9 +567,26 @@ static void parser_exec_state_dump(struct parser_exec_state *s)
 	if (s->ip_va == NULL) {
 		vgt_err(" ip_va(NULL)\n");
 	} else {
+		int cnt = 0;
 		vgt_err("  ip_va=%p: %08x %08x %08x %08x \n",
 				s->ip_va, cmd_val(s, 0), cmd_val(s, 1), cmd_val(s, 2), cmd_val(s, 3));
+
 		vgt_print_opcode(cmd_val(s, 0), s->ring_id);
+
+		/* print the whole page to trace */
+		trace_printk("ERROR ip_va=%p: %08x %08x %08x %08x \n",
+				s->ip_va, cmd_val(s, 0), cmd_val(s, 1), cmd_val(s, 2), cmd_val(s, 3));
+
+		s->ip_va = (uint32_t*)((((u64)s->ip_va) >> 12) << 12);
+		while(cnt < 1024) {
+		trace_printk("DUMP ip_va=%p: %08x %08x %08x %08x %08x %08x %08x %08x \n",
+				s->ip_va, cmd_val(s, 0), cmd_val(s, 1), cmd_val(s, 2), cmd_val(s, 3),
+				          cmd_val(s, 4), cmd_val(s, 5), cmd_val(s, 6), cmd_val(s, 7));
+
+			s->ip_va+=8;
+			cnt+=8;
+		}
+
 	}
 }
 #define RING_BUF_WRAP(s, ip_gma)	(((s)->buf_type == RING_BUFFER_INSTRUCTION) && \

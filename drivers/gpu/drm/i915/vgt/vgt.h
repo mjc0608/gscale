@@ -704,6 +704,7 @@ struct execlist_context {
 	 * data and store them into vgt->rb[ring_id] before a
 	 * context is submitted. We will have better handling later.
 	 */
+	vgt_reg_t last_guest_head;
 	vgt_reg_t last_scan_head;
 	uint64_t request_id;
 	//uint64_t cmd_nr;

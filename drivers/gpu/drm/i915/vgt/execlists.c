@@ -1411,11 +1411,25 @@ static void vgt_update_ring_info(struct vgt_device *vgt,
 	vgt->rb[ring_id].has_ppgtt_mode_enabled = 1;
 	vgt->rb[ring_id].has_ppgtt_base_set = 1;
 	vgt->rb[ring_id].request_id = el_ctx->request_id;
-	vgt->rb[ring_id].last_scan_head = el_ctx->last_scan_head;
-	if (!IS_PREEMPTION_RESUBMISSION(vring->head, vring->tail, el_ctx->last_scan_head)) {
+
+#if 0
+	/* keep this trace for debug purpose */
+	trace_printk("VRING: HEAD %04x TAIL %04x START %08x last_scan %08x PREEMPTION %d DPY %d\n",
+		vring->head, vring->tail, vring->start, el_ctx->last_scan_head,
+		IS_PREEMPTION_RESUBMISSION(vring->head, vring->tail,
+		el_ctx->last_scan_head), current_foreground_vm(vgt->pdev) == vgt);
+#endif
+	if (el_ctx->last_guest_head == vring->head) {
+		/* For lite-restore case from Guest, Headers are fixed,
+		 HW only resample tail */
 		vgt->rb[ring_id].last_scan_head = el_ctx->last_scan_head;
-		vgt_scan_vring(vgt, ring_id);
 	}
+	else {
+		vgt->rb[ring_id].last_scan_head = vring->head;
+		el_ctx->last_guest_head = vring->head;
+	}
+
+	vgt_scan_vring(vgt, ring_id);
 
 	/* the function is used to update ring/buffer only. No real submission inside */
 	vgt_submit_commands(vgt, ring_id);
