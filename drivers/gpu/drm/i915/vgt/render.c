@@ -1683,7 +1683,6 @@ struct vgt_render_context_ops gen7_context_ops = {
 
 static struct reg_mask_t gen8_rcs_reset_mmio[] = {
 	{0x2098, 0},
-	{0x229c, 1},
 	{0x20c0, 1},
 
 	{0x24d0, 0},
