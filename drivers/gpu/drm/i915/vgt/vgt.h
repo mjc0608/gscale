@@ -93,6 +93,8 @@ extern int preallocated_shadow_pages;
 extern int preallocated_oos_pages;
 extern bool spt_out_of_sync;
 extern bool cmd_parser_ip_buf;
+extern bool timer_based_qos;
+extern int tbs_period_ms;
 
 enum vgt_event_type {
 	// GT
@@ -825,13 +827,15 @@ struct vgt_sched_info {
 	int32_t weight;
 	int64_t time_slice;
 	/* more properties and policies should be added in*/
+	u64 tbs_period;  /* default: VGT_TBS_DEFAULT_PERIOD(1ms) */
 };
 
-#define VGT_TBS_DEFAULT_PERIOD (15 * 1000000) /* 15 ms */
+#define VGT_TBS_PERIOD_MAX 15
+#define VGT_TBS_PERIOD_MIN 1
+#define VGT_TBS_DEFAULT_PERIOD(x) ((x) * 1000000) /* 15 ms */
 
 struct vgt_hrtimer {
 	struct hrtimer timer;
-	u64 period;
 };
 
 #define VGT_TAILQ_RB_POLLING_PERIOD (2 * 1000000)
@@ -2159,6 +2163,7 @@ static inline unsigned long __REG_READ(struct pgt_device *pdev,
 #define ctx_remain_time(vgt) ((vgt)->sched_info.time_slice)
 #define ctx_actual_end_time(vgt) ((vgt)->sched_info.actual_end_time)
 #define ctx_rb_empty_delay(vgt) ((vgt)->sched_info.rb_empty_delay)
+#define ctx_tbs_period(vgt) ((vgt)->sched_info.tbs_period)
 
 #define vgt_get_cycles() ({		\
 	cycles_t __ret;				\
@@ -2213,11 +2218,35 @@ static inline int vgt_nr_in_runq(struct pgt_device *pdev)
 
 static inline void vgt_init_sched_info(struct vgt_device *vgt)
 {
-	ctx_remain_time(vgt) = VGT_DEFAULT_TSLICE;
-	ctx_start_time(vgt) = 0;
-	ctx_end_time(vgt) = 0;
-	ctx_actual_end_time(vgt) = 0;
-	ctx_rb_empty_delay(vgt) = 0;
+	if (event_based_qos) {
+		ctx_remain_time(vgt) = VGT_DEFAULT_TSLICE;
+		ctx_start_time(vgt) = 0;
+		ctx_end_time(vgt) = 0;
+		ctx_actual_end_time(vgt) = 0;
+		ctx_rb_empty_delay(vgt) = 0;
+	}
+
+	if (timer_based_qos) {
+
+		if (tbs_period_ms == -1) {
+			tbs_period_ms = IS_BDW(vgt->pdev) ?
+				VGT_TBS_PERIOD_MIN : VGT_TBS_PERIOD_MAX;
+		}
+
+		if (tbs_period_ms > VGT_TBS_PERIOD_MAX
+			|| tbs_period_ms < VGT_TBS_PERIOD_MIN) {
+			vgt_err("Invalid tbs_period=%d parameters. "
+				"Best value between <%d..%d>\n",
+				VGT_TBS_PERIOD_MIN, VGT_TBS_PERIOD_MAX,
+				tbs_period_ms);
+			tbs_period_ms = IS_BDW(vgt->pdev) ?
+				VGT_TBS_PERIOD_MIN : VGT_TBS_PERIOD_MAX;
+		}
+
+		ctx_tbs_period(vgt) = VGT_TBS_DEFAULT_PERIOD(tbs_period_ms);
+		vgt_info("VM-%d setup timebased schedule period %d ms\n",
+			vgt->vm_id, tbs_period_ms);
+	}
 }
 
 /* main context scheduling process */

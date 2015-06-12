@@ -314,8 +314,7 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 	*ptr_vgt = vgt;
 
 	/* initialize context scheduler infor */
-	if (event_based_qos)
-		vgt_init_sched_info(vgt);
+	vgt_init_sched_info(vgt);
 
 	if (shadow_tail_based_qos)
 		vgt_init_rb_tailq(vgt);
