@@ -1019,35 +1019,39 @@ static void vgt_emulate_submit_execlist(struct vgt_device *vgt, int ring_id,
 
 	status.execlist_write_pointer = (el_index == 0 ? 1 : 0);
 
-	/* TODO
-	 * 1, Check whether we should set below two states. According to the observation
-	 * from dom0, when there is ELSP write, both active bit and valid bit will be
-	 * set.
-	 * 2, Consider the emulation of preemption and lite restore.
-	 * It is designed to be in context switch by adding corresponding status entries
-	 * into status buffer.
-	 */
-	if (el_index == 0) {
-		status.execlist_0_active = 1;
-		status.execlist_0_valid = 1;
-	} else {
-		status.execlist_1_active = 1;
-		status.execlist_1_valid = 1;
-	}
+	if (status.execlist_0_valid == 0 && status.execlist_1_valid == 0) {
 
-	/* TODO emulate the status. Need double confirm
-	 *
-	 * Here non-render owner will not receive context switch interrupt
-	 * until it becomes a render owner. Meanwhile, the status register
-	 * is emulated to reflect the port submission operation.
-	 * It is noticed that the initial value of "current_execlist_pointer"
-	 * and "execlist_write_pointer" does not equal although the EXECLISTS
-	 * are all empty. It is then not appropriate to emulate "execlist_queue_full"
-	 * with the two bit value. Instead, the "execlist_queue_full" will be
-	 * set if valid bits of both "EXECLIST 0" and "EXECLIST 1" are set.
-	 * This needs the double confirm.
-	 */
-	if (status.execlist_0_valid && status.execlist_1_valid) {
+		status.udw = ctx0->guest_context.context_id;
+
+		/* TODO
+		 * 1, Check whether we should set below two states. According to the observation
+		 * from dom0, when there is ELSP write, both active bit and valid bit will be
+		 * set.
+		 * 2, Consider the emulation of preemption and lite restore.
+		 * It is designed to be in context switch by adding corresponding status entries
+		 * into status buffer.
+		 */
+		if (el_index == 0) {
+			status.execlist_0_active = 1;
+			status.execlist_0_valid = 1;
+			status.execlist_1_active = 0;
+			status.execlist_1_valid = 0;
+		} else {
+			status.execlist_0_active = 0;
+			status.execlist_0_valid = 0;
+			status.execlist_1_active = 1;
+			status.execlist_1_valid = 1;
+		}
+		/*update cur pointer to next */
+		status.current_execlist_pointer = el_index;
+	}
+	else {
+		/* TODO emulate the status. Need double confirm
+		 *
+		 * Here non-render owner will still receive context switch interrupt
+		 * injected because of HW GPU status change. Meanwhile, the status register
+		 * is emulated to reflect the port submission operation.
+		 */
 		status.execlist_queue_full = 1;
 		vgt_dbg(VGT_DBG_EXECLIST,"VM-%d: ring(%d) EXECLISTS becomes "
 			"full due to workload submission!\n",
@@ -1057,6 +1061,8 @@ static void vgt_emulate_submit_execlist(struct vgt_device *vgt, int ring_id,
 
 	__vreg(vgt, status_reg) = status.ldw;
 	__vreg(vgt, status_reg + 4) = status.udw;
+
+	return;
 }
 
 struct execlist_context * execlist_context_find(struct vgt_device *vgt,
