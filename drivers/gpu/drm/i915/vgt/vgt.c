@@ -32,7 +32,7 @@
 
 MODULE_AUTHOR("Intel Corporation");
 MODULE_DESCRIPTION("Virtual GPU device model for Intel Processor Graphics");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL and additional rights");
 MODULE_VERSION("0.1");
 
 bool hvm_render_owner = false;
