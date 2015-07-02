@@ -707,9 +707,10 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 	printk("i915_start_vgt: %s\n", i915_host_mediate ? "success" : "fail");
 
 	i915_check_vgt(dev_priv);
-	if (USES_VGT(dev))
+	if (USES_VGT(dev)){
 		i915.enable_fbc = 0;
-
+		i915.enable_ips = 0;
+	}
 	ret = i915_gem_gtt_init(dev);
 	if (ret)
 		goto out_regs;
