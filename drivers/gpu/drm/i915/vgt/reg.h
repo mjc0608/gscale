@@ -1069,6 +1069,9 @@ static inline uint32_t __RING_REG(int32_t ring_id, uint32_t rcs_reg)
 #define DISPLAY_MAXWM	0x7f	/* bit 16:22 */
 #define CURSOR_MAXWM	0x1f	/* bit 4:0 */
 
+/*Intermediate Pixel Storage*/
+#define _REG_IPS_CTL		0x43408
+
 union PCH_PP_CONTROL
 {
 	uint32_t data;
