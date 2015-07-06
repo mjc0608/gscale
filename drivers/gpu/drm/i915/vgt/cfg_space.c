@@ -366,33 +366,3 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 	 */
 	return rc;
 }
-
-bool vgt_hvm_write_cfg_space(struct vgt_device *vgt,
-	uint64_t addr, unsigned int bytes, unsigned long val)
-{
-	/* Low 32 bit of addr is real address, high 32 bit is bdf */
-	unsigned int port = addr & 0xffffffff;
-
-	vgt_dbg(VGT_DBG_GENERIC, "vgt_hvm_write_cfg_space %x %d %lx\n", port, bytes, val);
-	ASSERT(((bytes == 4) && ((port & 3) == 0)) ||
-		((bytes == 2) && ((port & 1) == 0)) || (bytes == 1));
-	vgt_emulate_cfg_write (vgt, port, &val, bytes);
-
-	return true;
-}
-
-bool vgt_hvm_read_cfg_space(struct vgt_device *vgt,
-	uint64_t addr, unsigned int bytes, unsigned long *val)
-{
-	unsigned long data;
-	/* Low 32 bit of addr is real address, high 32 bit is bdf */
-	unsigned int port = addr & 0xffffffff;
-
-	ASSERT (((bytes == 4) && ((port & 3) == 0)) ||
-		((bytes == 2) && ((port & 1) == 0)) || (bytes == 1));
-	vgt_emulate_cfg_read(vgt, port, &data, bytes);
-	memcpy(val, &data, bytes);
-	vgt_dbg(VGT_DBG_GENERIC, "VGT: vgt_hvm_read_cfg_space port %x bytes %x got %lx\n",
-			port, bytes, *val);
-	return true;
-}

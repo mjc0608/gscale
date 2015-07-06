@@ -91,25 +91,7 @@ bool vgt_native_mmio_write(u32 reg, void *val, int len, bool trace)
 bool vgt_native_gtt_read(u32 reg, void *val, int len)
 {
 	void *va = (void *)vgt_gttmmio_va(pdev_default, reg + gtt_offset);
-
-#if 0
-	if (dev_priv && vgt_ops && vgt_ops->initialized) {
-		switch (len) {
-		case 4:
-			*(u32 *)val = readl(reg + dev_priv->gtt.gsm);
-			break;
-		case 8:
-			*(u64 *)val = readq(reg + dev_priv->gtt.gsm);
-			break;
-		default:
-			vgt_err("your len is wrong: %d\n", len);
-			return false;
-		}
-		return true;
-	} else
-#endif
-	{
-		switch (len) {
+	switch (len) {
 		case 4:
 			*(u32 *)val = readl(va);
 			break;
@@ -119,33 +101,14 @@ bool vgt_native_gtt_read(u32 reg, void *val, int len)
 		default:
 			vgt_err("your len is wrong: %d\n", len);
 			return false;
-		}
-		return true;
 	}
+	return true;
 }
 
 bool vgt_native_gtt_write(u32 reg, void *val, int len)
 {
 	void *va = (void *)vgt_gttmmio_va(pdev_default, reg + gtt_offset);
-
-#if 0
-	if (dev_priv) {
-		switch (len) {
-		case 4:
-			writel(*(u32 *)val, reg + dev_priv->gtt.gsm);
-			break;
-		case 8:
-			writeq(*(u64 *)val, reg + dev_priv->gtt.gsm);
-			break;
-		default:
-			vgt_err("your len is wrong: %d\n", len);
-			return false;
-		}
-		return true;
-	} else
-#endif
-	{
-		switch (len) {
+	switch (len) {
 		case 4:
 			writel(*(u32 *)val, va);
 			break;
@@ -155,9 +118,8 @@ bool vgt_native_gtt_write(u32 reg, void *val, int len)
 		default:
 			vgt_err("your len is wrong: %d\n", len);
 			return false;
-		}
-		return true;
 	}
+	return true;
 }
 
 bool vgt_host_read(u32 reg, void *val, int len, bool is_gtt, bool trace)

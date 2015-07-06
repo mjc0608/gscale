@@ -702,11 +702,79 @@ static bool vgt_initialize_pgt_device(struct pci_dev *dev, struct pgt_device *pd
 	return true;
 }
 
-/*
- * Initialize the vgt driver.
- *  return 0: success
- *	-1: error
- */
+void vgt_destroy(void)
+{
+	struct list_head *pos, *next;
+	struct vgt_device *vgt;
+	struct pgt_device *pdev = &default_device;
+	int i;
+
+	vgt_cleanup_mmio_dev(pdev);
+
+	perf_pgt = NULL;
+	list_del(&pdev->list);
+
+	vgt_cleanup_ctx_scheduler(pdev);
+
+	/* do we need the thread actually stopped? */
+	kthread_stop(pdev->p_thread);
+
+	vgt_irq_exit(pdev);
+
+	/* Deactive all VGTs */
+	while ( !list_empty(&pdev->rendering_runq_head) ) {
+		list_for_each (pos, &pdev->rendering_runq_head) {
+			vgt = list_entry (pos, struct vgt_device, list);
+			vgt_disable_render(vgt);
+		}
+	};
+
+	/* Destruct all vgt_debugfs */
+	vgt_release_debugfs();
+
+	vgt_destroy_sysfs();
+
+	if (pdev->saved_gtt)
+		vfree(pdev->saved_gtt);
+	free_gtt(pdev);
+
+	if (pdev->gmadr_va)
+		iounmap(pdev->gmadr_va);
+	if (pdev->opregion_va)
+		iounmap(pdev->opregion_va);
+
+	while ( !list_empty(&pdev->rendering_idleq_head)) {
+		for (pos = pdev->rendering_idleq_head.next;
+			pos != &pdev->rendering_idleq_head; pos = next) {
+			next = pos->next;
+			vgt = list_entry (pos, struct vgt_device, list);
+			vgt_release_instance(vgt);
+		}
+	}
+	vgt_clear_mmio_table();
+	vfree(pdev->reg_info);
+	vfree(pdev->initial_mmio_state);
+
+	for (i = 0; i < I915_MAX_PORTS; ++ i) {
+		if (pdev->ports[i].edid) {
+			kfree(pdev->ports[i].edid);
+			pdev->ports[i].edid = NULL;
+		}
+
+		if (pdev->ports[i].dpcd) {
+			kfree(pdev->ports[i].dpcd);
+			pdev->ports[i].dpcd = NULL;
+		}
+
+		if (pdev->ports[i].cache.edid) {
+			kfree(pdev->ports[i].cache.edid);
+			pdev->ports[i].cache.edid = NULL;
+		}
+	}
+
+	vgt_cmd_parser_exit();
+}
+
 static int vgt_initialize(struct pci_dev *dev)
 {
 	struct pgt_device *pdev = &default_device;
@@ -805,79 +873,6 @@ err:
 	printk("vgt_initialize failed.\n");
 	vgt_destroy();
 	return -1;
-}
-
-void vgt_destroy(void)
-{
-	struct list_head *pos, *next;
-	struct vgt_device *vgt;
-	struct pgt_device *pdev = &default_device;
-	int i;
-
-	vgt_cleanup_mmio_dev(pdev);
-
-	perf_pgt = NULL;
-	list_del(&pdev->list);
-
-	vgt_cleanup_ctx_scheduler(pdev);
-
-	/* do we need the thread actually stopped? */
-	kthread_stop(pdev->p_thread);
-
-	vgt_irq_exit(pdev);
-
-	/* Deactive all VGTs */
-	while ( !list_empty(&pdev->rendering_runq_head) ) {
-		list_for_each (pos, &pdev->rendering_runq_head) {
-			vgt = list_entry (pos, struct vgt_device, list);
-			vgt_disable_render(vgt);
-		}
-	};
-
-	/* Destruct all vgt_debugfs */
-	vgt_release_debugfs();
-
-	vgt_destroy_sysfs();
-
-	if (pdev->saved_gtt)
-		vfree(pdev->saved_gtt);
-	free_gtt(pdev);
-
-	if (pdev->gmadr_va)
-		iounmap(pdev->gmadr_va);
-	if (pdev->opregion_va)
-		iounmap(pdev->opregion_va);
-
-	while ( !list_empty(&pdev->rendering_idleq_head)) {
-		for (pos = pdev->rendering_idleq_head.next;
-			pos != &pdev->rendering_idleq_head; pos = next) {
-			next = pos->next;
-			vgt = list_entry (pos, struct vgt_device, list);
-			vgt_release_instance(vgt);
-		}
-	}
-	vgt_clear_mmio_table();
-	vfree(pdev->reg_info);
-	vfree(pdev->initial_mmio_state);
-
-	for (i = 0; i < I915_MAX_PORTS; ++ i) {
-		if (pdev->ports[i].edid) {
-			kfree(pdev->ports[i].edid);
-			pdev->ports[i].edid = NULL;
-		}
-
-		if (pdev->ports[i].dpcd) {
-			kfree(pdev->ports[i].dpcd);
-			pdev->ports[i].dpcd = NULL;
-		}
-
-		if (pdev->ports[i].cache.edid) {
-			kfree(pdev->ports[i].cache.edid);
-			pdev->ports[i].cache.edid = NULL;
-		}
-	}
-
-	vgt_cmd_parser_exit();
 }
 
 int vgt_suspend(struct pci_dev *pdev)
@@ -1177,20 +1172,6 @@ int vgt_reset_device(struct pgt_device *pdev)
 	return 0;
 }
 
-bool vgt_check_host(void)
-{
-	if (!vgt_enabled)
-		return false;
-
-	if (!vgt_pkdm)
-		return false;
-
-	if (!hypervisor_check_host())
-		return false;
-
-	return true;
-}
-
 static void vgt_param_check(void)
 {
 	/* TODO: hvm_display/render_owner are broken */
@@ -1220,6 +1201,31 @@ static void vgt_param_check(void)
 		dom0_fence_sz = VGT_MAX_NUM_FENCES;
 }
 
+bool vgt_check_host(void)
+{
+	if (!vgt_enabled)
+		return false;
+
+	if (!vgt_pkdm)
+		return false;
+
+	if (!hypervisor_check_host())
+		return false;
+
+	return true;
+}
+
+void i915_stop_vgt(void)
+{
+	if (!hypervisor_check_host())
+		return;
+
+	// fill other exit works here
+	vgt_destroy();
+	vgt_klog_cleanup();
+	return;
+}
+
 bool i915_start_vgt(struct pci_dev *pdev)
 {
 	if (!vgt_check_host())
@@ -1235,16 +1241,4 @@ bool i915_start_vgt(struct pci_dev *pdev)
 	vgt_klog_init();
 
 	return vgt_initialize(pdev) == 0;
-}
-
-
-void i915_stop_vgt(void)
-{
-	if (!hypervisor_check_host())
-		return;
-
-	// fill other exit works here
-	vgt_destroy();
-	vgt_klog_cleanup();
-	return;
 }

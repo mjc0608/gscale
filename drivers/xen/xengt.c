@@ -735,6 +735,33 @@ err_ioreq_range:
 	return -ERANGE;
 }
 
+static bool vgt_hvm_write_cfg_space(struct vgt_device *vgt,
+	uint64_t addr, unsigned int bytes, unsigned long val)
+{
+	/* Low 32 bit of addr is real address, high 32 bit is bdf */
+	unsigned int port = addr & 0xffffffff;
+
+	ASSERT(((bytes == 4) && ((port & 3) == 0)) ||
+		((bytes == 2) && ((port & 1) == 0)) || (bytes == 1));
+	vgt_ops->emulate_cfg_write(vgt, port, &val, bytes);
+
+	return true;
+}
+
+static bool vgt_hvm_read_cfg_space(struct vgt_device *vgt,
+	uint64_t addr, unsigned int bytes, unsigned long *val)
+{
+	unsigned long data;
+	/* Low 32 bit of addr is real address, high 32 bit is bdf */
+	unsigned int port = addr & 0xffffffff;
+
+	ASSERT (((bytes == 4) && ((port & 3) == 0)) ||
+		((bytes == 2) && ((port & 1) == 0)) || (bytes == 1));
+	vgt_ops->emulate_cfg_read(vgt, port, &data, bytes);
+	memcpy(val, &data, bytes);
+	return true;
+}
+
 static int _hvm_pio_emulation(struct vgt_device *vgt, struct ioreq *ioreq)
 {
 	int sign;
