@@ -66,6 +66,78 @@ found:
 	return kvm;
 }
 
+static int kvmgt_vm_getdomid(void)
+{
+	/* 0 is reserved for host */
+	static int domid = 1;
+
+	return domid++;
+}
+
+void kvmgt_kvm_init(struct kvm *kvm)
+{
+	kvm->domid = kvmgt_vm_getdomid();
+	kvm->vgt_enabled = false;
+	kvm->vgt = NULL;
+}
+
+void kvmgt_kvm_exit(struct kvm *kvm)
+{
+	vgt_params_t vp;
+
+	if (!kvm->vgt_enabled || !kvm->vgt)
+		return;
+
+	vgt_info("release vgt resrouce for KVM!\n");
+	vp.vm_id = -kvm->domid;
+	vgt_ops->del_state_sysfs(vp);
+	kvm->vgt_enabled = false;
+}
+
+void kvmgt_record_cf8(struct kvm_vcpu *vcpu, unsigned port, unsigned long rax)
+{
+	if (port == 0xcf8)
+		vcpu->arch.last_cfg_addr = (u32)rax;
+}
+
+bool kvmgt_pio_is_igd_cfg(struct kvm_vcpu *vcpu)
+{
+	unsigned int b, d, f;
+	u32 addr = vcpu->arch.last_cfg_addr;
+
+	switch (vcpu->arch.pio.port) {
+	case 0xcfc ... 0xcff:
+		break;
+	default:
+		return false;
+	}
+
+	b = (addr >> 16) & 0xff;
+	d = (addr >> 11) & 0x1f;
+	f = (addr >> 8) & 0x7;
+
+	return (b == 0 && d == 2 && f == 0);
+}
+
+bool kvmgt_pio_igd_cfg(struct kvm_vcpu *vcpu)
+{
+	bool ret = false;
+
+	if (vcpu->arch.pio.in) {
+		ret = vgt_ops->emulate_cfg_read(vcpu->kvm->vgt,
+					(vcpu->arch.last_cfg_addr & 0xfc) + (vcpu->arch.pio.port & 3),
+					vcpu->arch.pio_data,
+					vcpu->arch.pio.size);
+	} else {
+		ret = vgt_ops->emulate_cfg_write(vcpu->kvm->vgt,
+					(vcpu->arch.last_cfg_addr & 0xfc) + (vcpu->arch.pio.port & 3),
+					vcpu->arch.pio_data,
+					vcpu->arch.pio.size);
+	}
+
+	return ret;
+}
+
 /* Tanslate from VM's guest pfn to host pfn */
 static unsigned long kvmgt_gfn_2_pfn(int vm_id, unsigned long g_pfn)
 {

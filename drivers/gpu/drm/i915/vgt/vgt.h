@@ -2742,17 +2742,6 @@ bool vgt_reg_isr_read(struct vgt_device *vgt, unsigned int reg,
 void vgt_reg_watchdog_handler(struct vgt_device *state,
 	uint32_t reg, uint32_t val, bool write, ...);
 extern char *vgt_irq_name[EVENT_MAX];
-
-typedef struct {
-	int vm_id;
-	int aperture_sz; /* in MB */
-	int gm_sz;	/* in MB */
-	int fence_sz;
-
-	int vgt_primary; /* 0/1: config the vgt device as secondary/primary VGA,
-						-1: means the ioemu doesn't supply a value */
-} vgt_params_t;
-
 ssize_t get_avl_vm_aperture_gm_and_fence(struct pgt_device *pdev, char *buf,
 		ssize_t buf_sz);
 vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_value);
@@ -2796,6 +2785,7 @@ extern void i915_handle_error(struct drm_device *dev, bool wedged,
 extern int i915_wait_error_work_complete(struct drm_device *dev);
 
 int vgt_reset_device(struct pgt_device *pgt);
+int vgt_del_state_sysfs(vgt_params_t vp);
 void reset_cached_interrupt_registers(struct pgt_device *pdev);
 
 int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vgt_params_t vp);

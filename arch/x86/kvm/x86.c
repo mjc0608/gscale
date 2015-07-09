@@ -64,6 +64,10 @@
 #include <asm/pvclock.h>
 #include <asm/div64.h>
 
+#ifdef CONFIG_KVMGT
+#include "kvmgt.h"
+#endif
+
 #define MAX_IO_MSRS 256
 #define KVM_MAX_MCE_BANKS 32
 #define KVM_MCE_CAP_SUPPORTED (MCG_CTL_P | MCG_SER_P)
@@ -4564,6 +4568,13 @@ static int kernel_pio(struct kvm_vcpu *vcpu, void *pd)
 	/* TODO: String I/O for in kernel device */
 	int r;
 
+#ifdef CONFIG_KVMGT
+	if (vcpu->kvm->vgt_enabled && kvmgt_pio_is_igd_cfg(vcpu)) {
+		if (!kvmgt_pio_igd_cfg(vcpu))
+			return -EOPNOTSUPP;
+		return 0;
+	}
+#endif
 	if (vcpu->arch.pio.in)
 		r = kvm_io_bus_read(vcpu->kvm, KVM_PIO_BUS, vcpu->arch.pio.port,
 				    vcpu->arch.pio.size, pd);
@@ -4582,6 +4593,12 @@ static int emulator_pio_in_out(struct kvm_vcpu *vcpu, int size,
 	vcpu->arch.pio.in = in;
 	vcpu->arch.pio.count  = count;
 	vcpu->arch.pio.size = size;
+
+#ifdef CONFIG_KVMGT
+	if (vcpu->kvm->vgt_enabled && !in)
+		kvmgt_record_cf8(vcpu, port,
+					kvm_register_read(vcpu, VCPU_REGS_RAX));
+#endif
 
 	if (!kernel_pio(vcpu, vcpu->arch.pio_data)) {
 		vcpu->arch.pio.count = 0;

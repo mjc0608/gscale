@@ -63,6 +63,10 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/kvm.h>
 
+#ifdef CONFIG_KVMGT
+#include "kvmgt.h"
+#endif
+
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
 
@@ -517,6 +521,9 @@ static struct kvm *kvm_create_vm(unsigned long type)
 	spin_lock(&kvm_lock);
 	list_add(&kvm->vm_list, &vm_list);
 	spin_unlock(&kvm_lock);
+#ifdef CONFIG_KVMGT
+	kvmgt_kvm_init(kvm);
+#endif
 
 	return kvm;
 
@@ -618,6 +625,9 @@ static void kvm_destroy_vm(struct kvm *kvm)
 	mmu_notifier_unregister(&kvm->mmu_notifier, kvm->mm);
 #else
 	kvm_arch_flush_shadow_all(kvm);
+#endif
+#ifdef CONFIG_KVMGT
+	kvmgt_kvm_exit(kvm);
 #endif
 	kvm_arch_destroy_vm(kvm);
 	kvm_destroy_devices(kvm);
@@ -2444,6 +2454,19 @@ static long kvm_vm_ioctl(struct file *filp,
 	case KVM_CREATE_VCPU:
 		r = kvm_vm_ioctl_create_vcpu(kvm, arg);
 		break;
+	case KVM_GET_DOMID:
+		r = kvm->domid;
+		break;
+	case KVM_VGT_SET_OPREGION: {
+		u32 gpa;
+
+		r = -EFAULT;
+		if (copy_from_user(&gpa, argp, sizeof(gpa)))
+			goto out;
+		kvm->opregion_gpa = gpa;
+		r = 0;
+		break;
+	}
 	case KVM_SET_USER_MEMORY_REGION: {
 		struct kvm_userspace_memory_region kvm_userspace_mem;
 

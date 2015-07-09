@@ -412,6 +412,7 @@ struct kvm {
 	int domid;
 	bool vgt_enabled;
 	struct vgt_device *vgt;
+	u32 opregion_gpa;
 #endif
 };
 

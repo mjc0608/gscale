@@ -33,7 +33,7 @@ static void vgt_kobj_release(struct kobject *kobj)
 }
 
 static int vgt_add_state_sysfs(vgt_params_t vp);
-static int vgt_del_state_sysfs(vgt_params_t vp);
+int vgt_del_state_sysfs(vgt_params_t vp);
 static ssize_t vgt_create_instance_store(struct kobject *kobj, struct kobj_attribute *attr,
 			const char *buf, size_t count)
 {
@@ -1082,7 +1082,7 @@ kobj_fail:
 	return retval;
 }
 
-static int vgt_del_state_sysfs(vgt_params_t vp)
+int vgt_del_state_sysfs(vgt_params_t vp)
 {
 	struct vgt_device *vgt;
 	int i;

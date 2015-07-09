@@ -186,6 +186,7 @@ static struct vgt_ops __vgt_ops = {
 	.panic = vgt_panic,
 	.pa_to_mmio_offset = vgt_pa_to_mmio_offset,
 	.expand_shadow_page_mempool = vgt_expand_shadow_page_mempool,
+	.del_state_sysfs = vgt_del_state_sysfs,
 };
 
 LIST_HEAD(pgt_devices);
