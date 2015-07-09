@@ -408,6 +408,11 @@ struct kvm {
 #endif
 	long tlbs_dirty;
 	struct list_head devices;
+#ifdef CONFIG_KVMGT
+	int domid;
+	bool vgt_enabled;
+	struct vgt_device *vgt;
+#endif
 };
 
 #define kvm_err(fmt, ...) \

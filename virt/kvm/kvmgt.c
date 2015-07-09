@@ -1,0 +1,386 @@
+/*
+ * KVM implementation of mediated pass-through framework of VGT.
+ *
+ * Copyright(c) 2014-2015 Intel Corporation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of Version 2 of the GNU General Public License as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+#include <linux/kernel.h>
+#include <linux/kvm.h>
+#include <linux/kvm_host.h>
+#include <linux/mm.h>
+#include <linux/list.h>
+#include <linux/spinlock.h>
+#include <linux/types.h>
+#include <asm/page.h>
+#include <asm/vmx.h>
+
+#include "vgt.h"
+#include "iodev.h"
+
+struct kvmgt_trap_info {
+	u64 base_addr;
+	int len;
+	struct kvm_io_device iodev;
+	bool set;
+};
+
+struct kvmgt_hvm_info {
+	struct kvm *kvm;
+	struct vgt_device *vgt;
+	struct kvmgt_trap_info trap_mmio;
+};
+
+static struct kvm *kvmgt_find_by_domid(int domid)
+{
+	struct kvm *kvm = NULL;
+
+	if (unlikely(domid <= 0)) {
+		vgt_err("FIXME! domid=%d\n", domid);
+		return NULL;
+	}
+
+	spin_lock(&kvm_lock);
+	list_for_each_entry(kvm,  &vm_list, vm_list) {
+		if (kvm->domid == domid) {
+			spin_unlock(&kvm_lock);
+			goto found;
+		}
+	}
+	spin_unlock(&kvm_lock);
+	return NULL;
+
+found:
+	return kvm;
+}
+
+/* Tanslate from VM's guest pfn to host pfn */
+static unsigned long kvmgt_gfn_2_pfn(int vm_id, unsigned long g_pfn)
+{
+	pfn_t pfn;
+	struct kvm *kvm;
+
+	if (!vm_id) {
+		pfn = g_pfn;
+		goto out;
+	}
+
+	kvm = kvmgt_find_by_domid(vm_id);
+	if (kvm == NULL) {
+		vgt_err("cannot find kvm for VM%d\n", vm_id);
+		pfn = INVALID_MFN;
+		return pfn;
+	}
+
+	pfn = gfn_to_pfn_atomic(kvm, g_pfn);
+	if (is_error_pfn(pfn)) {
+		vgt_err("gfn_to_pfn failed for VM%d, gfn: 0x%lx\n", vm_id, g_pfn);
+		pfn = INVALID_MFN;
+	}
+
+out:
+	return pfn;
+}
+
+static int kvmgt_pause_domain(int vm_id)
+{
+	/*TODO*/
+	return 0;
+}
+
+static int kvmgt_shutdown_domain(int vm_id)
+{
+	/*TODO*/
+	return 0;
+}
+
+static int kvmgt_guest_mmio_in_range(struct kvmgt_trap_info *info, gpa_t addr)
+{
+	return ((addr >= info->base_addr) &&
+		(addr < info->base_addr + info->len));
+}
+
+static int kvmgt_guest_mmio_read(struct kvm_io_device *this, gpa_t addr,
+			int len, void *val)
+{
+	struct kvmgt_trap_info *info = container_of(this, struct kvmgt_trap_info,
+				iodev);
+	struct kvmgt_hvm_info *hvm = container_of(info, struct kvmgt_hvm_info,
+				trap_mmio);
+	struct vgt_device *vgt = hvm->vgt;
+	u64 result = 0;
+
+	if (!kvmgt_guest_mmio_in_range(info, addr))
+		return -EOPNOTSUPP;
+
+	if (!vgt_ops->emulate_read(vgt, addr, &result, len)) {
+		vgt_err("vgt_emulate_read failed!\n");
+		return -EFAULT;
+	}
+
+	switch (len) {
+	case 8:
+		*(u64 *)val = result;
+		break;
+	case 1:
+	case 2:
+	case 4:
+		memcpy(val, (char *)&result, len);
+		break;
+	default:
+		vgt_err("FIXME! len is %d\n", len);
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
+static int kvmgt_guest_mmio_write(struct kvm_io_device *this, gpa_t addr,
+			int len, const void *val)
+{
+	struct kvmgt_trap_info *info = container_of(this, struct kvmgt_trap_info,
+				iodev);
+	struct kvmgt_hvm_info *hvm = container_of(info, struct kvmgt_hvm_info,
+				trap_mmio);
+	struct vgt_device *vgt = hvm->vgt;
+
+	if (!kvmgt_guest_mmio_in_range(info, addr))
+		return -EOPNOTSUPP;
+
+	if (!vgt_ops->emulate_write(vgt, addr, (void *)val, len)) {
+		vgt_err("vgt_emulate_write failed\n");
+		return 0;
+	}
+
+	return 0;
+}
+
+const struct kvm_io_device_ops trap_mmio_ops = {
+	.read	= kvmgt_guest_mmio_read,
+	.write	= kvmgt_guest_mmio_write,
+};
+
+static int kvmgt_set_trap_area(struct vgt_device *vgt, uint64_t start,
+			uint64_t end, bool map)
+{
+	int r;
+	struct kvm *kvm;
+	bool unlock = false;
+	struct kvmgt_hvm_info *info = vgt->hvm_info;
+
+	if (info->trap_mmio.set)
+		return 0;
+
+	kvm = kvmgt_find_by_domid(vgt->vm_id);
+	if (kvm == NULL) {
+		vgt_err("cannot find kvm for VM%d\n", vgt->vm_id);
+		return 0;
+	}
+
+	info->trap_mmio.base_addr = start;
+	info->trap_mmio.len = end - start;
+
+	kvm_iodevice_init(&info->trap_mmio.iodev, &trap_mmio_ops);
+	if (!mutex_is_locked(&kvm->slots_lock)) {
+		unlock = true;
+		mutex_lock(&kvm->slots_lock);
+	}
+	r = kvm_io_bus_register_dev(kvm, KVM_MMIO_BUS,
+				info->trap_mmio.base_addr,
+				info->trap_mmio.len, &info->trap_mmio.iodev);
+	if (unlock)
+		mutex_unlock(&kvm->slots_lock);
+	if (r < 0) {
+		vgt_err("kvm_io_bus_register_dev failed: %d\n", r);
+		return r;
+	}
+
+	info->trap_mmio.set = true;
+
+	return r;
+}
+
+static bool kvmgt_set_guest_page_writeprotection(struct vgt_device *vgt,
+			guest_page_t *guest_page)
+{
+	/*TODO*/
+	return 0;
+}
+
+static bool kvmgt_clear_guest_page_writeprotection(struct vgt_device *vgt,
+			guest_page_t *guest_page)
+{
+	/*TODO*/
+	return 0;
+}
+
+static int kvmgt_check_host(void)
+{
+	unsigned int eax, ebx, ecx, edx;
+	char s[12];
+	unsigned int *i;
+
+	/* KVM_CPUID_SIGNATURE */
+	eax = 0x40000000;
+	ebx = ecx = edx = 0;
+
+	asm volatile ("cpuid"
+		      : "+a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+		      :
+		      : "cc", "memory");
+	i = (unsigned int *)s;
+	i[0] = ebx;
+	i[1] = ecx;
+	i[2] = edx;
+
+	return strncmp(s, "KVMKVMKVM", strlen("KVMKVMKVM"));
+}
+
+static int kvmgt_virt_to_pfn(void *addr)
+{
+	return PFN_DOWN(__pa(addr));
+}
+
+static void *kvmgt_pfn_to_virt(unsigned long pfn)
+{
+	return pfn_to_kaddr(pfn);
+}
+
+static int kvmgt_hvm_init(struct vgt_device *vgt)
+{
+	struct kvm *kvm;
+	struct kvmgt_hvm_info *info;
+
+	kvm = kvmgt_find_by_domid(vgt->vm_id);
+	if (kvm == NULL) {
+		vgt_err("cannot find kvm for VM%d\n", vgt->vm_id);
+		return -EFAULT;
+	}
+
+	kvm->vgt_enabled = true;
+	kvm->vgt = vgt;
+
+	info = kzalloc(sizeof(struct kvmgt_hvm_info), GFP_KERNEL);
+	if (!info) {
+		vgt_err("cannot alloc hvm info\n");
+		return -ENOMEM;
+	}
+
+	vgt->hvm_info = info;
+	info->vgt = vgt;
+	info->kvm = kvm;
+
+	return 0;
+}
+
+static void *kvmgt_gpa_to_va(struct vgt_device *vgt, unsigned long gpa)
+{
+	unsigned long hva;
+	gfn_t gfn = gpa_to_gfn(gpa);
+	struct kvmgt_hvm_info *info = vgt->hvm_info;
+
+	ASSERT(vgt->vm_id);
+	hva = gfn_to_hva(info->kvm, gfn) + offset_in_page(gpa);
+
+	return (void *)hva;
+}
+
+static int kvmgt_inject_msi(int vm_id, u32 addr_lo, u16 data)
+{
+	struct kvm_msi info = {
+		.address_lo = addr_lo,
+		.address_hi = 0,
+		.data = data,
+		.flags = 0,
+	};
+	struct kvm *kvm = kvmgt_find_by_domid(vm_id);
+
+	memset(info.pad, 0, sizeof(info.pad));
+	if (kvm == NULL) {
+		vgt_err("cannot find kvm for VM%d\n", vm_id);
+		return -EFAULT;
+	}
+	kvm_send_userspace_msi(kvm, &info);
+
+	return 0;
+}
+
+static void kvmgt_hvm_exit(struct vgt_device *vgt)
+{
+	kfree(vgt->hvm_info);
+}
+
+static int kvmgt_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
+			unsigned long mfn, int nr, int map)
+{
+	/* TODO */
+	return 0;
+}
+
+static inline bool kvmgt_read_hva(struct vgt_device *vgt, void *hva,
+			void *data, int len, int atomic)
+{
+	int rc;
+
+	pagefault_disable();
+	rc = atomic ? __copy_from_user_inatomic(data, hva, len) :
+			__copy_from_user(data, hva, len);
+	pagefault_enable();
+
+	if (rc != 0)
+		vgt_err("copy_from_user failed: rc == %d, len == %d\n", rc, len);
+
+	return true;
+}
+
+static bool kvmgt_write_hva(struct vgt_device *vgt, void *hva, void *data,
+			int len, int atomic)
+{
+	int r;
+
+	pagefault_disable();
+	if (atomic)
+		r = __copy_to_user_inatomic((void __user *)hva, data, len);
+	else
+		r = __copy_to_user((void __user *)hva, data, len);
+	pagefault_enable();
+
+	if (r) {
+		vgt_err("__copy_to_user failed: %d\n", r);
+		return false;
+	}
+
+	return true;
+}
+
+struct kernel_dm kvmgt_kdm = {
+	.g2m_pfn = kvmgt_gfn_2_pfn,
+	.pause_domain = kvmgt_pause_domain,
+	.shutdown_domain = kvmgt_shutdown_domain,
+	.map_mfn_to_gpfn = kvmgt_map_mfn_to_gpfn,
+	.set_trap_area = kvmgt_set_trap_area,
+	.set_wp_pages = kvmgt_set_guest_page_writeprotection,
+	.unset_wp_pages = kvmgt_clear_guest_page_writeprotection,
+	.check_host = kvmgt_check_host,
+	.from_virt_to_mfn = kvmgt_virt_to_pfn,
+	.from_mfn_to_virt = kvmgt_pfn_to_virt,
+	.inject_msi = kvmgt_inject_msi,
+	.hvm_init = kvmgt_hvm_init,
+	.hvm_exit = kvmgt_hvm_exit,
+	.gpa_to_va = kvmgt_gpa_to_va,
+	.read_va = kvmgt_read_hva,
+	.write_va = kvmgt_write_hva,
+};
+EXPORT_SYMBOL(kvmgt_kdm);

@@ -36,6 +36,7 @@ MODULE_LICENSE("GPL and additional rights");
 MODULE_VERSION("0.1");
 
 extern struct kernel_dm xengt_kdm;
+extern struct kernel_dm kvmgt_kdm;
 struct kernel_dm *vgt_pkdm = NULL;
 
 bool hvm_render_owner = false;
@@ -1272,10 +1273,14 @@ bool i915_start_vgt(struct pci_dev *pdev)
 	vgt_ops = &__vgt_ops;
 
 	vgt_pkdm = try_then_request_module(symbol_get(xengt_kdm), "xengt");
-	if (vgt_pkdm == NULL) {
+	if (vgt_pkdm == NULL || !hypervisor_check_host()) {
 		printk("vgt: Could not load xengt MPT service\n");
-		return false;
-	} //TODO: request kvmgt here!
+		vgt_pkdm = try_then_request_module(symbol_get(kvmgt_kdm), "kvm");
+		if (vgt_pkdm == NULL) {
+			vgt_warn("vgt: Could not load kvmgt MPT service\n");
+			return false;
+		}
+	}
 
 	if (!vgt_check_host())
 		return false;
