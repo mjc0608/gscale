@@ -557,7 +557,8 @@ int vgt_hvm_opregion_map(struct vgt_device *vgt, int map)
 			vgt->state.opregion_gfn[i],
 			hypervisor_virt_to_mfn(opregion + i*PAGE_SIZE),
 			1,
-			map);
+			map,
+			VGT_MAP_OPREGION);
 		if (rc != 0)
 			vgt_err("hypervisor_map_mfn_to_gpfn fail with %d!\n", rc);
 	}
@@ -567,7 +568,7 @@ int vgt_hvm_opregion_map(struct vgt_device *vgt, int map)
 
 int vgt_hvm_opregion_init(struct vgt_device *vgt, uint32_t gpa)
 {
-	if (vgt_hvm_opregion_resinit(vgt, gpa)) {
+	if (!vgt_in_xen || vgt_hvm_opregion_resinit(vgt, gpa)) {
 
 		/* modify the vbios parameters for PORTs,
 		 * Let guest see full port capability.

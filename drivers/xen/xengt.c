@@ -216,7 +216,7 @@ static int xen_hvm_memory_mapping(int vm_id, uint64_t first_gfn, uint64_t first_
 }
 
 static int xen_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
-	unsigned long mfn, int nr, int map)
+	unsigned long mfn, int nr, int map, enum map_type type)
 {
 	int rc;
 	rc = xen_hvm_memory_mapping(vm_id, gpfn, mfn, nr,

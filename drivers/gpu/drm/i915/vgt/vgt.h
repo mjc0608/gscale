@@ -96,6 +96,7 @@ extern bool spt_out_of_sync;
 extern bool cmd_parser_ip_buf;
 extern bool timer_based_qos;
 extern int tbs_period_ms;
+extern bool vgt_in_xen;
 
 enum vgt_event_type {
 	// GT
@@ -229,6 +230,11 @@ enum transcoder {
 	TRANSCODER_EDP = 0xF,
 };
 
+enum map_type {
+	VGT_MAP_APERTURE,
+	VGT_MAP_OPREGION,
+};
+
 #define vgt_dbg(component, fmt, s...)	\
 	do { if (vgt_debug & component) printk(KERN_DEBUG "vGT debug:(%s:%d) " fmt, __FUNCTION__, __LINE__, ##s); } while (0)
 
@@ -333,7 +339,9 @@ typedef struct {
 
 	/* OpRegion state */
 	void		*opregion_va;
+	uint64_t    opregion_offset;
 	uint64_t	opregion_gfn[VGT_OPREGION_PAGES];
+	struct page *opregion_pages[VGT_OPREGION_PAGES];
 } vgt_state_t;
 
 typedef struct {
@@ -2995,10 +3003,10 @@ static inline int hypervisor_shutdown_domain(struct vgt_device *vgt)
 }
 
 static inline int hypervisor_map_mfn_to_gpfn(struct vgt_device *vgt,
-	unsigned long gpfn, unsigned long mfn, int nr, int map)
+	unsigned long gpfn, unsigned long mfn, int nr, int map, enum map_type type)
 {
 	if (vgt_pkdm && vgt_pkdm->map_mfn_to_gpfn)
-		return vgt_pkdm->map_mfn_to_gpfn(vgt->vm_id, gpfn, mfn, nr, map);
+		return vgt_pkdm->map_mfn_to_gpfn(vgt->vm_id, gpfn, mfn, nr, map, type);
 
 	return 0;
 }

@@ -394,13 +394,6 @@ static void kvmgt_hvm_exit(struct vgt_device *vgt)
 	kfree(vgt->hvm_info);
 }
 
-static int kvmgt_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
-			unsigned long mfn, int nr, int map)
-{
-	/* TODO */
-	return 0;
-}
-
 static inline bool kvmgt_read_hva(struct vgt_device *vgt, void *hva,
 			void *data, int len, int atomic)
 {
@@ -435,6 +428,157 @@ static bool kvmgt_write_hva(struct vgt_device *vgt, void *hva, void *data,
 	}
 
 	return true;
+}
+
+static bool kvmgt_add_apt_slot(struct vgt_device *vgt, pfn_t p1, gfn_t g1,
+			int nr_mfns, u64 hva)
+{
+	struct kvm_userspace_memory_region kvm_userspace_mem;
+	struct kvmgt_hvm_info *info = vgt->hvm_info;
+	int r = 0;
+	struct kvm *kvm = info->kvm;
+	bool unlock = false;
+
+	vgt_info("vgt-%d, p1: 0x%lx, g1: 0x%lx, nr_mfns: %d, hva: 0x%lx\n",
+				vgt->vm_id, (unsigned long)p1, (unsigned long)g1,
+				nr_mfns, (unsigned long)hva);
+	vgt_info("vgt-%d, aperture_offset: 0x%lx\n", vgt->vm_id,
+				(unsigned long)vgt->aperture_offset);
+
+	kvm_userspace_mem.slot = VGT_APERTURE_PRIVATE_MEMSLOT;
+	kvm_userspace_mem.flags = 0;
+	kvm_userspace_mem.guest_phys_addr = g1 << PAGE_SHIFT;
+	kvm_userspace_mem.memory_size = nr_mfns * PAGE_SIZE;
+
+	kvm->aperture_hpa = p1 << PAGE_SHIFT;
+
+	if (!mutex_is_locked(&kvm->slots_lock)) {
+		mutex_lock(&kvm->slots_lock);
+		unlock = true;
+	}
+	r = __kvm_set_memory_region(kvm, &kvm_userspace_mem);
+	if (r) {
+		vgt_err("__kvm_set_memory_region failed: %d\n", r);
+		if (unlock)
+			mutex_unlock(&kvm->slots_lock);
+			return false;
+		}
+	if (unlock)
+		mutex_unlock(&kvm->slots_lock);
+
+	return true;
+}
+
+static bool kvmgt_add_opreg_slot(struct vgt_device *vgt, int nr_pages)
+{
+	struct kvmgt_hvm_info *info = vgt->hvm_info;
+	struct kvm *kvm = info->kvm;
+	struct kvm_userspace_memory_region kvm_userspace_mem;
+	bool unlock = false;
+	int r = 0;
+
+	kvm_userspace_mem.slot = VGT_OPREGION_PRIVATE_MEMSLOT;
+	kvm_userspace_mem.flags = 0;
+	kvm_userspace_mem.guest_phys_addr = kvm->opregion_gpa & PAGE_MASK;
+	kvm_userspace_mem.memory_size = nr_pages * PAGE_SIZE;
+
+	if (!mutex_is_locked(&kvm->slots_lock)) {
+		mutex_lock(&kvm->slots_lock);
+		unlock = true;
+	}
+	r = __kvm_set_memory_region(kvm, &kvm_userspace_mem);
+	if (r) {
+		vgt_err("__kvm_set_memory_region failed: %d\n", r);
+	if (unlock)
+		mutex_unlock(&kvm->slots_lock);
+		return false;
+	}
+	if (unlock)
+		mutex_unlock(&kvm->slots_lock);
+
+	return true;
+}
+
+static bool kvmgt_opregion_init(struct vgt_device *vgt, uint32_t gpa)
+{
+	struct kvm *kvm = kvmgt_find_by_domid(vgt->vm_id);
+	int rc;
+	int i;
+
+	if (kvm == NULL) {
+		vgt_err("cannot find kvm for VM%d\n", vgt->vm_id);
+		return false;
+	}
+	rc = kvmgt_add_opreg_slot(vgt, VGT_OPREGION_PAGES);
+	if (!rc) {
+		vgt_err("VM%d: kvmgt_add_opreg_slot failed\n", vgt->vm_id);
+		return false;
+	}
+	down_read(&(kvm->mm->mmap_sem));
+	rc = get_user_pages(NULL, kvm->mm, kvm->opregion_hva,
+				VGT_OPREGION_PAGES, 1, 1, vgt->state.opregion_pages, NULL);
+	up_read(&kvm->mm->mmap_sem);
+	if (rc != VGT_OPREGION_PAGES) {
+		vgt_err("get_user_pages failed, rc is %d\n", rc);
+		return false;
+	}
+	vgt->state.opregion_va = vmap(vgt->state.opregion_pages,
+				VGT_OPREGION_PAGES, 0, PAGE_KERNEL);
+	if (vgt->state.opregion_va == NULL) {
+		vgt_err("VM%d: failed to allocate memory for opregion\n", vgt->vm_id);
+		goto kvm_fail;
+	}
+	vgt->state.opregion_offset = offset_in_page(kvm->opregion_gpa);
+	vgt->state.opregion_va += vgt->state.opregion_offset;
+	memcpy_fromio(vgt->state.opregion_va, vgt->pdev->opregion_va,
+				VGT_OPREGION_SIZE - vgt->state.opregion_offset);
+
+	return true;
+
+kvm_fail:
+	for (i = 0; i < VGT_OPREGION_PAGES; i++)
+		put_page(vgt->state.opregion_pages[i]);
+
+	return false;
+}
+
+static int kvmgt_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
+			unsigned long mfn, int nr, int map, enum map_type type)
+{
+	struct kvm *kvm = NULL;
+	struct vgt_device *vgt = NULL;
+	int r = 0;
+
+	kvm = kvmgt_find_by_domid(vm_id);
+	if (kvm == NULL) {
+		vgt_err("cannot find kvm for VM%d\n", vm_id);
+		return -EFAULT;
+	}
+	vgt = kvm->vgt;
+	if (type == VGT_MAP_APERTURE) {
+		if (!map)
+			return r;
+		if (kvm->aperture_hpa == 0) {
+			if (kvmgt_add_apt_slot(vgt, gpfn, mfn, nr,
+					(u64)vgt_aperture_vbase(vgt))) {
+				r = 0;
+				vgt->state.bar_mapped[1] = 1;
+			} else
+				r = -EFAULT;
+			return r;
+		}
+	} else if (type == VGT_MAP_OPREGION) {
+		if (!map)
+			return r;
+		if (vgt->state.opregion_va == NULL) {
+			r = kvmgt_opregion_init(vgt, 0);
+			if (!r)
+				return -EFAULT;
+			return 0;
+		}
+	}
+
+	return -EOPNOTSUPP;
 }
 
 struct kernel_dm kvmgt_kdm = {

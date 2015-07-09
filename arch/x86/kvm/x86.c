@@ -7451,32 +7451,124 @@ void kvm_arch_memslots_updated(struct kvm *kvm)
 	kvm_mmu_invalidate_mmio_sptes(kvm);
 }
 
-int kvm_arch_prepare_memory_region(struct kvm *kvm,
+static int private_map_anno(struct kvm *kvm, struct kvm_memory_slot *memslot,
+			struct kvm_userspace_memory_region *mem)
+{
+	unsigned long userspace_addr;
+
+	/*
+	 * MAP_SHARED to prevent internal slot pages from being moved
+	 * by fork()/COW.
+	 */
+	userspace_addr = vm_mmap(NULL, 0, memslot->npages * PAGE_SIZE,
+					 PROT_READ | PROT_WRITE,
+					 MAP_SHARED | MAP_ANONYMOUS, 0);
+
+	if (IS_ERR((void *)userspace_addr))
+		return PTR_ERR((void *)userspace_addr);
+
+	memslot->userspace_addr = userspace_addr;
+	return 0;
+}
+
+static int private_map_opregion(struct kvm *kvm,
+			struct kvm_memory_slot *memslot,
+			struct kvm_userspace_memory_region *mem)
+{
+	unsigned long userspace_addr;
+
+	userspace_addr = vm_mmap(NULL, 0, memslot->npages * PAGE_SIZE,
+	PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0);
+	if (IS_ERR((void *)userspace_addr))
+		return PTR_ERR((void *)userspace_addr);
+	memslot->userspace_addr = userspace_addr;
+	kvm->opregion_hva = userspace_addr;
+	return 0;
+}
+
+static int private_map_aperture(struct kvm *kvm,
+			struct kvm_memory_slot *memslot,
+			struct kvm_userspace_memory_region *mem)
+{
+	mm_segment_t oldfs;
+	struct file *devmem;
+	unsigned long userspace_addr;
+
+	oldfs = get_fs();
+	set_fs(KERNEL_DS);
+	devmem = filp_open("/dev/mem", O_RDWR, 0644);
+	if (IS_ERR(devmem)) {
+		printk(KERN_ERR "filp_open failed\n");
+		set_fs(oldfs);
+		return PTR_ERR((void *)devmem);
+	}
+
+	userspace_addr = vm_mmap(devmem, 0, mem->memory_size,
+						PROT_READ | PROT_WRITE,
+						MAP_SHARED, kvm->aperture_hpa);
+	if (IS_ERR_VALUE(userspace_addr)) {
+		printk(KERN_ERR "vm_mmap failed, got bad addr: 0x%lx\n",
+					userspace_addr);
+		filp_close(devmem, NULL);
+		set_fs(oldfs);
+		return PTR_ERR((void *)userspace_addr);
+	}
+	memslot->userspace_addr = userspace_addr;
+	filp_close(devmem, NULL);
+	set_fs(oldfs);
+	return 0;
+}
+
+static void private_unmap_anno(struct kvm *kvm,
+			struct kvm_userspace_memory_region *mem,
+			const struct kvm_memory_slot *old)
+{
+	int ret;
+
+	ret = vm_munmap(old->userspace_addr, old->npages * PAGE_SIZE);
+	if (ret < 0)
+		printk(KERN_WARNING "failed to munmap memory\n");
+}
+
+static struct {
+	int (*arch_create)(struct kvm *kvm,
 				struct kvm_memory_slot *memslot,
+				struct kvm_userspace_memory_region *mem);
+	void (*arch_delete)(struct kvm *kvm,
 				struct kvm_userspace_memory_region *mem,
-				enum kvm_mr_change change)
+				const struct kvm_memory_slot *old);
+} private_memslots[] = {
+	[0 ... KVM_PRIVATE_MEM_SLOTS - 2] = {
+		.arch_create = private_map_anno,
+		.arch_delete = private_unmap_anno,
+	},
+
+	[VGT_OPREGION_PRIVATE_MEMSLOT - KVM_USER_MEM_SLOTS] = {
+		.arch_create = private_map_opregion,
+		.arch_delete = private_unmap_anno,
+	},
+
+	[VGT_APERTURE_PRIVATE_MEMSLOT - KVM_USER_MEM_SLOTS] = {
+		.arch_create = private_map_aperture,
+		.arch_delete = private_unmap_anno,
+	},
+};
+
+int kvm_arch_prepare_memory_region(struct kvm *kvm,
+			struct kvm_memory_slot *memslot,
+			struct kvm_userspace_memory_region *mem,
+			enum kvm_mr_change change)
 {
 	/*
 	 * Only private memory slots need to be mapped here since
 	 * KVM_SET_MEMORY_REGION ioctl is no longer supported.
 	 */
-	if ((memslot->id >= KVM_USER_MEM_SLOTS) && (change == KVM_MR_CREATE)) {
-		unsigned long userspace_addr;
-
-		/*
-		 * MAP_SHARED to prevent internal slot pages from being moved
-		 * by fork()/COW.
-		 */
-		userspace_addr = vm_mmap(NULL, 0, memslot->npages * PAGE_SIZE,
-					 PROT_READ | PROT_WRITE,
-					 MAP_SHARED | MAP_ANONYMOUS, 0);
-
-		if (IS_ERR((void *)userspace_addr))
-			return PTR_ERR((void *)userspace_addr);
-
-		memslot->userspace_addr = userspace_addr;
-	}
-
+	if ((memslot->id >= KVM_USER_MEM_SLOTS) &&
+				(change == KVM_MR_CREATE) &&
+				(private_memslots[memslot->id -
+				 KVM_USER_MEM_SLOTS].arch_create))
+		return private_memslots[memslot->id - KVM_USER_MEM_SLOTS].arch_create(
+					kvm, memslot, mem);
 	return 0;
 }
 
@@ -7488,16 +7580,11 @@ void kvm_arch_commit_memory_region(struct kvm *kvm,
 
 	int nr_mmu_pages = 0;
 
-	if ((mem->slot >= KVM_USER_MEM_SLOTS) && (change == KVM_MR_DELETE)) {
-		int ret;
-
-		ret = vm_munmap(old->userspace_addr,
-				old->npages * PAGE_SIZE);
-		if (ret < 0)
-			printk(KERN_WARNING
-			       "kvm_vm_ioctl_set_memory_region: "
-			       "failed to munmap memory\n");
-	}
+	if ((mem->slot >= KVM_USER_MEM_SLOTS) &&
+		(change == KVM_MR_DELETE) &&
+		(private_memslots[mem->slot - KVM_USER_MEM_SLOTS].arch_delete))
+			private_memslots[mem->slot - KVM_USER_MEM_SLOTS].arch_delete(kvm,
+						mem, old);
 
 	if (!kvm->arch.n_requested_mmu_pages)
 		nr_mmu_pages = kvm_mmu_calculate_mmu_pages(kvm);

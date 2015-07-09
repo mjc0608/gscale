@@ -980,7 +980,7 @@ int vgt_hvm_map_aperture (struct vgt_device *vgt, int map)
 		vgt->vm_id, first_gfn, first_mfn, nr_mfns);
 
 	r = hypervisor_map_mfn_to_gpfn(vgt, first_gfn, first_mfn,
-		nr_mfns, map);
+		nr_mfns, map, VGT_MAP_APERTURE);
 
 	if (r != 0)
 		printk(KERN_ERR "vgt_hvm_map_aperture fail with %d!\n", r);

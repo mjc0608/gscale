@@ -289,6 +289,11 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 			current_foreground_vm(pdev) = vgt;
 		}
 	}
+	if (!vgt_in_xen) {
+		vgt_info("kvmgt:emulating a writing 0xfc opregion for VM%d\n",
+					vgt->vm_id);
+		vgt_hvm_opregion_init(vgt, 0);
+	}
 	bitmap_zero(vgt->enabled_rings, MAX_ENGINES);
 	bitmap_zero(vgt->started_rings, MAX_ENGINES);
 
@@ -398,9 +403,15 @@ void vgt_release_instance(struct vgt_device *vgt)
 	vgt_clean_vgtt(vgt);
 
 	if (vgt->state.opregion_va) {
-		vgt_hvm_opregion_map(vgt, 0);
-		free_pages((unsigned long)vgt->state.opregion_va,
-				VGT_OPREGION_PORDER);
+		if (!vgt_in_xen) {
+			vunmap(vgt->state.opregion_va - vgt->state.opregion_offset);
+			for (i = 0; i < VGT_OPREGION_PAGES; i++)
+				put_page(vgt->state.opregion_pages[i]);
+		} else {
+			vgt_hvm_opregion_map(vgt, 0);
+			free_pages((unsigned long)vgt->state.opregion_va,
+						VGT_OPREGION_PORDER);
+		}
 	}
 
 	hypervisor_hvm_exit(vgt);
