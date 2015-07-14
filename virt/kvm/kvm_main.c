@@ -2485,6 +2485,7 @@ static long kvm_vm_ioctl(struct file *filp,
 	case KVM_CREATE_VCPU:
 		r = kvm_vm_ioctl_create_vcpu(kvm, arg);
 		break;
+#ifdef CONFIG_KVMGT
 	case KVM_GET_DOMID:
 		r = kvm->domid;
 		break;
@@ -2498,6 +2499,7 @@ static long kvm_vm_ioctl(struct file *filp,
 		r = 0;
 		break;
 	}
+#endif
 	case KVM_SET_USER_MEMORY_REGION: {
 		struct kvm_userspace_memory_region kvm_userspace_mem;
 

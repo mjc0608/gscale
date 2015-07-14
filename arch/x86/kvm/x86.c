@@ -7471,6 +7471,7 @@ static int private_map_anno(struct kvm *kvm, struct kvm_memory_slot *memslot,
 	return 0;
 }
 
+#ifdef CONFIG_KVMGT
 static int private_map_opregion(struct kvm *kvm,
 			struct kvm_memory_slot *memslot,
 			struct kvm_userspace_memory_region *mem)
@@ -7518,6 +7519,7 @@ static int private_map_aperture(struct kvm *kvm,
 	set_fs(oldfs);
 	return 0;
 }
+#endif
 
 static void private_unmap_anno(struct kvm *kvm,
 			struct kvm_userspace_memory_region *mem,
@@ -7542,7 +7544,7 @@ static struct {
 		.arch_create = private_map_anno,
 		.arch_delete = private_unmap_anno,
 	},
-
+#ifdef CONFIG_KVMGT
 	[VGT_OPREGION_PRIVATE_MEMSLOT - KVM_USER_MEM_SLOTS] = {
 		.arch_create = private_map_opregion,
 		.arch_delete = private_unmap_anno,
@@ -7552,6 +7554,7 @@ static struct {
 		.arch_create = private_map_aperture,
 		.arch_delete = private_unmap_anno,
 	},
+#endif
 };
 
 int kvm_arch_prepare_memory_region(struct kvm *kvm,
