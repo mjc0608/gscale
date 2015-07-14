@@ -298,7 +298,7 @@ static bool kvmgt_clear_guest_page_writeprotection(struct vgt_device *vgt,
 	return 0;
 }
 
-static int kvmgt_check_host(void)
+static int kvmgt_check_guest(void)
 {
 	unsigned int eax, ebx, ecx, edx;
 	char s[12];
@@ -317,7 +317,16 @@ static int kvmgt_check_host(void)
 	i[1] = ecx;
 	i[2] = edx;
 
-	return strncmp(s, "KVMKVMKVM", strlen("KVMKVMKVM"));
+	return !strncmp(s, "KVMKVMKVM", strlen("KVMKVMKVM"));
+}
+
+/* NOTE:
+ * It's actually impossible to check if we are running in KVM host,
+ * since the "KVM host" is simply native. So we only dectect guest here.
+ */
+static int kvmgt_check_host(void)
+{
+	return !kvmgt_check_guest();
 }
 
 static int kvmgt_virt_to_pfn(void *addr)
