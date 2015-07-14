@@ -288,11 +288,11 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 			current_config_owner(pdev) = vgt;
 			current_foreground_vm(pdev) = vgt;
 		}
-	}
-	if (!vgt_in_xen) {
-		vgt_info("kvmgt:emulating a writing 0xfc opregion for VM%d\n",
-					vgt->vm_id);
-		vgt_hvm_opregion_init(vgt, 0);
+		if (!vgt_in_xen) {
+			vgt_info("kvmgt:emulating a writing 0xfc opregion for VM%d\n",
+						vgt->vm_id);
+			vgt_hvm_opregion_init(vgt, 0);
+		}
 	}
 	bitmap_zero(vgt->enabled_rings, MAX_ENGINES);
 	bitmap_zero(vgt->started_rings, MAX_ENGINES);
