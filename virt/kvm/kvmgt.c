@@ -591,6 +591,7 @@ static int kvmgt_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
 }
 
 struct kernel_dm kvmgt_kdm = {
+	.name = "kvmgt_kdm",
 	.g2m_pfn = kvmgt_gfn_2_pfn,
 	.pause_domain = kvmgt_pause_domain,
 	.shutdown_domain = kvmgt_shutdown_domain,

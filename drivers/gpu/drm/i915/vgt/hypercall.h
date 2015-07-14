@@ -30,6 +30,7 @@ struct guest_page;
 struct vgt_device;
 enum map_type;
 struct kernel_dm {
+	const char *name;
 	unsigned long (*g2m_pfn)(int vm_id, unsigned long g_pfn);
 	int (*pause_domain)(int vm_id);
 	int (*shutdown_domain)(int vm_id);

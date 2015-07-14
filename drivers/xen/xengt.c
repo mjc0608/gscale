@@ -1140,6 +1140,7 @@ static bool xen_write_va(struct vgt_device *vgt, void *va, void *val,
 }
 
 static struct kernel_dm xengt_kdm = {
+	.name = "xengt_kdm",
 	.g2m_pfn = xen_g2m_pfn,
 	.pause_domain = xen_pause_domain,
 	.shutdown_domain = xen_shutdown_domain,

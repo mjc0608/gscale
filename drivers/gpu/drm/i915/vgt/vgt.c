@@ -1265,7 +1265,7 @@ void i915_stop_vgt(void)
 {
 	vgt_destroy();
 	vgt_klog_cleanup();
-	symbol_put(xengt_kdm);
+	__symbol_put(vgt_pkdm->name);
 	vgt_pkdm = NULL;
 	vgt_ops = NULL;
 }
@@ -1274,22 +1274,28 @@ bool i915_start_vgt(struct pci_dev *pdev)
 {
 	vgt_ops = &__vgt_ops;
 
-	vgt_pkdm = try_then_request_module(symbol_get(xengt_kdm), "xengt");
-	if (vgt_pkdm == NULL || !hypervisor_check_host()) {
-		vgt_in_xen = false;
-		printk("vgt: Could not load xengt MPT service\n");
-		vgt_pkdm = try_then_request_module(symbol_get(kvmgt_kdm), "kvm");
-		if (vgt_pkdm == NULL) {
-			vgt_warn("vgt: Could not load kvmgt MPT service\n");
+	if (xen_initial_domain()) {
+		/* Xen Dom0 */
+		vgt_pkdm = try_then_request_module(symbol_get(xengt_kdm), "xengt");
+		if (!vgt_pkdm)
 			return false;
-		}
+	} else if (xen_domain()) {
+		/* Xen DomU */
+		return false;
+	} else {
+		/* not in Xen. Try KVMGT */
+		vgt_pkdm = try_then_request_module(symbol_get(kvmgt_kdm), "kvm");
+		if (!vgt_pkdm)
+			return false;
+
+		vgt_in_xen = false;
 	}
+
 
 	if (!vgt_check_host())
 		return false;
 
 	vgt_param_check();
-
 	vgt_klog_init();
 
 	return vgt_initialize(pdev) == 0;
