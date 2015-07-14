@@ -563,31 +563,35 @@ static int kvmgt_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
 		vgt_err("cannot find kvm for VM%d\n", vm_id);
 		return -EFAULT;
 	}
+	if (!map)
+		return r;
+
 	vgt = kvm->vgt;
-	if (type == VGT_MAP_APERTURE) {
-		if (!map)
-			return r;
+	switch (type) {
+	case VGT_MAP_APERTURE:
 		if (kvm->aperture_hpa == 0) {
 			if (kvmgt_add_apt_slot(vgt, gpfn, mfn, nr,
-					(u64)vgt_aperture_vbase(vgt))) {
+							(u64)vgt_aperture_vbase(vgt))) {
 				r = 0;
 				vgt->state.bar_mapped[1] = 1;
 			} else
 				r = -EFAULT;
-			return r;
 		}
-	} else if (type == VGT_MAP_OPREGION) {
-		if (!map)
-			return r;
+		break;
+	case VGT_MAP_OPREGION:
 		if (vgt->state.opregion_va == NULL) {
-			r = kvmgt_opregion_init(vgt, 0);
-			if (!r)
-				return -EFAULT;
-			return 0;
+			if (kvmgt_opregion_init(vgt, 0))
+				r = 0;
+			else
+				r = -EFAULT;
 		}
+		break;
+	default:
+		vgt_err("type:%d not supported!\n", type);
+		r = -EOPNOTSUPP;
 	}
 
-	return -EOPNOTSUPP;
+	return r;
 }
 
 struct kernel_dm kvmgt_kdm = {
