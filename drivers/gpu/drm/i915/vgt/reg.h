@@ -1623,6 +1623,7 @@ static inline int port_type_to_port(int port_sel)
 #define        _REGSHIFT_MASTER_INTERRUPT	31
 #define        _REGBIT_MASTER_INTERRUPT	(1 << 31)
 #define        _REGBIT_DP_A_HOTPLUG		(1 << 19)
+#define        _REGBIT_DP_A_HOTPLUG_IVB		(1 << 27)
 #define        _REGBIT_PIPE_A_VBLANK		(1 << 7)
 #define        _REGSHIFT_PCH			21
 #define        _REGBIT_PCH			(1 << 21)

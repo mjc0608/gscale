@@ -367,7 +367,7 @@ void vgt_update_monitor_status(struct vgt_device *vgt)
 	if (dpy_has_monitor_on_port(vgt, PORT_A)) {
 		__vreg(vgt, _REG_DDI_BUF_CTL_A) |= _DDI_BUFCTL_DETECT_MASK;
 		if (IS_PREBDW(vgt->pdev))
-			__vreg(vgt, _REG_DEISR) |= _REGBIT_DP_A_HOTPLUG;
+			__vreg(vgt, _REG_DEISR) |= _REGBIT_DP_A_HOTPLUG_IVB;
 		else
 			__vreg(vgt, _REG_DE_PORT_ISR) |= _REGBIT_PORT_DP_A_HOTPLUG; 
 	}
