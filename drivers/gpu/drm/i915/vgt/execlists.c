@@ -806,7 +806,7 @@ static bool vgt_el_create_shadow_ppgtt(struct vgt_device *vgt,
 				struct execlist_context *el_ctx)
 {
 	struct vgt_mm *mm;
-	u32 pdp[8];
+	u32 pdp[8] = {0};
 	uint32_t *s_rootp;
 
 	struct reg_state_ctx_header *reg_state;
