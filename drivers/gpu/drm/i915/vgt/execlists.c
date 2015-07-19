@@ -1509,7 +1509,7 @@ bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 
 void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 {
-	int i;
+	int i, j = 0;
 	struct ctx_desc_format context_descs[2];
 	uint32_t elsp_reg;
 	int el_slot_idx;
@@ -1534,16 +1534,35 @@ void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 
 	ASSERT (execlist->el_ctxs[0] != NULL);
 
+	memset(context_descs, 0, sizeof(context_descs));
+
 	for (i = 0; i < 2; ++ i) {
 		struct execlist_context *ctx = execlist->el_ctxs[i];
-		if (ctx == NULL) {
-			memset(&context_descs[i], 0,
-				sizeof(struct ctx_desc_format));
+		struct reg_state_ctx_header *guest_state;
+
+		if (ctx == NULL)
 			continue;
+
+		if (vgt_require_shadow_context(vgt)) {
+			guest_state = (struct reg_state_ctx_header *)
+				ctx->ctx_pages[1].guest_page.vaddr;
 		} else {
-			memcpy(&context_descs[i], &ctx->guest_context,
-				sizeof(struct ctx_desc_format));
+			ASSERT(vgt->vm_id == 0);
+			guest_state = vgt_get_reg_state_from_lrca(vgt,
+					ctx->guest_context.lrca);
 		}
+
+		if ((guest_state->ring_tail.val & RB_TAIL_OFF_MASK)
+				== (guest_state->ring_header.val & RB_HEAD_OFF_MASK)) {
+			if ((!guest_state->bb_cur_head_UDW.val
+				&& !guest_state->bb_cur_head_LDW.val) &&
+				(!guest_state->second_bb_addr_UDW.val &&
+				!guest_state->second_bb_addr_LDW.val))
+				continue;
+		}
+
+		memcpy(&context_descs[j++], &ctx->guest_context,
+				sizeof(struct ctx_desc_format));
 
 		ASSERT_VM(ring_id == ctx->ring_id, vgt);
 		vgt_update_shadow_ctx_from_guest(vgt, ctx);
@@ -1565,11 +1584,15 @@ void vgt_submit_execlist(struct vgt_device *vgt, enum vgt_ring_id ring_id)
 #endif
 	}
 
+	if (context_descs[0].elm_low == context_descs[1].elm_low &&
+		context_descs[0].elm_high == context_descs[1].elm_high)
+		memset(&context_descs[1], 0, sizeof(context_descs[1]));
+
 	elsp_reg = el_ring_mmio(ring_id, _EL_OFFSET_SUBMITPORT);
 	/* mark it submitted even if it failed the validation */
 	execlist->status = EL_SUBMITTED;
 
-	if (vgt_validate_elsp_descs(vgt, &context_descs[0], &context_descs[1])) {
+	if (vgt_validate_elsp_descs(vgt, &context_descs[0], &context_descs[1]) && j) {
 #ifdef EL_SLOW_DEBUG
 		struct execlist_status_format status;
 		uint32_t status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS);
