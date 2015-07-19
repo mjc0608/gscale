@@ -570,8 +570,8 @@ vgt_reg_t vgt_gen8_render_regs[] = {
 	0x1c080,
 	0x22080,
 
-	_REG_GEN8_PRIVATE_PAT,
-	_REG_GEN8_PRIVATE_PAT + 4,
+//	_REG_GEN8_PRIVATE_PAT,
+//	_REG_GEN8_PRIVATE_PAT + 4,
 
 	_REG_BCS_MI_MODE,
 	_REG_BCS_BLT_MODE_IVB,
