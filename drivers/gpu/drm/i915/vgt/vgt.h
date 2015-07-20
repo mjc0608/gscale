@@ -1310,7 +1310,6 @@ struct pgt_device {
 
 	bool ctx_switch_pending;
 
-	uint32_t el_cache_write_ptr[MAX_ENGINES];
 	uint32_t el_read_ptr[MAX_ENGINES];
 };
 
@@ -1393,7 +1392,7 @@ extern void do_vgt_fast_display_switch(struct pgt_device *pdev);
 	(pdev->vgt_aux_table[reg_aux_index(pdev, reg)].addr_fix.size)
 
 #define el_read_ptr(pdev, ring_id) ((pdev)->el_read_ptr[ring_id])
-#define el_write_ptr(pdev, ring_id) ((pdev)->el_cache_write_ptr[ring_id])
+#define el_write_ptr(pdev, ring_id) ((VGT_MMIO_READ((pdev), el_ring_mmio((ring_id), _EL_OFFSET_STATUS_PTR))) & 0x7 )
 
 #define ASSERT(x)							\
 	do {								\
@@ -2979,7 +2978,6 @@ static inline void reset_el_structure(struct pgt_device *pdev,
 				enum vgt_ring_id ring_id)
 {
 	el_read_ptr(pdev, ring_id) = DEFAULT_INV_SR_PTR;
-	el_write_ptr(pdev, ring_id) = DEFAULT_INV_SR_PTR;
 	vgt_clear_submitted_el_record(pdev, ring_id);
 	/* reset read ptr in MMIO as well */
 	VGT_MMIO_WRITE(pdev, el_ring_mmio(ring_id, _EL_OFFSET_STATUS_PTR),

@@ -563,29 +563,34 @@ static int mmio_to_ring_id(unsigned int reg)
 	case _REG_RCS_GFX_MODE_IVB:
 	case _REG_RCS_EXECLIST_SUBMITPORT:
 	case _REG_RCS_EXECLIST_STATUS:
+	case _REG_RCS_CTX_STATUS_PTR:
 		ring_id = RING_BUFFER_RCS;
 		break;
 	case _REG_BCS_PP_DIR_BASE:
 	case _REG_BCS_BLT_MODE_IVB:
 	case _REG_BCS_EXECLIST_SUBMITPORT:
 	case _REG_BCS_EXECLIST_STATUS:
+	case _REG_BCS_CTX_STATUS_PTR:
 		ring_id = RING_BUFFER_BCS;
 		break;
 	case _REG_VCS_PP_DIR_BASE:
 	case _REG_VCS_MFX_MODE_IVB:
 	case _REG_VCS_EXECLIST_SUBMITPORT:
 	case _REG_VCS_EXECLIST_STATUS:
+	case _REG_VCS_CTX_STATUS_PTR:
 		ring_id = RING_BUFFER_VCS;
 		break;
 	case _REG_VECS_PP_DIR_BASE:
 	case _REG_VEBOX_MODE:
 	case _REG_VECS_EXECLIST_SUBMITPORT:
 	case _REG_VECS_EXECLIST_STATUS:
+	case _REG_VECS_CTX_STATUS_PTR:
 		ring_id = RING_BUFFER_VECS;
 		break;
 	case _REG_VCS2_MFX_MODE_BDW:
 	case _REG_VCS2_EXECLIST_SUBMITPORT:
 	case _REG_VCS2_EXECLIST_STATUS:
+	case _REG_VCS2_CTX_STATUS_PTR:
 		ring_id = RING_BUFFER_VCS2;
 		break;
 	default:
@@ -2358,6 +2363,53 @@ static bool vgt_write_submitport(struct vgt_device *vgt, unsigned int offset,
 	return rc;
 }
 
+
+static bool vgt_read_ctx_status_ptr(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+	int ring_id = mmio_to_ring_id(offset);
+
+	if (vgt == current_render_owner(vgt->pdev)) {
+		/* update HW CSB status to guest if we are render owner
+		 * this is to make sure that guest always can get latest HW status,
+		 * even if we delay/did not send ctx switch events to guest.
+		 */
+		vgt_emulate_context_switch_event(vgt->pdev, ring_id);
+	}
+
+	return default_mmio_read(vgt, offset, p_data, bytes);
+}
+
+static bool vgt_write_ctx_status_ptr(struct vgt_device *vgt, unsigned int offset,
+	void *p_data, unsigned int bytes)
+{
+#if 0
+	int ring_id = mmio_to_ring_id(offset);
+	uint32_t ctx_ptr_reg;
+	struct ctx_st_ptr_format ctx_ptr_val;
+	struct ctx_st_ptr_format* guest_ctx_st = (struct ctx_st_ptr_format*)p_data;
+
+	ASSERT(bytes == 4);
+
+	ctx_ptr_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_PTR);
+	ctx_ptr_val.dw = __vreg(vgt, ctx_ptr_reg);
+
+	/* Guest modify write_ptr as long as mask bits not zero */
+	if ((guest_ctx_st->mask & _CTXBUF_WRITE_PTR_MASK) == _CTXBUF_WRITE_PTR_MASK) {
+		ctx_ptr_val.status_buf_write_ptr = guest_ctx_st->status_buf_write_ptr;
+	}
+
+	/* Guest modify read_ptr as long as not zero */
+	if ((guest_ctx_st->mask & _CTXBUF_READ_PTR_MASK) == _CTXBUF_READ_PTR_MASK) {
+		ctx_ptr_val.status_buf_read_ptr = guest_ctx_st->status_buf_read_ptr;
+	}
+
+	/* update into vreg */
+	guest_ctx_st->dw = ctx_ptr_val.dw;
+#endif
+	return default_mmio_write(vgt, offset, p_data, bytes);
+}
+
 /*
  * Track policies of all captured registers
  *
@@ -2683,11 +2735,16 @@ reg_attr_t vgt_base_reg_info[] = {
 {_REG_BCS_CTX_STATUS_BUF, 48, F_VIRT, 0, D_BDW_PLUS, NULL,
 					vgt_not_allowed_mmio_write},
 
-{_REG_RCS_CTX_STATUS_PTR, 4, F_VIRT | VGT_REG_MODE_CTL, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VCS_CTX_STATUS_PTR, 4, F_VIRT | VGT_REG_MODE_CTL, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VECS_CTX_STATUS_PTR, 4, F_VIRT | VGT_REG_MODE_CTL, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_VCS2_CTX_STATUS_PTR, 4, F_VIRT | VGT_REG_MODE_CTL, 0, D_BDW_PLUS, NULL, NULL},
-{_REG_BCS_CTX_STATUS_PTR, 4, F_VIRT | VGT_REG_MODE_CTL, 0, D_BDW_PLUS, NULL, NULL},
+{_REG_RCS_CTX_STATUS_PTR, 4, F_VIRT | VGT_REG_MODE_CTL, 0, D_BDW_PLUS, vgt_read_ctx_status_ptr,
+	vgt_write_ctx_status_ptr},
+{_REG_VCS_CTX_STATUS_PTR, 4, F_VIRT | VGT_REG_MODE_CTL, 0, D_BDW_PLUS, vgt_read_ctx_status_ptr,
+	vgt_write_ctx_status_ptr},
+{_REG_VECS_CTX_STATUS_PTR, 4, F_VIRT | VGT_REG_MODE_CTL, 0, D_BDW_PLUS, vgt_read_ctx_status_ptr,
+	vgt_write_ctx_status_ptr},
+{_REG_VCS2_CTX_STATUS_PTR, 4, F_VIRT | VGT_REG_MODE_CTL, 0, D_BDW_PLUS, vgt_read_ctx_status_ptr,
+	vgt_write_ctx_status_ptr},
+{_REG_BCS_CTX_STATUS_PTR, 4, F_VIRT | VGT_REG_MODE_CTL, 0, D_BDW_PLUS, vgt_read_ctx_status_ptr,
+	vgt_write_ctx_status_ptr},
 
 	/* -------display regs---------- */
 

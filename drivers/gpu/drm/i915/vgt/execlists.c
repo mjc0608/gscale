@@ -1469,9 +1469,11 @@ bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 	struct execlist_status_format el_status;
 	uint32_t ctx_ptr_reg;
 	struct ctx_st_ptr_format ctx_st_ptr;
+	struct ctx_st_ptr_format guest_ctx_st_ptr;
 	struct context_status_format ctx_status;
 	uint32_t ctx_status_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_BUF);
 	unsigned long last_csb_reg_offset;
+	struct vgt_device* vgt = current_render_owner(pdev);
 
 	el_ring_base = vgt_ring_id_to_EL_base(ring_id);
 	el_status_reg = el_ring_base + _EL_OFFSET_STATUS;
@@ -1495,6 +1497,12 @@ bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 
 	if (!ctx_status.active_to_idle)
 		return false;
+
+	/* check Guest ctx status pointers, make sure guest already received last irq update */
+	guest_ctx_st_ptr.dw = __vreg(vgt, ctx_ptr_reg);
+	if (guest_ctx_st_ptr.status_buf_write_ptr != vgt->rb[ring_id].csb_write_ptr) {
+		return false;
+	}
 
 	return true;
 }

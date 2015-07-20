@@ -534,7 +534,7 @@ void intel_execlists_handle_ctx_events(struct intel_engine_cs *ring)
 	ring->next_context_status_buffer = write_pointer % 6;
 
 	I915_WRITE(RING_CONTEXT_STATUS_PTR(ring),
-		   ((u32)ring->next_context_status_buffer & 0x07) << 8);
+		   (((u32)ring->next_context_status_buffer & 0x07) << 8) | 0x07000000);
 }
 
 static int execlists_context_queue(struct intel_engine_cs *ring,

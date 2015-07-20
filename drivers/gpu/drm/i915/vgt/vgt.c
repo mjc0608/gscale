@@ -504,7 +504,6 @@ bool initial_phys_states(struct pgt_device *pdev)
 
 	for (i = 0; i < MAX_ENGINES; ++ i) {
 		pdev->el_read_ptr[i] = DEFAULT_INV_SR_PTR;
-		pdev->el_cache_write_ptr[i] = DEFAULT_INV_SR_PTR;
 	}
 
 	return true;

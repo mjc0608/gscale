@@ -1129,6 +1129,15 @@ static void vgt_handle_ctx_switch_virt(struct vgt_irq_host_state *hstate,
 		csb_has_new_updates = true;
 
 	if (hvm_render_owner || csb_has_new_updates) {
+
+		if (current_render_owner(vgt->pdev) != vgt) {
+			/* In any case, we should not go here! */
+			vgt_err("ERROR VM inject irq without ownership"
+			" VM%d owner=%d, csb=%04x, s=%x\n",
+			vgt->vm_id, current_render_owner(vgt->pdev)->vm_id,
+			ctx_ptr_val.dw, s_write_ptr);
+		}
+
 		ctx_ptr_val.status_buf_write_ptr = s_write_ptr;
 		__vreg(vgt, ctx_ptr_reg) = ctx_ptr_val.dw;
 		vgt_handle_default_event_virt(hstate, event, vgt);
@@ -1320,14 +1329,8 @@ static void vgt_handle_port_hotplug_phys(struct vgt_irq_host_state *hstate,
 static void vgt_handle_ctx_switch_phys(struct vgt_irq_host_state *hstate,
 	enum vgt_event_type event)
 {
-	uint32_t ctx_ptr_reg;
-	struct ctx_st_ptr_format ctx_st_ptr;
 	struct pgt_device *pdev = hstate->pdev;
 	enum vgt_ring_id ring_id = event_to_ring_id(event);
-
-	ctx_ptr_reg = el_ring_mmio(ring_id, _EL_OFFSET_STATUS_PTR);
-	ctx_st_ptr.dw = VGT_MMIO_READ(pdev, ctx_ptr_reg);
-	el_write_ptr(pdev, ring_id) = ctx_st_ptr.status_buf_write_ptr;
 
 	vgt_raise_request(pdev, VGT_REQUEST_CTX_EMULATION_RCS + ring_id);
 
