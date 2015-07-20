@@ -1513,8 +1513,6 @@ static void vgt_base_disable_irq(struct vgt_irq_host_state *hstate)
 {
 	struct pgt_device *pdev = hstate->pdev;
 
-	ASSERT(spin_is_locked(&pdev->irq_lock));
-
 	VGT_MMIO_WRITE(pdev, _REG_DEIER,
 			VGT_MMIO_READ(pdev, _REG_DEIER) & ~_REGBIT_MASTER_INTERRUPT);
 }
@@ -1522,8 +1520,6 @@ static void vgt_base_disable_irq(struct vgt_irq_host_state *hstate)
 static void vgt_base_enable_irq(struct vgt_irq_host_state *hstate)
 {
 	struct pgt_device *pdev = hstate->pdev;
-
-	ASSERT(spin_is_locked(&pdev->irq_lock));
 
 	VGT_MMIO_WRITE(pdev, _REG_DEIER,
 			VGT_MMIO_READ(pdev, _REG_DEIER) | _REGBIT_MASTER_INTERRUPT);
@@ -1698,8 +1694,6 @@ static void vgt_gen8_disable_irq(struct vgt_irq_host_state *hstate)
 {
 	struct pgt_device *pdev = hstate->pdev;
 
-	ASSERT(spin_is_locked(&pdev->irq_lock));
-
 	VGT_MMIO_WRITE(pdev, _REG_MASTER_IRQ,
 			(VGT_MMIO_READ(pdev, _REG_MASTER_IRQ)
 			 & ~_REGBIT_MASTER_IRQ_CONTROL));
@@ -1709,8 +1703,6 @@ static void vgt_gen8_disable_irq(struct vgt_irq_host_state *hstate)
 static void vgt_gen8_enable_irq(struct vgt_irq_host_state *hstate)
 {
 	struct pgt_device *pdev = hstate->pdev;
-
-	ASSERT(spin_is_locked(&pdev->irq_lock));
 
 	VGT_MMIO_WRITE(pdev, _REG_MASTER_IRQ,
 			(VGT_MMIO_READ(pdev, _REG_MASTER_IRQ)
@@ -1927,10 +1919,11 @@ irqreturn_t vgt_interrupt(int irq, void *data)
 	pdev->stat.irq_num++;
 	pdev->stat.last_pirq = get_cycles();
 
-	spin_lock(&pdev->irq_lock);
 
 	/* avoid nested handling by disabling master interrupt */
 	hstate->ops->disable_irq(hstate);
+
+	spin_lock(&pdev->irq_lock);
 
 	ret = hstate->ops->irq_handler(hstate);
 	if (ret == IRQ_NONE) {
@@ -1941,10 +1934,10 @@ irqreturn_t vgt_interrupt(int irq, void *data)
 	vgt_raise_request(pdev, VGT_REQUEST_IRQ);
 
 out:
+	spin_unlock(&pdev->irq_lock);
+
 	/* re-enable master interrupt */
 	hstate->ops->enable_irq(hstate);
-
-	spin_unlock(&pdev->irq_lock);
 
 	pdev->stat.pirq_cycles += get_cycles() - pdev->stat.last_pirq;
 
