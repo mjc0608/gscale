@@ -247,6 +247,122 @@ struct pci_dev *pgt_to_pci(struct pgt_device *pdev)
  * vreg/sreg/ hwreg. In the future we can futher tune this part on
  * a necessary base.
  */
+static void vgt_processe_lo_priority_request(struct pgt_device *pdev)
+{
+	int cpu;
+
+	/* Send uevent to userspace */
+	if (test_and_clear_bit(VGT_REQUEST_UEVENT,
+				(void *)&pdev->request)) {
+		vgt_signal_uevent(pdev);
+	}
+
+	if (test_and_clear_bit(VGT_REQUEST_DPY_SWITCH,
+				(void *)&pdev->request)) {
+		vgt_lock_dev(pdev, cpu);
+		if (prepare_for_display_switch(pdev) == 0)
+			do_vgt_fast_display_switch(pdev);
+		vgt_unlock_dev(pdev, cpu);
+	}
+
+	/* Handle render engine scheduling */
+	if (vgt_ctx_switch &&
+	    test_and_clear_bit(VGT_REQUEST_SCHED,
+			(void *)&pdev->request)) {
+		if (!vgt_do_render_sched(pdev)) {
+			if (enable_reset) {
+				vgt_err("Hang in render sched, try to reset device.\n");
+
+				vgt_reset_device(pdev);
+			} else {
+				vgt_err("Hang in render sched, panic the system.\n");
+				ASSERT(0);
+			}
+		}
+	}
+
+	/* Handle render context switch */
+	if (vgt_ctx_switch &&
+	    test_and_clear_bit(VGT_REQUEST_CTX_SWITCH,
+			(void *)&pdev->request)) {
+		if (!vgt_do_render_context_switch(pdev)) {
+			if (enable_reset) {
+				vgt_err("Hang in context switch, try to reset device.\n");
+
+				vgt_reset_device(pdev);
+			} else {
+				vgt_err("Hang in context switch, panic the system.\n");
+				ASSERT(0);
+			}
+		}
+	}
+
+	if (test_and_clear_bit(VGT_REQUEST_EMUL_DPY_EVENTS,
+			(void *)&pdev->request)) {
+		vgt_lock_dev(pdev, cpu);
+		vgt_emulate_dpy_events(pdev);
+		vgt_unlock_dev(pdev, cpu);
+	}
+
+	return;
+}
+
+static void vgt_processe_hi_priority_request(struct pgt_device *pdev)
+{
+	int cpu;
+	enum vgt_ring_id ring_id;
+	bool ctx_irq_received = false;
+
+	if (test_and_clear_bit(VGT_REQUEST_DEVICE_RESET,
+				(void *)&pdev->request)) {
+		vgt_reset_device(pdev);
+	}
+
+	for (ring_id = 0; ring_id < MAX_ENGINES; ++ ring_id) {
+		if (test_and_clear_bit(
+			VGT_REQUEST_CTX_EMULATION_RCS + ring_id,
+			(void *)&pdev->request)) {
+			vgt_lock_dev(pdev, cpu);
+			vgt_emulate_context_switch_event(pdev, ring_id);
+			vgt_unlock_dev(pdev, cpu);
+			ctx_irq_received = true;
+		}
+	}
+
+	if (ctx_irq_received && ctx_switch_requested(pdev)) {
+		bool all_rings_empty = true;
+		for (ring_id = 0; ring_id < MAX_ENGINES; ++ ring_id) {
+			if(!vgt_idle_execlist(pdev, ring_id)) {
+				all_rings_empty = false;
+				break;
+			}
+		}
+		if (all_rings_empty)
+			vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
+	}
+
+	/* forward physical GPU events to VMs */
+	if (test_and_clear_bit(VGT_REQUEST_IRQ,
+				(void *)&pdev->request)) {
+		unsigned long flags;
+		vgt_lock_dev(pdev, cpu);
+		vgt_get_irq_lock(pdev, flags);
+		vgt_forward_events(pdev);
+		vgt_put_irq_lock(pdev, flags);
+		vgt_unlock_dev(pdev, cpu);
+	}
+
+	return;
+}
+
+#define REQUEST_LOOP(pdev)	((pdev)->request & 	\
+	((1<<VGT_REQUEST_IRQ) | 			\
+	(1<<VGT_REQUEST_CTX_EMULATION_RCS) |		\
+	(1<<VGT_REQUEST_CTX_EMULATION_VCS) |		\
+	(1<<VGT_REQUEST_CTX_EMULATION_BCS) |		\
+	(1<<VGT_REQUEST_CTX_EMULATION_VECS) |		\
+	(1<<VGT_REQUEST_CTX_EMULATION_VCS2)))
+
 static int vgt_thread(void *priv)
 {
 	struct pgt_device *pdev = (struct pgt_device *)priv;
@@ -258,8 +374,6 @@ static int vgt_thread(void *priv)
 
 	set_freezable();
 	while (!kthread_should_stop()) {
-		enum vgt_ring_id ring_id;
-		bool ctx_irq_received = false;
 		ret = wait_event_interruptible(pdev->event_wq, kthread_should_stop() ||
 					pdev->request || freezing(current));
 
@@ -286,97 +400,13 @@ static int vgt_thread(void *priv)
 			}
 		}
 
-		if (test_and_clear_bit(VGT_REQUEST_DEVICE_RESET,
-					(void *)&pdev->request)) {
-			vgt_reset_device(pdev);
+		do {
+			/* give another chance for high priority request */
+			vgt_processe_hi_priority_request(pdev);
 		}
+		while(REQUEST_LOOP(pdev));
 
-		for (ring_id = 0; ring_id < MAX_ENGINES; ++ ring_id) {
-			if (test_and_clear_bit(
-				VGT_REQUEST_CTX_EMULATION_RCS + ring_id,
-				(void *)&pdev->request)) {
-				vgt_lock_dev(pdev, cpu);
-				vgt_emulate_context_switch_event(pdev, ring_id);
-				vgt_unlock_dev(pdev, cpu);
-				ctx_irq_received = true;
-			}
-		}
-
-		if (ctx_irq_received && ctx_switch_requested(pdev)) {
-			bool all_rings_empty = true;
-			for (ring_id = 0; ring_id < MAX_ENGINES; ++ ring_id) {
-				if(!vgt_idle_execlist(pdev, ring_id)) {
-					all_rings_empty = false;
-					break;
-				}
-			}
-			if (all_rings_empty)
-				vgt_raise_request(pdev, VGT_REQUEST_CTX_SWITCH);
-		}
-
-		/* forward physical GPU events to VMs */
-		if (test_and_clear_bit(VGT_REQUEST_IRQ,
-					(void *)&pdev->request)) {
-			unsigned long flags;
-			vgt_lock_dev(pdev, cpu);
-			vgt_get_irq_lock(pdev, flags);
-			vgt_forward_events(pdev);
-			vgt_put_irq_lock(pdev, flags);
-			vgt_unlock_dev(pdev, cpu);
-		}
-
-		/* Send uevent to userspace */
-		if (test_and_clear_bit(VGT_REQUEST_UEVENT,
-					(void *)&pdev->request)) {
-			vgt_signal_uevent(pdev);
-		}
-
-		if (test_and_clear_bit(VGT_REQUEST_DPY_SWITCH,
-					(void *)&pdev->request)) {
-			vgt_lock_dev(pdev, cpu);
-			if (prepare_for_display_switch(pdev) == 0)
-				do_vgt_fast_display_switch(pdev);
-			vgt_unlock_dev(pdev, cpu);
-		}
-
-		/* Handle render engine scheduling */
-		if (vgt_ctx_switch &&
-		    test_and_clear_bit(VGT_REQUEST_SCHED,
-				(void *)&pdev->request)) {
-			if (!vgt_do_render_sched(pdev)) {
-				if (enable_reset) {
-					vgt_err("Hang in render sched, try to reset device.\n");
-
-					vgt_reset_device(pdev);
-				} else {
-					vgt_err("Hang in render sched, panic the system.\n");
-					ASSERT(0);
-				}
-			}
-		}
-
-		/* Handle render context switch */
-		if (vgt_ctx_switch &&
-		    test_and_clear_bit(VGT_REQUEST_CTX_SWITCH,
-				(void *)&pdev->request)) {
-			if (!vgt_do_render_context_switch(pdev)) {
-				if (enable_reset) {
-					vgt_err("Hang in context switch, try to reset device.\n");
-
-					vgt_reset_device(pdev);
-				} else {
-					vgt_err("Hang in context switch, panic the system.\n");
-					ASSERT(0);
-				}
-			}
-		}
-
-		if (test_and_clear_bit(VGT_REQUEST_EMUL_DPY_EVENTS,
-				(void *)&pdev->request)) {
-			vgt_lock_dev(pdev, cpu);
-			vgt_emulate_dpy_events(pdev);
-			vgt_unlock_dev(pdev, cpu);
-		}
+		vgt_processe_lo_priority_request(pdev);
 	}
 	return 0;
 }

@@ -1477,7 +1477,7 @@ bool vgt_idle_execlist(struct pgt_device *pdev, enum vgt_ring_id ring_id)
 	el_status_reg = el_ring_base + _EL_OFFSET_STATUS;
 	el_status.ldw = VGT_MMIO_READ(pdev, el_status_reg);
 	if (el_status.execlist_0_valid || el_status.execlist_1_valid) {
-		vgt_info("EXECLIST still have valid items in context switch!\n");
+		//vgt_info("EXECLIST still have valid items in context switch!\n");
 		return false;
 	}
 

@@ -1863,7 +1863,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	ASSERT(next != prev);
 
 	t0 = vgt_get_cycles();
-	if (!idle_rendering_engines(pdev, &i)) {
+	if (!pdev->enable_execlist && !idle_rendering_engines(pdev, &i)) {
 		int j;
 		vgt_err("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
 			vgt_ctx_switch(pdev),
@@ -1876,6 +1876,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	}
 
 	if (pdev->enable_execlist) {
+		static int check_cnt = 0;
 		int ring_id;
 		for (ring_id = 0; ring_id < pdev->max_engines; ++ ring_id) {
 			if (!pdev->ring_buffer[ring_id].need_switch)
@@ -1883,11 +1884,22 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 			if (!vgt_idle_execlist(pdev, ring_id)) {
 				vgt_dbg(VGT_DBG_EXECLIST, "rendering ring is not idle. "
 					"Ignore the context switch!\n");
+				check_cnt++;
 				vgt_force_wake_put();
+
+				if (check_cnt > 500 && !idle_rendering_engines(pdev, &i)) {
+					vgt_err("vGT: (%lldth switch<%d>)...ring(%d) is busy\n",
+						vgt_ctx_switch(pdev),
+					current_render_owner(pdev)->vgt_id, i);
+					goto err;
+				}
+
 				goto out;
 			}
 			vgt_clear_submitted_el_record(pdev, ring_id);
 		}
+
+		check_cnt = 0;
 	}
 
 	vgt_dbg(VGT_DBG_RENDER, "vGT: next vgt (%d)\n", next->vgt_id);
