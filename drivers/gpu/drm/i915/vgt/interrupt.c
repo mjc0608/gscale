@@ -1912,10 +1912,10 @@ irqreturn_t vgt_interrupt(int irq, void *data)
 	struct pgt_device *pdev = i915_drm_to_pgt(data);
 	struct vgt_irq_host_state *hstate = pdev->irq_hstate;
 	irqreturn_t ret;
-	int cpu;
 
-	cpu = vgt_enter();
-
+	/******************  PLEASE NOTE!!! **********************
+	 * we should not try to hold any pdev->lock in irq env   *
+	 *********************************************************/
 	pdev->stat.irq_num++;
 	pdev->stat.last_pirq = get_cycles();
 
@@ -1941,7 +1941,6 @@ out:
 
 	pdev->stat.pirq_cycles += get_cycles() - pdev->stat.last_pirq;
 
-	vgt_exit(cpu);
 	return IRQ_HANDLED;
 }
 
