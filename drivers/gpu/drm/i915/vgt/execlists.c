@@ -1790,6 +1790,8 @@ void vgt_reset_execlist(struct vgt_device *vgt, unsigned long ring_bitmap)
 {
 	vgt_state_ring_t *rb;
 	int bit, i;
+	uint32_t ctx_ptr_reg;
+	struct ctx_st_ptr_format ctx_ptr_val;
 
 	for_each_set_bit(bit, &ring_bitmap, sizeof(ring_bitmap)) {
 		if (bit >= vgt->pdev->max_engines)
@@ -1809,6 +1811,12 @@ void vgt_reset_execlist(struct vgt_device *vgt, unsigned long ring_bitmap)
 			memset(&rb->execlist_slots[i], 0,
 					sizeof(struct vgt_exec_list));
 
+		ctx_ptr_reg = el_ring_mmio(bit, _EL_OFFSET_STATUS_PTR);
+		ctx_ptr_val.dw = __vreg(vgt, ctx_ptr_reg);
+		ctx_ptr_val.status_buf_write_ptr = DEFAULT_INV_SR_PTR;
+
 		rb->csb_write_ptr = DEFAULT_INV_SR_PTR;
+
+		__vreg(vgt, ctx_ptr_reg) = ctx_ptr_val.dw;
 	}
 }
