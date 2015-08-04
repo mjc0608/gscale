@@ -658,6 +658,12 @@ static void vgt_update_guest_ctx_from_shadow(struct vgt_device *vgt,
 	int ctx_pages = EXECLIST_CTX_PAGES(ring_id);
 
 	if (shadow_execlist_context == PATCH_WITHOUT_SHADOW) {
+#if 0
+	/* For some unkonw reason, switch back to guest PDP will cause
+	 * strange ring hangup after > ~20hours 3D testing.
+	 * It is not necessary to swith back to guest PDP, since Guest
+	 * will not touch it anymore after submission*/
+
 		struct reg_state_ctx_header *reg_state;
 		uint32_t *g_rootp;
 		g_rootp = (uint32_t *)el_ctx->ppgtt_mm->virtual_page_table;
@@ -667,6 +673,7 @@ static void vgt_update_guest_ctx_from_shadow(struct vgt_device *vgt,
 		ROOT_POINTER_2_CTX_STATE(reg_state, g_rootp, 1);
 		ROOT_POINTER_2_CTX_STATE(reg_state, g_rootp, 2);
 		ROOT_POINTER_2_CTX_STATE(reg_state, g_rootp, 3);
+#endif
 	} else {
 		int i;
 		for (i = 0; i < ctx_pages; ++ i) {
