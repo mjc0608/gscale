@@ -1787,6 +1787,7 @@ struct drm_i915_private {
 	/* vgt host-side mediation */
 	void *pgt;
 	struct irq_work irq_work;
+	spinlock_t irq_work_lock;
 	struct {
 		irqreturn_t(*irq_handler) (int irq, void *arg);
 		void (*irq_preinstall) (struct drm_device *dev);

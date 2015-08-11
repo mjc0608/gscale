@@ -55,13 +55,15 @@ void i915_isr_wrapper(struct irq_work *work)
 	if (!vgt_can_process_irq())
 		return;
 
+	spin_lock(&dev_priv->irq_work_lock);
 	dev_priv->irq_ops.irq_handler(dev_priv->dev->pdev->irq, dev_priv->dev);
+	spin_unlock(&dev_priv->irq_work_lock);
 }
 
 void vgt_schedule_host_isr(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
-	irq_work_queue_on(&dev_priv->irq_work, 0);
+	irq_work_queue(&dev_priv->irq_work);
 }
 #endif
 
@@ -4381,6 +4383,7 @@ static void vgt_irq_preinstall(struct drm_device *dev)
 	}
 
 	init_irq_work(&dev_priv->irq_work, i915_isr_wrapper);
+	spin_lock_init(&dev_priv->irq_work_lock);
 
 	dev_priv->irq_ops.irq_preinstall(dev);
 }
