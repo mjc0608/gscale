@@ -241,7 +241,8 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, int bytes)
 {
 	char *cfg_space = &vgt->state.cfg_space[0];
-	uint32_t *cfg_reg, new, size;
+	uint32_t *cfg_reg, new;
+	uint64_t size;
 	u8 old_cmd, cmd_changed; /* we don't care the high 8 bits */
 	bool rc = true;
 	uint32_t low_mem_max_gpfn;
@@ -284,7 +285,6 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 		case VGT_REG_CFG_SPACE_BAR1:	/* GMADR */
 		case VGT_REG_CFG_SPACE_BAR2:	/* IO */
 			ASSERT((bytes == 4) && (off & 3) == 0);
-
 			new = *(uint32_t *)p_data;
 			printk("Programming bar 0x%x with 0x%x\n", off, new);
 			size = vgt->state.bar_size[(off - VGT_REG_CFG_SPACE_BAR0)/8];
@@ -345,12 +345,32 @@ bool vgt_emulate_cfg_write(struct vgt_device *vgt, unsigned int off,
 		case VGT_REG_CFG_SPACE_BAR0+4:
 		case VGT_REG_CFG_SPACE_BAR2+4:
 			ASSERT((bytes == 4) && (off & 3) == 0);
-			if (*(uint32_t *)p_data == 0xFFFFFFFF)
-				/* BAR size is not beyond 4G, so return all-0 in uppper 32 bit */
-				*cfg_reg = 0;
-			else
-				*cfg_reg = *(uint32_t*)p_data;
+			new = *(uint32_t *)p_data;
+			printk("Programming bar 0x%x with 0x%x\n", off, new);
+			size = vgt->state.bar_size[(off - (VGT_REG_CFG_SPACE_BAR0 + 4))/8];
+			/* for 32bit mode bar it returns all-0 in upper 32 bit, for 64bit
+			 * mode bar it will calculate the size with lower 32bit and return
+			 * the corresponding value
+			 */
+			if (new == 0xFFFFFFFF) {
+				if (VGT_GET_BITS(*(cfg_space + off - 4), 2, 1) == 2)
+					new &= ~(size-1) >> 32;
+				else
+					new = 0;
+				*cfg_reg = new;
+			} else {
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1 + 4)
+					vgt_hvm_map_aperture(vgt, 0);
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR0 + 4)
+					vgt_hvm_set_trap_area(vgt, 0);
+				*cfg_reg = new;
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR1 + 4)
+					vgt_hvm_map_aperture(vgt, 1);
+				if ((off & ~3) == VGT_REG_CFG_SPACE_BAR0 + 4)
+					vgt_hvm_set_trap_area(vgt, 1);
+			}
 			break;
+
 		case 0x90:
 		case 0x94:
 		case 0x98:

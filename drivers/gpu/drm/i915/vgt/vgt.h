@@ -329,7 +329,7 @@ typedef struct {
 	uint64_t	aperture_base;	/* bar1: guest aperture base */
 //	uint64_t	gt_gmadr_base;	/* bar1/GMADR */
 
-	uint32_t	bar_size[VGT_BAR_NUM];	/* 0: GTTMMIO, 1: GMADR, 2: PIO bar size */
+	uint64_t	bar_size[VGT_BAR_NUM];	/* 0: GTTMMIO, 1: GMADR, 2: PIO bar size */
 
 	/* OpRegion state */
 	void		*opregion_va;
@@ -1225,7 +1225,7 @@ struct pgt_device {
 
 	vgt_reg_t *initial_mmio_state;	/* copy from physical at start */
 	uint8_t initial_cfg_space[VGT_CFG_SPACE_SZ];	/* copy from physical at start */
-	uint32_t bar_size[VGT_BAR_NUM];
+	uint64_t bar_size[VGT_BAR_NUM];
 	uint64_t total_gm_sz;	/* size of available GM space, e.g 2M GTT is 2GB */
 
 	uint64_t gttmmio_base;	/* base of GTT and MMIO */
@@ -2928,7 +2928,7 @@ void vgt_clear_gtt(struct vgt_device *vgt);
 void vgt_save_gtt_and_fence(struct pgt_device *pdev);
 void vgt_restore_gtt_and_fence(struct pgt_device *pdev);
 uint64_t vgt_get_gtt_size(struct pgt_device *pdev);
-uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off);
+uint64_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off);
 struct vgt_device *vmid_2_vgt_device(int vmid);
 extern void vgt_print_edid(struct vgt_edid_data_t *edid);
 extern void vgt_print_dpcd(struct vgt_dpcd_data *dpcd);

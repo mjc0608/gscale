@@ -570,33 +570,27 @@ void show_virtual_interrupt_regs(struct vgt_device *vgt,
 #undef P_GROUP_WHICH
 }
 
-uint32_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
+uint64_t pci_bar_size(struct pgt_device *pdev, unsigned int bar_off)
 {
-	unsigned long bar_s, bar_size=0;
+	uint32_t bar_s;
+	uint64_t bar_size, bar_upper_size = 0;
 	struct pci_dev *dev = pdev->pdev;
 
 	pci_read_config_dword(dev, bar_off, (uint32_t *)&bar_s);
 	pci_write_config_dword(dev, bar_off, 0xFFFFFFFF);
-
 	pci_read_config_dword(dev, bar_off, (uint32_t *)&bar_size);
-	vgt_dbg(VGT_DBG_GENERIC, "read back bar_size %lx\n", bar_size);
+	vgt_dbg(VGT_DBG_GENERIC, "read back lower bar size %x\n", (uint32_t)bar_size);
 	bar_size &= ~0xf; /* bit 4-31 */
-	vgt_dbg(VGT_DBG_GENERIC, "read back bar_size1 %lx\n", bar_size);
-	bar_size = 1 << find_first_bit(&bar_size, BITS_PER_LONG);
-	vgt_dbg(VGT_DBG_GENERIC, "read back bar_size2 %lx\n", bar_size);
-
 	pci_write_config_dword(dev, bar_off, bar_s);
-
-#if 0
-	bar_s = pci_conf_read32( 0, vgt_bus, vgt_dev, vgt_fun, bar_off);
-	pci_conf_write32(0, vgt_bus, vgt_dev, vgt_fun, bar_off, 0xFFFFFFFF);
-
-	bar_size = pci_conf_read32(0, vgt_bus, vgt_dev, vgt_fun, bar_off);
-	bar_size &= ~0xf; /* bit 4-31 */
-	bar_size = 1 << find_first_bit(&bar_size, sizeof(bar_size));
-
-	pci_conf_write32(0, vgt_bus, vgt_dev, vgt_fun, bar_offset, bar_s);
-#endif
+	if (VGT_GET_BITS(bar_s, 2, 1) == 2) {
+		pci_read_config_dword(dev, bar_off + 4, (uint32_t *)&bar_s);
+		pci_write_config_dword(dev, bar_off + 4, 0xFFFFFFFF);
+		pci_read_config_dword(dev, bar_off + 4, (uint32_t *)&bar_upper_size);
+		vgt_dbg(VGT_DBG_GENERIC, "read back higher bar size %x\n", (uint32_t)bar_upper_size);
+		bar_size |= (bar_upper_size << 32);
+		pci_write_config_dword(dev, bar_off + 4, bar_s);
+	}
+	bar_size &= ~(bar_size - 1);
 	return bar_size;
 }
 

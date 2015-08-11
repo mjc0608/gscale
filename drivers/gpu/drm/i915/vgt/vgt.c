@@ -446,12 +446,12 @@ bool initial_phys_states(struct pgt_device *pdev)
 	}
 	for (i=0; i < 3; i++) {
 		pdev->bar_size[i] = pci_bar_size(pdev, VGT_REG_CFG_SPACE_BAR0 + 8*i);
-		printk("bar-%d size: %x\n", i, pdev->bar_size[i]);
+		printk("bar-%d size: %llx\n", i, pdev->bar_size[i]);
 	}
 
 	bar0 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR0];
 	bar1 = *(uint64_t *)&pdev->initial_cfg_space[VGT_REG_CFG_SPACE_BAR1];
-	printk("bar0: 0x%llx, Bar1: 0x%llx\n", bar0, bar1);
+	printk("bar0: 0x%llx, bar1: 0x%llx\n", bar0, bar1);
 
 	ASSERT ((bar0 & 7) == 4);
 	/* memory, 64 bits bar0 */
