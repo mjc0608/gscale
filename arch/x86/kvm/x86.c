@@ -4569,7 +4569,7 @@ static int kernel_pio(struct kvm_vcpu *vcpu, void *pd)
 	int r;
 
 #ifdef CONFIG_KVMGT
-	if (vcpu->kvm->vgt_enabled && kvmgt_pio_is_igd_cfg(vcpu)) {
+	if (kvmgt_pio_is_igd_cfg(vcpu)) {
 		if (!kvmgt_pio_igd_cfg(vcpu))
 			return -EOPNOTSUPP;
 		return 0;

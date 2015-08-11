@@ -27,8 +27,10 @@
 #include <asm/page.h>
 #include <asm/vmx.h>
 
+#include "kvmgt.h"
 #include "vgt.h"
 #include "iodev.h"
+
 
 struct kvmgt_trap_info {
 	u64 base_addr;
@@ -92,6 +94,7 @@ void kvmgt_kvm_exit(struct kvm *kvm)
 	vp.vm_id = -kvm->domid;
 	vgt_ops->del_state_sysfs(vp);
 	kvm->vgt_enabled = false;
+	kvm->vgt = NULL;
 }
 
 void kvmgt_record_cf8(struct kvm_vcpu *vcpu, unsigned port, unsigned long rax)
@@ -104,6 +107,9 @@ bool kvmgt_pio_is_igd_cfg(struct kvm_vcpu *vcpu)
 {
 	unsigned int b, d, f;
 	u32 addr = vcpu->arch.last_cfg_addr;
+
+	if (!vcpu->kvm->vgt_enabled)
+		return false;
 
 	switch (vcpu->arch.pio.port) {
 	case 0xcfc ... 0xcff:
@@ -249,7 +255,6 @@ static int kvmgt_set_trap_area(struct vgt_device *vgt, uint64_t start,
 {
 	int r;
 	struct kvm *kvm;
-	bool unlock = false;
 	struct kvmgt_hvm_info *info = vgt->hvm_info;
 
 	if (info->trap_mmio.set)
@@ -265,15 +270,11 @@ static int kvmgt_set_trap_area(struct vgt_device *vgt, uint64_t start,
 	info->trap_mmio.len = end - start;
 
 	kvm_iodevice_init(&info->trap_mmio.iodev, &trap_mmio_ops);
-	if (!mutex_is_locked(&kvm->slots_lock)) {
-		unlock = true;
-		mutex_lock(&kvm->slots_lock);
-	}
+	mutex_lock(&kvm->slots_lock);
 	r = kvm_io_bus_register_dev(kvm, KVM_MMIO_BUS,
 				info->trap_mmio.base_addr,
 				info->trap_mmio.len, &info->trap_mmio.iodev);
-	if (unlock)
-		mutex_unlock(&kvm->slots_lock);
+	mutex_unlock(&kvm->slots_lock);
 	if (r < 0) {
 		vgt_err("kvm_io_bus_register_dev failed: %d\n", r);
 		return r;
@@ -334,9 +335,9 @@ static int kvmgt_virt_to_pfn(void *addr)
 	return PFN_DOWN(__pa(addr));
 }
 
-static void *kvmgt_pfn_to_virt(unsigned long pfn)
+static void *kvmgt_pfn_to_virt(int pfn)
 {
-	return pfn_to_kaddr(pfn);
+	return pfn_to_kaddr((unsigned long)pfn);
 }
 
 static int kvmgt_hvm_init(struct vgt_device *vgt)
@@ -446,13 +447,10 @@ static bool kvmgt_add_apt_slot(struct vgt_device *vgt, pfn_t p1, gfn_t g1,
 	struct kvmgt_hvm_info *info = vgt->hvm_info;
 	int r = 0;
 	struct kvm *kvm = info->kvm;
-	bool unlock = false;
 
 	vgt_info("vgt-%d, p1: 0x%lx, g1: 0x%lx, nr_mfns: %d, hva: 0x%lx\n",
 				vgt->vm_id, (unsigned long)p1, (unsigned long)g1,
 				nr_mfns, (unsigned long)hva);
-	vgt_info("vgt-%d, aperture_offset: 0x%lx\n", vgt->vm_id,
-				(unsigned long)vgt->aperture_offset);
 
 	kvm_userspace_mem.slot = VGT_APERTURE_PRIVATE_MEMSLOT;
 	kvm_userspace_mem.flags = 0;
@@ -461,94 +459,56 @@ static bool kvmgt_add_apt_slot(struct vgt_device *vgt, pfn_t p1, gfn_t g1,
 
 	kvm->aperture_hpa = p1 << PAGE_SHIFT;
 
-	if (!mutex_is_locked(&kvm->slots_lock)) {
-		mutex_lock(&kvm->slots_lock);
-		unlock = true;
-	}
+	mutex_lock(&kvm->slots_lock);
 	r = __kvm_set_memory_region(kvm, &kvm_userspace_mem);
 	if (r) {
 		vgt_err("__kvm_set_memory_region failed: %d\n", r);
-		if (unlock)
-			mutex_unlock(&kvm->slots_lock);
-			return false;
-		}
-	if (unlock)
-		mutex_unlock(&kvm->slots_lock);
-
-	return true;
-}
-
-static bool kvmgt_add_opreg_slot(struct vgt_device *vgt, int nr_pages)
-{
-	struct kvmgt_hvm_info *info = vgt->hvm_info;
-	struct kvm *kvm = info->kvm;
-	struct kvm_userspace_memory_region kvm_userspace_mem;
-	bool unlock = false;
-	int r = 0;
-
-	kvm_userspace_mem.slot = VGT_OPREGION_PRIVATE_MEMSLOT;
-	kvm_userspace_mem.flags = 0;
-	kvm_userspace_mem.guest_phys_addr = kvm->opregion_gpa & PAGE_MASK;
-	kvm_userspace_mem.memory_size = nr_pages * PAGE_SIZE;
-
-	if (!mutex_is_locked(&kvm->slots_lock)) {
-		mutex_lock(&kvm->slots_lock);
-		unlock = true;
-	}
-	r = __kvm_set_memory_region(kvm, &kvm_userspace_mem);
-	if (r) {
-		vgt_err("__kvm_set_memory_region failed: %d\n", r);
-	if (unlock)
 		mutex_unlock(&kvm->slots_lock);
 		return false;
 	}
-	if (unlock)
-		mutex_unlock(&kvm->slots_lock);
+	mutex_unlock(&kvm->slots_lock);
 
 	return true;
 }
 
-static bool kvmgt_opregion_init(struct vgt_device *vgt, uint32_t gpa)
+static bool kvmgt_opregion_init(struct vgt_device *vgt)
 {
-	struct kvm *kvm = kvmgt_find_by_domid(vgt->vm_id);
 	int rc;
 	int i;
+	struct kvmgt_hvm_info *info = vgt->hvm_info;
+	struct kvm *kvm = info->kvm;
+	unsigned long addr;
 
-	if (kvm == NULL) {
-		vgt_err("cannot find kvm for VM%d\n", vgt->vm_id);
+	if (unlikely(vgt->state.opregion_va))
+		return true;
+
+	addr = gfn_to_hva(kvm, gpa_to_gfn(kvm->opregion_gpa));
+	if (kvm_is_error_hva(addr)) {
+		vgt_err("failed to find hva for gpa:0x%x\n", kvm->opregion_gpa);
 		return false;
 	}
-	rc = kvmgt_add_opreg_slot(vgt, VGT_OPREGION_PAGES);
-	if (!rc) {
-		vgt_err("VM%d: kvmgt_add_opreg_slot failed\n", vgt->vm_id);
-		return false;
-	}
+
 	down_read(&(kvm->mm->mmap_sem));
-	rc = get_user_pages(NULL, kvm->mm, kvm->opregion_hva,
-				VGT_OPREGION_PAGES, 1, 1, vgt->state.opregion_pages, NULL);
+	rc = get_user_pages(NULL, kvm->mm, addr, VGT_OPREGION_PAGES, 1, 1, vgt->state.opregion_pages, NULL);
 	up_read(&kvm->mm->mmap_sem);
 	if (rc != VGT_OPREGION_PAGES) {
-		vgt_err("get_user_pages failed, rc is %d\n", rc);
+		vgt_err("get_user_pages failed: %d\n", rc);
 		return false;
 	}
-	vgt->state.opregion_va = vmap(vgt->state.opregion_pages,
-				VGT_OPREGION_PAGES, 0, PAGE_KERNEL);
+
+	vgt->state.opregion_va = vmap(vgt->state.opregion_pages, VGT_OPREGION_PAGES, 0, PAGE_KERNEL);
 	if (vgt->state.opregion_va == NULL) {
-		vgt_err("VM%d: failed to allocate memory for opregion\n", vgt->vm_id);
-		goto kvm_fail;
+		vgt_err("VM%d: failed to allocate kernel space for opregion\n", vgt->vm_id);
+		for (i = 0; i < VGT_OPREGION_PAGES; i++)
+			put_page(vgt->state.opregion_pages[i]);
+		return false;
 	}
-	vgt->state.opregion_offset = offset_in_page(kvm->opregion_gpa);
-	vgt->state.opregion_va += vgt->state.opregion_offset;
-	memcpy_fromio(vgt->state.opregion_va, vgt->pdev->opregion_va,
-				VGT_OPREGION_SIZE - vgt->state.opregion_offset);
+
+	memcpy_fromio(vgt->state.opregion_va, vgt->pdev->opregion_va, VGT_OPREGION_SIZE);
+	memcpy(&vgt->state.cfg_space[VGT_REG_CFG_OPREGION], &kvm->opregion_gpa, sizeof(kvm->opregion_gpa));
+	vgt_info("opregion init succeed!\n");
 
 	return true;
-
-kvm_fail:
-	for (i = 0; i < VGT_OPREGION_PAGES; i++)
-		put_page(vgt->state.opregion_pages[i]);
-
-	return false;
 }
 
 static int kvmgt_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
@@ -563,6 +523,7 @@ static int kvmgt_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
 		vgt_err("cannot find kvm for VM%d\n", vm_id);
 		return -EFAULT;
 	}
+
 	if (!map)
 		return r;
 
@@ -579,12 +540,7 @@ static int kvmgt_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
 		}
 		break;
 	case VGT_MAP_OPREGION:
-		if (vgt->state.opregion_va == NULL) {
-			if (kvmgt_opregion_init(vgt, 0))
-				r = 0;
-			else
-				r = -EFAULT;
-		}
+		r = kvmgt_opregion_init(vgt);
 		break;
 	default:
 		vgt_err("type:%d not supported!\n", type);
