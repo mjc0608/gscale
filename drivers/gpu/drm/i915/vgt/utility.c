@@ -263,6 +263,7 @@ void common_show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes,
 	struct vgt_device *vgt = current_render_owner(pdev);
 	u32 *cur;
 	u64 ring_len, off;
+	u32 gpa;
 
 	printk("ring buffer(%d): head (0x%x) tail(0x%x), start(0x%x), "
 			"ctl(0x%x)\n", ring_id, p_head, p_tail, p_start, p_ctl);
@@ -277,14 +278,15 @@ void common_show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes,
 
 	p_head &= RB_HEAD_OFF_MASK;
 	ring_len = _RING_CTL_BUF_SIZE(p_ctl);
-	p_contents = vgt_gma_to_va(vgt->gtt.ggtt_mm, p_start);
+	gpa = p_start >> PAGE_SHIFT;
+	p_contents = vgt_gma_to_va(vgt->gtt.ggtt_mm, gpa<<PAGE_SHIFT);
 	if (!p_contents) {
 		if (pdev->enable_execlist)
 			return;
 
 		printk("Looks this ring buffer doesn't belong to current render owner.\n");
 		printk("Try to dump it from aperture.\n");
-		p_contents = phys_aperture_vbase(pdev) + p_start;
+		p_contents = phys_aperture_vbase(pdev) + (gpa<<PAGE_SHIFT);
 	}
 #define WRAP_OFF(off, size)			\
 	({					\
@@ -295,16 +297,27 @@ void common_show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes,
 			val -= size;	\
 		(val);				\
 	})
-	printk("p_contents(%lx)\n", (unsigned long)p_contents);
+	printk("p_contents(%lx)\n", (unsigned long)(p_contents + (p_start & (PAGE_SIZE-1))));
 	/* length should be 4 bytes aligned */
 	bytes &= ~0x3;
 	for (i = -bytes; i < bytes; i += 4) {
+		char *access;
 		off = (p_head + i) % ring_len;
 		off = WRAP_OFF(off, ring_len);
 		/* print offset within the ring every 8 Dword */
 		if (!((i + bytes) % 32))
 			printk("\n[%08llx]:", off);
-		printk(" %08x", *((u32*)(p_contents + off)));
+
+		/* handle Dom0 VA address 4K-page boundary */
+		if (((p_start+off) >> PAGE_SHIFT) != gpa) {
+			// cross page boundary.
+			gpa = (p_start + off) >> PAGE_SHIFT;
+			p_contents = vgt_gma_to_va(vgt->gtt.ggtt_mm, gpa << PAGE_SHIFT);
+			if (!p_contents) return;
+		}
+		access = p_contents + ((p_start + off) & (PAGE_SIZE-1));
+
+		printk(" %08x", *((u32*)access));
 		if (!i)
 			printk("(*)");
 	}
@@ -315,7 +328,10 @@ void common_show_ring_buffer(struct pgt_device *pdev, int ring_id, int bytes,
 	else
 		off = WRAP_OFF(((int32_t)p_head) - 12, ring_len);
 
-	cur = (u32*)(p_contents + off);
+	p_contents = vgt_gma_to_va(vgt->gtt.ggtt_mm, p_start + off);
+	if (!p_contents) return;
+
+	cur = (u32*)(p_contents);
 	if ((*cur & 0xfff00000) == 0x18800000 && vgt) {
 		int ppgtt = (*cur & _CMDBIT_BB_START_IN_PPGTT);
 
