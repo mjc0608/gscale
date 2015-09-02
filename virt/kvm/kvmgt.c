@@ -590,7 +590,7 @@ static int kvmgt_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
 	switch (type) {
 	case VGT_MAP_APERTURE:
 		if (kvm->aperture_hpa == 0) {
-			if (kvmgt_add_apt_slot(vgt, gpfn, mfn, nr,
+			if (kvmgt_add_apt_slot(vgt, mfn, gpfn, nr,
 							(u64)vgt_aperture_vbase(vgt))) {
 				r = 0;
 				vgt->state.bar_mapped[1] = 1;
