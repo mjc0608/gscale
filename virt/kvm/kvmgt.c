@@ -488,36 +488,14 @@ static void kvmgt_hvm_exit(struct vgt_device *vgt)
 static inline bool kvmgt_read_hva(struct vgt_device *vgt, void *hva,
 			void *data, int len, int atomic)
 {
-	int rc;
-
-	pagefault_disable();
-	rc = atomic ? __copy_from_user_inatomic(data, hva, len) :
-			__copy_from_user(data, hva, len);
-	pagefault_enable();
-
-	if (rc != 0)
-		vgt_err("copy_from_user failed: rc == %d, len == %d\n", rc, len);
-
+	memcpy(data, hva, len);
 	return true;
 }
 
 static bool kvmgt_write_hva(struct vgt_device *vgt, void *hva, void *data,
 			int len, int atomic)
 {
-	int r;
-
-	pagefault_disable();
-	if (atomic)
-		r = __copy_to_user_inatomic((void __user *)hva, data, len);
-	else
-		r = __copy_to_user((void __user *)hva, data, len);
-	pagefault_enable();
-
-	if (r) {
-		vgt_err("__copy_to_user failed: %d\n", r);
-		return false;
-	}
-
+	memcpy(hva, data, len);
 	return true;
 }
 
