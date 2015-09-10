@@ -762,11 +762,6 @@ void vgt_destroy(void)
 	list_for_each_entry_safe(vgt, tmp, &pdev->rendering_runq_head, list)
 		vgt_disable_render(vgt);
 
-	/* Destruct all vgt_debugfs */
-	vgt_release_debugfs();
-
-	vgt_destroy_sysfs();
-
 	if (pdev->saved_gtt)
 		vfree(pdev->saved_gtt);
 	free_gtt(pdev);
@@ -778,6 +773,10 @@ void vgt_destroy(void)
 		iounmap(pdev->opregion_va);
 
 	spin_unlock_irqrestore(&pdev->lock, flags);
+
+	/* destruct all vgt-related debugfs/sysfs */
+	vgt_release_debugfs();
+	vgt_destroy_sysfs();
 
 	list_for_each_entry_safe(vgt, tmp, &pdev->rendering_idleq_head, list)
 		vgt_release_instance(vgt);
