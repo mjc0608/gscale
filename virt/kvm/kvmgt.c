@@ -148,32 +148,65 @@ bool kvmgt_pio_igd_cfg(struct kvm_vcpu *vcpu)
 	return ret;
 }
 
-/* Tanslate from VM's guest pfn to host pfn */
-static unsigned long kvmgt_gfn_2_pfn(int vm_id, unsigned long g_pfn)
+static unsigned long __kvmgt_gfn_to_pfn(struct kvm *kvm, gfn_t gfn)
 {
 	pfn_t pfn;
+	struct kvm_memory_slot *slot;
+	bool unlock = false;
+
+	pfn = kvmgt_gfn_to_pfn_by_rmap(kvm, gfn);
+	if (!is_error_pfn(pfn))
+		return pfn;
+
+	/*
+	 * gfn_to_xxx() requires kvm->srcu lock, as per Documentation/virtual/kvm/locking.txt.
+	 * However, according to __kvm_memslots(), any of following conditions does the trick:
+	 * 	- kvm->slots_lock is held
+	 * 	- kvm->srcu is read-held
+	 * 	- general rcu is read-held
+	 * "lockdep_is_held" is difficult to use in non-RCU code, so ignore it here.
+	 * We pick the sleepless one in case that none of them is held.
+	 */
+	if (!srcu_read_lock_held(&kvm->srcu) && !rcu_read_lock_held()) {
+		rcu_read_lock();
+		unlock = true;
+	}
+
+	slot = gfn_to_memslot(kvm, gfn);
+	if (!slot) {
+		vgt_err("VM%d, gfn:0x%llx: slot is NULL!\n", kvm->domid, gfn);
+		goto err;
+	}
+
+	BUG_ON(slot->flags & KVM_MEMSLOT_INVALID);
+
+	if (!slot->pfn_list) {
+		vgt_err("VM%d, slot:%hd: pfn_list is NULL!\n", kvm->domid, slot->id);
+		goto err;
+	}
+
+	pfn = slot->pfn_list[gfn - slot->base_gfn];
+
+err:
+	if (unlock)
+		rcu_read_unlock();
+	return pfn;
+}
+
+static unsigned long kvmgt_gfn_to_pfn(int vm_id, unsigned long gfn)
+{
 	struct kvm *kvm;
 
-	if (!vm_id) {
-		pfn = g_pfn;
-		goto out;
-	}
+	if (!vm_id)
+		return gfn;
 
 	kvm = kvmgt_find_by_domid(vm_id);
-	if (kvm == NULL) {
-		vgt_err("cannot find kvm for VM%d\n", vm_id);
-		pfn = INVALID_MFN;
-		return pfn;
+	if (!kvm) {
+		vgt_err("VM%d: cannot find kvm\n", vm_id);
+		return INVALID_MFN;
 	}
 
-	pfn = gfn_to_pfn_atomic(kvm, g_pfn);
-	if (is_error_pfn(pfn)) {
-		vgt_err("gfn_to_pfn failed for VM%d, gfn: 0x%lx\n", vm_id, g_pfn);
-		pfn = INVALID_MFN;
-	}
-
-out:
-	return pfn;
+	return __kvmgt_gfn_to_pfn(kvm, gfn);
 }
 
 static int kvmgt_pause_domain(int vm_id)
@@ -597,7 +630,7 @@ static int kvmgt_map_mfn_to_gpfn(int vm_id, unsigned long gpfn,
 
 struct kernel_dm kvmgt_kdm = {
 	.name = "kvmgt_kdm",
-	.g2m_pfn = kvmgt_gfn_2_pfn,
+	.g2m_pfn = kvmgt_gfn_to_pfn,
 	.pause_domain = kvmgt_pause_domain,
 	.shutdown_domain = kvmgt_shutdown_domain,
 	.map_mfn_to_gpfn = kvmgt_map_mfn_to_gpfn,
