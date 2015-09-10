@@ -26,6 +26,10 @@ void kvmgt_record_cf8(struct kvm_vcpu *vcpu, unsigned port,	unsigned long rax);
 bool kvmgt_pio_is_igd_cfg(struct kvm_vcpu *vcpu);
 bool kvmgt_pio_igd_cfg(struct kvm_vcpu *vcpu);
 
+int kvmgt_pin_slot(struct kvm *kvm, struct kvm_memory_slot *slot);
+int kvmgt_unpin_slot(struct kvm *kvm, struct kvm_memory_slot *slot);
+void kvmgt_pin_guest(struct kvm *kvm);
+void kvmgt_unpin_guest(struct kvm *kvm);
 
 typedef struct kvmgt_pgfn {
 	gfn_t gfn;

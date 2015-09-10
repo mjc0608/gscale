@@ -303,6 +303,9 @@ struct kvm_memory_slot {
 	unsigned long userspace_addr;
 	u32 flags;
 	short id;
+#ifdef CONFIG_KVMGT
+	pfn_t *pfn_list;
+#endif
 };
 
 static inline unsigned long kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memslot)

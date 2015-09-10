@@ -95,6 +95,7 @@ void kvmgt_kvm_exit(struct kvm *kvm)
 	vgt_ops->del_state_sysfs(vp);
 
 	kvmgt_protect_table_destroy(kvm);
+	kvmgt_unpin_guest(kvm);
 
 	kvm->vgt_enabled = false;
 	kvm->vgt = NULL;
@@ -406,6 +407,7 @@ static int kvmgt_hvm_init(struct vgt_device *vgt)
 	info->kvm = kvm;
 
 	kvmgt_protect_table_init(kvm);
+	kvmgt_pin_guest(kvm);
 
 	return 0;
 }
@@ -695,4 +697,105 @@ bool kvmgt_gfn_is_write_protected(struct kvm *kvm, gfn_t gfn)
 bool kvmgt_emulate_write(struct kvm *kvm, gpa_t gpa, const void *val, int len)
 {
 	return vgt_ops->emulate_write(kvm->vgt, gpa, (void *)val, len);
+}
+
+int kvmgt_pin_slot(struct kvm *kvm, struct kvm_memory_slot *slot)
+{
+	int i;
+	pfn_t pfn;
+	struct page *page;
+
+	if (!kvm->vgt_enabled || !slot->npages ||
+				slot->id >= KVM_USER_MEM_SLOTS ||
+				(slot->flags & KVM_MEM_READONLY))
+		return -EFAULT;
+	if (slot->pfn_list) {
+		vgt_warn("VM%d: slot %d: pfn_list is not NULL!\n", kvm->domid, slot->id);
+		return -EEXIST;
+	}
+
+	/* Try the 1st page, ignore this slot on errors. It's possible */
+	page = gfn_to_page(kvm, slot->base_gfn);
+	if (is_error_page(page)) {
+		vgt_info("VM%d: ignore slot(%hd)\n", kvm->domid, slot->id);
+		return -EFAULT;
+	}
+	kvm_release_page_clean(page);
+
+	slot->pfn_list = kvm_kvzalloc(sizeof(pfn_t *) * slot->npages);
+	if (!slot->pfn_list) {
+		vgt_err("VM%d: slot %hd: failed to allocate pfn_list\n", kvm->domid, slot->id);
+		return -ENOMEM;
+	}
+
+	/* Pin and record every pfn */
+	for (i = 0; i < slot->npages; i++) {
+		pfn = gfn_to_pfn(kvm, slot->base_gfn + i);
+
+		WARN_ON(is_error_pfn(pfn));
+		slot->pfn_list[i] = pfn;
+	}
+
+	vgt_info("VM%d: pinned slot id(%hd) base_gfn(0x%llx) npages(%lu)\n",
+			kvm->domid, slot->id, slot->base_gfn, slot->npages);
+	return 0;
+}
+
+int kvmgt_unpin_slot(struct kvm *kvm, struct kvm_memory_slot *slot)
+{
+	int i;
+
+	if (!kvm->vgt_enabled || !slot->npages ||
+				slot->id >= KVM_USER_MEM_SLOTS ||
+				(slot->flags & KVM_MEM_READONLY))
+		return -EFAULT;
+
+	if (!slot->pfn_list) {
+		vgt_warn("VM%d: slot %hd: pfn_list is NULL!\n", kvm->domid, slot->id);
+		return -ENOENT;
+	}
+
+	for (i = 0; i < slot->npages; i++)
+		put_page(pfn_to_page(slot->pfn_list[i]));
+
+	kvfree(slot->pfn_list);
+	slot->pfn_list = NULL;
+
+	vgt_info("VM%d: unpinned slot id(%hd) base_gfn(0x%llx) npages(%lu)\n",
+			kvm->domid, slot->id, slot->base_gfn, slot->npages);
+	return 0;
+}
+
+void kvmgt_pin_guest(struct kvm *kvm)
+{
+	struct kvm_memslots *slots;
+	struct kvm_memory_slot *memslot;
+	int idx;
+
+	mutex_lock(&kvm->slots_lock);
+	idx = srcu_read_lock(&kvm->srcu);
+
+	slots = kvm_memslots(kvm);
+	kvm_for_each_memslot(memslot, slots)
+		kvmgt_pin_slot(kvm, memslot);
+
+	srcu_read_unlock(&kvm->srcu, idx);
+	mutex_unlock(&kvm->slots_lock);
+}
+
+void kvmgt_unpin_guest(struct kvm *kvm)
+{
+	struct kvm_memslots *slots;
+	struct kvm_memory_slot *memslot;
+	int idx;
+
+	mutex_lock(&kvm->slots_lock);
+	idx = srcu_read_lock(&kvm->srcu);
+
+	slots = kvm_memslots(kvm);
+	kvm_for_each_memslot(memslot, slots)
+		kvmgt_unpin_slot(kvm, memslot);
+
+	srcu_read_unlock(&kvm->srcu, idx);
+	mutex_unlock(&kvm->slots_lock);
 }
