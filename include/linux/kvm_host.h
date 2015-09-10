@@ -408,12 +408,15 @@ struct kvm {
 #endif
 	long tlbs_dirty;
 	struct list_head devices;
+
 #ifdef CONFIG_KVMGT
 	int domid;
 	bool vgt_enabled;
 	struct vgt_device *vgt;
 	u32 opregion_gpa;
 	u64 aperture_hpa;
+#define NR_BKT (1 << 18)
+	struct hlist_head ptable[NR_BKT];
 #endif
 };
 

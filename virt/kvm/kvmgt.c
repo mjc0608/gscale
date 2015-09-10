@@ -93,6 +93,9 @@ void kvmgt_kvm_exit(struct kvm *kvm)
 	vgt_info("release vgt resrouce for KVM!\n");
 	vp.vm_id = -kvm->domid;
 	vgt_ops->del_state_sysfs(vp);
+
+	kvmgt_protect_table_destroy(kvm);
+
 	kvm->vgt_enabled = false;
 	kvm->vgt = NULL;
 }
@@ -364,6 +367,8 @@ static int kvmgt_hvm_init(struct vgt_device *vgt)
 	info->vgt = vgt;
 	info->kvm = kvm;
 
+	kvmgt_protect_table_init(kvm);
+
 	return 0;
 }
 
@@ -570,3 +575,86 @@ struct kernel_dm kvmgt_kdm = {
 	.write_va = kvmgt_write_hva,
 };
 EXPORT_SYMBOL(kvmgt_kdm);
+
+void kvmgt_protect_table_init(struct kvm *kvm)
+{
+	if (kvm->vgt_enabled)
+		hash_init(kvm->ptable);
+}
+
+void kvmgt_protect_table_destroy(struct kvm *kvm)
+{
+	kvmgt_pgfn_t *p;
+	struct hlist_node *tmp;
+	int i;
+
+	if (!kvm->vgt_enabled)
+		return;
+
+	hash_for_each_safe(kvm->ptable, i, tmp, p, hnode) {
+		hash_del(&p->hnode);
+		kfree(p);
+	}
+}
+
+void kvmgt_protect_table_add(struct kvm *kvm, gfn_t gfn)
+{
+	kvmgt_pgfn_t *p;
+
+	if (!kvm->vgt_enabled)
+		return;
+
+	if (kvmgt_gfn_is_write_protected(kvm, gfn))
+		return;
+
+	p = kmalloc(sizeof(kvmgt_pgfn_t), GFP_ATOMIC);
+	if (!p) {
+		vgt_err("kmalloc failed for 0x%llx\n", gfn);
+		return;
+	}
+
+	p->gfn = gfn;
+	hash_add(kvm->ptable, &p->hnode, gfn);
+}
+
+static kvmgt_pgfn_t *__kvmgt_protect_table_find(struct kvm *kvm, gfn_t gfn)
+{
+	kvmgt_pgfn_t *p, *res = NULL;
+
+	hash_for_each_possible(kvm->ptable, p, hnode, gfn) {
+		if (gfn == p->gfn) {
+			res = p;
+			break;
+		}
+	}
+
+	return res;
+}
+
+void kvmgt_protect_table_del(struct kvm *kvm, gfn_t gfn)
+{
+	kvmgt_pgfn_t *p;
+
+	if (!kvm->vgt_enabled)
+		return;
+
+	p = __kvmgt_protect_table_find(kvm, gfn);
+	if (p)
+		hash_del(&p->hnode);
+}
+
+bool kvmgt_gfn_is_write_protected(struct kvm *kvm, gfn_t gfn)
+{
+	kvmgt_pgfn_t *p;
+
+	if (!kvm->vgt_enabled)
+		return false;
+
+	p = __kvmgt_protect_table_find(kvm, gfn);
+	return !!p;
+}
+
+bool kvmgt_emulate_write(struct kvm *kvm, gpa_t gpa, const void *val, int len)
+{
+	return vgt_ops->emulate_write(kvm->vgt, gpa, (void *)val, len);
+}

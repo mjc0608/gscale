@@ -26,4 +26,18 @@ void kvmgt_record_cf8(struct kvm_vcpu *vcpu, unsigned port,	unsigned long rax);
 bool kvmgt_pio_is_igd_cfg(struct kvm_vcpu *vcpu);
 bool kvmgt_pio_igd_cfg(struct kvm_vcpu *vcpu);
 
+
+typedef struct kvmgt_pgfn {
+	gfn_t gfn;
+	struct hlist_node hnode;
+} kvmgt_pgfn_t;
+
+void kvmgt_protect_table_init(struct kvm *kvm);
+void kvmgt_protect_table_destroy(struct kvm *kvm);
+void kvmgt_protect_table_add(struct kvm *kvm, gfn_t gfn);
+void kvmgt_protect_table_del(struct kvm *kvm, gfn_t gfn);
+bool kvmgt_write_protect(struct kvm *kvm, gfn_t gfn, bool add);
+bool kvmgt_gfn_is_write_protected(struct kvm *kvm, gfn_t gfn);
+bool kvmgt_emulate_write(struct kvm *kvm, gpa_t gpa, const void *val, int len);
+
 #endif /* _KVMGT_H_ */
