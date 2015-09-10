@@ -291,15 +291,53 @@ static int kvmgt_set_trap_area(struct vgt_device *vgt, uint64_t start,
 static bool kvmgt_set_guest_page_writeprotection(struct vgt_device *vgt,
 			guest_page_t *guest_page)
 {
-	/*TODO*/
-	return 0;
+	struct kvmgt_hvm_info *info = vgt->hvm_info;
+	struct kvm *kvm = info->kvm;
+	gfn_t gfn = guest_page->gfn;
+
+	spin_lock(&kvm->mmu_lock);
+
+	if (guest_page->writeprotection) {
+		spin_unlock(&kvm->mmu_lock);
+		return true;
+	}
+
+	if (kvmgt_write_protect(kvm, gfn, true))
+		kvm_flush_remote_tlbs(kvm);
+	kvmgt_protect_table_add(kvm, gfn);
+
+	guest_page->writeprotection = true;
+	atomic_inc(&vgt->gtt.n_write_protected_guest_page);
+
+	spin_unlock(&kvm->mmu_lock);
+
+	return true;
 }
 
 static bool kvmgt_clear_guest_page_writeprotection(struct vgt_device *vgt,
 			guest_page_t *guest_page)
 {
-	/*TODO*/
-	return 0;
+	struct kvmgt_hvm_info *info = vgt->hvm_info;
+	struct kvm *kvm = info->kvm;
+	gfn_t gfn = guest_page->gfn;
+
+	spin_lock(&kvm->mmu_lock);
+
+	if (!guest_page->writeprotection) {
+		spin_unlock(&kvm->mmu_lock);
+		return true;
+	}
+
+	if (kvmgt_write_protect(kvm, gfn, false))
+		kvm_flush_remote_tlbs(kvm);
+	kvmgt_protect_table_del(kvm, gfn);
+
+	guest_page->writeprotection = false;
+	atomic_dec(&vgt->gtt.n_write_protected_guest_page);
+
+	spin_unlock(&kvm->mmu_lock);
+
+	return true;
 }
 
 static int kvmgt_check_guest(void)
