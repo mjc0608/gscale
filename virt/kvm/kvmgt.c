@@ -445,16 +445,19 @@ static int kvmgt_hvm_init(struct vgt_device *vgt)
 	return 0;
 }
 
-static void *kvmgt_gpa_to_va(struct vgt_device *vgt, unsigned long gpa)
+static void *kvmgt_gpa_to_hva(struct vgt_device *vgt, unsigned long gpa)
 {
-	unsigned long hva;
-	gfn_t gfn = gpa_to_gfn(gpa);
 	struct kvmgt_hvm_info *info = vgt->hvm_info;
+	struct kvm *kvm = info->kvm;
+	pfn_t pfn;
 
-	ASSERT(vgt->vm_id);
-	hva = gfn_to_hva(info->kvm, gfn) + offset_in_page(gpa);
+	BUG_ON(!vgt->vm_id);
 
-	return (void *)hva;
+	pfn = __kvmgt_gfn_to_pfn(kvm, gpa_to_gfn(gpa));
+	if (is_error_pfn(pfn))
+		return NULL;
+
+	return (char *)pfn_to_kaddr(pfn) + offset_in_page(gpa);
 }
 
 static int kvmgt_inject_msi(int vm_id, u32 addr_lo, u16 data)
@@ -643,7 +646,7 @@ struct kernel_dm kvmgt_kdm = {
 	.inject_msi = kvmgt_inject_msi,
 	.hvm_init = kvmgt_hvm_init,
 	.hvm_exit = kvmgt_hvm_exit,
-	.gpa_to_va = kvmgt_gpa_to_va,
+	.gpa_to_va = kvmgt_gpa_to_hva,
 	.read_va = kvmgt_read_hva,
 	.write_va = kvmgt_write_hva,
 };
