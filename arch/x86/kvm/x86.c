@@ -7452,7 +7452,7 @@ void kvm_arch_memslots_updated(struct kvm *kvm)
 }
 
 static int private_map_anno(struct kvm *kvm, struct kvm_memory_slot *memslot,
-			struct kvm_userspace_memory_region *mem)
+			const struct kvm_userspace_memory_region *mem)
 {
 	unsigned long userspace_addr;
 
@@ -7472,24 +7472,9 @@ static int private_map_anno(struct kvm *kvm, struct kvm_memory_slot *memslot,
 }
 
 #ifdef CONFIG_KVMGT
-static int private_map_opregion(struct kvm *kvm,
-			struct kvm_memory_slot *memslot,
-			struct kvm_userspace_memory_region *mem)
-{
-	unsigned long userspace_addr;
-
-	userspace_addr = vm_mmap(NULL, 0, memslot->npages * PAGE_SIZE,
-	PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0);
-	if (IS_ERR((void *)userspace_addr))
-		return PTR_ERR((void *)userspace_addr);
-	memslot->userspace_addr = userspace_addr;
-	kvm->opregion_hva = userspace_addr;
-	return 0;
-}
-
 static int private_map_aperture(struct kvm *kvm,
 			struct kvm_memory_slot *memslot,
-			struct kvm_userspace_memory_region *mem)
+			const struct kvm_userspace_memory_region *mem)
 {
 	mm_segment_t oldfs;
 	struct file *devmem;
@@ -7522,7 +7507,7 @@ static int private_map_aperture(struct kvm *kvm,
 #endif
 
 static void private_unmap_anno(struct kvm *kvm,
-			struct kvm_userspace_memory_region *mem,
+			const struct kvm_userspace_memory_region *mem,
 			const struct kvm_memory_slot *old)
 {
 	int ret;
@@ -7535,21 +7520,16 @@ static void private_unmap_anno(struct kvm *kvm,
 static struct {
 	int (*arch_create)(struct kvm *kvm,
 				struct kvm_memory_slot *memslot,
-				struct kvm_userspace_memory_region *mem);
+				const struct kvm_userspace_memory_region *mem);
 	void (*arch_delete)(struct kvm *kvm,
-				struct kvm_userspace_memory_region *mem,
+				const struct kvm_userspace_memory_region *mem,
 				const struct kvm_memory_slot *old);
 } private_memslots[] = {
-	[0 ... KVM_PRIVATE_MEM_SLOTS - 2] = {
+	[0 ... KVM_PRIVATE_MEM_SLOTS - 1] = {
 		.arch_create = private_map_anno,
 		.arch_delete = private_unmap_anno,
 	},
 #ifdef CONFIG_KVMGT
-	[VGT_OPREGION_PRIVATE_MEMSLOT - KVM_USER_MEM_SLOTS] = {
-		.arch_create = private_map_opregion,
-		.arch_delete = private_unmap_anno,
-	},
-
 	[VGT_APERTURE_PRIVATE_MEMSLOT - KVM_USER_MEM_SLOTS] = {
 		.arch_create = private_map_aperture,
 		.arch_delete = private_unmap_anno,
