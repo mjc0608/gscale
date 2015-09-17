@@ -568,19 +568,28 @@ int vgt_hvm_opregion_map(struct vgt_device *vgt, int map)
 
 int vgt_hvm_opregion_init(struct vgt_device *vgt, uint32_t gpa)
 {
-	if (!vgt_in_xen || vgt_hvm_opregion_resinit(vgt, gpa)) {
-
-		/* modify the vbios parameters for PORTs,
-		 * Let guest see full port capability.
-		 */
-		if (!propagate_monitor_to_guest && !is_current_display_owner(vgt)) {
-			vgt_prepare_vbios_general_definition(vgt);
-		}
-
-		return vgt_hvm_opregion_map(vgt, 1);
+	if (!opregion_present) {
+		/* Need to allocate pages from host kernel */
+		vgt_hvm_opregion_resinit(vgt, gpa);
+		vgt_hvm_opregion_map(vgt, 1);
+	} else {
+		/* If opregion pages are not allocated from host kenrel, most of
+		 * the params are meaningless */
+		hypervisor_map_mfn_to_gpfn(vgt,
+				0, //not used
+				0, //not used
+				2, //not used
+				1,
+				VGT_MAP_OPREGION);
 	}
 
-	return false;
+	/* modify the vbios parameters for PORTs,
+	 * Let guest see full port capability.
+	 */
+	if (!propagate_monitor_to_guest && !is_current_display_owner(vgt))
+		vgt_prepare_vbios_general_definition(vgt);
+
+	return 0;
 }
 
 void vgt_initial_opregion_setup(struct pgt_device *pdev)

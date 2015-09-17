@@ -288,9 +288,8 @@ int create_vgt_instance(struct pgt_device *pdev, struct vgt_device **ptr_vgt, vg
 			current_config_owner(pdev) = vgt;
 			current_foreground_vm(pdev) = vgt;
 		}
-		if (!vgt_in_xen) {
-			vgt_info("kvmgt:emulating a writing 0xfc opregion for VM%d\n",
-						vgt->vm_id);
+		if (opregion_present) {
+			vgt_info("writing virtual 0xfc opregion for VM%d\n", vgt->vm_id);
 			vgt_hvm_opregion_init(vgt, 0);
 		}
 	}
@@ -403,8 +402,8 @@ void vgt_release_instance(struct vgt_device *vgt)
 	vgt_clean_vgtt(vgt);
 
 	if (vgt->state.opregion_va) {
-		if (!vgt_in_xen) {
-			vunmap(vgt->state.opregion_va - vgt->state.opregion_offset);
+		if (opregion_present) {
+			vunmap(vgt->state.opregion_va);
 			for (i = 0; i < VGT_OPREGION_PAGES; i++)
 				put_page(vgt->state.opregion_pages[i]);
 		} else {

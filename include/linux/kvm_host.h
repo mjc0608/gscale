@@ -413,7 +413,6 @@ struct kvm {
 	bool vgt_enabled;
 	struct vgt_device *vgt;
 	u32 opregion_gpa;
-	u64 opregion_hva;
 	u64 aperture_hpa;
 #endif
 };

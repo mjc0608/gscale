@@ -96,7 +96,7 @@ extern bool spt_out_of_sync;
 extern bool cmd_parser_ip_buf;
 extern bool timer_based_qos;
 extern int tbs_period_ms;
-extern bool vgt_in_xen;
+extern bool opregion_present;
 
 enum vgt_event_type {
 	// GT
@@ -339,7 +339,6 @@ typedef struct {
 
 	/* OpRegion state */
 	void		*opregion_va;
-	uint64_t    opregion_offset;
 	uint64_t	opregion_gfn[VGT_OPREGION_PAGES];
 	struct page *opregion_pages[VGT_OPREGION_PAGES];
 } vgt_state_t;

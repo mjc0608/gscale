@@ -38,7 +38,12 @@ MODULE_VERSION("0.1");
 extern struct kernel_dm xengt_kdm;
 extern struct kernel_dm kvmgt_kdm;
 struct kernel_dm *vgt_pkdm = NULL;
-bool vgt_in_xen __read_mostly = true;
+
+/*
+ * opregion pages could be logically present for a VM like KVMGT guest.
+ * In this case, don't allocate pages from host kernel in vgt.
+ */
+bool opregion_present __read_mostly = false;
 
 bool hvm_render_owner = false;
 module_param_named(hvm_render_owner, hvm_render_owner, bool, 0600);
@@ -1288,7 +1293,7 @@ bool i915_start_vgt(struct pci_dev *pdev)
 		if (!vgt_pkdm)
 			return false;
 
-		vgt_in_xen = false;
+		opregion_present = true;
 	}
 
 
