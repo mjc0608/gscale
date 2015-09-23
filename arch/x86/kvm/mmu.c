@@ -4663,7 +4663,7 @@ static bool __spte_unset_write_protect(struct kvm *kvm, u64 *sptep)
 	if (is_writable_pte(spte))
 		return false;
 
-	spte |= PT_WRITABLE_MASK;
+	spte |= PT_WRITABLE_MASK | SPTE_MMU_WRITEABLE;
 
 	return mmu_spte_update(sptep, spte);
 }
