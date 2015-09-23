@@ -287,8 +287,8 @@ const struct kvm_io_device_ops trap_mmio_ops = {
 	.write	= kvmgt_guest_mmio_write,
 };
 
-static int kvmgt_set_trap_area(struct vgt_device *vgt, uint64_t start,
-			uint64_t end, bool map)
+static int __kvmgt_set_trap_area(struct vgt_device *vgt, uint64_t start,
+			uint64_t end)
 {
 	int r;
 	struct kvm *kvm;
@@ -320,6 +320,45 @@ static int kvmgt_set_trap_area(struct vgt_device *vgt, uint64_t start,
 	info->trap_mmio.set = true;
 
 	return r;
+}
+
+static int __kvmgt_unset_trap_area(struct vgt_device *vgt)
+{
+	int r;
+	struct kvm *kvm;
+	struct kvmgt_hvm_info *info = vgt->hvm_info;
+
+	if (!info->trap_mmio.set)
+		return 0;
+
+	kvm = kvmgt_find_by_domid(vgt->vm_id);
+	if (kvm == NULL) {
+		vgt_err("cannot find kvm for VM%d\n", vgt->vm_id);
+		return 0;
+	}
+
+	mutex_lock(&kvm->slots_lock);
+	r = kvm_io_bus_unregister_dev(kvm, KVM_MMIO_BUS,
+			&info->trap_mmio.iodev);
+	mutex_unlock(&kvm->slots_lock);
+	if (r < 0) {
+		vgt_err("kvm_io_bus_unregister_dev failed: %d\n", r);
+		return r;
+	}
+
+	info->trap_mmio.set = false;
+
+	return r;
+}
+
+static int kvmgt_set_trap_area(struct vgt_device *vgt, uint64_t start,
+			uint64_t end, bool map)
+{
+	if (!vgt_pci_mmio_is_enabled(vgt))
+		return 0;
+
+	return map ? __kvmgt_set_trap_area(vgt, start, end) :
+		__kvmgt_unset_trap_area(vgt);
 }
 
 static bool kvmgt_set_guest_page_writeprotection(struct vgt_device *vgt,

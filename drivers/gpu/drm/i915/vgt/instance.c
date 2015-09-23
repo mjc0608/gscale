@@ -351,6 +351,7 @@ void vgt_release_instance(struct vgt_device *vgt)
 
 	printk("prepare to destroy vgt (%d)\n", vgt->vgt_id);
 
+	vgt_hvm_set_trap_area(vgt, 0);
 	/* destroy vgt_mmio_device */
 	vgt_destroy_mmio_dev(vgt);
 
