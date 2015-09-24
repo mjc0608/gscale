@@ -998,7 +998,7 @@ int vgt_hvm_set_trap_area(struct vgt_device *vgt, int map)
 	char *cfg_space = &vgt->state.cfg_space[0];
 	uint64_t bar_s, bar_e;
 
-	if (!vgt_pci_mmio_is_enabled(vgt))
+	if (!vgt->vm_id || !vgt_pci_mmio_is_enabled(vgt))
 		return 0;
 
 	cfg_space += VGT_REG_CFG_SPACE_BAR0;
