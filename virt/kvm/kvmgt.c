@@ -762,9 +762,10 @@ int kvmgt_pin_slot(struct kvm *kvm, struct kvm_memory_slot *slot)
 				slot->id >= KVM_USER_MEM_SLOTS ||
 				(slot->flags & KVM_MEM_READONLY))
 		return -EFAULT;
+
 	if (slot->pfn_list) {
-		vgt_warn("VM%d: slot %d: pfn_list is not NULL!\n", kvm->domid, slot->id);
-		return -EEXIST;
+		vgt_warn("VM%d: slot %d: pfn_list is not NULL, unpin first ...\n", kvm->domid, slot->id);
+		kvmgt_unpin_slot(kvm, slot);
 	}
 
 	/* Try the 1st page, ignore this slot on errors. It's possible */
