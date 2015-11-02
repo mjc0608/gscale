@@ -434,7 +434,15 @@ bool initial_phys_states(struct pgt_device *pdev)
 
 	ASSERT(gm_sz(pdev) <= info->max_gtt_gm_sz);
 
-	pdev->category[4]={0};
+	pdev->category_owner[0]=0;	/* Mochi: the default value of each category_owner is 0. */
+	pdev->category_owner[1]=0;
+	pdev->category_owner[2]=0;
+	pdev->category_owner[3]=0;
+
+	pdev->category_load[0]=0;	/* Mochi: the default value of each category_load is 0. */
+	pdev->category_load[1]=0;
+	pdev->category_load[2]=0;
+	pdev->category_load[3]=0;
 
 	pdev->saved_gtt = vzalloc(pdev->gtt_size);
 	if (!pdev->saved_gtt)

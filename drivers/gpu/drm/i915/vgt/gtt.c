@@ -2366,3 +2366,37 @@ int shadow_to_gtt(struct pgt_device *pdev, struct vgt_device *vgt)
 	}
 	return 0;
 }
+
+unsigned long get_hidden_gm_start(struct pgt_device *pdev, struct vgt_device *vgt)
+{
+	struct vgt_device_info *info = &pdev->device_info;
+	int category_load = pdev->category_load[0];
+	int i = 0;
+	int category_id = 0;
+	unsigned long hidden_gm_start;
+	unsigned long category_sz, visible_gm_sz, total_gm_sz;
+	for(i=1; i<4; i++){
+		if(pdev->category_load[i]<category_load){
+			category_load = pdev->category_load[i];
+			category_id = i;
+		}
+	}
+	
+	pdev->category_load[category_id]++;
+	vgt->category = category_id;
+
+	total_gm_sz = info->max_gtt_gm_sz/SIZE_1MB;
+	visible_gm_sz = hidden_gm_base(pdev)/SIZE_1MB;
+	category_sz = (total_gm_sz - visible_gm_sz)/4;
+	hidden_gm_start = visible_gm_sz + vgt->category * category_sz;
+	return hidden_gm_start;
+}
+
+int category_sched(struct pgt_device *pdev, struct vgt_device *vgt)	/* Here could add some scheduling policies. Currently we just switch the category owner. */
+{
+	if(vgt->vm_id != pdev->category_owner[vgt->category]){
+		shadow_to_gtt(pdev, vgt);
+		pdev->category_owner[vgt->category] = vgt->vm_id;
+	}
+	return 0;
+}

@@ -1248,7 +1248,8 @@ struct pgt_device {
 	uint32_t *saved_gtt;
 	uint64_t saved_fences[VGT_MAX_NUM_FENCES];
 
-	int category[4];	/* Mochi: split high GM into 4 categories, each digit means the VM_id of current category owner.*/
+	int category_owner[4];	/* Mochi: split high GM into 4 categories, each digit of category_owner means the VM_id of current category owner.*/
+	int category_load[4];	/* Mochi: each digit of category_load means the amount of VMs run in this category. */
 
 	uint32_t saved_rrmr;
 	uint32_t saved_shotplug_ctl;
@@ -2049,6 +2050,8 @@ extern void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start,
 
 /* Mochi: new functins to support shadow GTT. */
 extern int shadow_to_gtt(struct pgt_device *pdev, struct vgt_device *vgt);
+extern unsigned long get_hidden_gm_start(struct pgt_device *pdev, struct vgt_device *vgt);
+extern int  category_sched(struct pgt_device *pdev, struct vgt_device *vgt);
 
 #if 0
 /* This unused function is for non-ballooning case. */
