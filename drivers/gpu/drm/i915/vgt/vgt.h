@@ -957,6 +957,8 @@ struct vgt_device {
 	int			fence_base;
 	int			fence_sz;
 
+	int category;	/* Mochi: this param indicates which category the vm belongs to */
+
 
 	/* TODO: move to hvm_info  */
 	unsigned long low_mem_max_gpfn;	/* the max gpfn of the <4G memory */
@@ -1245,6 +1247,8 @@ struct pgt_device {
 	int reg_num;
 	uint32_t *saved_gtt;
 	uint64_t saved_fences[VGT_MAX_NUM_FENCES];
+
+	int category[4];	/* Mochi: split high GM into 4 categories, each digit means the VM_id of current category owner.*/
 
 	uint32_t saved_rrmr;
 	uint32_t saved_shotplug_ctl;

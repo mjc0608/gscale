@@ -434,6 +434,8 @@ bool initial_phys_states(struct pgt_device *pdev)
 
 	ASSERT(gm_sz(pdev) <= info->max_gtt_gm_sz);
 
+	pdev->category[4]={0};
+
 	pdev->saved_gtt = vzalloc(pdev->gtt_size);
 	if (!pdev->saved_gtt)
 		return false;
