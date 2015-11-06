@@ -562,6 +562,7 @@ struct vgt_mm {
 	u32 page_table_entry_cnt;
 	void *virtual_page_table;
 	void *shadow_page_table;
+	void *shadow_gtt;	/* Mochi: shadow GTT. */
 
 	int page_table_level;
 	bool has_shadow_page_table;
@@ -2041,6 +2042,9 @@ extern unsigned long rsvd_aperture_alloc(struct pgt_device *pdev,
 		unsigned long size);
 extern void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start,
 		unsigned long size);
+
+/* Mochi: new functins to support shadow GTT. */
+extern int shadow_to_gtt(struct pgt_device *pdev, struct vgt_device *vgt);
 
 #if 0
 /* This unused function is for non-ballooning case. */

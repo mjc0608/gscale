@@ -1638,6 +1638,11 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 		goto out;
 	}
 
+	/* Mochi: write shadow GTT to physical GTT. */
+	vgt_info("Mochi context switch VM%d -> VM%d.\n", prev->vm_id, next->vm_id);
+	if(next->vm_id != 0)
+		shadow_to_gtt(pdev, next);
+
 	start_ring(pdev, ring_id);
 
 	/* STEP-d: save HW render context for prev */
