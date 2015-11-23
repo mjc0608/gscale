@@ -171,16 +171,26 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 	
 	struct vgt_mm *ggtt_mm = vgt->gtt.ggtt_mm;
 	void *shadow_gtt = ggtt_mm->shadow_gtt;
-	unsigned long h_gm_index_start = vgt->hidden_gm_offset >> GTT_PAGE_SHIFT;
+	unsigned long hidden_gm_index_start = hidden_gm_base(vgt->pdev) >> GTT_PAGE_SHIFT;
+	unsigned long rsvd_gm_index_start = (hidden_gm_base(vgt->pdev) - vgt->pdev->rsvd_aperture_sz) >> GTT_PAGE_SHIFT;
 
 	ASSERT(info->gtt_entry_size == 4);
 	if (!pt){
-		if(vgt->vm_id==0 || current_render_owner(e->pdev)==vgt){
+		if(vgt->vm_id == 0)
+			vgt_write_gtt(e->pdev, index, e->val32[0]);
+		else if(index < rsvd_gm_index_start){
+			/* domU set aperture entries */
+			vgt_write_gtt(e->pdev, index, e->val32[0]);
+		}else if(index < hidden_gm_index_start){
+			/* domU set rsvd_aperture entries */
+			vgt_write_gtt(e->pdev, index, e->val32[0]);
+		
+		}else if(current_render_owner(e->pdev)==vgt){
+			/* domU owns render set hidden gm entries */
 			vgt_write_gtt(e->pdev, index, e->val32[0]);
 			*((u32 *)shadow_gtt + index) = e->val32[0];
-		}else if(index < h_gm_index_start){
-			vgt_write_gtt(e->pdev, index, e->val32[0]);
 		}else{
+			/* domU doesn't own render set hidden gm entries */
 			*((u32 *)shadow_gtt + index) = e->val32[0];
 		}
 	}
