@@ -173,6 +173,9 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 	void *shadow_gtt = ggtt_mm->shadow_gtt;
 	unsigned long hidden_gm_index_start = hidden_gm_base(vgt->pdev) >> GTT_PAGE_SHIFT;
 	unsigned long rsvd_gm_index_start = (hidden_gm_base(vgt->pdev) - vgt->pdev->rsvd_aperture_sz) >> GTT_PAGE_SHIFT;
+	
+	unsigned long mfn, gfn;
+	struct vgt_gtt_pte_ops *pte_ops = vgt->pdev->gtt.pte_ops;
 
 	ASSERT(info->gtt_entry_size == 4);
 	if (!pt){
@@ -181,10 +184,18 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 		else if(index < rsvd_gm_index_start){
 			/* domU sets aperture entries */
 			vgt_write_gtt(e->pdev, index, e->val32[0]);
+			/*    |<-     GM address     ->| + |<-     aperture offset    ->| = GPA -> GFN */
+			gfn = ((index << GTT_PAGE_SHIFT) + phys_aperture_base(vgt->pdev)) >> PAGE_SHIFT;
+
+			/* get mfn through the GTT entry */
+			mfn = pte_ops->get_pfn(e);
+
+			/* modify EPT to map GPA direct to HPA without using GTT. */
+			hypervisor_map_mfn_to_gpfn(vgt, gfn, mfn, 1, 1, VGT_MAP_APERTURE);
+
 		}else if(index < hidden_gm_index_start){
 			/* domU sets rsvd_aperture entries */
 			vgt_write_gtt(e->pdev, index, e->val32[0]);
-		
 		}else if(current_render_owner(e->pdev)==vgt){
 			/* domU which owns render sets hidden gm entries */
 			vgt_write_gtt(e->pdev, index, e->val32[0]);

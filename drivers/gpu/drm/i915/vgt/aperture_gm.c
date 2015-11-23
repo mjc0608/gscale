@@ -215,7 +215,7 @@ int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp)
 	ASSERT(vp.fence_sz > 0);
 
 	visable_gm_start = bitmap_find_next_zero_area(gm_bitmap, guard,
-				aperture_search_start, vp.aperture_sz, 0);
+					aperture_search_start, vp.aperture_sz, 0);
 	if (visable_gm_start >= guard)
 		return -ENOMEM;
 
@@ -239,7 +239,10 @@ int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp)
 	vgt->fence_sz = vp.fence_sz;
 
 	/* mark the related areas as BUSY. */
-	bitmap_set(gm_bitmap, visable_gm_start, vp.aperture_sz);
+
+	/* mochi: remove visibale_gm allocate for domU. */
+	if(vgt->vm_id==0)
+		bitmap_set(gm_bitmap, visable_gm_start, vp.aperture_sz);
 	/* Mochi: remove the hidden gm balloning for dormU. */
 	if (vp.gm_sz > vp.aperture_sz && vp.vm_id == 0)
 		bitmap_set(gm_bitmap, hidden_gm_start, vp.gm_sz - vp.aperture_sz);
