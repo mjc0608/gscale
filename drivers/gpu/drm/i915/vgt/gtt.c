@@ -179,18 +179,18 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 		if(vgt->vm_id == 0)
 			vgt_write_gtt(e->pdev, index, e->val32[0]);
 		else if(index < rsvd_gm_index_start){
-			/* domU set aperture entries */
+			/* domU sets aperture entries */
 			vgt_write_gtt(e->pdev, index, e->val32[0]);
 		}else if(index < hidden_gm_index_start){
-			/* domU set rsvd_aperture entries */
+			/* domU sets rsvd_aperture entries */
 			vgt_write_gtt(e->pdev, index, e->val32[0]);
 		
 		}else if(current_render_owner(e->pdev)==vgt){
-			/* domU owns render set hidden gm entries */
+			/* domU which owns render sets hidden gm entries */
 			vgt_write_gtt(e->pdev, index, e->val32[0]);
 			*((u32 *)shadow_gtt + index) = e->val32[0];
 		}else{
-			/* domU doesn't own render set hidden gm entries */
+			/* domU which doesn't own render sets hidden gm entries */
 			*((u32 *)shadow_gtt + index) = e->val32[0];
 		}
 	}
