@@ -973,8 +973,9 @@ int vgt_hvm_map_aperture (struct vgt_device *vgt, int map)
 		bar_s = * (uint32_t*) cfg_space;
 	}
 
-	first_gfn = (bar_s + vgt_aperture_offset(vgt)) >> PAGE_SHIFT;
-	first_mfn = vgt_aperture_base(vgt) >> PAGE_SHIFT;
+	vgt->first_gfn = first_gfn = (bar_s + vgt_aperture_offset(vgt)) >> PAGE_SHIFT;
+	vgt->first_mfn = first_mfn = vgt_aperture_base(vgt) >> PAGE_SHIFT;
+	
 	if (!vgt->ballooning)
 		nr_mfns = vgt->state.bar_size[1] >> PAGE_SHIFT;
 	else

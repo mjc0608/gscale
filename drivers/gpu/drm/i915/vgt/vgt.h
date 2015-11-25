@@ -1010,6 +1010,10 @@ struct vgt_device {
 	unsigned long reset_flags;
 	unsigned long enabled_rings_before_reset;
 	unsigned long last_reset_time;
+	
+	/* mochi: for EPT map */
+	unsigned long first_gfn;
+	unsigned long first_mfn;
 };
 
 enum vgt_owner_type {
