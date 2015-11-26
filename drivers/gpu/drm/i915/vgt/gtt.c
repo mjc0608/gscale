@@ -141,7 +141,7 @@ static gtt_entry_t *gtt_get_entry32(void *pt, gtt_entry_t *e,
 	ASSERT(info->gtt_entry_size == 4);
 
 	if (!pt) {
-		if(vgt->vm_id == 0 || current_render_owner(e->pdev) == vgt){
+		if(vgt->vm_id == 0){
 			e->val32[0] = vgt_read_gtt(e->pdev, index);
 			e->val32[1] = 0;
 		}else{
@@ -193,6 +193,11 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 		}
 		
 		if(vgt->vm_id!=0 && index < rsvd_gm_index_start){
+			if(vgt->ept_umap==0){
+				hypervisor_map_mfn_to_gpfn(vgt, vgt->first_gfn, vgt->first_mfn, vgt_aperture_sz(vgt) >> PAGE_SHIFT, 0, VGT_MAP_APERTURE);
+				vgt->ept_umap=1;
+			}
+				
 			/* domU sets aperture entries */
 			/*    |<-     GM address     ->| + |<-     aperture offset    ->| = HPA -> MFN */
 			mfn = ((index << GTT_PAGE_SHIFT) + phys_aperture_base(vgt->pdev)) >> PAGE_SHIFT;
@@ -2423,9 +2428,9 @@ unsigned long get_hidden_gm_start(struct pgt_device *pdev, struct vgt_device *vg
 
 int category_sched(struct pgt_device *pdev, struct vgt_device *vgt)	/* Here could add some scheduling policies. Currently we just switch the category owner. */
 {
-	if(vgt->vm_id != pdev->category_owner[vgt->category]){
+	//if(vgt->vm_id != pdev->category_owner[vgt->category]){
 		shadow_to_gtt(pdev, vgt);
-		pdev->category_owner[vgt->category] = vgt->vm_id;
-	}
+	//	pdev->category_owner[vgt->category] = vgt->vm_id;
+	//}
 	return 0;
 }

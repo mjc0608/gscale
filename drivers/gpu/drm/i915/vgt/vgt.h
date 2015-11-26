@@ -1014,6 +1014,7 @@ struct vgt_device {
 	/* mochi: for EPT map */
 	unsigned long first_gfn;
 	unsigned long first_mfn;
+	int ept_umap;
 };
 
 enum vgt_owner_type {
