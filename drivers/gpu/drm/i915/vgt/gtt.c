@@ -2377,12 +2377,12 @@ bool vgt_handle_guest_write_rootp_in_context(struct execlist_context *el_ctx, in
 	return rc;
 }
 
-int shadow_to_gtt(struct pgt_device *pdev, struct vgt_device *vgt)
+int switch_gtt_aperture(struct pgt_device *pdev, struct vgt_device *vgt)
 {
 	struct vgt_mm *ggtt_mm = vgt->gtt.ggtt_mm;
 	unsigned long i;
-	unsigned long high_gm_index_start, aperture_gm_index_start;
-	unsigned long high_gm_pages, aperture_gm_pages;
+	unsigned long aperture_gm_index_start;
+	unsigned long aperture_gm_pages;
 	gtt_entry_t e;
 	
 	aperture_gm_index_start = vgt->aperture_offset >> GTT_PAGE_SHIFT;
@@ -2391,6 +2391,16 @@ int shadow_to_gtt(struct pgt_device *pdev, struct vgt_device *vgt)
 		vgt_mm_get_entry(ggtt_mm, ggtt_mm->shadow_gtt, &e, aperture_gm_index_start + i);
 		vgt_write_gtt(pdev, i + aperture_gm_index_start, e.val32[0]);
 	}
+	return 0;	
+}
+
+int switch_gtt_hidden(struct pgt_device *pdev, struct vgt_device *vgt)
+{
+	struct vgt_mm *ggtt_mm = vgt->gtt.ggtt_mm;
+	unsigned long i;
+	unsigned long high_gm_index_start;
+	unsigned long high_gm_pages;
+	gtt_entry_t e;
 	
 	high_gm_index_start = vgt->hidden_gm_offset >> GTT_PAGE_SHIFT;
 	high_gm_pages = (vgt->gm_sz - vgt->aperture_sz) >> GTT_PAGE_SHIFT;
@@ -2428,8 +2438,9 @@ unsigned long get_hidden_gm_start(struct pgt_device *pdev, struct vgt_device *vg
 
 int category_sched(struct pgt_device *pdev, struct vgt_device *vgt)	/* Here could add some scheduling policies. Currently we just switch the category owner. */
 {
+	switch_gtt_aperture(pdev, vgt);
 	//if(vgt->vm_id != pdev->category_owner[vgt->category]){
-		shadow_to_gtt(pdev, vgt);
+	switch_gtt_hidden(pdev, vgt);
 	//	pdev->category_owner[vgt->category] = vgt->vm_id;
 	//}
 	return 0;

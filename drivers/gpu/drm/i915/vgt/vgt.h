@@ -2054,7 +2054,8 @@ extern void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start,
 		unsigned long size);
 
 /* Mochi: new functins to support shadow GTT. */
-extern int shadow_to_gtt(struct pgt_device *pdev, struct vgt_device *vgt);
+extern int switch_gtt_aperture(struct pgt_device *pdev, struct vgt_device *vgt);
+extern int switch_gtt_hidden(struct pgt_device *pdev, struct vgt_device *vgt);
 extern unsigned long get_hidden_gm_start(struct pgt_device *pdev, struct vgt_device *vgt);
 extern int  category_sched(struct pgt_device *pdev, struct vgt_device *vgt);
 
