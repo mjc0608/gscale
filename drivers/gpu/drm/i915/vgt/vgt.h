@@ -1018,6 +1018,11 @@ struct vgt_device {
 	unsigned long first_gfn;
 	unsigned long first_mfn;
 	int ept_umap;
+
+	/* Mochi: for fence aperture. */
+	unsigned long fence_gfn_start[4];
+	unsigned long fence_mfn_start[4];
+	unsigned long fence_page_num[4];
 };
 
 enum vgt_owner_type {
