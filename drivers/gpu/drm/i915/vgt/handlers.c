@@ -93,6 +93,8 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 	void *p_data, unsigned int bytes)
 {
 	int id;
+	unsigned long value, upper_mask, lower_mask, upper_pfn, lower_pfn;
+	
 	ASSERT(bytes <= 8 && !(off & (bytes - 1)));
 	id = (off - _REG_FENCE_0_LOW) >> 3;
 
@@ -105,6 +107,16 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 		memcpy ((char *)vgt->state.vReg + off, p_data, bytes);
 		memcpy ((char *)vgt->state.sReg + off, p_data, bytes);
 		/* TODO: Check address space */
+
+		value = __vreg64(vgt, off);
+		upper_mask = ((1UL << 20)-1) << 12;
+		lower_mask = ((1UL << 20)-1) << 44;
+		upper_pfn = (value & upper_mask) >> 12;
+		lower_pfn = (value & lower_mask) >> 44;
+
+		vgt_info("Mochi off: %d, vReg: %lx, start_pfn: %lx, end_pfn: %lx, total: %lx.\n", 
+					off, __vreg64(vgt, off), upper_pfn, lower_pfn, lower_pfn - upper_pfn);
+
 
 		/* FENCE registers are physically assigned, update! */
 		if (bytes < 8)

@@ -298,6 +298,8 @@ struct vgt_rsvd_ring {
 #define VGT_MAX_VMS			8
 #define VGT_RSVD_APERTURE_SZ		(32*SIZE_1MB)	/* reserve 8MB for vGT itself */
 
+#define VGT_FENCE_APERTURE_SZ		(32*SIZE_1MB)	/* Mochi: fence aperture reserved. */
+
 #define GTT_PAGE_SHIFT		12
 #define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
 #define GTT_PAGE_MASK		(~(GTT_PAGE_SIZE-1))
@@ -312,6 +314,7 @@ struct vgt_rsvd_ring {
 #define VGT_FENCE_BITMAP_BITS	VGT_MAX_NUM_FENCES
 #define VGT_FENCE_REGION_SIZE	(VGT_MAX_NUM_FENCES*8)
 #define VGT_RSVD_APERTURE_BITMAP_BITS (VGT_RSVD_APERTURE_SZ / GTT_PAGE_SIZE)
+#define VGT_FENCE_APERTURE_BITMAP_BITS (VGT_FENCE_APERTURE_SZ / GTT_PAGE_SIZE)	/* Mochi: fence bitmap. */
 #define VGT_APERTURE_PAGES	(VGT_RSVD_APERTURE_SZ >> GTT_PAGE_SHIFT)
 
 //#define SZ_CONTEXT_AREA_PER_RING	4096
@@ -1279,12 +1282,19 @@ struct pgt_device {
 	/* 1 bit corresponds to 1 PAGE(4K) in aperture */
 	DECLARE_BITMAP(rsvd_aperture_bitmap, VGT_RSVD_APERTURE_BITMAP_BITS);
 
+	/* 1 bit corresponds to 1 PAGE(4K) in aperture */
+	DECLARE_BITMAP(fence_aperture_bitmap, VGT_FENCE_APERTURE_BITMAP_BITS);
+
 	struct page *dummy_page;
 	struct page *(*rsvd_aperture_pages)[VGT_APERTURE_PAGES];
 	gtt_entry_t dummy_gtt_entry;
 
 	uint64_t rsvd_aperture_sz;
 	uint64_t rsvd_aperture_base;
+	
+	uint64_t fence_aperture_sz;	/* Mochi: for fence aperture. */
+	uint64_t fence_aperture_base;
+
 	uint64_t scratch_page;		/* page used for data written from GPU */
 
 	struct vgt_device *device[VGT_MAX_VMS];	/* a list of running VMs */
@@ -2053,6 +2063,12 @@ extern unsigned long rsvd_aperture_alloc(struct pgt_device *pdev,
 extern void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start,
 		unsigned long size);
 
+/* Mochi: fence aperture alloc & free fucntions. */
+extern unsigned long fence_aperture_alloc(struct pgt_device *pdev,
+		unsigned long size);
+extern void fence_aperture_free(struct pgt_device *pdev, unsigned long start,
+		unsigned long size);
+
 /* Mochi: new functins to support shadow GTT. */
 extern int switch_gtt_aperture(struct pgt_device *pdev, struct vgt_device *vgt);
 extern int switch_gtt_hidden(struct pgt_device *pdev, struct vgt_device *vgt);
@@ -2772,6 +2788,10 @@ vgt_reg_t mmio_g2h_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t g_
 vgt_reg_t mmio_h2g_gmadr(struct vgt_device *vgt, unsigned long reg, vgt_reg_t h_value);
 unsigned long rsvd_aperture_alloc(struct pgt_device *pdev, unsigned long size);
 void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start, unsigned long size);
+/* Mochi: fence aperture functions. */
+unsigned long fence_aperture_alloc(struct pgt_device *pdev, unsigned long size);
+void fence_aperture_free(struct pgt_device *pdev, unsigned long start, unsigned long size);
+
 int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp);
 void free_vm_aperture_gm_and_fence(struct vgt_device *vgt);
 int alloc_vm_rsvd_aperture(struct vgt_device *vgt);
