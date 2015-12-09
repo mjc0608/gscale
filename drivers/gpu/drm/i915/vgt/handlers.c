@@ -117,10 +117,10 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 			lower_mask = ((1UL << 20)-1) << 12;
 			upper_mask = ((1UL << 20)-1) << 44;
-			lower_pfn = (value & upper_mask) >> 12;
-			upper_pfn = (value & lower_mask) >> 44;
+			lower_pfn = (value & lower_mask) >> 12;
+			upper_pfn = (value & upper_mask) >> 44;
 			vgt_info("Mochi off: %d, vReg: %lx, lower_pfn: %lx, upper_pfn: %lx, total: %lx.\n", 
-						off, __vreg64(vgt, off), lower_pfn, upper_pfn, upper_pfn - lower_pfn);
+						off, __vreg64(vgt, off), lower_pfn, upper_pfn, upper_pfn - lower_pfn + 1);
 
 			if(((off-1048576)%8==0) && (value&1)){
 				vgt_info("oh, shit!\n");
@@ -133,11 +133,11 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 					fence_aperture_free(vgt->pdev, vgt->fence_mfn_start[id] << PAGE_SHIFT, vgt->fence_page_num[id] << PAGE_SHIFT);
 				}
 
-				mfn = fence_aperture_alloc(vgt->pdev, (upper_pfn - lower_pfn) << PAGE_SHIFT) >> PAGE_SHIFT;
+				mfn = fence_aperture_alloc(vgt->pdev, (upper_pfn - lower_pfn + 1) << PAGE_SHIFT) >> PAGE_SHIFT;
 				vgt->fence_gfn_start[id] = gfn;
 				vgt->fence_mfn_start[id] = mfn;
-				vgt->fence_page_num[id] = upper_pfn - lower_pfn;
-				hypervisor_map_mfn_to_gpfn(vgt, gfn, mfn, upper_pfn - lower_pfn, 1, VGT_MAP_APERTURE);
+				vgt->fence_page_num[id] = upper_pfn - lower_pfn + 1;
+				hypervisor_map_mfn_to_gpfn(vgt, gfn, mfn, upper_pfn - lower_pfn + 1, 1, VGT_MAP_APERTURE);
 				
 				new_lower_pfn = mfn - (phys_aperture_base(vgt->pdev) >> PAGE_SHIFT);
 				new_upper_pfn = new_lower_pfn + upper_pfn - lower_pfn;
@@ -148,7 +148,7 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 				VGT_MMIO_WRITE_BYTES(vgt->pdev, off + vgt->fence_base * 8, new_value, 8);		
 
 				vgt_info("Mochi off: %d, vReg: %lx, lower_pfn: %lx, upper_pfn: %lx, total: %lx, gfn: %lx, mfn: %lx.\n", 
-						off, __vreg64(vgt, off), lower_pfn, upper_pfn, upper_pfn - lower_pfn, gfn, mfn);
+						off, __vreg64(vgt, off), lower_pfn, upper_pfn, upper_pfn - lower_pfn + 1, gfn, mfn);
 			}
 
 		}else{
