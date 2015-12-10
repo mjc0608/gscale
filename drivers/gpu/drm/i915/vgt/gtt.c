@@ -171,7 +171,7 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 	struct vgt_mm *ggtt_mm = vgt->gtt.ggtt_mm;
 	void *shadow_gtt = ggtt_mm->shadow_gtt;
 	unsigned long hidden_gm_index_start = hidden_gm_base(vgt->pdev) >> GTT_PAGE_SHIFT;
-	unsigned long rsvd_gm_index_start = (hidden_gm_base(vgt->pdev) - vgt->pdev->rsvd_aperture_sz) >> GTT_PAGE_SHIFT;
+	unsigned long fence_aperture_index_start = (hidden_gm_base(vgt->pdev) - vgt->pdev->rsvd_aperture_sz - vgt->pdev->fence_aperture_sz) >> GTT_PAGE_SHIFT;
 	
 	unsigned long mfn, target_mfn, target_gfn;
 	struct vgt_gtt_pte_ops *pte_ops = vgt->pdev->gtt.pte_ops;
@@ -186,13 +186,13 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 			*((u32 *)shadow_gtt + index) = e->val32[0];	
 		}else{
 			/* domU sets rsvd_aperture entries */
-			if(index < hidden_gm_index_start && index >= rsvd_gm_index_start)
+			if(index < hidden_gm_index_start && index >= fence_aperture_index_start)
 				vgt_write_gtt(e->pdev, index, e->val32[0]);
 
 			*((u32 *)shadow_gtt + index) = e->val32[0];
 		}
 		
-		if(vgt->vm_id!=0 && index < rsvd_gm_index_start){
+		if(vgt->vm_id!=0 && index < fence_aperture_index_start){
 			if(vgt->ept_umap==0){
 				hypervisor_map_mfn_to_gpfn(vgt, vgt->first_gfn, vgt->first_mfn, vgt_aperture_sz(vgt) >> PAGE_SHIFT, 0, VGT_MAP_APERTURE);
 				vgt->ept_umap=1;

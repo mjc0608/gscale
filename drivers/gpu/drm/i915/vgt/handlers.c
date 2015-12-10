@@ -98,6 +98,10 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 	unsigned long gfn, mfn;
 	unsigned long new_upper_pfn, new_lower_pfn, upper_pfn, lower_pfn;
 
+	unsigned long index;
+	struct vgt_mm *ggtt_mm = vgt->gtt.ggtt_mm;
+	gtt_entry_t e;
+
 	ASSERT(bytes <= 8 && !(off & (bytes - 1)));
 	id = (off - _REG_FENCE_0_LOW) >> 3;
 
@@ -113,7 +117,7 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 
 		value = __vreg64(vgt, off);
 		
-		if(vgt->vm_id!=0){
+		if(vgt->vm_id!=0 && ((off - 1048576)%8==0) && (value&1)){
 
 			lower_mask = ((1UL << 20)-1) << 12;
 			upper_mask = ((1UL << 20)-1) << 44;
@@ -122,34 +126,32 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 			vgt_info("Mochi off: %d, vReg: %lx, lower_pfn: %lx, upper_pfn: %lx, total: %lx.\n", 
 						off, __vreg64(vgt, off), lower_pfn, upper_pfn, upper_pfn - lower_pfn + 1);
 
-			if(((off-1048576)%8==0) && (value&1)){
-				vgt_info("oh, shit!\n");
-				gfn = lower_pfn + (phys_aperture_base(vgt->pdev) >> PAGE_SHIFT) - vgt->first_mfn + vgt->first_gfn;
+			gfn = lower_pfn + (phys_aperture_base(vgt->pdev) >> PAGE_SHIFT) - vgt->first_mfn + vgt->first_gfn;
 
-				/* Before we map new fence aperture pages, we free old pages. */
-				if(vgt->fence_gfn_start[id]!=0){	
-					hypervisor_map_mfn_to_gpfn(vgt, vgt->fence_gfn_start[id], vgt->fence_mfn_start[id],
-							vgt->fence_page_num[id], 0, VGT_MAP_APERTURE);	//No.1: umap EPT.	
-					fence_aperture_free(vgt->pdev, vgt->fence_mfn_start[id] << PAGE_SHIFT, vgt->fence_page_num[id] << PAGE_SHIFT);
-				}
-
-				mfn = fence_aperture_alloc(vgt->pdev, (upper_pfn - lower_pfn + 1) << PAGE_SHIFT) >> PAGE_SHIFT;
-				vgt->fence_gfn_start[id] = gfn;
-				vgt->fence_mfn_start[id] = mfn;
-				vgt->fence_page_num[id] = upper_pfn - lower_pfn + 1;
-				hypervisor_map_mfn_to_gpfn(vgt, gfn, mfn, upper_pfn - lower_pfn + 1, 1, VGT_MAP_APERTURE);
-				
-				new_lower_pfn = mfn - (phys_aperture_base(vgt->pdev) >> PAGE_SHIFT);
-				new_upper_pfn = new_lower_pfn + upper_pfn - lower_pfn;
-
-				new_value_mask = (((1UL << 13) - 1) << 32) + ((1UL << 13) - 1);
-				new_value = (value & new_value_mask) + (new_lower_pfn << 12) + (new_upper_pfn << 44);
-
-				VGT_MMIO_WRITE_BYTES(vgt->pdev, off + vgt->fence_base * 8, new_value, 8);		
-
-				vgt_info("Mochi off: %d, vReg: %lx, lower_pfn: %lx, upper_pfn: %lx, total: %lx, gfn: %lx, mfn: %lx.\n", 
-						off, __vreg64(vgt, off), lower_pfn, upper_pfn, upper_pfn - lower_pfn + 1, gfn, mfn);
+			/* Before we map new fence aperture pages, we free old pages. */
+			if(vgt->fence_gfn_start[id]!=0){	
+				hypervisor_map_mfn_to_gpfn(vgt, vgt->fence_gfn_start[id], vgt->fence_mfn_start[id],
+						vgt->fence_page_num[id], 0, VGT_MAP_APERTURE);	//No.1: umap EPT.	
+				fence_aperture_free(vgt->pdev, vgt->fence_mfn_start[id] << PAGE_SHIFT, vgt->fence_page_num[id] << PAGE_SHIFT);
 			}
+
+			mfn = fence_aperture_alloc(vgt->pdev, (upper_pfn - lower_pfn + 1) << PAGE_SHIFT) >> PAGE_SHIFT;
+			vgt->fence_gfn_start[id] = gfn;
+			vgt->fence_mfn_start[id] = mfn;
+			vgt->fence_page_num[id] = upper_pfn - lower_pfn + 1;
+			hypervisor_map_mfn_to_gpfn(vgt, gfn, mfn, upper_pfn - lower_pfn + 1, 1, VGT_MAP_APERTURE);
+			
+			new_lower_pfn = ((mfn << PAGE_SHIFT) - phys_aperture_base(vgt->pdev)) >> PAGE_SHIFT;
+			new_upper_pfn = new_lower_pfn + upper_pfn - lower_pfn;
+
+			new_value_mask = (((1UL << 13) - 1) << 32) + ((1UL << 13) - 1);
+			new_value = (value & new_value_mask) + (new_lower_pfn << 12) + (new_upper_pfn << 44);
+			for(index = 0; index < (upper_pfn - lower_pfn + 1); index++){
+				vgt_mm_get_entry(ggtt_mm, NULL, &e, lower_pfn + index);
+				vgt_mm_set_entry(ggtt_mm, NULL, &e, new_lower_pfn + index);
+			}
+			
+			VGT_MMIO_WRITE_BYTES(vgt->pdev, off + vgt->fence_base * 8, new_value, 8);		
 
 		}else{
 			/* FENCE registers are physically assigned, update! */
