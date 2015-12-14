@@ -298,7 +298,7 @@ struct vgt_rsvd_ring {
 #define VGT_MAX_VMS			8
 #define VGT_RSVD_APERTURE_SZ		(32*SIZE_1MB)	/* reserve 8MB for vGT itself */
 
-#define VGT_FENCE_APERTURE_SZ		(32*SIZE_1MB)	/* Mochi: fence aperture reserved. */
+#define VGT_FENCE_APERTURE_SZ		(48*SIZE_1MB)	/* Mochi: fence aperture reserved. */
 
 #define GTT_PAGE_SHIFT		12
 #define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)

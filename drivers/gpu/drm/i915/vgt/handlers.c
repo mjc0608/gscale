@@ -144,8 +144,8 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 			new_lower_pfn = ((mfn << PAGE_SHIFT) - phys_aperture_base(vgt->pdev)) >> PAGE_SHIFT;
 			new_upper_pfn = new_lower_pfn + upper_pfn - lower_pfn;
 
-			new_value_mask = (((1UL << 13) - 1) << 32) + ((1UL << 13) - 1);
-			new_value = (value & new_value_mask) + (new_lower_pfn << 12) + (new_upper_pfn << 44);
+			new_value_mask = (((1UL << 12) - 1) << 32) | ((1UL << 12) - 1);
+			new_value = (value & new_value_mask) | (new_lower_pfn << 12) | (new_upper_pfn << 44);
 			for(index = 0; index < (upper_pfn - lower_pfn + 1); index++){
 				vgt_mm_get_entry(ggtt_mm, NULL, &e, lower_pfn + index);
 				vgt_mm_set_entry(ggtt_mm, NULL, &e, new_lower_pfn + index);
