@@ -394,6 +394,7 @@ unsigned long fence_aperture_alloc(struct pgt_device *pdev, unsigned long size)
 	}
 
 	bitmap_set(pdev->fence_aperture_bitmap, start, nr_pages);
+	vgt_info("bitmap start: %lu, numbers: %lu.\n", start, nr_pages);
 
 	return pdev->fence_aperture_base + (start << PAGE_SHIFT);
 }
