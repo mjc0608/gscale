@@ -294,11 +294,11 @@ struct vgt_rsvd_ring {
 #define VGT_VBLANK_TIMEOUT	50	/* in ms */
 
 /* Maximum VMs supported by vGT. Actual number is device specific */
-#define VGT_MAX_VMS_HSW 		4
-#define VGT_MAX_VMS			8
-#define VGT_RSVD_APERTURE_SZ		(32*SIZE_1MB)	/* reserve 8MB for vGT itself */
+#define VGT_MAX_VMS_HSW 		20
+#define VGT_MAX_VMS			20
+#define VGT_RSVD_APERTURE_SZ		(8*SIZE_1MB)	/* reserve 8MB for vGT itself */
 
-#define VGT_FENCE_APERTURE_SZ		(48*SIZE_1MB)	/* Mochi: fence aperture reserved. */
+#define VGT_FENCE_APERTURE_SZ		(56*SIZE_1MB)	/* Mochi: fence aperture reserved. */
 
 #define GTT_PAGE_SHIFT		12
 #define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
@@ -2796,6 +2796,7 @@ void rsvd_aperture_free(struct pgt_device *pdev, unsigned long start, unsigned l
 /* Mochi: fence aperture functions. */
 unsigned long fence_aperture_alloc(struct pgt_device *pdev, unsigned long size);
 void fence_aperture_free(struct pgt_device *pdev, unsigned long start, unsigned long size);
+void free_fence_aperture(struct vgt_device *vgt);
 
 int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp);
 void free_vm_aperture_gm_and_fence(struct vgt_device *vgt);

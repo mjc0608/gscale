@@ -415,3 +415,14 @@ void fence_aperture_free(struct pgt_device *pdev, unsigned long start, unsigned 
 	}
 }
 
+void free_fence_aperture(struct vgt_device *vgt)
+{
+	struct pgt_device *pdev = vgt->pdev;
+	int i;
+	for(i=0; i< 4; i++){
+		if(vgt->fence_gfn_start[i]!=0)
+			fence_aperture_free(pdev, vgt->fence_mfn_start[i] << PAGE_SHIFT, vgt->fence_page_num[i] << PAGE_SHIFT);
+			
+	}
+}
+
