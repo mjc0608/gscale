@@ -116,15 +116,15 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 		memcpy ((char *)vgt->state.sReg + off, p_data, bytes);
 		/* TODO: Check address space */
 
-		if(vgt->vm_id!=0 && (off - 104580)%8==0 && (__vreg64(vgt, off-4)&1)){
+		if(vgt_if_windows && vgt->vm_id!=0 && (off - 104580)%8==0 && (__vreg64(vgt, off-4)&1)){
 			value = __vreg64(vgt, off - 4);
 			
 			lower_mask = ((1UL << 20)-1) << 12;
 			upper_mask = ((1UL << 20)-1) << 44;
 			lower_pfn = (value & lower_mask) >> 12;
 			upper_pfn = (value & upper_mask) >> 44;
-			vgt_info("Mochi off: %d, vReg: %lx, lower_pfn: %lx, upper_pfn: %lx, total: %lx.\n", 
-						off, __vreg64(vgt, off-4), lower_pfn, upper_pfn, upper_pfn - lower_pfn + 1);
+			vgt_info("Mochi vm: %d off: %d, vReg: %lx, lower_pfn: %lx, upper_pfn: %lx, total: %lx.\n", 
+						vgt->vm_id, off, __vreg64(vgt, off-4), lower_pfn, upper_pfn, upper_pfn - lower_pfn + 1);
 
 			gfn = lower_pfn + (phys_aperture_base(vgt->pdev) >> PAGE_SHIFT) - vgt->first_mfn + vgt->first_gfn;
 
@@ -159,15 +159,15 @@ static bool fence_mmio_write(struct vgt_device *vgt, unsigned int off,
 			
 			VGT_MMIO_WRITE_BYTES(vgt->pdev, off - 4 + vgt->fence_base * 8, new_value, 8);		
 
-		}else if(vgt->vm_id!=0 && ((off - 1048576)%8==0) && (__vreg64(vgt, off)&1) && (__vreg64(vgt, off) >> 32)){
+		}else if(!vgt_if_windows && vgt->vm_id!=0 && ((off - 1048576)%8==0) && (__vreg64(vgt, off)&1) && (__vreg64(vgt, off) >> 32)){
 			value = __vreg64(vgt, off);
 			
 			lower_mask = ((1UL << 20)-1) << 12;
 			upper_mask = ((1UL << 20)-1) << 44;
 			lower_pfn = (value & lower_mask) >> 12;
 			upper_pfn = (value & upper_mask) >> 44;
-			vgt_info("Mochi off: %d, vReg: %lx, lower_pfn: %lx, upper_pfn: %lx, total: %lx.\n", 
-						off, __vreg64(vgt, off), lower_pfn, upper_pfn, upper_pfn - lower_pfn + 1);
+			vgt_info("Mochi vm: %d off: %d, vReg: %lx, lower_pfn: %lx, upper_pfn: %lx, total: %lx.\n", 
+						vgt->vm_id, off, __vreg64(vgt, off), lower_pfn, upper_pfn, upper_pfn - lower_pfn + 1);
 
 			gfn = lower_pfn + (phys_aperture_base(vgt->pdev) >> PAGE_SHIFT) - vgt->first_mfn + vgt->first_gfn;
 

@@ -198,15 +198,27 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 				vgt->ept_umap=1;
 			}
 				
+			/* get target mfn through the GTT entry */
+			target_mfn = pte_ops->get_pfn(e);
+
+			/* this my naive way to jump over invalid value and reduce hypercall. */
+			if(vgt->invalid==target_mfn){
+				vgt->invalid_count++;
+			}else{
+				vgt->invalid = target_mfn;
+				vgt->invalid_count=0;
+			}
+
+			if(vgt->invalid_count>10)
+				return e;
+				
 			/* domU sets aperture entries */
 			/*    |<-     GM address     ->| + |<-     aperture offset    ->| = HPA -> MFN */
 			mfn = ((index << GTT_PAGE_SHIFT) + phys_aperture_base(vgt->pdev)) >> PAGE_SHIFT;
 
 			target_gfn = vgt->first_gfn + mfn - vgt->first_mfn;
 
-			/* get target mfn through the GTT entry */
-			target_mfn = pte_ops->get_pfn(e);
-
+			
 			/* modify EPT to map GPA direct to HPA without using GTT. */
 			hypervisor_map_mfn_to_gpfn(vgt, target_gfn, target_mfn, 1, 1, VGT_MAP_APERTURE);
 		}

@@ -97,6 +97,7 @@ extern bool cmd_parser_ip_buf;
 extern bool timer_based_qos;
 extern int tbs_period_ms;
 extern bool opregion_present;
+extern int vgt_if_windows;
 
 enum vgt_event_type {
 	// GT
@@ -1023,6 +1024,9 @@ struct vgt_device {
 	unsigned long fence_gfn_start[4];
 	unsigned long fence_mfn_start[4];
 	unsigned long fence_page_num[4];
+	/* Mochi: for jump over invalid value. */
+	unsigned long invalid;
+	int invalid_count;
 };
 
 enum vgt_owner_type {
