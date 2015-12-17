@@ -1639,11 +1639,6 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 		goto out;
 	}
 
-	/* Mochi: write shadow GTT to physical GTT. */
-	vgt_info("Mochi context switch VM%d -> VM%d.\n", prev->vm_id, next->vm_id);
-	if(next->vm_id != 0)
-		category_sched(pdev, next);
-
 	start_ring(pdev, ring_id);
 
 	/* STEP-d: save HW render context for prev */
@@ -1656,6 +1651,12 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 		vgt_err("Fail to reset engine\n");
 		goto out;
 	}
+
+	/* Mochi: write shadow GTT to physical GTT. */
+	vgt_info("Mochi context switch VM%d -> VM%d.\n", prev->vm_id, next->vm_id);
+	if(next->vm_id != 0)
+		category_sched(pdev, next);
+
 
 	/* STEP-e: restore HW render context for next */
 	if (!context_ops->restore_hw_context(ring_id, next)) {
