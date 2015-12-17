@@ -1632,6 +1632,7 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 		goto out;
 	}
 
+	
 	/* STEP-c: switch to vGT ring buffer */
 	if (!vgt_setup_rsvd_ring(ring)) {
 		vgt_err("Fail to setup rsvd ring\n");

@@ -3057,6 +3057,16 @@ static inline int hypervisor_map_mfn_to_gpfn(struct vgt_device *vgt,
 	return 0;
 }
 
+/* Mochi: map a group of gfn to gpfn. */
+static inline int hypervisor_batch_map_mfn_to_gpfn(struct vgt_device *vgt,
+	unsigned long *gpfns, unsigned long *mfns, int nr, int map, enum map_type type)
+{
+	if (vgt_pkdm && vgt_pkdm->batch_map_mfn_to_gpfn)
+		return vgt_pkdm->batch_map_mfn_to_gpfn(vgt->vm_id, gpfns, mfns, nr, map, type);
+
+	return 0;
+}
+
 static inline int hypervisor_set_trap_area(struct vgt_device *vgt,
 	uint64_t start, uint64_t end, bool map)
 {
