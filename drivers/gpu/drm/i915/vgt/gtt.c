@@ -2452,8 +2452,10 @@ int category_sched(struct pgt_device *pdev, struct vgt_device *vgt)	/* Here coul
 {
 	switch_gtt_aperture(pdev, vgt);
 	//if(vgt->vm_id != pdev->category_owner[vgt->category]){
-	switch_gtt_hidden(pdev, vgt);
+	if(pdev->gtt_owner!=vgt->vm_id)
+		switch_gtt_hidden(pdev, vgt);
 	//	pdev->category_owner[vgt->category] = vgt->vm_id;
 	//}
+	pdev->gtt_owner = vgt->vm_id;
 	return 0;
 }

@@ -1618,6 +1618,7 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 {
 	bool rc = false;
 	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[ring_id];
+	cycles_t t0, t1;
 
 	/* STEP-a: stop the ring */
 	if (!stop_ring(pdev, ring_id)) {
@@ -1653,10 +1654,12 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 	}
 
 	/* Mochi: write shadow GTT to physical GTT. */
-	vgt_info("Mochi context switch VM%d -> VM%d.\n", prev->vm_id, next->vm_id);
+	//vgt_info("Mochi context switch VM%d -> VM%d.\n", prev->vm_id, next->vm_id);
+	t0 = vgt_get_cycles();
 	if(next->vm_id != 0)
 		category_sched(pdev, next);
-
+	t1 = vgt_get_cycles();
+	vgt_info("Mochi:entry.copy, %lu\n", t1-t0);
 
 	/* STEP-e: restore HW render context for next */
 	if (!context_ops->restore_hw_context(ring_id, next)) {
@@ -1855,7 +1858,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	int i = 0;
 	int cpu;
 	struct vgt_device *next, *prev;
-	cycles_t t0, t1, t2;
+	cycles_t t0, t1, t2, end_mark;
 
 	vgt_lock_dev(pdev, cpu);
 	if (!ctx_switch_requested(pdev))
@@ -1975,6 +1978,11 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 
 	t2 = vgt_get_cycles();
 	context_switch_cost += (t2-t1);
+
+	end_mark = vgt_get_cycles();
+	vgt_info("Mochi:total, %lu\n", end_mark - pdev->last_mark);
+	pdev->last_mark = end_mark;
+	
 out:
 	vgt_unlock_dev(pdev, cpu);
 	return true;

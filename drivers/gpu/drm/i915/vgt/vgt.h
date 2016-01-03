@@ -297,9 +297,9 @@ struct vgt_rsvd_ring {
 /* Maximum VMs supported by vGT. Actual number is device specific */
 #define VGT_MAX_VMS_HSW 		20
 #define VGT_MAX_VMS			20
-#define VGT_RSVD_APERTURE_SZ		(8*SIZE_1MB)	/* reserve 8MB for vGT itself */
+#define VGT_RSVD_APERTURE_SZ		(32*SIZE_1MB)	/* reserve 8MB for vGT itself */
 
-#define VGT_FENCE_APERTURE_SZ		(56*SIZE_1MB)	/* Mochi: fence aperture reserved. */
+#define VGT_FENCE_APERTURE_SZ		(256*SIZE_1MB)	/* Mochi: fence aperture reserved. */
 
 #define GTT_PAGE_SHIFT		12
 #define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
@@ -1267,6 +1267,8 @@ struct pgt_device {
 
 	int category_owner[4];	/* Mochi: split high GM into 4 categories, each digit of category_owner means the VM_id of current category owner.*/
 	int category_load[4];	/* Mochi: each digit of category_load means the amount of VMs run in this category. */
+	cycles_t last_mark;
+	int gtt_owner;	
 
 	uint32_t saved_rrmr;
 	uint32_t saved_shotplug_ctl;
