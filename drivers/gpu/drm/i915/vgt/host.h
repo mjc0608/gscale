@@ -53,4 +53,5 @@ uint64_t vgt_gttmmio_va(struct pgt_device *pdev, off_t reg);
 uint64_t vgt_gttmmio_pa(struct pgt_device *pdev, off_t reg);
 struct pci_dev *pgt_to_pci(struct pgt_device *pdev);
 
+bool vgt_host_write(u32 reg, void *val, int len, bool is_gtt, bool trace);
 #endif /* _VGT_HOST_MEDIATE_H_ */
