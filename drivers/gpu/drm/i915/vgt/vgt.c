@@ -488,7 +488,7 @@ bool initial_phys_states(struct pgt_device *pdev)
 	pdev->gmadr_base = bar1 & ~0xf;
 	printk("gttmmio: 0x%llx, gmadr: 0x%llx\n", pdev->gttmmio_base, pdev->gmadr_base);
 
-	pdev->gttmmio_base_va = ioremap_wc(pdev->gttmmio_base, pdev->bar_size[0]);
+	pdev->gttmmio_base_va = ioremap(pdev->gttmmio_base, pdev->bar_size[0]);
 	if (pdev->gttmmio_base_va == NULL) {
 		WARN_ONCE(1, "insufficient memory for ioremap!\n");
 		return false;

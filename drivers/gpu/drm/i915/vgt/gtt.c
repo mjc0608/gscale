@@ -27,10 +27,6 @@
 #include "vgt.h"
 #include "trace.h"
 
-#include "host.h"
-
-#define GFX_FLSH_CNTL_GEN6      0x101008
-#define   GFX_FLSH_CNTL_EN      (1<<0)
 
 
 /*
@@ -181,8 +177,6 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 	
 	unsigned long mfn, target_mfn, target_gfn;
 	struct vgt_gtt_pte_ops *pte_ops = vgt->pdev->gtt.pte_ops;
-	int flush_val;
-	int flush = GFX_FLSH_CNTL_EN;
 
 	ASSERT(info->gtt_entry_size == 4);
 	if (!pt){
@@ -200,11 +194,6 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 			*((u32 *)shadow_gtt + index) = e->val32[0];
 		}
 
-		vgt_native_mmio_write(GFX_FLSH_CNTL_GEN6, &flush, 4, false);
-		vgt_native_mmio_read(GFX_FLSH_CNTL_GEN6, &flush_val, 4, false);
-		//vgt_host_write(GFX_FLSH_CNTL_GEN6, GFX_FLSH_CNTL_EN, sizeof(u32), false, false);
-		//I915_WRITE(GFX_FLSH_CNTL_GEN6, GFX_FLSH_CNFL_EN);
-		//POSTING_READ(GFX_FLSH_CNTL_GEN6);
 		
 		if(vgt->vm_id!=0 && index < fence_aperture_index_start){
 			if(vgt->ept_umap==0){
@@ -2409,18 +2398,13 @@ int switch_gtt_aperture(struct pgt_device *pdev, struct vgt_device *vgt)
 	unsigned long i;
 	unsigned long aperture_gm_index_start;
 	unsigned long aperture_gm_pages;
-	gtt_entry_t e;
-	int flush = (0 << 1);
-	int flush_val;
+	uint32_t *entry = ggtt_mm->shadow_gtt;
 	
 	aperture_gm_index_start = vgt->aperture_offset >> GTT_PAGE_SHIFT;
 	aperture_gm_pages = vgt->aperture_sz >> GTT_PAGE_SHIFT;
-	for(i = 0; i < aperture_gm_pages; i++){
-		vgt_mm_get_entry(ggtt_mm, ggtt_mm->shadow_gtt, &e, aperture_gm_index_start + i);
-		vgt_write_gtt(pdev, i + aperture_gm_index_start, e.val32[0]);
+	for(i = aperture_gm_index_start; i < aperture_gm_pages + aperture_gm_index_start; i++){
+		vgt_write_gtt(pdev, i , *(entry+i));
 	}
-	vgt_native_mmio_write(GFX_FLSH_CNTL_GEN6, &flush, 4, false);
-	vgt_native_mmio_read(GFX_FLSH_CNTL_GEN6, &flush_val, 4, false);
 
 	return 0;	
 }
@@ -2431,18 +2415,13 @@ int switch_gtt_hidden(struct pgt_device *pdev, struct vgt_device *vgt)
 	unsigned long i;
 	unsigned long high_gm_index_start;
 	unsigned long high_gm_pages;
-	gtt_entry_t e;
-	int flush = (0 << 1);
-	int flush_val;
+	uint32_t *entry = ggtt_mm->shadow_gtt;
 	
 	high_gm_index_start = vgt->hidden_gm_offset >> GTT_PAGE_SHIFT;
 	high_gm_pages = (vgt->gm_sz - vgt->aperture_sz) >> GTT_PAGE_SHIFT;
-	for(i = 0; i < high_gm_pages; i++){
-		vgt_mm_get_entry(ggtt_mm, ggtt_mm->shadow_gtt, &e, high_gm_index_start + i);
-		vgt_write_gtt(pdev, i + high_gm_index_start, e.val32[0]);
+	for(i = high_gm_index_start; i < high_gm_pages + high_gm_index_start; i++){
+		vgt_write_gtt(pdev, i , *(entry+i));
 	}
-	vgt_native_mmio_write(GFX_FLSH_CNTL_GEN6, &flush, 4, false);
-	vgt_native_mmio_read(GFX_FLSH_CNTL_GEN6, &flush_val, 4, false);
 
 	return 0;
 }
@@ -2476,8 +2455,8 @@ int category_sched(struct pgt_device *pdev, struct vgt_device *vgt)	/* Here coul
 {
 	switch_gtt_aperture(pdev, vgt);
 	//if(vgt->vm_id != pdev->category_owner[vgt->category]){
-	if(pdev->gtt_owner!=vgt->vm_id)
-		switch_gtt_hidden(pdev, vgt);
+	//if(pdev->gtt_owner!=vgt->vm_id)
+	switch_gtt_hidden(pdev, vgt);
 	//	pdev->category_owner[vgt->category] = vgt->vm_id;
 	//}
 	pdev->gtt_owner = vgt->vm_id;
