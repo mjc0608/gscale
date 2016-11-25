@@ -1228,7 +1228,7 @@ struct vgt_gtt_info {
 	struct list_head oos_page_free_list_head;
 };
 
-/* Jachin: add vgt pre_copy info */
+/*  Jachin: add vgt pre_copy info */
 struct vgt_pre_copy_info {
 	spinlock_t info_lock;
 	spinlock_t slot_locks[4];
