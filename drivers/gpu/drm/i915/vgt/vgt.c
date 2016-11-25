@@ -142,7 +142,7 @@ module_param_named(enable_video_switch, enable_video_switch, int, 0600);
  * We can reduce the GM space used by Dom0 i915, but remember: Dom0
  * render/display may not work properly without enough GM space.
  */
-int dom0_low_gm_sz = 96;	//in MB.
+int dom0_low_gm_sz = 64;	//in MB.
 module_param_named(dom0_low_gm_sz, dom0_low_gm_sz, int, 0600);
 
 int dom0_high_gm_sz = 384;	//in MB.

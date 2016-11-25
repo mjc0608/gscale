@@ -219,11 +219,15 @@ int allocate_vm_aperture_gm_and_fence(struct vgt_device *vgt, vgt_params_t vp)
 	if (visable_gm_start >= guard)
 		return -ENOMEM;
 
-	if (vp.gm_sz > vp.aperture_sz) {
+	if (vgt->vm_id==0 && vp.gm_sz > vp.aperture_sz) {
 		hidden_gm_start = bitmap_find_next_zero_area(gm_bitmap,
 				gm_bitmap_total_bits, guard, vp.gm_sz - vp.aperture_sz, 0);
 		if (hidden_gm_start >= gm_bitmap_total_bits)
 			return -ENOMEM;
+	}
+	else if (vp.gm_sz > vp.aperture_sz) {
+		hidden_gm_start = get_hidden_gm_start(pdev, vgt);
+		printk("jachin: hidden_gm_start: %u: %u\n", vgt->vm_id, hidden_gm_start);
 	}
 	fence_base = bitmap_find_next_zero_area(fence_bitmap,
 				VGT_FENCE_BITMAP_BITS, 0, vp.fence_sz, 0);

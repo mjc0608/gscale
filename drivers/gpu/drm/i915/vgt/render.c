@@ -1611,14 +1611,30 @@ static void dump_regs_on_err(struct pgt_device *pdev)
 			VGT_MMIO_READ(pdev, regs[i]));
 }
 
+extern int pre_copy_thread(void *);
+
 static bool gen7_ring_switch(struct pgt_device *pdev,
 		enum vgt_ring_id ring_id,
 		struct vgt_device *prev,
 		struct vgt_device *next)
 {
+	static bool pre_copy_thread_created = false;
 	bool rc = false;
 	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[ring_id];
 	cycles_t t0, t1;
+
+	/* Jachin: init pre_copy_thread */
+	if (unlikely(pre_copy_thread_created==false)) {
+		int i;
+		pdev->pre_copy_info.pdev = pdev;
+		pdev->pre_copy_info.wake_up=false;
+		pdev->pre_copy_info.pre_copy_thread = NULL;
+		pdev->pre_copy_info.pre_copy_thread = kthread_run(pre_copy_thread, (void*)&pdev->pre_copy_info, "vm_id: %d", prev->vm_id);
+		if (pdev->pre_copy_info.pre_copy_thread!=NULL) pre_copy_thread_created = true;
+		for (i=0; i<32; i++) {
+			pdev->pre_copy_info.possible_next[i]=NULL;
+		}	
+	}
 
 	/* STEP-a: stop the ring */
 	if (!stop_ring(pdev, ring_id)) {
@@ -1659,7 +1675,18 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 	if(next->vm_id != 0)
 		category_sched(pdev, next);
 	t1 = vgt_get_cycles();
-	vgt_info("Mochi:entry.copy, %lu\n", t1-t0);
+	vgt_info("Mochi.gtt.copy: %lu \n", t1-t0);
+	
+	/* Jachin: another thread */
+	spin_lock(&pdev->pre_copy_info.info_lock);
+	// pdev->pre_copy_info.pre_copy_vgt = prev;
+	pdev->pre_copy_info.wake_up=true;
+	
+	pdev->pre_copy_info.curr_vgt = prev;
+	pdev->pre_copy_info.next_vgt = next;
+
+	spin_unlock(&pdev->pre_copy_info.info_lock);
+	wake_up_process(pdev->pre_copy_info.pre_copy_thread);
 
 	/* STEP-e: restore HW render context for next */
 	if (!context_ops->restore_hw_context(ring_id, next)) {
@@ -1858,7 +1885,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	int i = 0;
 	int cpu;
 	struct vgt_device *next, *prev;
-	cycles_t t0, t1, t2, end_mark;
+	cycles_t t0, t1, t2;
 
 	vgt_lock_dev(pdev, cpu);
 	if (!ctx_switch_requested(pdev))
@@ -1977,12 +2004,10 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	vgt_sched_update_next(next);
 
 	t2 = vgt_get_cycles();
+	vgt_info("Mochi: vm:%d, ladder mapping:%lu, total modify:%lu \n", next->vm_id, next->ladder_mapping, next->gtt_modify);
+	//vgt_info("Mochi.total.time: %lu \n", t2 - pdev->last_mark);
+	pdev->last_mark = t2;
 	context_switch_cost += (t2-t1);
-
-	end_mark = vgt_get_cycles();
-	vgt_info("Mochi:total, %lu\n", end_mark - pdev->last_mark);
-	pdev->last_mark = end_mark;
-	
 out:
 	vgt_unlock_dev(pdev, cpu);
 	return true;

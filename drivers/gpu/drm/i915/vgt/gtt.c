@@ -177,7 +177,8 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 	
 	unsigned long mfn, target_mfn, target_gfn;
 	struct vgt_gtt_pte_ops *pte_ops = vgt->pdev->gtt.pte_ops;
-
+	
+	vgt->gtt_modify++;
 	ASSERT(info->gtt_entry_size == 4);
 	if (!pt){
 		if(vgt->vm_id == 0)
@@ -190,6 +191,9 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 			/* domU sets rsvd_aperture entries */
 			if(index < hidden_gm_index_start && index >= fence_aperture_index_start)
 				vgt_write_gtt(e->pdev, index, e->val32[0]);
+
+			if(index > hidden_gm_index_start && vgt->vm_id == vgt->pdev->gtt_owner)
+                                vgt_write_gtt(e->pdev, index, e->val32[0]);
 
 			*((u32 *)shadow_gtt + index) = e->val32[0];
 		}
@@ -214,7 +218,8 @@ static gtt_entry_t *gtt_set_entry32(void *pt, gtt_entry_t *e,
 
 			if(vgt->invalid_count>10)
 				return e;
-				
+			
+			vgt->ladder_mapping ++;
 			/* domU sets aperture entries */
 			/*    |<-     GM address     ->| + |<-     aperture offset    ->| = HPA -> MFN */
 			mfn = ((index << GTT_PAGE_SHIFT) + phys_aperture_base(vgt->pdev)) >> PAGE_SHIFT;
@@ -2429,18 +2434,20 @@ int switch_gtt_hidden(struct pgt_device *pdev, struct vgt_device *vgt)
 unsigned long get_hidden_gm_start(struct pgt_device *pdev, struct vgt_device *vgt)
 {
 	struct vgt_device_info *info = &pdev->device_info;
-	int category_load = pdev->category_load[0];
+	int category_load = ~(1<<31);
 	int i = 0;
 	int category_id = 0;
 	unsigned long hidden_gm_start;
 	unsigned long category_sz, visible_gm_sz, total_gm_sz;
-	for(i=1; i<4; i++){
+	for(i=1; i<3; i++){
 		if(pdev->category_load[i]<category_load){
 			category_load = pdev->category_load[i];
 			category_id = i;
 		}
 	}
 	
+	printk("jachin: vm=%u, slot=%u\n", vgt->vm_id, category_id);
+
 	pdev->category_load[category_id]++;
 	vgt->category = category_id;
 
@@ -2454,11 +2461,58 @@ unsigned long get_hidden_gm_start(struct pgt_device *pdev, struct vgt_device *vg
 int category_sched(struct pgt_device *pdev, struct vgt_device *vgt)	/* Here could add some scheduling policies. Currently we just switch the category owner. */
 {
 	switch_gtt_aperture(pdev, vgt);
-	//if(vgt->vm_id != pdev->category_owner[vgt->category]){
-	//if(pdev->gtt_owner!=vgt->vm_id)
-	switch_gtt_hidden(pdev, vgt);
-	//	pdev->category_owner[vgt->category] = vgt->vm_id;
-	//}
+	if(vgt->vm_id != pdev->category_owner[vgt->category]){
+		/* Jachin: add lock */
+		spin_lock(&pdev->pre_copy_info.slot_locks[vgt->category]);
+		if(pdev->gtt_owner!=vgt->vm_id)
+			switch_gtt_hidden(pdev, vgt);
+		pdev->category_owner[vgt->category] = vgt->vm_id;
+		spin_unlock(&pdev->pre_copy_info.slot_locks[vgt->category]);
+	}
 	pdev->gtt_owner = vgt->vm_id;
 	return 0;
 }
+
+/* Jachin: the pre-copy thread */
+int pre_copy_thread(void *args) {
+	struct vgt_pre_copy_info *info = (struct vgt_pre_copy_info*)args;
+	struct vgt_device *curr, *next, *pre_copy_vgt, *render_owner;
+	struct pgt_device *pdev;
+	while (1) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule();
+	//	printk("jachin: vgt = %lu\n", info->pre_copy_vgt->vm_id);
+	//	info->wake_up=false;
+
+		// get info
+		curr = info->curr_vgt;
+		next = info->next_vgt;
+		pre_copy_vgt = NULL;
+		pdev = info->pdev;
+		render_owner = NULL;
+		
+		// store predicitive map
+		info->possible_next[curr->vgt_id] = next;
+		pre_copy_vgt = info->possible_next[next->vgt_id];
+		
+		printk("Jachin: pre-copy mapping: %d -> %d\n", curr->vm_id, next->vm_id);
+
+		// try to do pre-copy
+		if (pre_copy_vgt == NULL) continue; // not initialized
+		render_owner = current_render_owner(pdev);	
+		if (render_owner == NULL) continue; // may not happen
+		if (render_owner->category==pre_copy_vgt->category) continue; // when the current owner and the pre-copy vgt has the same category
+
+		printk("Jachin: pre-copy start: %d on slot %d\n", pre_copy_vgt->vm_id, pre_copy_vgt->category);
+	
+		/* if the vgt to pre-copy is not the category owner, do the pre-copy */	
+		spin_lock(&info->slot_locks[pre_copy_vgt->category]); // lock the slot	
+		switch_gtt_hidden(pdev, pre_copy_vgt);
+		pdev->category_owner[pre_copy_vgt->category] = pre_copy_vgt->vm_id;
+		spin_unlock(&info->slot_locks[pre_copy_vgt->category]); // unlock the slot
+
+		printk("Jachin: pre-copy end\n");
+			
+	}
+}
+

@@ -297,9 +297,9 @@ struct vgt_rsvd_ring {
 /* Maximum VMs supported by vGT. Actual number is device specific */
 #define VGT_MAX_VMS_HSW 		20
 #define VGT_MAX_VMS			20
-#define VGT_RSVD_APERTURE_SZ		(32*SIZE_1MB)	/* reserve 8MB for vGT itself */
+#define VGT_RSVD_APERTURE_SZ		(24*SIZE_1MB)	/* reserve 8MB for vGT itself */
 
-#define VGT_FENCE_APERTURE_SZ		(256*SIZE_1MB)	/* Mochi: fence aperture reserved. */
+#define VGT_FENCE_APERTURE_SZ		(104*SIZE_1MB)	/* Mochi: fence aperture reserved. */
 
 #define GTT_PAGE_SHIFT		12
 #define GTT_PAGE_SIZE		(1UL << GTT_PAGE_SHIFT)
@@ -962,7 +962,8 @@ struct vgt_device {
 	int			fence_sz;
 
 	int category;	/* Mochi: this param indicates which category the vm belongs to */
-
+	unsigned long gtt_modify;
+	unsigned long ladder_mapping;
 
 	/* TODO: move to hvm_info  */
 	unsigned long low_mem_max_gpfn;	/* the max gpfn of the <4G memory */
@@ -1227,6 +1228,19 @@ struct vgt_gtt_info {
 	struct list_head oos_page_free_list_head;
 };
 
+/* Jachin: add vgt pre_copy info */
+struct vgt_pre_copy_info {
+	spinlock_t info_lock;
+	spinlock_t slot_locks[4];
+	struct pgt_device *pdev;
+	struct vgt_device *pre_copy_vgt;
+	struct vgt_device *curr_vgt;
+	struct vgt_device *next_vgt;
+	struct task_struct *pre_copy_thread;
+	bool wake_up;
+	struct vgt_device *possible_next[32];
+};
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list; /* list node for 'pgt_devices' */
@@ -1268,7 +1282,9 @@ struct pgt_device {
 	int category_owner[4];	/* Mochi: split high GM into 4 categories, each digit of category_owner means the VM_id of current category owner.*/
 	int category_load[4];	/* Mochi: each digit of category_load means the amount of VMs run in this category. */
 	cycles_t last_mark;
-	int gtt_owner;	
+	int gtt_owner;
+	unsigned long ladder_mapping;
+	unsigned long gtt_modify;	
 
 	uint32_t saved_rrmr;
 	uint32_t saved_shotplug_ctl;
@@ -1350,6 +1366,8 @@ struct pgt_device {
 	bool ctx_switch_pending;
 
 	uint32_t el_read_ptr[MAX_ENGINES];
+
+	struct vgt_pre_copy_info pre_copy_info;
 };
 
 /*
