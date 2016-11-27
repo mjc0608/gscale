@@ -28,7 +28,7 @@
 #include <linux/delay.h>
 #include "vgt.h"
 
-//#define PRE_COPY
+#define PRE_COPY
 
 /*
  * NOTE list:
