@@ -28,6 +28,8 @@
 #include <linux/delay.h>
 #include "vgt.h"
 
+//#define PRE_COPY
+
 /*
  * NOTE list:
  *	- hook with i915 driver (now invoke vgt_initalize from i915_init directly)
@@ -1623,6 +1625,7 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[ring_id];
 	cycles_t t0, t1;
 
+#ifdef PRE_COPY
 	/* Jachin: init pre_copy_thread */
 	if (unlikely(pre_copy_thread_created==false)) {
 		int i;
@@ -1635,6 +1638,7 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 			pdev->pre_copy_info.possible_next[i]=NULL;
 		}	
 	}
+#endif
 
 	/* STEP-a: stop the ring */
 	if (!stop_ring(pdev, ring_id)) {
@@ -1675,8 +1679,9 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 	if(next->vm_id != 0)
 		category_sched(pdev, next);
 	t1 = vgt_get_cycles();
-	vgt_info("Mochi.gtt.copy: %lu \n", t1-t0);
-	
+//	vgt_info("Mochi.gtt.copy: %lu \n", t1-t0);
+
+#ifdef PRE_COPY
 	/* Jachin: another thread */
 	spin_lock(&pdev->pre_copy_info.info_lock);
 	// pdev->pre_copy_info.pre_copy_vgt = prev;
@@ -1687,6 +1692,7 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 
 	spin_unlock(&pdev->pre_copy_info.info_lock);
 	wake_up_process(pdev->pre_copy_info.pre_copy_thread);
+#endif
 
 	/* STEP-e: restore HW render context for next */
 	if (!context_ops->restore_hw_context(ring_id, next)) {
@@ -2004,7 +2010,7 @@ bool vgt_do_render_context_switch(struct pgt_device *pdev)
 	vgt_sched_update_next(next);
 
 	t2 = vgt_get_cycles();
-	vgt_info("Mochi: vm:%d, ladder mapping:%lu, total modify:%lu \n", next->vm_id, next->ladder_mapping, next->gtt_modify);
+//	vgt_info("Mochi: vm:%d, ladder mapping:%lu, total modify:%lu \n", next->vm_id, next->ladder_mapping, next->gtt_modify);
 	//vgt_info("Mochi.total.time: %lu \n", t2 - pdev->last_mark);
 	pdev->last_mark = t2;
 	context_switch_cost += (t2-t1);

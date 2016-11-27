@@ -2463,6 +2463,7 @@ int category_sched(struct pgt_device *pdev, struct vgt_device *vgt)	/* Here coul
 	switch_gtt_aperture(pdev, vgt);
 	if(vgt->vm_id != pdev->category_owner[vgt->category]){
 		/* Jachin: add lock */
+		printk("Jachin: gtt copy: %d\n", vgt->vm_id);
 		spin_lock(&pdev->pre_copy_info.slot_locks[vgt->category]);
 		if(pdev->gtt_owner!=vgt->vm_id)
 			switch_gtt_hidden(pdev, vgt);
@@ -2478,6 +2479,7 @@ int pre_copy_thread(void *args) {
 	struct vgt_pre_copy_info *info = (struct vgt_pre_copy_info*)args;
 	struct vgt_device *curr, *next, *pre_copy_vgt, *render_owner;
 	struct pgt_device *pdev;
+	int i;
 	while (1) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule();
@@ -2495,13 +2497,24 @@ int pre_copy_thread(void *args) {
 		info->possible_next[curr->vgt_id] = next;
 		pre_copy_vgt = info->possible_next[next->vgt_id];
 		
-		printk("Jachin: pre-copy mapping: %d -> %d\n", curr->vm_id, next->vm_id);
+//		printk("Jachin: pre-copy mapping: %d -> %d\n", curr->vm_id, next->vm_id);
+
+		for (i=0; i<3; i++) {
+			printk("jachin: slot %d, vm %d\n", i, pdev->category_owner[i]);
+		}
 
 		// try to do pre-copy
-		if (pre_copy_vgt == NULL) continue; // not initialized
+		if (pre_copy_vgt == NULL|| pre_copy_vgt->vm_id==0) continue; // not initialized
 		render_owner = current_render_owner(pdev);	
 		if (render_owner == NULL) continue; // may not happen
+//		printk("jachin: runder_owner: %d, slot: %d\n", render_owner->vm_id, render_owner->category);
 		if (render_owner->category==pre_copy_vgt->category) continue; // when the current owner and the pre-copy vgt has the same category
+		
+		if(pre_copy_vgt->vm_id == pdev->category_owner[pre_copy_vgt->category]) continue;
+
+		// do not copy when the pre-copy category conflict with two previous ones
+//		if(pre_copy_vgt->category == curr->category || pre_copy_vgt->category == next->category)
+//			continue;
 
 		printk("Jachin: pre-copy start: %d on slot %d\n", pre_copy_vgt->vm_id, pre_copy_vgt->category);
 	
