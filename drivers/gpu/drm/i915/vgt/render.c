@@ -1629,11 +1629,23 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 	/* Jachin: init pre_copy_thread */
 	if (unlikely(pre_copy_thread_created==false)) {
 		int i;
+        sema_init(&pdev->pre_copy_info.pre_copy_sem, 0);
+        spin_lock_init(&pdev->pre_copy_info.pre_lock);
+        spin_lock_init(&pdev->pre_copy_info.main_lock);
+        spin_lock(&pdev->pre_copy_info.pre_lock);
 		pdev->pre_copy_info.pdev = pdev;
 		pdev->pre_copy_info.wake_up=false;
+        pdev->pre_copy_info.flag = 1;
+        pdev->pre_copy_info.lock = 0;
 		pdev->pre_copy_info.pre_copy_thread = NULL;
 		pdev->pre_copy_info.pre_copy_thread = kthread_run(pre_copy_thread, (void*)&pdev->pre_copy_info, "vm_id: %d", prev->vm_id);
+        //struct sched_param param;
+        //param.sched_priority = 99;
+        //printk("fish: init, pre_thread_pid = %d\n", pdev->pre_copy_info.pre_copy_thread->pid);
+        //int result = sched_setscheduler(pdev->pre_copy_info.pre_copy_thread, SCHED_FIFO, &param);
+        //printk("fish: init the pre-copy-thrad: result = %d\n", result);
 		if (pdev->pre_copy_info.pre_copy_thread!=NULL) pre_copy_thread_created = true;
+        //pre_copy_thread_created = true;
 		for (i=0; i<32; i++) {
 			pdev->pre_copy_info.possible_next[i]=NULL;
 		}	
@@ -1676,22 +1688,45 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 	/* Mochi: write shadow GTT to physical GTT. */
 	//vgt_info("Mochi context switch VM%d -> VM%d.\n", prev->vm_id, next->vm_id);
 	t0 = vgt_get_cycles();
+#ifdef PRE_COPY
+    //printk("fish: main thread: acquiere main lock: pre_thread_state=%d, sem count=%d\n",
+     //       pdev->pre_copy_info.pre_copy_thread->state, pdev->pre_copy_info.pre_copy_sem.count);
+   // down(&pdev->pre_copy_info.pre_copy_sem);
+    //while (spin_trylock(&pdev->pre_copy_info.main_lock) == 0) {
+    //    printk("fish: main thread: failed to acquire main lock\n");
+    //    msleep_interruptible(5);
+    //    printk("fish: main thread: after sleep 5 ms\n");
+    //}
+    while (test_and_set_bit(0, &pdev->pre_copy_info.lock)){
+        //printk("fish: main thread: failed to acquire lock\n");
+        //msleep_interruptible(5);
+        //printk("fish: main thread: after sleep 5 ms\n");
+    }
+    //printk("fish: main thread: acquiere main lock success\n");
+#endif
 	if(next->vm_id != 0)
 		category_sched(pdev, next);
-	t1 = vgt_get_cycles();
+	//t1 = vgt_get_cycles();
 //	vgt_info("Mochi.gtt.copy: %lu \n", t1-t0);
 
 #ifdef PRE_COPY
 	/* Jachin: another thread */
-	spin_lock(&pdev->pre_copy_info.info_lock);
+	//spin_lock(&pdev->pre_copy_info.info_lock);
 	// pdev->pre_copy_info.pre_copy_vgt = prev;
 	pdev->pre_copy_info.wake_up=true;
+    pdev->pre_copy_info.flag = 0;
 	
 	pdev->pre_copy_info.curr_vgt = prev;
 	pdev->pre_copy_info.next_vgt = next;
 
-	spin_unlock(&pdev->pre_copy_info.info_lock);
-	wake_up_process(pdev->pre_copy_info.pre_copy_thread);
+	//spin_unlock(&pdev->pre_copy_info.info_lock);
+    //printk("fish: main thread: release pre lock\n");
+    clear_bit(0, &pdev->pre_copy_info.lock);
+    //spin_unlock(&pdev->pre_copy_info.main_lock);
+    //up(&pdev->pre_copy_info.pre_copy_sem);
+    //printk("fish: main thread: wake up pre copy thraed: pre_traed_state=%d, sem count=%d\n",
+    //        pdev->pre_copy_info.pre_copy_thread->state, pdev->pre_copy_info.pre_copy_sem.count);
+	//wake_up_process(pdev->pre_copy_info.pre_copy_thread);
 #endif
 
 	/* STEP-e: restore HW render context for next */

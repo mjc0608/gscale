@@ -1232,12 +1232,17 @@ struct vgt_gtt_info {
 struct vgt_pre_copy_info {
 	spinlock_t info_lock;
 	spinlock_t slot_locks[4];
+    struct semaphore pre_copy_sem;
+    spinlock_t main_lock;
+    spinlock_t pre_lock;
 	struct pgt_device *pdev;
 	struct vgt_device *pre_copy_vgt;
 	struct vgt_device *curr_vgt;
 	struct vgt_device *next_vgt;
 	struct task_struct *pre_copy_thread;
 	bool wake_up;
+    int flag;
+    unsigned long lock;
 	struct vgt_device *possible_next[32];
 };
 
