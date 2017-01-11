@@ -2490,14 +2490,14 @@ int pre_copy_thread(void *args) {
 		//schedule();
         printk("fish: pre_copy_thread: acquire pre lock\n");
         //down(&info->pre_copy_sem);
-        //while (info->flag == 1 || spin_trylock(&info->main_lock) == 0) {
-        //    msleep(5);
-        //}
-        while (info->flag == 1 || test_and_set_bit(0, &info->lock)) {
-            //printk("fish: pre_copy_thread: failed to acquire lock\n");
-            msleep(15);
-            //printk("fish: pre_copy_thread: after sleep 15ms\n");
+        while (info->flag == 1 || spin_trylock(&info->main_lock) == 0) {
+            msleep(5);
         }
+        //while (info->flag == 1 || test_and_set_bit(0, &info->lock)) {
+            //printk("fish: pre_copy_thread: failed to acquire lock\n");
+        //    msleep(15);
+            //printk("fish: pre_copy_thread: after sleep 15ms\n");
+        //}
         printk("fish: pre_copy_thread: acquire pre lock success\n");
 	//	printk("jachin: vgt = %lu\n", info->pre_copy_vgt->vm_id);
 	//	info->wake_up=false;
@@ -2549,8 +2549,8 @@ pre_copy_out:
         //printk("fish: pre_copy_thread: release main lock\n");
 		//set_current_state(TASK_INTERRUPTIBLE);
         info->flag = 1;
-        //spin_unlock(&info->main_lock);
-        clear_bit(0, &info->lock);
+        spin_unlock_irq(&info->main_lock);
+        //clear_bit(0, &info->lock);
         //printk("fish: pre_copy_thread: release main lock success\n");
         //up(&info->pre_copy_sem);
 			

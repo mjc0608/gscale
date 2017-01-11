@@ -1697,11 +1697,12 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
     //    msleep_interruptible(5);
     //    printk("fish: main thread: after sleep 5 ms\n");
     //}
-    while (test_and_set_bit(0, &pdev->pre_copy_info.lock)){
+    spin_lock_irq(&pdev->pre_copy_info.main_lock);
+    //while (test_and_set_bit(0, &pdev->pre_copy_info.lock)){
         //printk("fish: main thread: failed to acquire lock\n");
         //msleep_interruptible(5);
         //printk("fish: main thread: after sleep 5 ms\n");
-    }
+    //}
     //printk("fish: main thread: acquiere main lock success\n");
 #endif
 	if(next->vm_id != 0)
@@ -1721,8 +1722,8 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 
 	//spin_unlock(&pdev->pre_copy_info.info_lock);
     //printk("fish: main thread: release pre lock\n");
-    clear_bit(0, &pdev->pre_copy_info.lock);
-    //spin_unlock(&pdev->pre_copy_info.main_lock);
+    //clear_bit(0, &pdev->pre_copy_info.lock);
+    spin_unlock_irq(&pdev->pre_copy_info.main_lock);
     //up(&pdev->pre_copy_info.pre_copy_sem);
     //printk("fish: main thread: wake up pre copy thraed: pre_traed_state=%d, sem count=%d\n",
     //        pdev->pre_copy_info.pre_copy_thread->state, pdev->pre_copy_info.pre_copy_sem.count);
