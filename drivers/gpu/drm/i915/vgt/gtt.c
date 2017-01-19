@@ -2439,7 +2439,7 @@ unsigned long get_hidden_gm_start(struct pgt_device *pdev, struct vgt_device *vg
 	int category_id = 0;
 	unsigned long hidden_gm_start;
 	unsigned long category_sz, visible_gm_sz, total_gm_sz;
-	for(i=1; i<3; i++){
+	for(i=1; i<4; i++){
 		if(pdev->category_load[i]<category_load){
 			category_load = pdev->category_load[i];
 			category_id = i;
