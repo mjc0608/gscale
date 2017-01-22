@@ -1611,6 +1611,7 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[ring_id];
 	cycles_t t0, t1;
     static unsigned long long curr_nsched=0;
+    int i;
 
 #ifdef PRE_COPY
 	/* Jachin: init pre_copy_thread */
@@ -1644,40 +1645,40 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
     curr_nsched++;
     if (unlikely(smart_slot_sched_inited==false)) {
         for (i=0; i<32; i++) {
-            pdev->vgt_slot_sched_info.vgt_sched_cnt[i]=0;
+            pdev->slot_sched_info.vgt_sched_cnt[i]=0;
         }
         for (i=0; i<4; i++) {
-            pdev->vgt_slot_sched_info.slot_sched_cnt[i]=0;
+            pdev->slot_sched_info.slot_sched_cnt[i]=0;
         }
-        pdev->vgt_slot_sched_info.last_nscheds = 0;
+        pdev->slot_sched_info.last_nscheds = 0;
         smart_slot_sched_inited = true;
     }
-    else if (curr_nsched-pdev->vgt_slot_sched_info.last_nscheds>=1000) {
+    else if (curr_nsched-pdev->slot_sched_info.last_nscheds>=1000) {
         for (i=0; i<32; i++) {
-            if (pdev->vgt_slot_sched_info.vgt_prev_weighted_cnt[i]==0) {
-                pdev->vgt_slot_sched_info.vgt_prev_weighted_cnt[i] = pdev->vgt_slot_sched_info.vgt_sched_cnt[i];
+            if (pdev->slot_sched_info.vgt_prev_weighted_cnt[i]==0) {
+                pdev->slot_sched_info.vgt_prev_weighted_cnt[i] = pdev->slot_sched_info.vgt_sched_cnt[i];
             }
             else {
-                pdev->vgt_slot_sched_info.vgt_prev_weighted_cnt[i]/=2;
-                pdev->vgt_slot_sched_info.vgt_prev_weighted_cnt[i]+=pdev->vgt_slot_sched_info.vgt_sched_cnt[i]/2;
+                pdev->slot_sched_info.vgt_prev_weighted_cnt[i]/=2;
+                pdev->slot_sched_info.vgt_prev_weighted_cnt[i]+=pdev->slot_sched_info.vgt_sched_cnt[i]/2;
             }
-            pdev->vgt_slot_sched_info.vgt_sched_cnt[i]=0;
+            pdev->slot_sched_info.vgt_sched_cnt[i]=0;
         }
         for (i=0; i<4; i++) {
-            if (pdev->vgt_slot_sched_info.slot_prev_weighted_cnt[i]==0) {
-                pdev->vgt_slot_sched_info.slot_prev_weighted_cnt[i] = pdev->vgt_slot_sched_info.slot_sched_cnt[i];
+            if (pdev->slot_sched_info.slot_prev_weighted_cnt[i]==0) {
+                pdev->slot_sched_info.slot_prev_weighted_cnt[i] = pdev->slot_sched_info.slot_sched_cnt[i];
             }
             else {
-                pdev->vgt_slot_sched_info.slot_prev_weighted_cnt[i]/=2;
-                pdev->vgt_slot_sched_info.slot_prev_weighted_cnt[i]+=pdev->vgt_slot_sched_info.slot_sched_cnt[i]/2;
+                pdev->slot_sched_info.slot_prev_weighted_cnt[i]/=2;
+                pdev->slot_sched_info.slot_prev_weighted_cnt[i]+=pdev->slot_sched_info.slot_sched_cnt[i]/2;
             }
-            pdev->vgt_slot_sched_info.slot_sched_cnt[i]=0;
+            pdev->slot_sched_info.slot_sched_cnt[i]=0;
         }
-        pdev->vgt_slot_sched_info.last_nscheds = curr_nsched;
+        pdev->slot_sched_info.last_nscheds = curr_nsched;
     }
     else {
-        pdev->vgt_slot_sched_info.vgt_sched_cnt[curr->vgt_id]++;
-        pdev->vgt_slot_sched_info.slot_sched_cnt[curr->category_id]++;
+        pdev->slot_sched_info.vgt_sched_cnt[prev->vgt_id]++;
+        pdev->slot_sched_info.slot_sched_cnt[prev->category]++;
     }
 
 #endif

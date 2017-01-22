@@ -2443,21 +2443,21 @@ unsigned long get_hidden_gm_start(struct pgt_device *pdev, struct vgt_device *vg
 	int category_id = 0;
 	unsigned long hidden_gm_start;
 	unsigned long category_sz, visible_gm_sz, total_gm_sz;
-#if 0
-	for(i=1; i<3; i++){
+#if 1
+	for(i=1; i<4; i++){
 		if(pdev->category_load[i]<category_load){
 			category_load = pdev->category_load[i];
 			category_id = i;
 		}
 	}
 #else
-    category_load = pdev->vgt_slot_sched_info.slot_sched_cnt[1];
-    category_load = vgt_slot_sched_weight(pdev->vgt_slot_sched_info.slot_prev_weighted_cnt[1],
-                                        pdev->vgt_slot_sched_info.slot_sched_cnt[1]);
+    category_load = pdev->slot_sched_info.slot_sched_cnt[1];
+    category_load = vgt_slot_sched_weight(pdev->slot_sched_info.slot_prev_weighted_cnt[1],
+                                        pdev->slot_sched_info.slot_sched_cnt[1]);
     category_id = 1;
     for (i=1; i<4; i++) {
-        uint32_t curr_load = vgt_slot_sched_weight(pdev->vgt_slot_sched_info.slot_prev_weighted_cnt[i],
-                                                pdev->vgt_slot_sched_info.slot_sched_cnt[i]);
+        uint32_t curr_load = vgt_slot_sched_weight(pdev->slot_sched_info.slot_prev_weighted_cnt[i],
+                                                pdev->slot_sched_info.slot_sched_cnt[i]);
         if (curr_load<category_load) {
             category_load = curr_load;
             category_id = i;

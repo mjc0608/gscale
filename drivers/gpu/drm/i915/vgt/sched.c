@@ -67,7 +67,7 @@ static inline bool phys_head_catch_tail(struct pgt_device *pdev)
 	return true;
 }
 
-static dump_vgt_list(struct vgt_deivce *vgt) {
+static dump_vgt_list(struct vgt_device *vgt) {
     struct list_head *next = &vgt->list;
     struct vgt_device *next_vgt = NULL;
 

@@ -1252,7 +1252,7 @@ struct vgt_slot_sched_info {
     uint32_t slot_sched_cnt[4];
     uint32_t slot_prev_weighted_cnt[4];
     unsigned long long last_nscheds;
-}
+};
 
 /* per-device structure */
 struct pgt_device {
@@ -1381,6 +1381,7 @@ struct pgt_device {
 	uint32_t el_read_ptr[MAX_ENGINES];
 
 	struct vgt_pre_copy_info pre_copy_info;
+    struct vgt_slot_sched_info slot_sched_info;
 };
 
 /*
