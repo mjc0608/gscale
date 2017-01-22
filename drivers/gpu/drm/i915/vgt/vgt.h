@@ -1246,6 +1246,14 @@ struct vgt_pre_copy_info {
 	struct vgt_device *possible_next[32];
 };
 
+struct vgt_slot_sched_info {
+    uint32_t vgt_sched_cnt[32];
+    uint32_t vgt_prev_weighted_cnt[32];
+    uint32_t slot_sched_cnt[4];
+    uint32_t slot_prev_weighted_cnt[4];
+    unsigned long long last_nscheds;
+}
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list; /* list node for 'pgt_devices' */
@@ -1942,22 +1950,17 @@ static inline uint64_t vgt_mmio_bar_base(struct vgt_device *vgt)
 static inline uint64_t g2h_aperture(struct vgt_device *vgt, uint64_t g_addr)
 {
 	uint64_t offset;
-
 	ASSERT_NUM((g_addr >= vgt_guest_aperture_base(vgt)) &&
 		(g_addr <= vgt_guest_aperture_end(vgt)), g_addr);
-
 	offset = g_addr - vgt_guest_aperture_base(vgt);
 	return vgt_aperture_base(vgt) + offset;
 }
-
 /* translate a host aperture address to guest aperture address */
 static inline uint64_t h2g_aperture(struct vgt_device *vgt, uint64_t h_addr)
 {
 	uint64_t offset;
-
 	ASSERT_NUM((h_addr >= vgt_aperture_base(vgt)) &&
 		(h_addr <= vgt_aperture_end(vgt)), h_addr);
-
 	offset = h_addr - vgt_aperture_base(vgt);
 	return vgt_guest_aperture_base(vgt) + offset;
 }
@@ -2121,10 +2124,8 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 {
 	if (vgt->bypass_addr_check)
 		return false;
-
 	if (!vgt_hidden_gm_offset(vgt))
 		return false;
-
 	return g_gm_is_visible(vgt, g_start) &&
 		g_gm_is_hidden(vgt, g_start + size - 1);
 }
