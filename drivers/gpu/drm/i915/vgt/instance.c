@@ -456,6 +456,10 @@ void vgt_release_instance(struct vgt_device *vgt)
 	vfree(vgt->state.sReg);
 	vfree(vgt);
 	printk("vGT: vgt_release_instance done\n");
+
+    /* Jachin: if a vm is destroyed, the slot cnt should be modified */
+    vgt->pdev->vgt_slot_sched_info.slot_prev_weighted_cnt[vgt->category] -= vgt->pdev->vgt_slot_sched_info.vgt_prev_weighted_cnt[vgt->vgt_id];
+    vgt->pdev->vgt_slot_sched_info.slot_sched_cnt[vgt->category] -= vgt->pdev->vgt_slot_sched_info.vgt_sched_cnt[vgt->vgt_id]
 }
 
 void vgt_reset_ppgtt(struct vgt_device *vgt, unsigned long ring_bitmap)

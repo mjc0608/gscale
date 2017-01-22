@@ -67,6 +67,20 @@ static inline bool phys_head_catch_tail(struct pgt_device *pdev)
 	return true;
 }
 
+static dump_vgt_list(struct vgt_deivce *vgt) {
+    struct list_head *next = &vgt->list;
+    struct vgt_device *next_vgt = NULL;
+
+    char *ringinfo = vgt_vrings_empty(next_vgt)?"empty":"full";
+    printk("jachin: vm_id: %d, vgt_id: %d, slot_id: %d, vring: %s\n", vgt->vm_id, vgt->vgt_id, vgt->category, ringinfo);
+
+    do {
+        next = next->next;
+        next_vgt = list_entry(next, struct vgt_device, list);
+        ringinfo = vgt_vrings_empty(next_vgt)?"empty":"full";
+        printk("jachin: vm_id: %d, vgt_id: %d, slot_id: %d, vring: %s\n", next_vgt->vm_id, next_vgt->vgt_id, next_vgt->category, ringinfo);
+    } while(next_vgt!=vgt);
+}
 
 /* FIXME: Since it is part of "timer based scheduler",
  * move this from vgt_context.c here and renamed from
@@ -808,7 +822,6 @@ static int calculate_budget(struct vgt_device *vgt)
 {
 #if 0
 	int budget;
-
 	budget = vgt->allocated_cmds - vgt->submitted_cmds;
 	/* call scheduler when budget is not enough */
 	if (budget <= 0) {
