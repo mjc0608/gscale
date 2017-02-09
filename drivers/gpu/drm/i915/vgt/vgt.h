@@ -1028,6 +1028,7 @@ struct vgt_device {
 	/* Mochi: for jump over invalid value. */
 	unsigned long invalid;
 	int invalid_count;
+
 };
 
 enum vgt_owner_type {
@@ -1246,6 +1247,19 @@ struct vgt_pre_copy_info {
 	struct vgt_device *possible_next[32];
 };
 
+/* Jachin: list of vgt, using the list that kernel provide
+ * us may lead to some strange problem, so we write it
+ * ourselves.
+ * */
+struct vgt_list_item {
+    struct vgt_list *prev, *next;
+    struct vgt_device *vgt;
+};
+
+struct vgt_list {
+    struct vgt_list_item *head, *tail;
+};
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list; /* list node for 'pgt_devices' */
@@ -1373,6 +1387,10 @@ struct pgt_device {
 	uint32_t el_read_ptr[MAX_ENGINES];
 
 	struct vgt_pre_copy_info pre_copy_info;
+
+    /* Jachin: priority schedule list */
+    struct vgt_list first_sched_list;
+    bool vgt_first_sched[32]; // to avoid scan the list every time we keep the bitmap
 };
 
 /*

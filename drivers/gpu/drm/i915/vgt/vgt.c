@@ -447,6 +447,10 @@ bool initial_phys_states(struct pgt_device *pdev)
 	pdev->category_load[2]=0;
 	pdev->category_load[3]=0;
 
+    for (i=0; i<32; i++) {
+        pdev->vgt_first_sched[i] = false;
+    }
+
 	pdev->saved_gtt = vzalloc(pdev->gtt_size);
 	if (!pdev->saved_gtt)
 		return false;
