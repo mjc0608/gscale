@@ -1244,7 +1244,7 @@ struct vgt_pre_copy_info {
 	bool wake_up;
     int flag;
     unsigned long lock;
-	struct vgt_device *possible_next[32];
+	struct vgt_device *possible_next[32][3];
 };
 
 /* Jachin: list of vgt, using the list that kernel provide

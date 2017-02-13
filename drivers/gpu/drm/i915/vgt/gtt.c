@@ -2483,24 +2483,10 @@ int pre_copy_thread(void *args) {
 	struct vgt_device *curr, *next, *pre_copy_vgt, *render_owner;
 	struct pgt_device *pdev;
 	int i;
-	//set_current_state(TASK_INTERRUPTIBLE);
 	while (1) {
-		//set_current_state(TASK_INTERRUPTIBLE);
-        //printk("fish: pre_copy_thread: schedule out\n");
-		//schedule();
-        printk("fish: pre_copy_thread: acquire pre lock\n");
-        //down(&info->pre_copy_sem);
         while (info->flag == 1 || spin_trylock(&info->main_lock) == 0) {
             msleep(5);
         }
-        //while (info->flag == 1 || test_and_set_bit(0, &info->lock)) {
-            //printk("fish: pre_copy_thread: failed to acquire lock\n");
-        //    msleep(15);
-            //printk("fish: pre_copy_thread: after sleep 15ms\n");
-        //}
-        printk("fish: pre_copy_thread: acquire pre lock success\n");
-	//	printk("jachin: vgt = %lu\n", info->pre_copy_vgt->vm_id);
-	//	info->wake_up=false;
 
 		// get info
 		curr = info->curr_vgt;
@@ -2508,52 +2494,57 @@ int pre_copy_thread(void *args) {
 		pre_copy_vgt = NULL;
 		pdev = info->pdev;
 		render_owner = NULL;
-		
-		// store predicitive map
-		info->possible_next[curr->vgt_id] = next;
-		pre_copy_vgt = info->possible_next[next->vgt_id];
-		
-//		printk("Jachin: pre-copy mapping: %d -> %d\n", curr->vm_id, next->vm_id);
 
-		//for (i=0; i<3; i++) {
-		//	printk("jachin: slot %d, vm %d\n", i, pdev->category_owner[i]);
-		//}
-        //if (pre_copy_vgt != NULL)
-		//    spin_lock(&info->slot_locks[pre_copy_vgt->category]); // lock the slot	
+        // store predicitive map
+        if (info->possible_next[curr->vgt_id][0]==NULL) {
+            info->possible_next[curr->vgt_id][0] = next;
+        }
+        else if (info->possible_next[curr->vgt_id][1]==NULL) {
+            info->possible_next[curr->vgt_id][1] = next;
+        }
+        else if (info->possible_next[curr->vgt_id][2]==NULL) {
+            info->possible_next[curr->vgt_id][2] = next;
+        }
+        else {
+            info->possible_next[curr->vgt_id][0] = info->possible_next[curr->vgt_id][1];
+            info->possible_next[curr->vgt_id][1] = info->possible_next[curr->vgt_id][2];
+            info->possible_next[curr->vgt_id][2] = next;
+        }
+
+        if (info->possible_next[next->vgt_id][1]==NULL) {
+            pre_copy_vgt = info->possible_next[next->vgt_id][0];
+        }
+        else if (info->possible_next[next->vgt_id][0]==info->possible_next[next->vgt_id][1]
+                && info->possible_next[next->vgt_id][1]==info->possible_next[next->vgt_id][2]) {
+            pre_copy_vgt = info->possible_next[next->vgt_id][0];
+        }
+        else if (info->possible_next[next->vgt_id][0]==info->possible_next[next->vgt_id][1]) {
+            pre_copy_vgt = info->possible_next[next->vgt_id][0];
+        }
+        else if (info->possible_next[next->vgt_id][0]==info->possible_next[next->vgt_id][2]) {
+            pre_copy_vgt = info->possible_next[next->vgt_id][0];
+        }
+        else if (info->possible_next[next->vgt_id][2]==info->possible_next[next->vgt_id][1]) {
+            pre_copy_vgt = info->possible_next[next->vgt_id][2];
+        }
+        else {
+            pre_copy_vgt = NULL;
+        }
 
 		// try to do pre-copy
 		if (pre_copy_vgt == NULL|| pre_copy_vgt->vm_id==0) goto pre_copy_out; // not initialized
-		render_owner = current_render_owner(pdev);	
+		render_owner = current_render_owner(pdev);
 		if (render_owner == NULL) goto pre_copy_out; // may not happen
-//		printk("jachin: runder_owner: %d, slot: %d\n", render_owner->vm_id, render_owner->category);
 		if (render_owner->category==pre_copy_vgt->category) goto pre_copy_out; // when the current owner and the pre-copy vgt has the same category
-		
 		if(pre_copy_vgt->vm_id == pdev->category_owner[pre_copy_vgt->category]) goto pre_copy_out;
 
-		// do not copy when the pre-copy category conflict with two previous ones
-//		if(pre_copy_vgt->category == curr->category || pre_copy_vgt->category == next->category)
-//			continue;
-
-		printk("Jachin: pre-copy start: %d on slot %d\n", pre_copy_vgt->vm_id, pre_copy_vgt->category);
-	
-		/* if the vgt to pre-copy is not the category owner, do the pre-copy */	
-		//spin_lock(&info->slot_locks[pre_copy_vgt->category]); // lock the slot	
+		/* if the vgt to pre-copy is not the category owner, do the pre-copy */
 		switch_gtt_hidden(pdev, pre_copy_vgt);
 		pdev->category_owner[pre_copy_vgt->category] = pre_copy_vgt->vm_id;
-		//spin_unlock(&info->slot_locks[pre_copy_vgt->category]); // unlock the slot
 
 pre_copy_out:
-		//printk("Jachin: pre-copy end\n");
-        //if (pre_copy_vgt != NULL)
-		//    spin_unlock(&info->slot_locks[pre_copy_vgt->category]); // unlock the slot
-        //printk("fish: pre_copy_thread: release main lock\n");
-		//set_current_state(TASK_INTERRUPTIBLE);
         info->flag = 1;
         spin_unlock_irq(&info->main_lock);
-        //clear_bit(0, &info->lock);
-        //printk("fish: pre_copy_thread: release main lock success\n");
-        //up(&info->pre_copy_sem);
-			
 	}
 }
 
