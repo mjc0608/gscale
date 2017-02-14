@@ -72,43 +72,19 @@ static inline bool phys_head_catch_tail(struct pgt_device *pdev)
  * move this from vgt_context.c here and renamed from
  * next_vgt() to tbs_next_vgt()
  */
-/* TODO: add a list into pgt_device, which stores those
- * vgt whose slot is the same as the previous one. Then,
- * in the next schedule, we scan the list first, if it's
- * not empty, we choose that vgt.
- * Notice that the priority should take into consideration.
- * */
 static struct vgt_device *tbs_next_vgt(
 	struct list_head *head, struct vgt_device *vgt)
 {
 	struct list_head *next = &vgt->list;
 	struct vgt_device *next_vgt = NULL;
 	struct pgt_device *pdev;
-    struct vgt_list *first_sched_list;
 
 	if (vgt->force_removal)
 		return vgt_dom0;
 
 	pdev = vgt->pdev;
-    first_sched_list = &pdev->first_sched_list;
-
 	if (ctx_switch_requested(pdev))
 		return pdev->next_sched_vgt;
-
-    // choose the first one in first_sched_list
-    if (first_sched_list!=NULL) {
-        struct vgt_device *chosen_vgt = first_sched_list->head->vgt;
-        pdev->vgt_first_sched[chosen_vgt->vgt_id] = false;
-        if (first_sched_list->head->next!=NULL) {
-            first_sched_list->head->next->prev = NULL;
-            first_sched_list->head = first_sched_list->head->next;
-        }
-        else {
-            first_sched_list->tail = NULL;
-            first_sched_list->head = NULL;
-        }
-        return chosen_vgt;
-    }
 
 	do {
 		next = next->next;
@@ -117,41 +93,9 @@ static struct vgt_device *tbs_next_vgt(
 			next = head->next;
 		next_vgt = list_entry(next, struct vgt_device, list);
 
-		if (!vgt_vrings_empty(next_vgt)) {
-
-            /* if vgt's category is the same as next_vgt's category */
-            if(vgt->category == next_vgt->category) {
-                if (first_sched_list->head==NULL && first_sched_list->tail==NULL) {
-                    struct vgt_list_item *item = kmalloc(sizeof(*item));
-                    item->prev = NULL;
-                    item->next = NULL;
-                    item->vgt = next_vgt;
-                    pdev.vgt_first_sched[next_vgt->vgt_id] = true;
-
-                    first_sched_list->head = item;
-                    first_sched_list->tail = item;
-                }
-                else if (first_sched_list->head==NULL || first_sched_list->tail==NULL) {
-                    ASSERT(0);
-                }
-                else {
-                    struct vgt_list_item *item = kmalloc(sizeof(*item));
-                    item->prev = first_sched_list->tail;
-                    item->next = NULL;
-                    item->vgt = next_vgt;
-                    pdev->vgt_first_sched[next_vgt->vgt_id] = true;
-
-                    first_sched_list->tail->next = item;
-                    first_sched_list->tail = item;
-                }
-                continue; // drop this one
-            }
-
+		if (!vgt_vrings_empty(next_vgt))
 			break;
-        }
 
-        /* it's impossible to fall into dead loop, because it will end when next_vgt == vgt
-         * */
 	} while (next_vgt != vgt);
 
 	return next_vgt;
