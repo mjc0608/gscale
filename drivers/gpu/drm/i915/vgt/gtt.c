@@ -2496,20 +2496,9 @@ int pre_copy_thread(void *args) {
 		render_owner = NULL;
 
         // store predicitive map
-        if (info->possible_next[curr->vgt_id][0]==NULL) {
-            info->possible_next[curr->vgt_id][0] = next;
-        }
-        else if (info->possible_next[curr->vgt_id][1]==NULL) {
-            info->possible_next[curr->vgt_id][1] = next;
-        }
-        else if (info->possible_next[curr->vgt_id][2]==NULL) {
-            info->possible_next[curr->vgt_id][2] = next;
-        }
-        else {
-            info->possible_next[curr->vgt_id][0] = info->possible_next[curr->vgt_id][1];
-            info->possible_next[curr->vgt_id][1] = info->possible_next[curr->vgt_id][2];
-            info->possible_next[curr->vgt_id][2] = next;
-        }
+        info->possible_next[curr->vgt_id][2] = info->possible_next[curr->vgt_id][1];
+        info->possible_next[curr->vgt_id][1] = info->possible_next[curr->vgt_id][0];
+        info->possible_next[curr->vgt_id][0] = next;
 
         if (info->possible_next[next->vgt_id][1]==NULL) {
             pre_copy_vgt = info->possible_next[next->vgt_id][0];
