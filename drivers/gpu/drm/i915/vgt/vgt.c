@@ -447,6 +447,16 @@ bool initial_phys_states(struct pgt_device *pdev)
 	pdev->category_load[2]=0;
 	pdev->category_load[3]=0;
 
+    pdev->slot_aware_scheduler.head[0]=NULL;   //Jachin: the default value of slot aware sched
+    pdev->slot_aware_scheduler.head[1]=NULL;
+    pdev->slot_aware_scheduler.head[2]=NULL;
+    pdev->slot_aware_scheduler.head[3]=NULL;
+
+    pdev->slot_aware_scheduler.vring_empty_head[0]=NULL;
+    pdev->slot_aware_scheduler.vring_empty_head[1]=NULL;
+    pdev->slot_aware_scheduler.vring_empty_head[2]=NULL;
+    pdev->slot_aware_scheduler.vring_empty_head[3]=NULL;
+
 	pdev->saved_gtt = vzalloc(pdev->gtt_size);
 	if (!pdev->saved_gtt)
 		return false;

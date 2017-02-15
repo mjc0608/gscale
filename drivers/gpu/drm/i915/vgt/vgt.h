@@ -1028,6 +1028,8 @@ struct vgt_device {
 	/* Mochi: for jump over invalid value. */
 	unsigned long invalid;
 	int invalid_count;
+
+    struct vgt_sched_list_item sched_list_item;
 };
 
 enum vgt_owner_type {
@@ -1254,6 +1256,18 @@ struct vgt_slot_sched_info {
     unsigned long long last_nscheds;
 };
 
+/* Jachin: slot aware scheduler */
+struct vgt_sched_list_item {
+    struct vgt_sched_list_item *next;
+    struct vgt_device *vgt;
+    bool if_sched;
+};
+
+struct vgt_slot_aware_scheduler {
+    struct vgt_slot_list_item *head[4];
+    struct vgt_slot_list_item *vring_empty_head[4]; //curently not use, keep for future extension
+};
+
 /* per-device structure */
 struct pgt_device {
 	struct list_head	list; /* list node for 'pgt_devices' */
@@ -1382,6 +1396,8 @@ struct pgt_device {
 
 	struct vgt_pre_copy_info pre_copy_info;
     struct vgt_slot_sched_info slot_sched_info;
+
+    struct vgt_slot_aware_scheduler slot_aware_scheduler;
 };
 
 /*
