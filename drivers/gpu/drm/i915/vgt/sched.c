@@ -80,8 +80,8 @@ static bool is_sched_round_finished(struct pgt_device *pdev) {
     return true;
 }
 
-static void rebuild_slot_aware_sched_list(struct pgt_device *pdev) {
-    struct list_head *next = dom0_vgt;
+static void rebuild_slot_aware_sched_list(struct pgt_device *pdev, struct list_head *head) {
+    struct list_head *next = &vgt_dom0->list;
     struct vgt_device *next_vgt = NULL;
     struct vgt_slot_aware_scheduler *scheduler = &pdev->slot_aware_scheduler;
 
@@ -101,7 +101,7 @@ static void rebuild_slot_aware_sched_list(struct pgt_device *pdev) {
             scheduler->head[slot_id] = &next_vgt->sched_list_item;
         }
 
-	} while (next_vgt != vgt);
+	} while (next_vgt != vgt_dom0);
 }
 
 #define NEXT_SLOT(curr) \
@@ -159,7 +159,7 @@ static struct vgt_device *tbs_next_vgt(
 		return pdev->next_sched_vgt;
 
     if (is_sched_round_finished(pdev)) {
-        rebuild_slot_aware_sched_list(pdev);
+        rebuild_slot_aware_sched_list(pdev, head);
         return vgt_dom0;
     }
     else {

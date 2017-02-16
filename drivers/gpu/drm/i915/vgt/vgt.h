@@ -940,6 +940,18 @@ struct gt_port {
 	enum vgt_port physcal_port;
 };
 
+/* Jachin: slot aware scheduler */
+struct vgt_sched_list_item {
+    struct vgt_sched_list_item *next;
+    struct vgt_device *vgt;
+    bool if_sched;
+};
+
+struct vgt_slot_aware_scheduler {
+    struct vgt_sched_list_item *head[4];
+    struct vgt_sched_list_item *vring_empty_head[4]; //curently not use, keep for future extension
+};
+
 struct vgt_device {
 	enum vgt_pipe pipe_mapping[I915_MAX_PIPES];
 	int vgt_id;		/* 0 is always for dom0 */
@@ -1254,18 +1266,6 @@ struct vgt_slot_sched_info {
     uint32_t slot_sched_cnt[4];
     uint32_t slot_prev_weighted_cnt[4];
     unsigned long long last_nscheds;
-};
-
-/* Jachin: slot aware scheduler */
-struct vgt_sched_list_item {
-    struct vgt_sched_list_item *next;
-    struct vgt_device *vgt;
-    bool if_sched;
-};
-
-struct vgt_slot_aware_scheduler {
-    struct vgt_slot_list_item *head[4];
-    struct vgt_slot_list_item *vring_empty_head[4]; //curently not use, keep for future extension
 };
 
 /* per-device structure */
