@@ -67,6 +67,77 @@ static inline bool phys_head_catch_tail(struct pgt_device *pdev)
 	return true;
 }
 
+static bool is_sched_round_finished(struct pgt_device *pdev) {
+    int i;
+    for (i=0; i<4; i++) {
+        if (pdev->slot_aware_scheduler.head[i]!=NULL) {
+            return false;
+        }
+        if (pdev->slot_aware_scheduler.vring_empty_head[i]!=NULL) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void rebuild_slot_aware_sched_list(struct pgt_device *pdev, struct list_head *head) {
+    struct list_head *next = &vgt_dom0->list;
+    struct vgt_device *next_vgt = NULL;
+    struct vgt_slot_aware_scheduler *scheduler = &pdev->slot_aware_scheduler;
+
+    do {
+		next = next->next;
+		/* wrap the list */
+		if (next == head)
+			next = head->next;
+		next_vgt = list_entry(next, struct vgt_device, list);
+
+		if (!vgt_vrings_empty(next_vgt)) {
+            int slot_id = next_vgt->category;
+
+            next_vgt->sched_list_item.next = scheduler->head[slot_id];
+            next_vgt->sched_list_item.vgt = next_vgt;
+            next_vgt->sched_list_item.if_sched = false;
+            scheduler->head[slot_id] = &next_vgt->sched_list_item;
+        }
+
+	} while (next_vgt != vgt_dom0);
+}
+
+#define NEXT_SLOT(curr) \
+    ((curr)%3+1)
+
+static struct vgt_device *choose_vgt_from_list(struct pgt_device *pdev) {
+    static int last_slot_id = 0;
+    int curr_slot_id = NEXT_SLOT(last_slot_id);
+    struct vgt_slot_aware_scheduler *scheduler = &pdev->slot_aware_scheduler;
+
+    // prefer to choose vm from a different slot
+    do {
+        if (scheduler->head[curr_slot_id]!=NULL) {
+            struct vgt_sched_list_item *chosen_item = scheduler->head[curr_slot_id];
+            scheduler->head[curr_slot_id] = chosen_item->next;
+            last_slot_id = curr_slot_id;
+            return chosen_item->vgt;
+        }
+
+        curr_slot_id = NEXT_SLOT(curr_slot_id);
+    } while (curr_slot_id!=last_slot_id);
+
+    // have to choose one from the same slot
+    if (scheduler->head[curr_slot_id]!=NULL) {
+        struct vgt_sched_list_item *chosen_item = scheduler->head[curr_slot_id];
+        scheduler->head[curr_slot_id] = chosen_item->next;
+        last_slot_id = curr_slot_id;
+        return chosen_item->vgt;
+    }
+    else {
+        // return NULL if no vm is active
+        return NULL;
+    }
+
+}
+
 
 /* FIXME: Since it is part of "timer based scheduler",
  * move this from vgt_context.c here and renamed from
@@ -75,28 +146,26 @@ static inline bool phys_head_catch_tail(struct pgt_device *pdev)
 static struct vgt_device *tbs_next_vgt(
 	struct list_head *head, struct vgt_device *vgt)
 {
-	struct list_head *next = &vgt->list;
 	struct vgt_device *next_vgt = NULL;
 	struct pgt_device *pdev;
+
 
 	if (vgt->force_removal)
 		return vgt_dom0;
 
 	pdev = vgt->pdev;
+
 	if (ctx_switch_requested(pdev))
 		return pdev->next_sched_vgt;
 
-	do {
-		next = next->next;
-		/* wrap the list */
-		if (next == head)
-			next = head->next;
-		next_vgt = list_entry(next, struct vgt_device, list);
-
-		if (!vgt_vrings_empty(next_vgt))
-			break;
-
-	} while (next_vgt != vgt);
+    if (is_sched_round_finished(pdev)) {
+        rebuild_slot_aware_sched_list(pdev, head);
+        return vgt_dom0;
+    }
+    else {
+        next_vgt = choose_vgt_from_list(pdev);
+        if (next_vgt==NULL) next_vgt = vgt;
+    }
 
 	return next_vgt;
 }

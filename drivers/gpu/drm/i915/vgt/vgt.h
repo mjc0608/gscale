@@ -940,6 +940,18 @@ struct gt_port {
 	enum vgt_port physcal_port;
 };
 
+/* Jachin: slot aware scheduler */
+struct vgt_sched_list_item {
+    struct vgt_sched_list_item *next;
+    struct vgt_device *vgt;
+    bool if_sched;
+};
+
+struct vgt_slot_aware_scheduler {
+    struct vgt_sched_list_item *head[4];
+    struct vgt_sched_list_item *vring_empty_head[4]; //curently not use, keep for future extension
+};
+
 struct vgt_device {
 	enum vgt_pipe pipe_mapping[I915_MAX_PIPES];
 	int vgt_id;		/* 0 is always for dom0 */
@@ -1029,6 +1041,7 @@ struct vgt_device {
 	unsigned long invalid;
 	int invalid_count;
 
+    struct vgt_sched_list_item sched_list_item;
 };
 
 enum vgt_owner_type {
@@ -1244,7 +1257,15 @@ struct vgt_pre_copy_info {
 	bool wake_up;
     int flag;
     unsigned long lock;
-	struct vgt_device *possible_next[32][3];
+	struct vgt_device *possible_next[32];
+};
+
+struct vgt_slot_sched_info {
+    uint32_t vgt_sched_cnt[32];
+    uint32_t vgt_prev_weighted_cnt[32];
+    uint32_t slot_sched_cnt[4];
+    uint32_t slot_prev_weighted_cnt[4];
+    unsigned long long last_nscheds;
 };
 
 /* per-device structure */
@@ -1374,6 +1395,9 @@ struct pgt_device {
 	uint32_t el_read_ptr[MAX_ENGINES];
 
 	struct vgt_pre_copy_info pre_copy_info;
+    struct vgt_slot_sched_info slot_sched_info;
+
+    struct vgt_slot_aware_scheduler slot_aware_scheduler;
 };
 
 /*
@@ -1943,22 +1967,17 @@ static inline uint64_t vgt_mmio_bar_base(struct vgt_device *vgt)
 static inline uint64_t g2h_aperture(struct vgt_device *vgt, uint64_t g_addr)
 {
 	uint64_t offset;
-
 	ASSERT_NUM((g_addr >= vgt_guest_aperture_base(vgt)) &&
 		(g_addr <= vgt_guest_aperture_end(vgt)), g_addr);
-
 	offset = g_addr - vgt_guest_aperture_base(vgt);
 	return vgt_aperture_base(vgt) + offset;
 }
-
 /* translate a host aperture address to guest aperture address */
 static inline uint64_t h2g_aperture(struct vgt_device *vgt, uint64_t h_addr)
 {
 	uint64_t offset;
-
 	ASSERT_NUM((h_addr >= vgt_aperture_base(vgt)) &&
 		(h_addr <= vgt_aperture_end(vgt)), h_addr);
-
 	offset = h_addr - vgt_aperture_base(vgt);
 	return vgt_guest_aperture_base(vgt) + offset;
 }
@@ -2122,10 +2141,8 @@ static inline bool check_g_gm_cross_boundary(struct vgt_device *vgt,
 {
 	if (vgt->bypass_addr_check)
 		return false;
-
 	if (!vgt_hidden_gm_offset(vgt))
 		return false;
-
 	return g_gm_is_visible(vgt, g_start) &&
 		g_gm_is_hidden(vgt, g_start + size - 1);
 }

@@ -29,6 +29,7 @@
 #include "vgt.h"
 
 #define PRE_COPY
+#define SMART_SLOT_SCHED
 
 /*
  * NOTE list:
@@ -1194,7 +1195,6 @@ static bool gen7_save_hw_context(int id, struct vgt_device *vgt)
 	vgt_ring_emit(ring, MI_LOAD_REGISTER_IMM);
 	vgt_ring_emit(ring, _REG_CCID);
 	vgt_ring_emit(ring, ccid);
-
 	/* pipeline flush */
 	vgt_ring_emit(ring, PIPE_CONTROL(5));
 	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
@@ -1205,25 +1205,20 @@ static bool gen7_save_hw_context(int id, struct vgt_device *vgt)
 	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
 	vgt_ring_emit(ring, ++pdev->magic);
 	vgt_ring_emit(ring, 0);
-
 	vgt_ring_emit(ring, MI_NOOP);
 	vgt_ring_emit(ring, MI_NOOP);
 	vgt_ring_emit(ring, MI_NOOP);
-
 	/* submit cmds */
 	vgt_ring_advance(ring);
-
 	if (!ring_wait_for_completion(pdev, id)) {
 		vgt_err("change CCID to XenGT save context: commands unfinished\n");
 		return false;
 	}
-
 	if (VGT_MMIO_READ(pdev, _REG_CCID) != ccid) {
 		vgt_err("change CCID to XenGT save context: fail [%x, %x]\n",
 			VGT_MMIO_READ(pdev, _REG_CCID), ccid);
 		return false;
 	}
-
 	/* Save context and switch to NULL context */
 	vgt_ring_emit(ring, MI_ARB_ON_OFF | MI_ARB_DISABLE);
 	vgt_ring_emit(ring, MI_SET_CONTEXT);
@@ -1438,7 +1433,6 @@ static bool gen7_restore_hw_context(int id, struct vgt_device *vgt)
 			    MI_LRI_BYTE3_DISABLE);
 	vgt_ring_emit(ring, _REG_CCID);
 	vgt_ring_emit(ring, 0);
-
 	/* pipeline flush */
 	vgt_ring_emit(ring, PIPE_CONTROL(5));
 	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
@@ -1449,19 +1443,15 @@ static bool gen7_restore_hw_context(int id, struct vgt_device *vgt)
 	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
 	vgt_ring_emit(ring, ++pdev->magic);
 	vgt_ring_emit(ring, 0);
-
 	vgt_ring_emit(ring, MI_NOOP);
 	vgt_ring_emit(ring, MI_NOOP);
 	vgt_ring_emit(ring, MI_NOOP);
-
 	/* submit cmds */
 	vgt_ring_advance(ring);
-
 	if (!ring_wait_for_completion(pdev, id)) {
 		vgt_err("Invalidate CCID after NULL restore: commands unfinished\n");
 		return false;
 	}
-
 	if (VGT_MMIO_READ(pdev, _REG_CCID) != 0) {
 		vgt_err("Invalidate CCID after NULL restore: fail [%x, %x]\n",
 			VGT_MMIO_READ(pdev, _REG_CCID), 0);
@@ -1520,7 +1510,6 @@ static bool gen7_restore_hw_context(int id, struct vgt_device *vgt)
 	vgt_ring_emit(ring, MI_LOAD_REGISTER_IMM);
 	vgt_ring_emit(ring, _REG_CCID);
 	vgt_ring_emit(ring, __vreg(vgt, _REG_CCID));
-
 	/* pipeline flush */
 	vgt_ring_emit(ring, PIPE_CONTROL(5));
 	vgt_ring_emit(ring, PIPE_CONTROL_CS_STALL |
@@ -1531,19 +1520,15 @@ static bool gen7_restore_hw_context(int id, struct vgt_device *vgt)
 	vgt_ring_emit(ring, vgt_data_ctx_magic(pdev));
 	vgt_ring_emit(ring, ++pdev->magic);
 	vgt_ring_emit(ring, 0);
-
 	vgt_ring_emit(ring, MI_NOOP);
 	vgt_ring_emit(ring, MI_NOOP);
 	vgt_ring_emit(ring, MI_NOOP);
-
 	/* submit CMDs */
 	vgt_ring_advance(ring);
-
 	if (!ring_wait_for_completion(pdev, id)) {
 		vgt_err("Restore VM CCID: commands unfinished\n");
 		return false;
 	}
-
 	if (VGT_MMIO_READ(pdev, _REG_CCID) != __vreg(vgt, _REG_CCID)) {
 		vgt_err("Restore VM CCID: fail [%x, %x]\n",
 			VGT_MMIO_READ(pdev, _REG_CCID),
@@ -1621,9 +1606,12 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 		struct vgt_device *next)
 {
 	static bool pre_copy_thread_created = false;
+    static bool smart_slot_sched_inited = false;
 	bool rc = false;
 	struct vgt_rsvd_ring *ring = &pdev->ring_buffer[ring_id];
 	cycles_t t0, t1;
+    static unsigned long long curr_nsched=0;
+    int i;
 
 #ifdef PRE_COPY
 	/* Jachin: init pre_copy_thread */
@@ -1647,11 +1635,55 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 		if (pdev->pre_copy_info.pre_copy_thread!=NULL) pre_copy_thread_created = true;
         //pre_copy_thread_created = true;
 		for (i=0; i<32; i++) {
-			pdev->pre_copy_info.possible_next[i][0]=NULL;
-			pdev->pre_copy_info.possible_next[i][1]=NULL;
-			pdev->pre_copy_info.possible_next[i][2]=NULL;
-		}	
+			pdev->pre_copy_info.possible_next[i]=NULL;
+		}
+
 	}
+#endif
+
+#ifdef SMART_SLOT_SCHED
+    curr_nsched++;
+    if (unlikely(smart_slot_sched_inited==false)) {
+        for (i=0; i<32; i++) {
+            pdev->slot_sched_info.vgt_sched_cnt[i]=0;
+        }
+        for (i=0; i<4; i++) {
+            pdev->slot_sched_info.slot_sched_cnt[i]=0;
+        }
+        pdev->slot_sched_info.last_nscheds = 0;
+        smart_slot_sched_inited = true;
+    }
+    else if (curr_nsched-pdev->slot_sched_info.last_nscheds>=1000) {
+        for (i=0; i<32; i++) {
+            if (pdev->slot_sched_info.vgt_prev_weighted_cnt[i]==0) {
+                pdev->slot_sched_info.vgt_prev_weighted_cnt[i] = pdev->slot_sched_info.vgt_sched_cnt[i];
+            }
+            else {
+                pdev->slot_sched_info.vgt_prev_weighted_cnt[i]/=2;
+                pdev->slot_sched_info.vgt_prev_weighted_cnt[i]+=pdev->slot_sched_info.vgt_sched_cnt[i]/2;
+            }
+            pdev->slot_sched_info.vgt_sched_cnt[i]=0;
+        }
+        for (i=0; i<4; i++) {
+            if (pdev->slot_sched_info.slot_prev_weighted_cnt[i]==0) {
+                pdev->slot_sched_info.slot_prev_weighted_cnt[i] = pdev->slot_sched_info.slot_sched_cnt[i];
+            }
+            else {
+                pdev->slot_sched_info.slot_prev_weighted_cnt[i]/=2;
+                pdev->slot_sched_info.slot_prev_weighted_cnt[i]+=pdev->slot_sched_info.slot_sched_cnt[i]/2;
+            }
+            pdev->slot_sched_info.slot_sched_cnt[i]=0;
+        }
+        pdev->slot_sched_info.last_nscheds = curr_nsched;
+    }
+    else {
+        pdev->slot_sched_info.vgt_sched_cnt[prev->vgt_id]++;
+        pdev->slot_sched_info.slot_sched_cnt[prev->category]++;
+    }
+
+#endif
+
+#ifdef SMART_SLOT_SCHED
 #endif
 
 	/* STEP-a: stop the ring */
@@ -1688,21 +1720,48 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 	}
 
 	/* Mochi: write shadow GTT to physical GTT. */
+	//vgt_info("Mochi context switch VM%d -> VM%d.\n", prev->vm_id, next->vm_id);
 	t0 = vgt_get_cycles();
 #ifdef PRE_COPY
+    //printk("fish: main thread: acquiere main lock: pre_thread_state=%d, sem count=%d\n",
+     //       pdev->pre_copy_info.pre_copy_thread->state, pdev->pre_copy_info.pre_copy_sem.count);
+   // down(&pdev->pre_copy_info.pre_copy_sem);
+    //while (spin_trylock(&pdev->pre_copy_info.main_lock) == 0) {
+    //    printk("fish: main thread: failed to acquire main lock\n");
+    //    msleep_interruptible(5);
+    //    printk("fish: main thread: after sleep 5 ms\n");
+    //}
     spin_lock_irq(&pdev->pre_copy_info.main_lock);
+    //while (test_and_set_bit(0, &pdev->pre_copy_info.lock)){
+        //printk("fish: main thread: failed to acquire lock\n");
+        //msleep_interruptible(5);
+        //printk("fish: main thread: after sleep 5 ms\n");
+    //}
+    //printk("fish: main thread: acquiere main lock success\n");
 #endif
 	if(next->vm_id != 0)
 		category_sched(pdev, next);
+	//t1 = vgt_get_cycles();
+//	vgt_info("Mochi.gtt.copy: %lu \n", t1-t0);
 
 #ifdef PRE_COPY
 	/* Jachin: another thread */
+	//spin_lock(&pdev->pre_copy_info.info_lock);
+	// pdev->pre_copy_info.pre_copy_vgt = prev;
 	pdev->pre_copy_info.wake_up=true;
     pdev->pre_copy_info.flag = 0;
+	
 	pdev->pre_copy_info.curr_vgt = prev;
 	pdev->pre_copy_info.next_vgt = next;
 
+	//spin_unlock(&pdev->pre_copy_info.info_lock);
+    //printk("fish: main thread: release pre lock\n");
+    //clear_bit(0, &pdev->pre_copy_info.lock);
     spin_unlock_irq(&pdev->pre_copy_info.main_lock);
+    //up(&pdev->pre_copy_info.pre_copy_sem);
+    //printk("fish: main thread: wake up pre copy thraed: pre_traed_state=%d, sem count=%d\n",
+    //        pdev->pre_copy_info.pre_copy_thread->state, pdev->pre_copy_info.pre_copy_sem.count);
+	//wake_up_process(pdev->pre_copy_info.pre_copy_thread);
 #endif
 
 	/* STEP-e: restore HW render context for next */
@@ -1776,27 +1835,21 @@ static bool gen8_reset_engine(int ring_id,
 	}
 #if 0
 	VGT_MMIO_WRITE(pdev, 0x20d0, (1 << 16) | (1 << 0));
-
 	for (count = 1000; count > 0; count --)
 		if (VGT_MMIO_READ(pdev, 0x20d0) & (1 << 1))
 			break;
-
 	if (!count) {
 		vgt_err("wait 0x20d0 timeout.\n");
 		return false;
 	}
-
 	VGT_MMIO_WRITE(pdev, _REG_GEN6_GDRST, _REGBIT_GEN6_GRDOM_RENDER);
-
 	for (count = 1000; count > 0; count --)
 		if (!(VGT_MMIO_READ(pdev, _REG_GEN6_GDRST) & _REGBIT_GEN6_GRDOM_RENDER))
 			break;
-
 	if (!count) {
 		vgt_err("wait gdrst timeout.\n");
 		return false;
 	}
-
 	VGT_MMIO_WRITE(pdev, _REG_RCS_IMR, __sreg(vgt_dom0, _REG_RCS_IMR));
 #endif
 	for (count = 0; count < ARRAY_SIZE(gen8_rcs_reset_mmio); count++) {
