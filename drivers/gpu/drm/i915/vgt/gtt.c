@@ -2464,7 +2464,7 @@ unsigned long get_hidden_gm_start(struct pgt_device *pdev, struct vgt_device *vg
         }
     }
 #endif
-	printk("jachin: vm=%u, slot=%u\n", vgt->vm_id, category_id);
+	printk("jachin: init: vm=%u, slot=%u\n", vgt->vm_id, category_id);
 
 	pdev->category_load[category_id]++;
 	vgt->category = category_id;
@@ -2506,17 +2506,17 @@ int pre_copy_thread(void *args) {
 		//set_current_state(TASK_INTERRUPTIBLE);
         //printk("fish: pre_copy_thread: schedule out\n");
 		//schedule();
-        printk("fish: pre_copy_thread: acquire pre lock\n");
+//        printk("fish: pre_copy_thread: acquire pre lock\n");
         //down(&info->pre_copy_sem);
         while (info->flag == 1 || spin_trylock(&info->main_lock) == 0) {
-            msleep(5);
+            msleep(1);
         }
         //while (info->flag == 1 || test_and_set_bit(0, &info->lock)) {
             //printk("fish: pre_copy_thread: failed to acquire lock\n");
         //    msleep(15);
             //printk("fish: pre_copy_thread: after sleep 15ms\n");
         //}
-        printk("fish: pre_copy_thread: acquire pre lock success\n");
+//        printk("fish: pre_copy_thread: acquire pre lock success\n");
 	//	printk("jachin: vgt = %lu\n", info->pre_copy_vgt->vm_id);
 	//	info->wake_up=false;
 

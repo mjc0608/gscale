@@ -1720,7 +1720,7 @@ static bool gen7_ring_switch(struct pgt_device *pdev,
 	}
 
 	/* Mochi: write shadow GTT to physical GTT. */
-	//vgt_info("Mochi context switch VM%d -> VM%d.\n", prev->vm_id, next->vm_id);
+	vgt_info("Jachin: context switch: VM: %d -> %d; SLOT: %d -> %d\n", prev->vm_id, next->vm_id, prev->category, next->category);
 	t0 = vgt_get_cycles();
 #ifdef PRE_COPY
     //printk("fish: main thread: acquiere main lock: pre_thread_state=%d, sem count=%d\n",

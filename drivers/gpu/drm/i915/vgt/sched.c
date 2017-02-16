@@ -71,9 +71,7 @@ static bool is_sched_round_finished(struct pgt_device *pdev) {
     int i;
     for (i=0; i<4; i++) {
         if (pdev->slot_aware_scheduler.head[i]!=NULL) {
-            return false;
-        }
-        if (pdev->slot_aware_scheduler.vring_empty_head[i]!=NULL) {
+//            printk("jachin: slot %d has vm %d, round is not finished\n", i, pdev->slot_aware_scheduler.head[i]->vgt->vm_id);
             return false;
         }
     }
@@ -95,22 +93,34 @@ static void rebuild_slot_aware_sched_list(struct pgt_device *pdev, struct list_h
 		if (!vgt_vrings_empty(next_vgt)) {
             int slot_id = next_vgt->category;
 
+//            printk("jachin: rebuilding, put vm %d into slot %d\n", next_vgt->category, slot_id);
+
             next_vgt->sched_list_item.next = scheduler->head[slot_id];
             next_vgt->sched_list_item.vgt = next_vgt;
             next_vgt->sched_list_item.if_sched = false;
             scheduler->head[slot_id] = &next_vgt->sched_list_item;
+        }
+        else {
+            int slot_id = next_vgt->category;
+
+//            printk("jachin: rebuilding, vm %d (slot %d): empty\n", next_vgt->vm_id, slot_id);
         }
 
 	} while (next_vgt != vgt_dom0);
 }
 
 #define NEXT_SLOT(curr) \
-    ((curr)%3+1)
+    ((curr+1)%4)
 
-static struct vgt_device *choose_vgt_from_list(struct pgt_device *pdev) {
+static struct vgt_device *choose_vgt_from_list(struct pgt_device *pdev, bool round_begin) {
     static int last_slot_id = 0;
     int curr_slot_id = NEXT_SLOT(last_slot_id);
     struct vgt_slot_aware_scheduler *scheduler = &pdev->slot_aware_scheduler;
+
+    if (round_begin) {
+        last_slot_id = 0;
+        return vgt_dom0;
+    }
 
     // prefer to choose vm from a different slot
     do {
@@ -118,22 +128,36 @@ static struct vgt_device *choose_vgt_from_list(struct pgt_device *pdev) {
             struct vgt_sched_list_item *chosen_item = scheduler->head[curr_slot_id];
             scheduler->head[curr_slot_id] = chosen_item->next;
             last_slot_id = curr_slot_id;
+
+//            printk("jachin: choose vm %d of slot %d\n", chosen_item->vgt->vm_id, chosen_item->vgt->category);
+
             return chosen_item->vgt;
         }
 
+//        printk("jachin: slot %d is empty, move to next slot\n", curr_slot_id);
+
         curr_slot_id = NEXT_SLOT(curr_slot_id);
     } while (curr_slot_id!=last_slot_id);
+
+//    printk("jachin: have to choose vm from the same slot\n");
 
     // have to choose one from the same slot
     if (scheduler->head[curr_slot_id]!=NULL) {
         struct vgt_sched_list_item *chosen_item = scheduler->head[curr_slot_id];
         scheduler->head[curr_slot_id] = chosen_item->next;
         last_slot_id = curr_slot_id;
+
+//        printk("jachin: choose vm %d of slot %d\n", chosen_item->vgt->vm_id, chosen_item->vgt->category);
+
         return chosen_item->vgt;
     }
     else {
         // return NULL if no vm is active
-        return NULL;
+        last_slot_id = curr_slot_id;
+
+//        printk("jachin: nothing is active, give ring to dom0\n");
+
+        return vgt_dom0;
     }
 
 }
@@ -148,7 +172,7 @@ static struct vgt_device *tbs_next_vgt(
 {
 	struct vgt_device *next_vgt = NULL;
 	struct pgt_device *pdev;
-
+    bool round_begin = false;
 
 	if (vgt->force_removal)
 		return vgt_dom0;
@@ -160,12 +184,9 @@ static struct vgt_device *tbs_next_vgt(
 
     if (is_sched_round_finished(pdev)) {
         rebuild_slot_aware_sched_list(pdev, head);
-        return vgt_dom0;
+        round_begin = true;
     }
-    else {
-        next_vgt = choose_vgt_from_list(pdev);
-        if (next_vgt==NULL) next_vgt = vgt;
-    }
+    next_vgt = choose_vgt_from_list(pdev, round_begin);
 
 	return next_vgt;
 }
