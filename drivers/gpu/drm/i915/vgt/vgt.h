@@ -98,6 +98,8 @@ extern bool timer_based_qos;
 extern int tbs_period_ms;
 extern bool opregion_present;
 extern int vgt_if_windows;
+extern int vgt_sss_enable;
+extern int vgt_sas_enable;
 
 enum vgt_event_type {
 	// GT
