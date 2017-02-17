@@ -170,6 +170,7 @@ static struct vgt_device *choose_vgt_from_list(struct pgt_device *pdev, bool rou
 static struct vgt_device *tbs_next_vgt(
 	struct list_head *head, struct vgt_device *vgt)
 {
+    struct list_head *next = &vgt->list;
 	struct vgt_device *next_vgt = NULL;
 	struct pgt_device *pdev;
     bool round_begin = false;
@@ -178,15 +179,28 @@ static struct vgt_device *tbs_next_vgt(
 		return vgt_dom0;
 
 	pdev = vgt->pdev;
-
 	if (ctx_switch_requested(pdev))
 		return pdev->next_sched_vgt;
 
-    if (is_sched_round_finished(pdev)) {
-        rebuild_slot_aware_sched_list(pdev, head);
-        round_begin = true;
+    if (vgt_sas_enable) {
+        if (is_sched_round_finished(pdev)) {
+            rebuild_slot_aware_sched_list(pdev, head);
+            round_begin = true;
+        }
+        next_vgt = choose_vgt_from_list(pdev, round_begin);
     }
-    next_vgt = choose_vgt_from_list(pdev, round_begin);
+    else {
+        do {
+            next = next->next;
+            /* wrap the list */
+            if (next == head)
+                next = head->next;
+            next_vgt = list_entry(next, struct vgt_device, list);
+
+            if (!vgt_vrings_empty(next_vgt))
+                break;
+        } while (next_vgt != vgt);
+    }
 
 	return next_vgt;
 }

@@ -178,6 +178,12 @@ module_param_named(shadow_execlist_context, shadow_execlist_context, int, 0400);
 int vgt_if_windows = 0;
 module_param_named(vgt_if_windows, vgt_if_windows, int, 0600);
 
+int vgt_sss_enable = 0;
+module_param_named(vgt_sss_enable, vgt_sss_enable, int, 0600);
+
+int vgt_sas_enable = 1;
+module_param_named(vgt_sas_enable, vgt_sas_enable, int, 0600);
+
 /* Very frequent set/clear write protection can see wrong write trap even if
 + * write protection has been cleared. Below option is to disable the context
 + * protection between ctx submission and ctx completion. Normal context shadow
